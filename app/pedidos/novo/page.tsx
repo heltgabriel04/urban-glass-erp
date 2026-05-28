@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/client";
 import { getClientes } from "@/services/clientes.service";
 import { createPedido, getProximoIdPedido } from "@/services/pedidos.service";
 import { formatBRL, formatM2 } from "@/lib/formatters";
+import DateInput from "@/components/ui/DateInput";
 import type { Cliente, Produto, TabelaPreco, ItemPedidoInsert, PedidoInsert } from "@/types";
 
 interface ItemForm {
@@ -61,7 +62,6 @@ export default function NovoPedidoPage() {
     }
   }
 
-  // Quando cliente muda, preenche forma de pagamento
   useEffect(() => {
     if (!clienteId) return;
     const cli = clientes.find(c => c.id === clienteId);
@@ -94,8 +94,6 @@ export default function NovoPedidoPage() {
     setItens(items => items.map((item, idx) => {
       if (idx !== i) return item;
       const novo = { ...item, [field]: value };
-
-      // Quando muda produto, atualiza nome e valor_m2
       if (field === "produto_id") {
         const prod = produtos.find(p => p.id === Number(value));
         if (prod) {
@@ -159,9 +157,7 @@ export default function NovoPedidoPage() {
     const result = await createPedido(pedido, itensInsert);
     setSalvando(false);
 
-    if (result) {
-      router.push("/pedidos");
-    }
+    if (result) router.push("/pedidos");
   }
 
   const tab = getTabela();
@@ -180,7 +176,6 @@ export default function NovoPedidoPage() {
 
       <div className="con">
         <div className="g2 mb14">
-          {/* Dados do pedido */}
           <div className="card">
             <div className="ct">Dados do Pedido</div>
 
@@ -203,11 +198,11 @@ export default function NovoPedidoPage() {
             <div className="fr">
               <div className="fg">
                 <label className="fl">Data do Pedido</label>
-                <input className="fc" type="date" value={dtPedido} onChange={e => setDtPedido(e.target.value)} />
+                <DateInput value={dtPedido} onChange={setDtPedido} />
               </div>
               <div className="fg">
                 <label className="fl">Previsão Retirada</label>
-                <input className="fc" type="date" value={dtRetirada} onChange={e => setDtRetirada(e.target.value)} />
+                <DateInput value={dtRetirada} onChange={setDtRetirada} />
               </div>
             </div>
 
@@ -247,7 +242,6 @@ export default function NovoPedidoPage() {
             </div>
           </div>
 
-          {/* Totalizador */}
           <div className="card">
             <div className="ct">Resumo do Pedido</div>
             <div className="sr">
@@ -288,21 +282,17 @@ export default function NovoPedidoPage() {
           </div>
         </div>
 
-        {/* Itens */}
         <div className="card">
           <div className="ct">
             Itens do Pedido
             <button className="btn bp xs" onClick={addItem}>+ Item</button>
           </div>
 
-          {/* Header */}
           <div style={{
             display: "grid",
             gridTemplateColumns: "2fr 80px 80px 60px 100px 100px 80px",
-            gap: "8px",
-            padding: "6px 0",
-            borderBottom: "1px solid var(--b1)",
-            marginBottom: "8px",
+            gap: "8px", padding: "6px 0",
+            borderBottom: "1px solid var(--b1)", marginBottom: "8px",
           }}>
             {["Produto","Larg. (mm)","Alt. (mm)","Qtd","Valor/m²","Lap./m²",""].map((h, i) => (
               <div key={i} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>
@@ -319,14 +309,9 @@ export default function NovoPedidoPage() {
                 <div style={{
                   display: "grid",
                   gridTemplateColumns: "2fr 80px 80px 60px 100px 100px 80px",
-                  gap: "8px",
-                  alignItems: "center",
+                  gap: "8px", alignItems: "center",
                 }}>
-                  <select
-                    className="fc"
-                    value={item.produto_id || ""}
-                    onChange={e => updItem(i, "produto_id", Number(e.target.value))}
-                  >
+                  <select className="fc" value={item.produto_id || ""} onChange={e => updItem(i, "produto_id", Number(e.target.value))}>
                     {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
                   </select>
                   <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
@@ -336,35 +321,20 @@ export default function NovoPedidoPage() {
                   <input className="fc" type="number" step="0.01" value={item.lapidacao || ""} onChange={e => updItem(i, "lapidacao", parseFloat(e.target.value) || 0)} placeholder="0" />
                   <button className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1}>✕</button>
                 </div>
-                {/* Cálculo do item */}
                 {m2 > 0 && (
                   <div style={{ display: "flex", gap: "16px", padding: "4px 0 0 4px" }}>
-                    <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>
-                      {formatM2(m2)} ·
-                    </span>
-                    <span style={{ fontSize: "11px", color: "var(--acc)", fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>
-                      {formatBRL(sub)}
-                    </span>
+                    <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>{formatM2(m2)} ·</span>
+                    <span style={{ fontSize: "11px", color: "var(--acc)", fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>{formatBRL(sub)}</span>
                   </div>
                 )}
               </div>
             );
           })}
 
-          {/* Totais dos itens */}
           <div className="totbar" style={{ marginTop: "8px" }}>
-            <div className="ti">
-              <div className="tl">Itens</div>
-              <div className="tv">{itens.length}</div>
-            </div>
-            <div className="ti">
-              <div className="tl">m² Total</div>
-              <div className="tv" style={{ color: "var(--acc2)" }}>{formatM2(m2Total)}</div>
-            </div>
-            <div className="ti">
-              <div className="tl">Valor Total</div>
-              <div className="tv" style={{ color: "var(--acc)" }}>{formatBRL(valorTotal)}</div>
-            </div>
+            <div className="ti"><div className="tl">Itens</div><div className="tv">{itens.length}</div></div>
+            <div className="ti"><div className="tl">m² Total</div><div className="tv" style={{ color: "var(--acc2)" }}>{formatM2(m2Total)}</div></div>
+            <div className="ti"><div className="tl">Valor Total</div><div className="tv" style={{ color: "var(--acc)" }}>{formatBRL(valorTotal)}</div></div>
           </div>
         </div>
       </div>
