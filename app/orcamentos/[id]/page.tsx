@@ -14,9 +14,6 @@ const CHIP: Record<string, string> = {
   "Rejeitado": "chip cr",
 };
 
-// Logo Urban Glass em base64 (fundo azul)
-const LOGO_B64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAyAGQDASIAAhEBAxEB/8QAHAABAAIDAQEBAAAAAAAAAAAAAAYHBAUIAwEC/8QAMhAAAQMDAgQEBQQDAAAAAAAAAQIDBAAFEQYSITFBUWEHEyJxgRQykaHBFSNCUmL/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8A2pSlKBSlKBSlKBSlKBSlKBSlKBXO1XW3WlhL9ynxoTSjgLkOpQCfbJFdGtV7i6Es13lOtx2bfGW6txQJAABJJ/oDmg2DS1KUClKUClKUClKUClKUCuBr3Wdv0Xp9y63IlQCghtpAyt1Z6IH9fQZNd+uBq7SkDW+mZthuKlJakgFLqBktLBylYHwR+OKDz/pTX2odW6gmTb/ACHWgkiNGfSENMJ5ISlPTucAnzNeztaQ0vSukLfpuI8p5mIgorXjBWtRKlH2yTge1clzs3R9luLlun2OPGlNYCm3GlBQz0PXB+K9IezGxNJSq1ycqAJHMI/1QW1KUoBSlKBSlKBSlKBSlKBSlKD/2Q==";
-
 export default function OrcamentoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -81,7 +78,7 @@ export default function OrcamentoDetalhe() {
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          .sb, .tb-topbar { display: none !important; }
+          .sb { display: none !important; }
           body { background: white !important; color: black !important; overflow: auto !important; }
           .erp-layout { display: block !important; }
           .erp-content, .erp-main { overflow: visible !important; }
@@ -106,7 +103,6 @@ export default function OrcamentoDetalhe() {
 
           <button className="btn bg sm" onClick={() => window.print()}>⎙ PDF</button>
 
-          {/* Ações por status */}
           {orc.status === "Rascunho" && (
             <>
               <button className="btn bs sm" onClick={handleEnviar} disabled={salvando}>Marcar Enviado</button>
@@ -188,6 +184,13 @@ export default function OrcamentoDetalhe() {
                   </tr>
                 </thead>
                 <tbody>
+                  {itens.length === 0 && (
+                    <tr>
+                      <td colSpan={8} style={{ textAlign: "center", color: "var(--t3)", padding: "24px" }}>
+                        Nenhum item neste orçamento
+                      </td>
+                    </tr>
+                  )}
                   {itens.map((item: any, i: number) => (
                     <tr key={item.id}>
                       <td className="mono" style={{ color: "var(--t3)" }}>{i + 1}</td>
@@ -211,20 +214,15 @@ export default function OrcamentoDetalhe() {
 
           {/* Cabeçalho */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "28px", paddingBottom: "20px", borderBottom: "3px solid #2d5fa6" }}>
-            {/* Logo */}
-            <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-              <div style={{ width: "64px", height: "64px", background: "#2d5fa6", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                <img src={LOGO_B64} alt="Urban Glass" style={{ width: "56px", height: "56px", objectFit: "contain" }} />
+            {/* Empresa — só texto, sem logo */}
+            <div>
+              <div style={{ fontSize: "26px", fontWeight: 900, color: "#2d5fa6", letterSpacing: "-1px" }}>
+                urban<span style={{ color: "#3d8c5c" }}>glass</span>
               </div>
-              <div>
-                <div style={{ fontSize: "20px", fontWeight: 900, color: "#2d5fa6", letterSpacing: "-0.5px" }}>
-                  urban<span style={{ color: "#3d8c5c" }}>glass</span>
-                </div>
-                <div style={{ fontSize: "9px", color: "#888", textTransform: "uppercase", letterSpacing: "1.5px" }}>Urban Glass Comércio Ltda</div>
-                <div style={{ fontSize: "9px", color: "#888" }}>CNPJ: 65.668.970/0001-05</div>
-                <div style={{ fontSize: "9px", color: "#888" }}>Av. Vereador Raymundo Hargreaves, 17 – Fontesville – Juiz de Fora/MG</div>
-                <div style={{ fontSize: "9px", color: "#888" }}>(32) 99986-0317</div>
-              </div>
+              <div style={{ fontSize: "9px", color: "#888", textTransform: "uppercase", letterSpacing: "1.5px", marginTop: "2px" }}>Urban Glass Comércio Ltda</div>
+              <div style={{ fontSize: "9px", color: "#888", marginTop: "2px" }}>CNPJ: 65.668.970/0001-05</div>
+              <div style={{ fontSize: "9px", color: "#888" }}>Av. Vereador Raymundo Hargreaves, 17 – Fontesville – Juiz de Fora/MG</div>
+              <div style={{ fontSize: "9px", color: "#888" }}>(32) 99986-0317</div>
             </div>
 
             {/* Número e status */}
@@ -295,6 +293,13 @@ export default function OrcamentoDetalhe() {
               </tr>
             </thead>
             <tbody>
+              {itens.length === 0 && (
+                <tr>
+                  <td colSpan={8} style={{ padding: "20px", textAlign: "center", color: "#aaa", fontSize: "11px" }}>
+                    Nenhum item registrado
+                  </td>
+                </tr>
+              )}
               {itens.map((item: any, i: number) => (
                 <tr key={item.id} style={{ background: i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
                   <td style={{ padding: "9px 10px", borderBottom: "1px solid #e8ecf5", textAlign: "center", color: "#aaa", fontSize: "11px" }}>{i + 1}</td>
