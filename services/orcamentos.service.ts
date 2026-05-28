@@ -88,17 +88,16 @@ export async function updateOrcamento(id: string, updates: Partial<OrcamentoInse
 }
 
 export async function aprovarOrcamento(orcamentoId: string) {
-  // 1. Busca orçamento completo
   const orc = await getOrcamentoById(orcamentoId);
   if (!orc) return null;
 
-  // 2. Gera ID do pedido
+  // Gera novo ID de pedido
   const { count } = await supabase
     .from('pedidos')
     .select('*', { count: 'exact', head: true });
   const pedidoId = `P-${String((count || 0) + 1).padStart(3, '0')}`;
 
-  // 3. Cria o pedido
+  // Cria pedido
   const { data: pedido, error: errPedido } = await supabase
     .from('pedidos')
     .insert([{
@@ -120,7 +119,7 @@ export async function aprovarOrcamento(orcamentoId: string) {
 
   if (errPedido) { console.error('aprovarOrcamento pedido:', errPedido); return null; }
 
-  // 4. Cria itens do pedido a partir dos itens do orçamento
+  // Cria itens do pedido
   if (orc.itens_orcamento?.length > 0) {
     const itensPedido = orc.itens_orcamento.map((i: any) => ({
       pedido_id: pedidoId,
@@ -138,13 +137,30 @@ export async function aprovarOrcamento(orcamentoId: string) {
     if (errItens) console.error('aprovarOrcamento itens_pedido:', errItens);
   }
 
-  // 5. Atualiza orçamento como aprovado e vincula ao pedido
+  // Atualiza orçamento
   await updateOrcamento(orcamentoId, {
     status: 'Aprovado',
     pedido_id: pedidoId,
   } as any);
 
   return pedido;
+}
+
+export async function rejeitarOrcamento(orcamentoId: string) {
+  const orc = await getOrcamentoById(orcamentoId);
+  if (!orc) return null;
+
+  // Se tinha pedido vinculado, deleta completamente
+  if (orc.pedido_id) {
+    await supabase.from('itens_pedido').delete().eq('pedido_id', orc.pedido_id);
+    await supabase.from('pedidos').delete().eq('id', orc.pedido_id);
+  }
+
+  // Atualiza orçamento como rejeitado e remove vínculo com pedido
+  return updateOrcamento(orcamentoId, {
+    status: 'Rejeitado',
+    pedido_id: null,
+  } as any);
 }
 
 export async function getProximoIdOrcamento(): Promise<string> {

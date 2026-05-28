@@ -7,17 +7,20 @@ import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 
 const CHIP: Record<string, string> = {
-  "Rascunho": "chip cgr",
-  "Enviado":  "chip cy",
-  "Aprovado": "chip cg",
+  "Rascunho":  "chip cgr",
+  "Enviado":   "chip cy",
+  "Aprovado":  "chip cg",
   "Rejeitado": "chip cr",
 };
+
+const FILTROS = ["Todos", "Rascunho", "Enviado", "Aprovado", "Rejeitado"];
 
 export default function OrcamentosPage() {
   const { toast } = useToast();
   const [orcamentos, setOrcamentos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtro, setFiltro] = useState("");
+  const [busca, setBusca] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState("Todos");
 
   useEffect(() => { load(); }, []);
 
@@ -30,20 +33,17 @@ export default function OrcamentosPage() {
 
   async function handleEnviar(id: string) {
     const result = await updateOrcamento(id, { status: "Enviado" } as any);
-    if (result) {
-      toast(`Orçamento ${id} marcado como Enviado`);
-      load();
-    } else {
-      toast("Erro ao atualizar status", "err");
-    }
+    if (result) { toast(`Orçamento ${id} marcado como Enviado`); load(); }
+    else toast("Erro ao atualizar status", "err");
   }
 
-  const filtrados = orcamentos.filter(o =>
-    !filtro ||
-    o.id.toLowerCase().includes(filtro.toLowerCase()) ||
-    o.clientes?.nome?.toLowerCase().includes(filtro.toLowerCase()) ||
-    o.status.toLowerCase().includes(filtro.toLowerCase())
-  );
+  const filtrados = orcamentos.filter(o => {
+    const matchBusca = !busca ||
+      o.id.toLowerCase().includes(busca.toLowerCase()) ||
+      o.clientes?.nome?.toLowerCase().includes(busca.toLowerCase());
+    const matchStatus = filtroStatus === "Todos" || o.status === filtroStatus;
+    return matchBusca && matchStatus;
+  });
 
   return (
     <AppLayout>
@@ -53,14 +53,60 @@ export default function OrcamentosPage() {
           <span className="tb-search-ic">⌕</span>
           <input
             placeholder="Buscar orçamento ou cliente..."
-            value={filtro}
-            onChange={e => setFiltro(e.target.value)}
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
           />
         </div>
         <a href="/orcamentos/novo" className="btn bp sm">+ Novo Orçamento</a>
       </div>
 
       <div className="con">
+        {/* Filtros de status */}
+        <div style={{ display: "flex", gap: "6px", marginBottom: "14px" }}>
+          {FILTROS.map(f => (
+            <button
+              key={f}
+              onClick={() => setFiltroStatus(f)}
+              style={{
+                padding: "5px 14px",
+                borderRadius: "99px",
+                border: "1px solid",
+                fontSize: "12px",
+                cursor: "pointer",
+                fontFamily: "'DM Sans', sans-serif",
+                fontWeight: filtroStatus === f ? 700 : 400,
+                background: filtroStatus === f
+                  ? f === "Aprovado" ? "rgba(16,185,129,.15)"
+                  : f === "Rejeitado" ? "rgba(244,63,94,.15)"
+                  : f === "Enviado" ? "rgba(245,158,11,.15)"
+                  : f === "Rascunho" ? "rgba(255,255,255,.08)"
+                  : "var(--surf2)"
+                  : "transparent",
+                borderColor: filtroStatus === f
+                  ? f === "Aprovado" ? "var(--ok)"
+                  : f === "Rejeitado" ? "var(--err)"
+                  : f === "Enviado" ? "var(--warn)"
+                  : "var(--b2)"
+                  : "var(--b1)",
+                color: filtroStatus === f
+                  ? f === "Aprovado" ? "var(--ok)"
+                  : f === "Rejeitado" ? "var(--err)"
+                  : f === "Enviado" ? "var(--warn)"
+                  : "var(--t1)"
+                  : "var(--t2)",
+                transition: "all 0.15s",
+              }}
+            >
+              {f}
+              {f !== "Todos" && (
+                <span style={{ marginLeft: "6px", opacity: 0.7, fontSize: "10px" }}>
+                  {orcamentos.filter(o => o.status === f).length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
         {loading ? (
           <div className="loading">Carregando orçamentos...</div>
         ) : (
@@ -89,14 +135,10 @@ export default function OrcamentosPage() {
                 )}
                 {filtrados.map(o => (
                   <tr key={o.id}>
-                    <td>
-                      <span className="mono" style={{ color: "var(--acc)" }}>{o.id}</span>
-                    </td>
+                    <td><span className="mono" style={{ color: "var(--acc)" }}>{o.id}</span></td>
                     <td>
                       <strong>{o.clientes?.nome ?? "—"}</strong>
-                      {o.clientes?.cidade && (
-                        <div className="tdim">{o.clientes.cidade}</div>
-                      )}
+                      {o.clientes?.cidade && <div className="tdim">{o.clientes.cidade}</div>}
                     </td>
                     <td className="mono">{formatDate(o.dt_orcamento)}</td>
                     <td className="mono">{formatDate(o.dt_validade) || "—"}</td>
@@ -104,9 +146,7 @@ export default function OrcamentosPage() {
                     <td className="mono" style={{ color: "var(--acc)", fontWeight: 600 }}>
                       {formatBRL(o.valor_total)}
                     </td>
-                    <td>
-                      <span className={CHIP[o.status] ?? "chip cgr"}>{o.status}</span>
-                    </td>
+                    <td><span className={CHIP[o.status] ?? "chip cgr"}>{o.status}</span></td>
                     <td>
                       {o.pedido_id ? (
                         <a href={`/pedidos/${o.pedido_id}`} className="mono" style={{ color: "var(--acc2)", fontSize: "12px" }}>
@@ -120,10 +160,7 @@ export default function OrcamentosPage() {
                       <div style={{ display: "flex", gap: "6px" }}>
                         <a href={`/orcamentos/${o.id}`} className="btn bg xs">Ver</a>
                         {o.status === "Rascunho" && (
-                          <button
-                            className="btn bs xs"
-                            onClick={() => handleEnviar(o.id)}
-                          >
+                          <button className="btn bs xs" onClick={() => handleEnviar(o.id)}>
                             Enviar →
                           </button>
                         )}
@@ -139,7 +176,7 @@ export default function OrcamentosPage() {
         {!loading && filtrados.length > 0 && (
           <div className="totbar">
             <div className="ti">
-              <div className="tl">Total</div>
+              <div className="tl">Exibindo</div>
               <div className="tv">{filtrados.length}</div>
             </div>
             <div className="ti">
@@ -151,13 +188,19 @@ export default function OrcamentosPage() {
             <div className="ti">
               <div className="tl">Aprovados</div>
               <div className="tv" style={{ color: "var(--ok)" }}>
-                {filtrados.filter(o => o.status === "Aprovado").length}
+                {orcamentos.filter(o => o.status === "Aprovado").length}
               </div>
             </div>
             <div className="ti">
               <div className="tl">Pendentes</div>
               <div className="tv" style={{ color: "var(--warn)" }}>
-                {filtrados.filter(o => ["Rascunho","Enviado"].includes(o.status)).length}
+                {orcamentos.filter(o => ["Rascunho","Enviado"].includes(o.status)).length}
+              </div>
+            </div>
+            <div className="ti">
+              <div className="tl">Rejeitados</div>
+              <div className="tv" style={{ color: "var(--err)" }}>
+                {orcamentos.filter(o => o.status === "Rejeitado").length}
               </div>
             </div>
           </div>
