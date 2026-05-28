@@ -14,8 +14,9 @@ const NAV = [
   {
     grupo: "COMERCIAL",
     items: [
-      { href: "/pedidos",  label: "Pedidos",  icon: "◈" },
-      { href: "/clientes", label: "Clientes", icon: "◎" },
+      { href: "/orcamentos", label: "Orçamentos", icon: "◻" },
+      { href: "/pedidos",    label: "Pedidos",    icon: "◈" },
+      { href: "/clientes",   label: "Clientes",   icon: "◎" },
     ],
   },
   {
@@ -55,7 +56,6 @@ export default function Sidebar() {
 
   return (
     <aside className="sb">
-      {/* Logo */}
       <div className="logo-area">
         <div className="logo-row">
           <div className="logo-ico">UG</div>
@@ -66,7 +66,6 @@ export default function Sidebar() {
         <div className="logo-ver">ERP Industrial v3</div>
       </div>
 
-      {/* Nav */}
       {NAV.map((grupo) => (
         <div key={grupo.grupo}>
           <div className="ns">{grupo.grupo}</div>
@@ -86,7 +85,6 @@ export default function Sidebar() {
         </div>
       ))}
 
-      {/* Footer */}
       <div className="sb-ft">
         <span className="ver-tag">v3.0.0 · 2026</span>
         <button
