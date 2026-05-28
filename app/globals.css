@@ -584,3 +584,33 @@ textarea.fc { resize: vertical; min-height: 64px; }
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+/* ─── OTIMIZADOR ─────────────────────────────────────────── */
+.rs  { display: grid; grid-template-columns: repeat(4,1fr); gap: 9px; margin-bottom: 12px; }
+.rsi { background: var(--surf2); border: 1px solid var(--b1); border-radius: var(--r); padding: 12px; text-align: center; }
+.rsv { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 19px; margin-bottom: 3px; }
+.rsl { font-size: 9px; color: var(--t3); text-transform: uppercase; letter-spacing: 1.2px; font-family: 'DM Mono', monospace; }
+
+.cvw { background: var(--surf3); border: 1px solid var(--b2); border-radius: var(--r); padding: 10px; position: relative; }
+.cvi { position: absolute; top: 8px; left: 8px; font-size: 10px; font-family: 'DM Mono', monospace; color: var(--t3); pointer-events: none; }
+.cvleg { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 9px; }
+.cvli  { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--t2); }
+.cvld  { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+
+.op  { background: var(--surf2); border: 1px solid var(--b1); border-radius: var(--r); padding: 11px; margin-bottom: 7px; }
+.oph { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; font-size: 10.5px; color: var(--acc); font-family: 'DM Mono', monospace; font-weight: 500; }
+
+.add-il {
+  width: 100%; margin-top: 9px; padding: 9px;
+  border-radius: var(--r); border: 1.5px dashed var(--b2);
+  background: transparent; color: var(--t3); cursor: pointer;
+  font-size: 12px; display: flex; align-items: center;
+  justify-content: center; gap: 6px; transition: .15s;
+  font-family: 'DM Sans', sans-serif;
+}
+.add-il:hover { border-color: var(--acc); color: var(--acc); background: rgba(61,255,160,.04); }
+
+.rtag {
+  background: rgba(0,200,255,.08); border: 1px solid rgba(0,200,255,.2);
+  color: var(--acc2); padding: 2px 8px; border-radius: 4px;
+  font-size: 10px; font-family: 'DM Mono', monospace;
+}
