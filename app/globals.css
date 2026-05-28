@@ -542,6 +542,7 @@ textarea.fc { resize: vertical; min-height: 64px; }
   display: flex;
   flex-direction: column;
   gap: 8px;
+  pointer-events: none;
 }
 
 .toast {
@@ -550,15 +551,20 @@ textarea.fc { resize: vertical; min-height: 64px; }
   font-size: 13px;
   font-weight: 500;
   box-shadow: var(--sh);
-  animation: slideIn 0.2s ease;
+  pointer-events: auto;
+  animation: toastIn .25s cubic-bezier(.4,0,.2,1);
+  max-width: 350px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.toast.ok   { background: var(--ok);   color: #fff; }
-.toast.warn { background: var(--warn); color: #090b10; }
-.toast.err  { background: var(--err);  color: #fff; }
+.toast.ok   { background: var(--surf2); border: 1px solid var(--ok);   color: var(--ok); }
+.toast.warn { background: var(--surf2); border: 1px solid var(--warn); color: var(--warn); }
+.toast.err  { background: var(--surf2); border: 1px solid var(--err);  color: var(--err); }
 
-@keyframes slideIn {
-  from { opacity: 0; transform: translateY(10px); }
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -584,6 +590,7 @@ textarea.fc { resize: vertical; min-height: 64px; }
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
 /* ─── OTIMIZADOR ─────────────────────────────────────────── */
 .rs  { display: grid; grid-template-columns: repeat(4,1fr); gap: 9px; margin-bottom: 12px; }
 .rsi { background: var(--surf2); border: 1px solid var(--b1); border-radius: var(--r); padding: 12px; text-align: center; }

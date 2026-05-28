@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidoById, avancarStatusPedido, registrarRecebimento } from "@/services/pedidos.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
+import { useToast } from "@/components/ui/toast";
 import type { Pedido } from "@/types";
 
 const CHIP: Record<string, string> = {
@@ -31,6 +32,7 @@ const FLUXO = [
 export default function PedidoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { toast } = useToast();
 
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [loading, setLoading] = useState(true);
@@ -50,7 +52,12 @@ export default function PedidoDetalhe() {
   async function handleAvancar() {
     if (!pedido) return;
     setSalvando(true);
-    await avancarStatusPedido(pedido.id, pedido.status);
+    const result = await avancarStatusPedido(pedido.id, pedido.status);
+    if (result) {
+      toast(`${pedido.id} → ${result.status}`);
+    } else {
+      toast("Erro ao avançar status", "err");
+    }
     await load();
     setSalvando(false);
   }
@@ -58,13 +65,27 @@ export default function PedidoDetalhe() {
   async function handleReceber() {
     if (!pedido) return;
     const valor = parseFloat(valorRec.replace(",", "."));
-    if (!valor || valor <= 0) return;
+    if (!valor || valor <= 0) {
+      toast("Informe um valor válido", "warn");
+      return;
+    }
+    const aberto = Number(pedido.valor_total) - Number(pedido.valor_recebido);
+    if (valor > aberto) {
+      toast(`Valor máximo: ${formatBRL(aberto)}`, "warn");
+      return;
+    }
     setSalvando(true);
-    await registrarRecebimento(pedido.id, valor);
+    const result = await registrarRecebimento(pedido.id, valor);
+    setSalvando(false);
+    if (!result) {
+      toast("Erro ao registrar recebimento", "err");
+      return;
+    }
+    const quitado = valor >= aberto;
+    toast(quitado ? `✓ Pedido ${pedido.id} quitado!` : `Recebimento de ${formatBRL(valor)} registrado`);
     setValorRec("");
     setRecebendo(false);
     await load();
-    setSalvando(false);
   }
 
   if (loading) {
@@ -98,7 +119,6 @@ export default function PedidoDetalhe() {
 
   return (
     <AppLayout>
-      {/* ── Toolbar ── */}
       <div className="tb">
         <button className="btn bg sm" onClick={() => router.back()}>← Voltar</button>
         <div className="tb-title" style={{ flex: 1 }}>
@@ -106,10 +126,7 @@ export default function PedidoDetalhe() {
         </div>
         <span className={CHIP[pedido.status] ?? "chip cgr"}>{pedido.status}</span>
         {temItens && (
-          <a
-            href={`/otimizador?pedido=${pedido.id}`}
-            className="btn bg sm"
-          >
+          <a href={`/otimizador?pedido=${pedido.id}`} className="btn bg sm">
             ◈ Otimizar Corte
           </a>
         )}
@@ -122,7 +139,7 @@ export default function PedidoDetalhe() {
 
       <div className="con" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
-        {/* ── Progresso do fluxo ── */}
+        {/* Progresso do fluxo */}
         <div className="card" style={{ padding: "20px 24px" }}>
           <div style={{ display: "flex", alignItems: "center", overflowX: "auto" }}>
             {FLUXO.map((step, i) => {
@@ -163,44 +180,33 @@ export default function PedidoDetalhe() {
           </div>
         </div>
 
-        {/* ── Grid: info + financeiro ── */}
+        {/* Grid: info + financeiro */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-
-          {/* Info do pedido */}
           <div className="card" style={{ padding: "20px 24px" }}>
             <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, marginBottom: "16px", letterSpacing: ".06em" }}>
               INFORMAÇÕES DO PEDIDO
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <Row label="Cliente"           value={pedido.clientes?.nome ?? "—"} />
-              <Row label="Cidade"            value={pedido.clientes?.cidade ?? "—"} />
-              <Row label="Telefone"          value={pedido.clientes?.tel ?? "—"} />
-              <Row label="Data do pedido"    value={formatDate(pedido.dt_pedido)} />
-              <Row label="Retirada prevista" value={formatDate(pedido.dt_retirada)} />
-              <Row label="m² total"          value={`${Number(pedido.m2_total).toFixed(2)} m²`} />
+              <Row label="Cliente"            value={pedido.clientes?.nome ?? "—"} />
+              <Row label="Cidade"             value={pedido.clientes?.cidade ?? "—"} />
+              <Row label="Telefone"           value={pedido.clientes?.tel ?? "—"} />
+              <Row label="Data do pedido"     value={formatDate(pedido.dt_pedido)} />
+              <Row label="Retirada prevista"  value={formatDate(pedido.dt_retirada)} />
+              <Row label="m² total"           value={`${Number(pedido.m2_total).toFixed(2)} m²`} />
               <Row label="Forma de pagamento" value={pedido.forma_pgto || "—"} />
               {pedido.parcelas > 1 && <Row label="Parcelas" value={`${pedido.parcelas}×`} />}
               {pedido.obs && <Row label="Observações" value={pedido.obs} />}
             </div>
           </div>
 
-          {/* Financeiro */}
           <div className="card" style={{ padding: "20px 24px" }}>
             <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, marginBottom: "16px", letterSpacing: ".06em" }}>
               FINANCEIRO
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               <Row label="Valor total" value={formatBRL(pedido.valor_total)} accent />
-              <Row
-                label="Recebido"
-                value={formatBRL(pedido.valor_recebido)}
-                color={pedido.valor_recebido > 0 ? "var(--ok)" : "var(--t2)"}
-              />
-              <Row
-                label="Em aberto"
-                value={formatBRL(Math.max(0, aberto))}
-                color={quitado ? "var(--ok)" : "var(--err)"}
-              />
+              <Row label="Recebido" value={formatBRL(pedido.valor_recebido)} color={pedido.valor_recebido > 0 ? "var(--ok)" : "var(--t2)"} />
+              <Row label="Em aberto" value={formatBRL(Math.max(0, aberto))} color={quitado ? "var(--ok)" : "var(--err)"} />
             </div>
 
             <div style={{ marginTop: "20px" }}>
@@ -210,10 +216,8 @@ export default function PedidoDetalhe() {
               </div>
               <div style={{ height: "6px", borderRadius: "3px", background: "var(--surf3)", overflow: "hidden" }}>
                 <div style={{
-                  height: "100%", borderRadius: "3px",
-                  width: `${pctRec}%`,
-                  background: quitado ? "var(--ok)" : "var(--acc)",
-                  transition: "width .3s",
+                  height: "100%", borderRadius: "3px", width: `${pctRec}%`,
+                  background: quitado ? "var(--ok)" : "var(--acc)", transition: "width .3s",
                 }} />
               </div>
             </div>
@@ -227,9 +231,7 @@ export default function PedidoDetalhe() {
                 ) : (
                   <div style={{ display: "flex", gap: "8px" }}>
                     <input
-                      type="text"
-                      placeholder="0,00"
-                      value={valorRec}
+                      type="text" placeholder="0,00" value={valorRec}
                       onChange={e => setValorRec(e.target.value)}
                       style={{
                         flex: 1, background: "var(--surf2)", border: "1px solid var(--b2)",
@@ -240,9 +242,7 @@ export default function PedidoDetalhe() {
                     <button className="btn bp sm" onClick={handleReceber} disabled={salvando}>
                       {salvando ? "..." : "Salvar"}
                     </button>
-                    <button className="btn bg sm" onClick={() => { setRecebendo(false); setValorRec(""); }}>
-                      ✕
-                    </button>
+                    <button className="btn bg sm" onClick={() => { setRecebendo(false); setValorRec(""); }}>✕</button>
                   </div>
                 )}
               </div>
@@ -255,16 +255,14 @@ export default function PedidoDetalhe() {
           </div>
         </div>
 
-        {/* ── Itens do pedido ── */}
+        {/* Itens do pedido */}
         <div className="card" style={{ padding: "20px 24px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
             <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>
               ITENS DO PEDIDO ({pedido.itens_pedido?.length ?? 0})
             </div>
             {temItens && (
-              <a href={`/otimizador?pedido=${pedido.id}`} className="btn bg xs">
-                ◈ Otimizar Corte
-              </a>
+              <a href={`/otimizador?pedido=${pedido.id}`} className="btn bg xs">◈ Otimizar Corte</a>
             )}
           </div>
 
@@ -277,14 +275,8 @@ export default function PedidoDetalhe() {
               <table>
                 <thead>
                   <tr>
-                    <th>#</th>
-                    <th>Produto</th>
-                    <th>Dimensão</th>
-                    <th>m²</th>
-                    <th>Qtd</th>
-                    <th>R$/m²</th>
-                    <th>Lapidação</th>
-                    <th>Subtotal</th>
+                    <th>#</th><th>Produto</th><th>Dimensão</th><th>m²</th>
+                    <th>Qtd</th><th>R$/m²</th><th>Lapidação</th><th>Subtotal</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -309,26 +301,18 @@ export default function PedidoDetalhe() {
             </div>
           )}
         </div>
-
       </div>
     </AppLayout>
   );
 }
 
 function Row({ label, value, accent, color }: {
-  label: string;
-  value: string | number;
-  accent?: boolean;
-  color?: string;
+  label: string; value: string | number; accent?: boolean; color?: string;
 }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "12px" }}>
       <span style={{ fontSize: "13px", color: "var(--t3)", flexShrink: 0 }}>{label}</span>
-      <span style={{
-        fontSize: "13px", fontWeight: accent ? 700 : 500,
-        color: color ?? (accent ? "var(--acc)" : "var(--t1)"),
-        textAlign: "right",
-      }}>
+      <span style={{ fontSize: "13px", fontWeight: accent ? 700 : 500, color: color ?? (accent ? "var(--acc)" : "var(--t1)"), textAlign: "right" }}>
         {value}
       </span>
     </div>

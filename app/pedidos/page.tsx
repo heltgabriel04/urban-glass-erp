@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidos, avancarStatusPedido } from "@/services/pedidos.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
+import { useToast } from "@/components/ui/toast";
 import type { Pedido } from "@/types";
 
 const CHIP: Record<string, string> = {
@@ -18,6 +19,7 @@ const CHIP: Record<string, string> = {
 };
 
 export default function PedidosPage() {
+  const { toast } = useToast();
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState("");
@@ -32,7 +34,12 @@ export default function PedidosPage() {
   }
 
   async function handleAvancar(id: string, status: Pedido["status"]) {
-    await avancarStatusPedido(id, status);
+    const result = await avancarStatusPedido(id, status);
+    if (result) {
+      toast(`${id} → ${result.status}`);
+    } else {
+      toast("Erro ao avançar status", "err");
+    }
     load();
   }
 
@@ -137,7 +144,6 @@ export default function PedidosPage() {
           </div>
         )}
 
-        {/* totais */}
         {!loading && filtrados.length > 0 && (
           <div className="totbar">
             <div className="ti">
