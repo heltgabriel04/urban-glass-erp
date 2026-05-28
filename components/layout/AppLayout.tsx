@@ -1,24 +1,25 @@
+"use client";
+
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
+import { ToastProvider } from "@/components/ui/Toast";
 
 interface Props {
   children: React.ReactNode;
 }
 
-export default function AppLayout({
-  children,
-}: Props) {
+export default function AppLayout({ children }: Props) {
   return (
-    <div className="erp-layout">
-      <Sidebar />
-
-      <div className="erp-content">
-        <Topbar />
-
-        <main className="erp-main">
-          {children}
-        </main>
+    <ToastProvider>
+      <div className="erp-layout">
+        <Sidebar />
+        <div className="erp-content">
+          <Topbar />
+          <main className="erp-main">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </ToastProvider>
   );
 }
