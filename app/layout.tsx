@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-// @ts-ignore: CSS import handled by Next.js
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,7 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" className="h-full">
-      <body className="h-full">{children}</body>
+      <body className="h-full" lang="pt-BR">{children}</body>
     </html>
   );
 }
