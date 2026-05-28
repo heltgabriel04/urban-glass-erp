@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/client";
 import { getClientes } from "@/services/clientes.service";
 import { createOrcamento, getProximoIdOrcamento } from "@/services/orcamentos.service";
 import { formatBRL, formatM2 } from "@/lib/formatters";
+import DateInput from "@/components/ui/DateInput";
 import type { Cliente, Produto, TabelaPreco } from "@/types";
 
 interface ItemForm {
@@ -160,10 +161,7 @@ export default function NovoOrcamentoPage() {
     }, itensInsert);
 
     setSalvando(false);
-
-    if (result) {
-      router.push("/orcamentos");
-    }
+    if (result) router.push("/orcamentos");
   }
 
   const tab = getTabela();
@@ -182,7 +180,6 @@ export default function NovoOrcamentoPage() {
 
       <div className="con">
         <div className="g2 mb14">
-          {/* Dados do orçamento */}
           <div className="card">
             <div className="ct">Dados do Orçamento</div>
 
@@ -205,23 +202,23 @@ export default function NovoOrcamentoPage() {
             <div className="fr">
               <div className="fg">
                 <label className="fl">Data do Orçamento</label>
-                <input className="fc" type="date" value={dtOrcamento} onChange={e => setDtOrcamento(e.target.value)} />
+                <DateInput value={dtOrcamento} onChange={setDtOrcamento} />
               </div>
               <div className="fg">
                 <label className="fl">Validade do Orçamento</label>
-                <input className="fc" type="date" value={dtValidade} onChange={e => setDtValidade(e.target.value)} />
+                <DateInput value={dtValidade} onChange={setDtValidade} />
               </div>
             </div>
 
             <div className="fr">
               <div className="fg">
                 <label className="fl">Previsão de Entrega</label>
-                <input className="fc" type="date" value={dtEntrega} onChange={e => setDtEntrega(e.target.value)} />
+                <DateInput value={dtEntrega} onChange={setDtEntrega} />
               </div>
               <div className="fg">
                 <label className="fl">Frete</label>
                 <select className="fc" value={frete} onChange={e => setFrete(e.target.value)}>
-                  {["Retirada", "CIF", "FOB"].map(f => <option key={f}>{f}</option>)}
+                  {["Retirada","CIF","FOB"].map(f => <option key={f}>{f}</option>)}
                 </select>
               </div>
             </div>
@@ -271,7 +268,6 @@ export default function NovoOrcamentoPage() {
             </div>
           </div>
 
-          {/* Resumo */}
           <div className="card">
             <div className="ct">Resumo do Orçamento</div>
             <div className="sr">
@@ -317,7 +313,6 @@ export default function NovoOrcamentoPage() {
           </div>
         </div>
 
-        {/* Itens */}
         <div className="card">
           <div className="ct">
             Itens do Orçamento
@@ -327,10 +322,8 @@ export default function NovoOrcamentoPage() {
           <div style={{
             display: "grid",
             gridTemplateColumns: "2fr 80px 80px 60px 100px 100px 80px",
-            gap: "8px",
-            padding: "6px 0",
-            borderBottom: "1px solid var(--b1)",
-            marginBottom: "8px",
+            gap: "8px", padding: "6px 0",
+            borderBottom: "1px solid var(--b1)", marginBottom: "8px",
           }}>
             {["Produto","Larg. (mm)","Alt. (mm)","Qtd","Valor/m²","Lap./m²",""].map((h, i) => (
               <div key={i} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>
@@ -347,14 +340,9 @@ export default function NovoOrcamentoPage() {
                 <div style={{
                   display: "grid",
                   gridTemplateColumns: "2fr 80px 80px 60px 100px 100px 80px",
-                  gap: "8px",
-                  alignItems: "center",
+                  gap: "8px", alignItems: "center",
                 }}>
-                  <select
-                    className="fc"
-                    value={item.produto_id || ""}
-                    onChange={e => updItem(i, "produto_id", Number(e.target.value))}
-                  >
+                  <select className="fc" value={item.produto_id || ""} onChange={e => updItem(i, "produto_id", Number(e.target.value))}>
                     {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
                   </select>
                   <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
