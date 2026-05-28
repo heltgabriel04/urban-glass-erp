@@ -7,9 +7,9 @@ import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 
 const CHIP: Record<string, string> = {
-  "Rascunho":  "chip cgr",
-  "Enviado":   "chip cy",
-  "Aprovado":  "chip cg",
+  "Rascunho": "chip cgr",
+  "Enviado":  "chip cy",
+  "Aprovado": "chip cg",
   "Rejeitado": "chip cr",
 };
 
@@ -61,39 +61,30 @@ export default function OrcamentosPage() {
       </div>
 
       <div className="con">
-        {/* Filtros de status */}
         <div style={{ display: "flex", gap: "6px", marginBottom: "14px" }}>
           {FILTROS.map(f => (
             <button
               key={f}
               onClick={() => setFiltroStatus(f)}
               style={{
-                padding: "5px 14px",
-                borderRadius: "99px",
-                border: "1px solid",
-                fontSize: "12px",
-                cursor: "pointer",
-                fontFamily: "'DM Sans', sans-serif",
+                padding: "5px 14px", borderRadius: "99px", border: "1px solid",
+                fontSize: "12px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
                 fontWeight: filtroStatus === f ? 700 : 400,
                 background: filtroStatus === f
                   ? f === "Aprovado" ? "rgba(16,185,129,.15)"
                   : f === "Rejeitado" ? "rgba(244,63,94,.15)"
                   : f === "Enviado" ? "rgba(245,158,11,.15)"
-                  : f === "Rascunho" ? "rgba(255,255,255,.08)"
-                  : "var(--surf2)"
-                  : "transparent",
+                  : "var(--surf2)" : "transparent",
                 borderColor: filtroStatus === f
                   ? f === "Aprovado" ? "var(--ok)"
                   : f === "Rejeitado" ? "var(--err)"
                   : f === "Enviado" ? "var(--warn)"
-                  : "var(--b2)"
-                  : "var(--b1)",
+                  : "var(--b2)" : "var(--b1)",
                 color: filtroStatus === f
                   ? f === "Aprovado" ? "var(--ok)"
                   : f === "Rejeitado" ? "var(--err)"
                   : f === "Enviado" ? "var(--warn)"
-                  : "var(--t1)"
-                  : "var(--t2)",
+                  : "var(--t1)" : "var(--t2)",
                 transition: "all 0.15s",
               }}
             >

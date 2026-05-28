@@ -1,0 +1,1 @@
+require('fs').writeFileSync('app/orcamentos/page.tsx', require('fs').readFileSync('write-content.txt', 'utf8'))
