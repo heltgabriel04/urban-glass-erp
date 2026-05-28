@@ -2,11 +2,10 @@
 
 export const dynamic = "force-dynamic";
 
-import { Suspense, useEffect, useRef, useState, useCallback } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
-import { formatPercent } from "@/lib/formatters";
 import type { Produto } from "@/types";
 
 // ─── TIPOS ────────────────────────────────────────────────
@@ -39,15 +38,16 @@ interface ResultadoChapa {
   free: EspacoLivre[];
   W: number;
   H: number;
+  isRet?: boolean;
 }
 
-// retalho com referência à chapa de origem
 interface RetalhoGerado extends EspacoLivre {
-  chapaIdx: number; // índice base-0 da chapa no array resultado
+  chapaIdx: number;
+  prod: string;
+  m2: number;
 }
 
-// ─── ALGORITMO GUILHOTINA ─────────────────────────────────
-// NÃO ALTERAR — best-fit por menor desperdício
+// ─── ALGORITMO GUILHOTINA — NÃO ALTERAR ──────────────────
 function guilhotina(
   W: number,
   H: number,
@@ -59,11 +59,7 @@ function guilhotina(
 
   pecas.forEach((peca, idx) => {
     if (!free.length) return;
-
-    let best = Infinity;
-    let bR: EspacoLivre | null = null;
-    let bI = -1;
-    let rot = false;
+    let best = Infinity, bR: EspacoLivre | null = null, bI = -1, rot = false;
 
     free.forEach((fr, fi) => {
       if (peca.l <= fr.l && peca.a <= fr.a) {
@@ -77,13 +73,10 @@ function guilhotina(
     });
 
     if (!bR || bI === -1) return;
-
     const fr = bR as EspacoLivre;
     const pl = rot ? peca.a : peca.l;
     const pa = rot ? peca.l : peca.a;
-
     placed.push({ x: fr.x, y: fr.y, l: pl, a: pa, idx, prod: peca.prod, rot });
-
     const nr: EspacoLivre[] = [];
     if (fr.l - (pl + kerf) >= 100) nr.push({ x: fr.x + pl + kerf, y: fr.y, l: fr.l - (pl + kerf), a: pa });
     if (fr.a - (pa + kerf) >= 100) nr.push({ x: fr.x, y: fr.y + pa + kerf, l: fr.l, a: fr.a - (pa + kerf) });
@@ -100,17 +93,12 @@ const CHAPAS_PADRAO = [
   { label: "2250 × 1605 mm", w: 2250, h: 1605 },
 ];
 
-const PAD = 12;
-
-// paleta de cores por produto (canvas)
-const CORES_PRODUTO = [
-  "#3dffa0", "#00c8ff", "#a78bfa", "#f59e0b",
-  "#f43f5e", "#38bdf8", "#fb923c", "#4ade80",
+const COLS_PECA = [
+  "#1f4d32","#173d26","#255c3b","#1a4530",
+  "#204228","#2a5c3f","#1e3a2a","#18402e",
 ];
 
-// ──────────────────────────────────────────────────────────
-// COMPONENTE INTERNO
-// ──────────────────────────────────────────────────────────
+// ─── COMPONENTE INTERNO ───────────────────────────────────
 function OtimizadorContent() {
   const searchParams = useSearchParams();
   const pedidoParam = searchParams.get("pedido");
@@ -120,39 +108,46 @@ function OtimizadorContent() {
 
   const [chapaW, setChapaW] = useState(3210);
   const [chapaH, setChapaH] = useState(2250);
-  const [kerf, setKerf] = useState(3);
+  const [kerf, setKerf] = useState(4);
+  const [bord, setBord] = useState(3);
 
   const [resultado, setResultado] = useState<ResultadoChapa[] | null>(null);
   const [chapaIdx, setChapaIdx] = useState(0);
   const [pedidoRef, setPedidoRef] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
 
-  // estado dos retalhos
+  // stats
+  const [statAprov, setStatAprov] = useState("—");
+  const [statPerda, setStatPerda] = useState("—");
+  const [statChapas, setStatChapas] = useState("—");
+  const [statRetalhos, setStatRetalhos] = useState("—");
+  const [msg, setMsg] = useState("");
+
+  // retalhos gerados
+  const [retalhosGerados, setRetalhosGerados] = useState<RetalhoGerado[]>([]);
+  const [mostrarCardRet, setMostrarCardRet] = useState(false);
   const [salvandoRetalhos, setSalvandoRetalhos] = useState(false);
   const [retalhosSalvos, setRetalhosSalvos] = useState(false);
   const [erroRetalhos, setErroRetalhos] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const resultadoRef = useRef<ResultadoChapa[] | null>(null);
 
-  // ── carrega produtos ──
+  // ── produtos ──
   useEffect(() => {
-    supabase
-      .from("produtos")
-      .select("*")
-      .eq("ativo", true)
-      .then(({ data }) => {
-        setProdutos((data as Produto[]) || []);
-        if (data && data.length > 0 && !pedidoParam) {
-          setPecas([{ l: 0, a: 0, qtd: 1, prod: data[0].nome }]);
-        }
-      });
+    supabase.from("produtos").select("*").eq("ativo", true).then(({ data }) => {
+      const prods = (data as Produto[]) || [];
+      setProdutos(prods);
+      if (prods.length > 0 && !pedidoParam) {
+        setPecas([{ l: 0, a: 0, qtd: 1, prod: prods[0].nome }]);
+      }
+    });
   }, []);
 
-  // ── carrega peças do pedido via URL param ──
+  // ── pedido via URL ──
   useEffect(() => {
     if (!pedidoParam) return;
     setCarregando(true);
-
     supabase
       .from("itens_pedido")
       .select("*, produtos(nome)")
@@ -160,167 +155,128 @@ function OtimizadorContent() {
       .then(({ data, error }) => {
         setCarregando(false);
         if (error || !data || data.length === 0) return;
-
         const map = new Map<string, Peca>();
         data.forEach((item: any) => {
           const key = `${item.largura}x${item.altura}x${item.produto_nome}`;
-          if (map.has(key)) {
-            map.get(key)!.qtd += item.quantidade;
-          } else {
-            map.set(key, {
-              l: item.largura,
-              a: item.altura,
-              qtd: item.quantidade,
-              prod: item.produto_nome,
-            });
-          }
+          if (map.has(key)) map.get(key)!.qtd += item.quantidade;
+          else map.set(key, { l: item.largura, a: item.altura, qtd: item.quantidade, prod: item.produto_nome });
         });
-
         setPecas(Array.from(map.values()));
         setPedidoRef(pedidoParam);
       });
   }, [pedidoParam]);
 
-  // ── redesenha quando muda chapa visualizada ──
+  // ── redesenha ──
   useEffect(() => {
     if (resultado && resultado[chapaIdx]) {
-      desenhar(resultado[chapaIdx], chapaIdx, pecas);
+      drawOpt(resultado[chapaIdx], chapaIdx, bord);
     }
   }, [resultado, chapaIdx]);
 
-  // ─── DESENHAR ────────────────────────────────────────────
-  function desenhar(chapa: ResultadoChapa, idx: number, pecasRef: Peca[]) {
-    const canvas = canvasRef.current;
-    if (!canvas || !chapa) return;
-    const ctx = canvas.getContext("2d");
+  // ── DESENHAR ──────────────────────────────────────────────
+  function drawOpt(r: ResultadoChapa, idx: number, bordMm: number) {
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const ctx = cv.getContext("2d");
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const displayW = canvas.offsetWidth;
-    const displayH = canvas.offsetHeight;
-
-    canvas.width = displayW * dpr;
-    canvas.height = displayH * dpr;
+    const displayW = cv.offsetWidth;
+    const displayH = cv.offsetHeight;
+    cv.width = displayW * dpr;
+    cv.height = displayH * dpr;
     ctx.scale(dpr, dpr);
 
-    const LABEL_H = 22;
-    const CW = displayW - PAD * 2;
-    const CH = displayH - PAD * 2 - LABEL_H;
-
-    const scale = Math.min(CW / chapa.W, CH / chapa.H);
-    const dW = chapa.W * scale;
-    const dH = chapa.H * scale;
-    const ox = (CW - dW) / 2 + PAD;
-    const oy = (CH - dH) / 2 + PAD + LABEL_H;
+    const CW = displayW - 14;
+    const CH = displayH - 14;
+    const scale = Math.min(CW / r.W, CH / r.H);
+    const dW = r.W * scale;
+    const dH = r.H * scale;
+    const ox = (CW - dW) / 2 + 7;
+    const oy = (CH - dH) / 2 + 7;
 
     ctx.clearRect(0, 0, displayW, displayH);
 
-    // label da chapa
-    ctx.fillStyle = "#444e68";
-    ctx.font = "bold 10px 'DM Mono', monospace";
-    ctx.fillText(`CHAPA ${idx + 1} · ${chapa.W} × ${chapa.H} mm`, PAD, PAD + 13);
-
-    // fundo da chapa
-    ctx.fillStyle = "#0d1f14";
-    ctx.strokeStyle = "#1a2035";
-    ctx.lineWidth = 1;
+    // fundo chapa
+    ctx.fillStyle = r.isRet ? "#0b1a2a" : "#0a1710";
     ctx.fillRect(ox, oy, dW, dH);
+    ctx.strokeStyle = r.isRet ? "#1a4060" : "#1a4028";
+    ctx.lineWidth = 1.5;
     ctx.strokeRect(ox, oy, dW, dH);
 
-    // grid de referência (linhas a cada 500mm)
-    ctx.strokeStyle = "rgba(61,255,160,0.06)";
-    ctx.lineWidth = 0.5;
-    for (let gx = 500; gx < chapa.W; gx += 500) {
-      const px = ox + gx * scale;
-      ctx.beginPath(); ctx.moveTo(px, oy); ctx.lineTo(px, oy + dH); ctx.stroke();
-    }
-    for (let gy = 500; gy < chapa.H; gy += 500) {
-      const py = oy + gy * scale;
-      ctx.beginPath(); ctx.moveTo(ox, py); ctx.lineTo(ox + dW, py); ctx.stroke();
+    // borda lapidação
+    if (bordMm > 0) {
+      const bs = bordMm * scale;
+      ctx.fillStyle = "rgba(255,107,53,0.12)";
+      ctx.fillRect(ox, oy, dW, bs);
+      ctx.fillRect(ox, oy + dH - bs, dW, bs);
+      ctx.fillRect(ox, oy, bs, dH);
+      ctx.fillRect(ox + dW - bs, oy, bs, dH);
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = "rgba(255,107,53,0.35)";
+      ctx.lineWidth = 0.6;
+      ctx.strokeRect(ox + bs, oy + bs, dW - bs * 2, dH - bs * 2);
+      ctx.setLineDash([]);
     }
 
-    // mapeia produto → cor (consistente por nome)
-    const prodMap = new Map<string, string>();
-    let ci = 0;
-    pecasRef.forEach((p) => {
-      if (!prodMap.has(p.prod)) {
-        prodMap.set(p.prod, CORES_PRODUTO[ci % CORES_PRODUTO.length]);
-        ci++;
-      }
-    });
+    // label
+    ctx.fillStyle = "#444e68";
+    ctx.font = "9px 'DM Mono', monospace";
+    ctx.fillText(
+      (r.isRet ? "RETALHO " : "CHAPA ") + (idx + 1) + " · " + r.W + "×" + r.H + "mm",
+      ox, oy - 3
+    );
 
-    // peças colocadas
-    chapa.placed.forEach((p) => {
-      const cor = prodMap.get(p.prod) || "#3dffa0";
-      const px = ox + p.x * scale;
-      const py = oy + p.y * scale;
+    // peças
+    r.placed.forEach((p, i) => {
+      const px = ox + (p.x + bordMm) * scale;
+      const py = oy + (p.y + bordMm) * scale;
       const pw = p.l * scale;
       const ph = p.a * scale;
-
-      ctx.fillStyle = cor + "33"; // 20% alpha
+      ctx.fillStyle = COLS_PECA[i % COLS_PECA.length];
       ctx.fillRect(px, py, pw, ph);
-
-      ctx.strokeStyle = cor;
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "rgba(61,255,160,.45)";
+      ctx.lineWidth = 0.7;
       ctx.strokeRect(px, py, pw, ph);
-
-      // label da peça (só se couber)
-      if (pw > 30 && ph > 18) {
-        ctx.fillStyle = cor;
-        ctx.font = `bold ${Math.min(10, pw / 6)}px 'DM Mono', monospace`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        const label = p.rot
-          ? `${p.a}×${p.l}`
-          : `${p.l}×${p.a}`;
-        ctx.fillText(label, px + pw / 2, py + ph / 2);
-        ctx.textAlign = "left";
-        ctx.textBaseline = "alphabetic";
+      if (pw > 35 && ph > 18) {
+        ctx.fillStyle = "rgba(200,255,230,.88)";
+        ctx.font = `${Math.max(7, Math.min(10, pw / 8))}px 'DM Sans', sans-serif`;
+        ctx.fillText(p.l + "×" + p.a, px + 3, py + 11);
+        if (ph > 23 && pw > 55) {
+          ctx.font = "7px 'DM Mono', monospace";
+          ctx.fillStyle = "rgba(150,220,180,.7)";
+          ctx.fillText(((p.l * p.a) / 1e6).toFixed(3) + "m²", px + 3, py + 20);
+        }
       }
     });
 
-    // espaços livres ≥200×200 (retalhos)
-    chapa.free
-      .filter((fr) => fr.l >= 200 && fr.a >= 200)
-      .forEach((fr) => {
-        const px = ox + fr.x * scale;
-        const py = oy + fr.y * scale;
-        const pw = fr.l * scale;
-        const ph = fr.a * scale;
-
-        ctx.fillStyle = "rgba(167,139,250,0.08)";
-        ctx.fillRect(px, py, pw, ph);
-
-        ctx.strokeStyle = "#a78bfa";
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 3]);
-        ctx.strokeRect(px, py, pw, ph);
-        ctx.setLineDash([]);
-
-        if (pw > 40 && ph > 16) {
-          ctx.fillStyle = "#a78bfa88";
-          ctx.font = "8px 'DM Mono', monospace";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText(`${fr.l}×${fr.a}`, px + pw / 2, py + ph / 2);
-          ctx.textAlign = "left";
-          ctx.textBaseline = "alphabetic";
-        }
-      });
+    // free rects
+    r.free.forEach((fr) => {
+      const isLg = fr.l >= 200 && fr.a >= 200;
+      const fx = ox + (fr.x + bordMm) * scale;
+      const fy = oy + (fr.y + bordMm) * scale;
+      const fw = fr.l * scale;
+      const fh = fr.a * scale;
+      ctx.fillStyle = isLg ? "rgba(0,200,255,.05)" : "rgba(255,255,255,.015)";
+      ctx.fillRect(fx, fy, fw, fh);
+      if (isLg && fw > 18 && fh > 12) {
+        ctx.fillStyle = "rgba(0,200,255,.4)";
+        ctx.font = "9px 'DM Mono', monospace";
+        ctx.fillText("↺", fx + 3, fy + 10);
+      }
+    });
   }
 
-  // ─── RODAR OTIMIZADOR ────────────────────────────────────
+  // ── RODAR ────────────────────────────────────────────────
   function rodar() {
-    const expandidas: Peca[] = [];
+    const tipoProd = pecas.find((p) => p.prod)?.prod || "Retalho";
+    let expandidas: Peca[] = [];
     pecas.forEach((p) => {
       if (p.l > 0 && p.a > 0) {
-        for (let q = 0; q < (p.qtd || 1); q++) {
-          expandidas.push({ ...p, qtd: 1 });
-        }
+        for (let q = 0; q < (p.qtd || 1); q++) expandidas.push({ ...p, qtd: 1 });
       }
     });
     if (!expandidas.length) return;
-
     expandidas.sort((a, b) => b.l * b.a - a.l * a.a);
 
     const results: ResultadoChapa[] = [];
@@ -328,7 +284,7 @@ function OtimizadorContent() {
     let ci = 0;
 
     while (rem.length && ci < 15) {
-      const r = guilhotina(chapaW, chapaH, rem, kerf);
+      const r = guilhotina(chapaW - bord * 2, chapaH - bord * 2, rem, kerf);
       results.push({ W: chapaW, H: chapaH, ...r });
       const used = new Set(r.placed.map((p) => p.idx));
       rem = rem.filter((_, i) => !used.has(i));
@@ -336,40 +292,63 @@ function OtimizadorContent() {
       if (!r.placed.length) break;
     }
 
+    resultadoRef.current = results;
     setResultado(results);
     setChapaIdx(0);
     setRetalhosSalvos(false);
     setErroRetalhos(null);
+
+    // stats
+    let totA = 0, usedA = 0;
+    results.forEach((r) => {
+      totA += r.W * r.H;
+      r.placed.forEach((p) => (usedA += p.l * p.a));
+    });
+    const aprov = totA > 0 ? (usedA / totA) * 100 : 0;
+    const perda = 100 - aprov;
+    setStatAprov(aprov.toFixed(2) + "%");
+    setStatPerda(perda.toFixed(2) + "%");
+    setStatChapas(String(results.length));
+
+    // retalhos gerados
+    const retPend: RetalhoGerado[] = [];
+    results.forEach((r, ri) => {
+      r.free
+        .filter((fr) => fr.l >= 200 && fr.a >= 200)
+        .forEach((fr) => {
+          retPend.push({
+            ...fr,
+            chapaIdx: ri,
+            prod: tipoProd,
+            m2: parseFloat(((fr.l * fr.a) / 1e6).toFixed(4)),
+          });
+        });
+    });
+
+    setRetalhosGerados(retPend);
+    setStatRetalhos(String(retPend.length));
+    setMostrarCardRet(retPend.length > 0);
+
+    const totalPecas = expandidas.length;
+    const totalPlaced = results.reduce((s, r) => s + r.placed.length, 0);
+    const naoCouberam = totalPecas - totalPlaced;
+    setMsg(
+      `${totalPecas} peças · ${results.length} superfície(s) · ${naoCouberam > 0 ? naoCouberam + " não couberam" : "Todas alocadas!"}`
+    );
   }
 
-  // ─── RETALHOS GERADOS ────────────────────────────────────
-  // Mantém referência à chapa de origem — o flatMap simples do handoff perdia isso
-  const retalhosGerados: RetalhoGerado[] = resultado
-    ? resultado.flatMap((chapa, ci) =>
-        chapa.free
-          .filter((fr) => fr.l >= 200 && fr.a >= 200)
-          .map((fr) => ({ ...fr, chapaIdx: ci }))
-      )
-    : [];
-
-  // nome do produto predominante para etiquetar os retalhos
-  const produtoPredominante =
-    pecas.find((p) => p.prod)?.prod || "Retalho";
-
-  // ─── SALVAR RETALHOS ────────────────────────────────────
+  // ── SALVAR RETALHOS ──────────────────────────────────────
   async function salvarRetalhos() {
-    if (!resultado || retalhosGerados.length === 0) return;
-
+    if (retalhosGerados.length === 0) return;
     setSalvandoRetalhos(true);
     setErroRetalhos(null);
 
-    const hoje = new Date().toISOString().split("T")[0]; // date → YYYY-MM-DD
-
+    const hoje = new Date().toISOString().split("T")[0];
     const rows = retalhosGerados.map((fr) => ({
-      produto_nome: produtoPredominante,
+      produto_nome: fr.prod,
       largura: fr.l,
       altura: fr.a,
-      m2: parseFloat(((fr.l * fr.a) / 1_000_000).toFixed(4)),
+      m2: fr.m2,
       chapa_origem: `CHAPA ${fr.chapaIdx + 1}`,
       pedido_origem: pedidoRef ?? null,
       status: "Disponível",
@@ -377,343 +356,275 @@ function OtimizadorContent() {
     }));
 
     const { error } = await supabase.from("retalhos").insert(rows);
-
     setSalvandoRetalhos(false);
-
     if (error) {
-      setErroRetalhos(`Erro ao salvar: ${error.message}`);
+      setErroRetalhos(`Erro: ${error.message}`);
     } else {
       setRetalhosSalvos(true);
+      setMostrarCardRet(false);
     }
   }
 
-  // ─── HELPERS UI ──────────────────────────────────────────
+  // ── HELPERS ──────────────────────────────────────────────
   function addPeca() {
     setPecas((p) => [...p, { l: 0, a: 0, qtd: 1, prod: produtos[0]?.nome || "" }]);
   }
-
   function remPeca(i: number) {
     setPecas((p) => p.filter((_, idx) => idx !== i));
   }
-
   function updPeca(i: number, field: keyof Peca, value: string | number) {
-    setPecas((p) =>
-      p.map((pc, idx) => (idx === i ? { ...pc, [field]: value } : pc))
-    );
+    setPecas((p) => p.map((pc, idx) => (idx === i ? { ...pc, [field]: value } : pc)));
   }
-
   function aplicarChapaPadrao(e: React.ChangeEvent<HTMLSelectElement>) {
     const v = parseInt(e.target.value);
-    if (isNaN(v)) return;
-    const c = CHAPAS_PADRAO[v];
-    setChapaW(c.w);
-    setChapaH(c.h);
+    if (isNaN(v) || v < 0) return;
+    setChapaW(CHAPAS_PADRAO[v].w);
+    setChapaH(CHAPAS_PADRAO[v].h);
   }
 
-  // ── stats ──
-  const totalPecas = pecas.reduce((s, p) => s + (p.qtd || 1), 0);
-  const totalChapas = resultado?.length ?? 0;
-  const totalPlaced = resultado?.reduce((s, r) => s + r.placed.length, 0) ?? 0;
-  const eficiencia =
-    resultado && resultado.length > 0
-      ? pecas.reduce((s, p) => s + p.l * p.a * p.qtd, 0) /
-        (resultado.length * chapaW * chapaH)
-      : null;
-
-  // ──────────────────────────────────────────────────────────
-  // RENDER
-  // ──────────────────────────────────────────────────────────
+  // ── RENDER ───────────────────────────────────────────────
   return (
     <AppLayout>
-      <div className="pw" style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
-
-        {/* toolbar */}
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-          {pedidoRef && (
-            <a
-              href={`/pedidos/${pedidoRef}`}
-              className="btn btn-ghost"
-              style={{ fontSize: "12px", gap: "6px" }}
-            >
-              ← Voltar ao Pedido
-            </a>
-          )}
-          <h1 style={{ fontFamily: "var(--font-syne)", fontSize: "18px", fontWeight: 700, flex: 1 }}>
-            ◈ Otimizador de Corte
-          </h1>
-          {pedidoRef && (
-            <span className="chip chip-blue" style={{ fontSize: "11px" }}>
-              Pedido {pedidoRef}
+      <div className="con">
+        {/* toolbar voltar */}
+        {pedidoRef && (
+          <div style={{ marginBottom: "14px", display: "flex", alignItems: "center", gap: "10px" }}>
+            <a href={`/pedidos/${pedidoRef}`} className="btn bg sm">← Voltar ao Pedido</a>
+            <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "var(--font-mono)" }}>
+              Otimizando pedido {pedidoRef}
             </span>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* grid principal */}
-        <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: "16px", alignItems: "start" }}>
+        <div className="g2" style={{ alignItems: "start", gap: "14px" }}>
 
-          {/* coluna esquerda — inputs */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-
-            {/* chapa */}
-            <div className="card" style={{ padding: "16px" }}>
-              <p className="label" style={{ marginBottom: "10px" }}>Chapa</p>
-
-              <select className="input" onChange={aplicarChapaPadrao} style={{ marginBottom: "10px" }}>
-                {CHAPAS_PADRAO.map((c, i) => (
-                  <option key={i} value={i}>{c.label}</option>
-                ))}
-                <option value={-1}>Personalizado</option>
-              </select>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
-                <div>
-                  <p className="label" style={{ marginBottom: "4px" }}>Largura</p>
-                  <input
-                    type="number"
-                    className="input"
-                    value={chapaW}
-                    onChange={(e) => setChapaW(Number(e.target.value))}
-                  />
+          {/* ── COL ESQUERDA ── */}
+          <div>
+            {/* Configuração da Chapa */}
+            <div className="card mb14">
+              <div className="ct">Configuração da Chapa</div>
+              <div className="fr">
+                <div className="fg">
+                  <label className="fl">Tipo de Chapa</label>
+                  <select className="fc" onChange={aplicarChapaPadrao}>
+                    {CHAPAS_PADRAO.map((c, i) => (
+                      <option key={i} value={i}>{c.label}</option>
+                    ))}
+                    <option value={-1}>Personalizado</option>
+                  </select>
                 </div>
-                <div>
-                  <p className="label" style={{ marginBottom: "4px" }}>Altura</p>
+                <div className="fg">
+                  <label className="fl">Folga do Corte / Diamante (mm)</label>
                   <input
-                    type="number"
-                    className="input"
-                    value={chapaH}
-                    onChange={(e) => setChapaH(Number(e.target.value))}
-                  />
-                </div>
-                <div>
-                  <p className="label" style={{ marginBottom: "4px" }}>Kerf (mm)</p>
-                  <input
-                    type="number"
-                    className="input"
-                    value={kerf}
+                    type="number" className="fc" value={kerf} min={0} max={20}
                     onChange={(e) => setKerf(Number(e.target.value))}
-                    min={0}
-                    max={10}
+                  />
+                </div>
+              </div>
+              <div className="fr">
+                <div className="fg">
+                  <label className="fl">Largura Chapa (mm)</label>
+                  <input type="number" className="fc" value={chapaW} onChange={(e) => setChapaW(Number(e.target.value))} />
+                </div>
+                <div className="fg">
+                  <label className="fl">Altura Chapa (mm)</label>
+                  <input type="number" className="fc" value={chapaH} onChange={(e) => setChapaH(Number(e.target.value))} />
+                </div>
+              </div>
+              <div className="fr">
+                <div className="fg">
+                  <label className="fl">Perda de Borda Lapidação (mm)</label>
+                  <input
+                    type="number" className="fc" value={bord} min={0} max={30}
+                    onChange={(e) => setBord(Number(e.target.value))}
                   />
                 </div>
               </div>
             </div>
 
-            {/* peças */}
-            <div className="card" style={{ padding: "16px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                <p className="label">Peças ({totalPecas})</p>
-                <button className="btn btn-ghost" style={{ fontSize: "11px", padding: "4px 10px" }} onClick={addPeca}>
-                  + Adicionar
-                </button>
+            {/* Peças */}
+            <div className="card">
+              <div className="ct">
+                Peças a Cortar
+                <button className="btn bp sm" onClick={rodar}>◈ Calcular</button>
               </div>
 
               {carregando && (
-                <p style={{ color: "var(--t3)", fontSize: "12px", textAlign: "center", padding: "12px" }}>
+                <div style={{ textAlign: "center", color: "var(--t3)", fontSize: "12px", padding: "14px", fontFamily: "var(--font-mono)" }}>
                   Carregando peças do pedido...
-                </p>
+                </div>
               )}
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "320px", overflowY: "auto" }}>
+              <div id="opt-pecas">
+                {pecas.length === 0 && (
+                  <div style={{ textAlign: "center", color: "var(--t3)", fontSize: "12px", padding: "14px", fontFamily: "var(--font-mono)" }}>
+                    Nenhuma peça. Clique em + para adicionar.
+                  </div>
+                )}
                 {pecas.map((p, i) => (
-                  <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 60px 28px", gap: "6px", alignItems: "center" }}>
-                    <input
-                      type="number"
-                      className="input"
-                      placeholder="Larg."
-                      value={p.l || ""}
-                      onChange={(e) => updPeca(i, "l", Number(e.target.value))}
-                    />
-                    <input
-                      type="number"
-                      className="input"
-                      placeholder="Alt."
-                      value={p.a || ""}
-                      onChange={(e) => updPeca(i, "a", Number(e.target.value))}
-                    />
-                    <input
-                      type="number"
-                      className="input"
-                      placeholder="Qtd"
-                      value={p.qtd}
-                      min={1}
-                      onChange={(e) => updPeca(i, "qtd", Number(e.target.value))}
-                    />
-                    <button
-                      className="btn btn-ghost"
-                      style={{ padding: "4px", color: "var(--err)", fontSize: "13px" }}
-                      onClick={() => remPeca(i)}
-                    >
-                      ×
-                    </button>
+                  <div key={i} className="op">
+                    <div className="oph">
+                      <span>PEÇA {i + 1}</span>
+                      <button className="btn bw xs" onClick={() => remPeca(i)}>✕</button>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 60px", gap: "7px" }}>
+                      <div className="fg" style={{ margin: 0 }}>
+                        <label className="fl" style={{ fontSize: "9px" }}>Produto</label>
+                        <select
+                          className="fc" style={{ fontSize: "11px" }} value={p.prod}
+                          onChange={(e) => updPeca(i, "prod", e.target.value)}
+                        >
+                          {produtos.map((pr) => (
+                            <option key={pr.id} value={pr.nome}>{pr.nome}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="fg" style={{ margin: 0 }}>
+                        <label className="fl" style={{ fontSize: "9px" }}>Largura (mm)</label>
+                        <input
+                          type="number" className="fc" style={{ fontSize: "12px" }}
+                          value={p.l || ""} placeholder="1200"
+                          onChange={(e) => updPeca(i, "l", Number(e.target.value))}
+                        />
+                      </div>
+                      <div className="fg" style={{ margin: 0 }}>
+                        <label className="fl" style={{ fontSize: "9px" }}>Altura (mm)</label>
+                        <input
+                          type="number" className="fc" style={{ fontSize: "12px" }}
+                          value={p.a || ""} placeholder="800"
+                          onChange={(e) => updPeca(i, "a", Number(e.target.value))}
+                        />
+                      </div>
+                      <div className="fg" style={{ margin: 0 }}>
+                        <label className="fl" style={{ fontSize: "9px" }}>Qtd</label>
+                        <input
+                          type="number" className="fc" style={{ fontSize: "12px" }}
+                          value={p.qtd} min={1}
+                          onChange={(e) => updPeca(i, "qtd", Number(e.target.value))}
+                        />
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
+
+              <button className="add-il" onClick={addPeca}>＋ Adicionar peça</button>
             </div>
-
-            {/* botão rodar */}
-            <button
-              className="btn btn-primary"
-              onClick={rodar}
-              style={{ width: "100%", padding: "12px" }}
-            >
-              ◈ Calcular Otimização
-            </button>
-
-            {/* stats */}
-            {resultado && (
-              <div className="card" style={{ padding: "14px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span className="label">Chapas usadas</span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", color: "var(--t1)" }}>{totalChapas}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span className="label">Peças alocadas</span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", color: "var(--t1)" }}>{totalPlaced}</span>
-                </div>
-                {eficiencia !== null && (
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span className="label">Eficiência</span>
-                    <span style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "13px",
-                      color: eficiencia >= 0.8 ? "var(--ok)" : eficiencia >= 0.6 ? "var(--warn)" : "var(--err)"
-                    }}>
-                      {formatPercent(eficiencia)}
-                    </span>
-                  </div>
-                )}
-                {retalhosGerados.length > 0 && (
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span className="label">Retalhos ≥200×200</span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", color: "#a78bfa" }}>
-                      {retalhosGerados.length} espaço{retalhosGerados.length > 1 ? "s" : ""}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* botão salvar retalhos — só aparece quando há resultado e pedido */}
-            {resultado && retalhosGerados.length > 0 && pedidoRef && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <button
-                  className="btn"
-                  onClick={salvarRetalhos}
-                  disabled={salvandoRetalhos || retalhosSalvos}
-                  style={{
-                    width: "100%",
-                    padding: "11px",
-                    background: retalhosSalvos ? "var(--ok)" : "rgba(167,139,250,0.15)",
-                    border: "1px solid",
-                    borderColor: retalhosSalvos ? "var(--ok)" : "#a78bfa",
-                    color: retalhosSalvos ? "#fff" : "#a78bfa",
-                    cursor: retalhosSalvos ? "default" : "pointer",
-                    borderRadius: "var(--r)",
-                    fontWeight: 600,
-                    fontSize: "13px",
-                    transition: "all .2s",
-                  }}
-                >
-                  {salvandoRetalhos
-                    ? "Salvando..."
-                    : retalhosSalvos
-                    ? `✓ ${retalhosGerados.length} retalho${retalhosGerados.length > 1 ? "s" : ""} salvo${retalhosGerados.length > 1 ? "s" : ""}`
-                    : `◧ Salvar ${retalhosGerados.length} retalho${retalhosGerados.length > 1 ? "s" : ""} no estoque`}
-                </button>
-
-                {erroRetalhos && (
-                  <p style={{ fontSize: "11px", color: "var(--err)", textAlign: "center" }}>
-                    {erroRetalhos}
-                  </p>
-                )}
-
-                {!retalhosSalvos && (
-                  <p style={{ fontSize: "10px", color: "var(--t3)", textAlign: "center" }}>
-                    Espaços livres ≥ 200×200 mm serão salvos em /retalhos vinculados a {pedidoRef}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* aviso quando há retalhos mas não veio de pedido */}
-            {resultado && retalhosGerados.length > 0 && !pedidoRef && (
-              <p style={{ fontSize: "11px", color: "var(--t3)", textAlign: "center", lineHeight: 1.4 }}>
-                {retalhosGerados.length} retalho{retalhosGerados.length > 1 ? "s" : ""} identificado{retalhosGerados.length > 1 ? "s" : ""}.
-                Para salvar no estoque, acesse o otimizador a partir de um pedido.
-              </p>
-            )}
           </div>
 
-          {/* coluna direita — canvas + navegação */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-
-            {/* navegação entre chapas */}
-            {resultado && resultado.length > 1 && (
-              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                {resultado.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setChapaIdx(i)}
-                    className="btn btn-ghost"
-                    style={{
-                      fontSize: "11px",
-                      padding: "4px 10px",
-                      background: chapaIdx === i ? "rgba(61,255,160,0.1)" : undefined,
-                      borderColor: chapaIdx === i ? "var(--acc)" : undefined,
-                      color: chapaIdx === i ? "var(--acc)" : undefined,
-                    }}
-                  >
-                    Chapa {i + 1}
-                  </button>
-                ))}
+          {/* ── COL DIREITA ── */}
+          <div>
+            {/* Resultado */}
+            <div className="card mb14">
+              <div className="ct">
+                Resultado da Otimização
+                {resultado && retalhosSalvos && (
+                  <span style={{ fontSize: "11px", color: "var(--ok)", fontFamily: "var(--font-mono)" }}>
+                    ✓ Retalhos salvos
+                  </span>
+                )}
               </div>
-            )}
 
-            {/* canvas */}
-            <div
-              className="card"
-              style={{
-                padding: "0",
-                overflow: "hidden",
-                minHeight: "480px",
-                position: "relative",
-                background: "var(--surf)",
-              }}
-            >
-              {!resultado && (
-                <div style={{
-                  position: "absolute", inset: 0,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  color: "var(--t3)", fontSize: "13px", flexDirection: "column", gap: "8px"
-                }}>
-                  <span style={{ fontSize: "32px" }}>◈</span>
-                  <span>Configure as peças e clique em Calcular</span>
+              {/* stats */}
+              <div className="rs">
+                <div className="rsi">
+                  <div className="rsv" style={{ color: "var(--acc)" }}>{statAprov}</div>
+                  <div className="rsl">Aproveitamento</div>
+                </div>
+                <div className="rsi">
+                  <div className="rsv" style={{ color: "var(--err)" }}>{statPerda}</div>
+                  <div className="rsl">Perda</div>
+                </div>
+                <div className="rsi">
+                  <div className="rsv">{statChapas}</div>
+                  <div className="rsl">Chapas</div>
+                </div>
+                <div className="rsi">
+                  <div className="rsv" style={{ color: "var(--acc2)" }}>{statRetalhos}</div>
+                  <div className="rsl">Retalhos Gerados</div>
+                </div>
+              </div>
+
+              {msg && (
+                <div style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "var(--font-mono)", marginBottom: "10px" }}>
+                  {msg}
                 </div>
               )}
-              <canvas
-                ref={canvasRef}
-                style={{ width: "100%", height: "480px", display: "block" }}
-              />
+
+              {/* tabs chapas */}
+              {resultado && resultado.length > 1 && (
+                <div style={{ display: "flex", gap: "5px", flexWrap: "wrap", marginBottom: "9px" }}>
+                  {resultado.map((_, i) => (
+                    <button
+                      key={i}
+                      className="btn bg sm"
+                      onClick={() => setChapaIdx(i)}
+                      style={chapaIdx === i ? { borderColor: "var(--acc)", color: "var(--acc)" } : {}}
+                    >
+                      Chapa {i + 1}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* canvas */}
+              <div className="cvw">
+                <div className="cvi" id="opt-cvi">
+                  {!resultado ? "Configure peças e calcule" : `Chapa ${chapaIdx + 1} · ${resultado[chapaIdx]?.placed.length || 0} peças`}
+                </div>
+                <canvas
+                  ref={canvasRef}
+                  width={554}
+                  height={365}
+                  style={{ display: "block", width: "100%", height: "365px" }}
+                />
+              </div>
+
+              {/* legenda */}
+              <div className="cvleg">
+                <div className="cvli"><div className="cvld" style={{ background: "#1f4d32" }} />Peça cortada</div>
+                <div className="cvli"><div className="cvld" style={{ background: "#3a1a08", opacity: 0.7 }} />Perda borda</div>
+                <div className="cvli"><div className="cvld" style={{ background: "#1a1a2a" }} />Descarte</div>
+              </div>
             </div>
 
-            {/* legenda */}
-            {resultado && (
-              <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", paddingLeft: "4px" }}>
-                {Array.from(new Set(pecas.map((p) => p.prod))).map((prod, i) => (
-                  <div key={prod} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <div style={{
-                      width: "10px", height: "10px", borderRadius: "2px",
-                      background: CORES_PRODUTO[i % CORES_PRODUTO.length],
-                    }} />
-                    <span style={{ fontSize: "11px", color: "var(--t2)" }}>{prod || "—"}</span>
-                  </div>
-                ))}
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <div style={{
-                    width: "10px", height: "10px", borderRadius: "2px",
-                    background: "#a78bfa", border: "1px dashed #a78bfa"
-                  }} />
-                  <span style={{ fontSize: "11px", color: "var(--t2)" }}>Retalho aproveitável</span>
+            {/* Card retalhos gerados */}
+            {mostrarCardRet && (
+              <div className="card">
+                <div className="ct">Retalhos Gerados — Rastreabilidade</div>
+                <div>
+                  {retalhosGerados.map((r, i) => (
+                    <div key={i} className="sr">
+                      <div className="sl">
+                        Retalho {i + 1} — {r.prod}
+                        <small>{r.l}×{r.a}mm · {r.m2} m² · Chapa {r.chapaIdx + 1}</small>
+                      </div>
+                      <span className="rtag">↺ Reutilizável</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop: "12px", display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                  <button
+                    className="btn bp sm"
+                    onClick={salvarRetalhos}
+                    disabled={salvandoRetalhos}
+                  >
+                    {salvandoRetalhos ? "Salvando..." : "✓ Salvar Retalhos"}
+                  </button>
+                  <button
+                    className="btn bg sm"
+                    onClick={() => setMostrarCardRet(false)}
+                  >
+                    Descartar
+                  </button>
+                  {!pedidoRef && (
+                    <span style={{ fontSize: "10px", color: "var(--warn)", fontFamily: "var(--font-mono)" }}>
+                      ⚠ Sem pedido vinculado — pedido_origem será nulo
+                    </span>
+                  )}
+                  {erroRetalhos && (
+                    <span style={{ fontSize: "10px", color: "var(--err)" }}>{erroRetalhos}</span>
+                  )}
                 </div>
               </div>
             )}
@@ -724,9 +635,7 @@ function OtimizadorContent() {
   );
 }
 
-// ──────────────────────────────────────────────────────────
-// EXPORT PRINCIPAL COM SUSPENSE
-// ──────────────────────────────────────────────────────────
+// ── EXPORT COM SUSPENSE ───────────────────────────────────
 export default function OtimizadorPage() {
   return (
     <Suspense fallback={<div>Carregando...</div>}>
