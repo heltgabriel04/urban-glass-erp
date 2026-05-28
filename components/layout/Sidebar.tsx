@@ -1,20 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase/client";
 
 const NAV = [
   {
     grupo: "VISÃO GERAL",
     items: [
-      { href: "/dashboard", label: "Dashboard",   icon: "⬡" },
+      { href: "/dashboard", label: "Dashboard", icon: "⬡" },
     ],
   },
   {
     grupo: "COMERCIAL",
     items: [
-      { href: "/pedidos",   label: "Pedidos",      icon: "◈", badge: null },
-      { href: "/clientes",  label: "Clientes",     icon: "◎" },
+      { href: "/pedidos",  label: "Pedidos",  icon: "◈" },
+      { href: "/clientes", label: "Clientes", icon: "◎" },
     ],
   },
   {
@@ -36,15 +37,21 @@ const NAV = [
   {
     grupo: "GESTÃO",
     items: [
-      { href: "/produtos",   label: "Produtos",          icon: "◫" },
-      { href: "/tabelas",    label: "Tabelas de Preço",  icon: "▦" },
-      { href: "/relatorios", label: "Relatórios & BI",   icon: "◭" },
+      { href: "/produtos",   label: "Produtos",         icon: "◫" },
+      { href: "/tabelas",    label: "Tabelas de Preço", icon: "▦" },
+      { href: "/relatorios", label: "Relatórios & BI",  icon: "◭" },
     ],
   },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.push("/auth/login");
+  }
 
   return (
     <aside className="sb">
@@ -53,9 +60,7 @@ export default function Sidebar() {
         <div className="logo-row">
           <div className="logo-ico">UG</div>
           <div>
-            <div className="logo-name">
-              Urban<span>Glass</span>
-            </div>
+            <div className="logo-name">Urban<span>Glass</span></div>
           </div>
         </div>
         <div className="logo-ver">ERP Industrial v3</div>
@@ -84,7 +89,30 @@ export default function Sidebar() {
       {/* Footer */}
       <div className="sb-ft">
         <span className="ver-tag">v3.0.0 · 2026</span>
-        <span style={{ fontSize: "10px", color: "var(--t3)" }}>⬡ online</span>
+        <button
+          onClick={handleLogout}
+          style={{
+            background: "transparent",
+            border: "1px solid var(--b2)",
+            borderRadius: "6px",
+            color: "var(--t3)",
+            fontSize: "10px",
+            padding: "4px 9px",
+            cursor: "pointer",
+            fontFamily: "'DM Mono', monospace",
+            transition: "0.1s",
+          }}
+          onMouseEnter={e => {
+            (e.target as HTMLButtonElement).style.color = "var(--err)";
+            (e.target as HTMLButtonElement).style.borderColor = "var(--err)";
+          }}
+          onMouseLeave={e => {
+            (e.target as HTMLButtonElement).style.color = "var(--t3)";
+            (e.target as HTMLButtonElement).style.borderColor = "var(--b2)";
+          }}
+        >
+          ⏻ sair
+        </button>
       </div>
     </aside>
   );
