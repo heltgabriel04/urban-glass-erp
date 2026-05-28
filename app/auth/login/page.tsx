@@ -6,28 +6,22 @@ import { supabase } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  async function handleLogin(
-    e: React.FormEvent<HTMLFormElement>
-  ) {
+  async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-
+    setError("");
     setLoading(true);
 
-    const { error } =
-      await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     setLoading(false);
 
     if (error) {
-      alert(error.message);
+      setError("E-mail ou senha inválidos.");
       return;
     }
 
@@ -35,74 +29,216 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#020816] flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-[#0b1220] border border-[#173056] rounded-3xl p-8 shadow-2xl">
+    <div style={{
+      minHeight: "100vh",
+      background: "var(--bg)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontFamily: "'DM Sans', sans-serif",
+      position: "relative",
+      overflow: "hidden",
+    }}>
 
-        <div className="mb-8">
-          <img
-            src="/logo.png"
-            alt="UrbanGlass"
-            className="h-12 mb-6"
-          />
+      {/* Glow de fundo */}
+      <div style={{
+        position: "absolute",
+        width: "600px",
+        height: "600px",
+        borderRadius: "50%",
+        background: "radial-gradient(circle, rgba(61,255,160,0.06) 0%, transparent 70%)",
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
+        pointerEvents: "none",
+      }} />
 
-          <h1 className="text-4xl font-bold text-white mb-2">
-            Bem-vindo
-          </h1>
+      <div style={{
+        width: "100%",
+        maxWidth: "420px",
+        padding: "0 20px",
+        position: "relative",
+        zIndex: 1,
+      }}>
 
-          <p className="text-gray-400 text-sm">
-            Entre com suas credenciais para acessar
-          </p>
-        </div>
+        {/* Card */}
+        <div style={{
+          background: "var(--surf)",
+          border: "1px solid var(--b2)",
+          borderRadius: "20px",
+          padding: "40px",
+          boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+        }}>
 
-        <form onSubmit={handleLogin}>
-
-          <div className="mb-4">
-            <label className="block text-xs text-gray-400 uppercase mb-2">
-              E-mail
-            </label>
-
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) =>
-                setEmail(e.target.value)
-              }
-              className="w-full bg-[#101827] border border-[#1f365c] rounded-xl px-4 py-4 text-white outline-none focus:border-[#38ef7d]"
-            />
+          {/* Logo */}
+          <div style={{ marginBottom: "32px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+              <div style={{
+                width: "38px",
+                height: "38px",
+                background: "linear-gradient(135deg, var(--acc), var(--acc2))",
+                borderRadius: "10px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: "'Syne', sans-serif",
+                fontSize: "13px",
+                fontWeight: 900,
+                color: "#090b10",
+                flexShrink: 0,
+              }}>UG</div>
+              <div>
+                <div style={{
+                  fontFamily: "'Syne', sans-serif",
+                  fontSize: "18px",
+                  fontWeight: 800,
+                  letterSpacing: "-0.5px",
+                  color: "var(--t1)",
+                }}>Urban<span style={{ color: "var(--acc)" }}>Glass</span></div>
+                <div style={{
+                  fontSize: "9px",
+                  color: "var(--t3)",
+                  letterSpacing: "2px",
+                  textTransform: "uppercase",
+                  fontFamily: "'DM Mono', monospace",
+                }}>ERP INDUSTRIAL V3</div>
+              </div>
+            </div>
           </div>
 
-          <div className="mb-6">
-            <label className="block text-xs text-gray-400 uppercase mb-2">
-              Senha
-            </label>
-
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) =>
-                setPassword(e.target.value)
-              }
-              className="w-full bg-[#101827] border border-[#1f365c] rounded-xl px-4 py-4 text-white outline-none focus:border-[#38ef7d]"
-            />
+          {/* Título */}
+          <div style={{ marginBottom: "28px" }}>
+            <h1 style={{
+              fontFamily: "'Syne', sans-serif",
+              fontSize: "26px",
+              fontWeight: 800,
+              color: "var(--t1)",
+              letterSpacing: "-0.5px",
+              marginBottom: "6px",
+            }}>Bem-vindo</h1>
+            <p style={{ fontSize: "13px", color: "var(--t2)" }}>
+              Entre com suas credenciais para acessar
+            </p>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-[#43f08f] hover:opacity-90 transition rounded-xl py-4 font-bold text-black"
-          >
-            {loading
-              ? "Entrando..."
-              : "→ Entrar"}
-          </button>
-        </form>
+          {/* Form */}
+          <form onSubmit={handleLogin}>
 
-        <div className="mt-8 border-t border-[#1c2b46] pt-6 text-center text-xs text-gray-500">
-          urban-glass-erp • acesso restrito
+            <div style={{ marginBottom: "14px" }}>
+              <label style={{
+                display: "block",
+                fontSize: "9.5px",
+                color: "var(--t3)",
+                textTransform: "uppercase",
+                letterSpacing: "1.2px",
+                fontFamily: "'DM Mono', monospace",
+                marginBottom: "6px",
+              }}>E-mail</label>
+              <input
+                type="email"
+                required
+                placeholder="seu@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                style={{
+                  width: "100%",
+                  background: "var(--surf2)",
+                  border: "1px solid var(--b2)",
+                  borderRadius: "8px",
+                  padding: "11px 14px",
+                  color: "var(--t1)",
+                  fontSize: "13px",
+                  outline: "none",
+                  fontFamily: "'DM Sans', sans-serif",
+                  transition: "border-color 0.15s",
+                }}
+                onFocus={(e) => e.target.style.borderColor = "var(--acc)"}
+                onBlur={(e) => e.target.style.borderColor = "var(--b2)"}
+              />
+            </div>
+
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{
+                display: "block",
+                fontSize: "9.5px",
+                color: "var(--t3)",
+                textTransform: "uppercase",
+                letterSpacing: "1.2px",
+                fontFamily: "'DM Mono', monospace",
+                marginBottom: "6px",
+              }}>Senha</label>
+              <input
+                type="password"
+                required
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                style={{
+                  width: "100%",
+                  background: "var(--surf2)",
+                  border: "1px solid var(--b2)",
+                  borderRadius: "8px",
+                  padding: "11px 14px",
+                  color: "var(--t1)",
+                  fontSize: "13px",
+                  outline: "none",
+                  fontFamily: "'DM Sans', sans-serif",
+                  transition: "border-color 0.15s",
+                }}
+                onFocus={(e) => e.target.style.borderColor = "var(--acc)"}
+                onBlur={(e) => e.target.style.borderColor = "var(--b2)"}
+              />
+            </div>
+
+            {error && (
+              <div style={{
+                background: "rgba(244,63,94,0.08)",
+                border: "1px solid rgba(244,63,94,0.25)",
+                color: "var(--err)",
+                borderRadius: "8px",
+                padding: "10px 14px",
+                fontSize: "12px",
+                marginBottom: "16px",
+              }}>{error}</div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                width: "100%",
+                background: loading ? "var(--surf3)" : "var(--acc)",
+                color: loading ? "var(--t2)" : "#090b10",
+                border: "none",
+                borderRadius: "8px",
+                padding: "13px",
+                fontSize: "14px",
+                fontWeight: 700,
+                fontFamily: "'DM Sans', sans-serif",
+                cursor: loading ? "not-allowed" : "pointer",
+                transition: "all 0.15s",
+                letterSpacing: "0.2px",
+              }}
+            >
+              {loading ? "Entrando..." : "→ Entrar"}
+            </button>
+          </form>
+
+          {/* Footer */}
+          <div style={{
+            marginTop: "28px",
+            paddingTop: "20px",
+            borderTop: "1px solid var(--b1)",
+            textAlign: "center",
+            fontSize: "10px",
+            color: "var(--t3)",
+            fontFamily: "'DM Mono', monospace",
+            letterSpacing: "1px",
+          }}>
+            urban-glass-erp • acesso restrito
+          </div>
+
         </div>
-
       </div>
     </div>
   );
