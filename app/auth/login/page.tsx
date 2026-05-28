@@ -6,126 +6,103 @@ import { supabase } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
-  async function handleLogin(e: React.FormEvent) {
+  async function handleLogin(
+    e: React.FormEvent<HTMLFormElement>
+  ) {
     e.preventDefault();
+
     setLoading(true);
-    setError("");
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+    const { error } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
     setLoading(false);
-    if (error) { setError("E-mail ou senha inválidos."); return; }
-    router.push("/dashboard");
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    router.push("/");
   }
 
   return (
-    <div style={{
-      minHeight: "100vh", background: "var(--bg)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-    }}>
-      {/* Glow de fundo */}
-      <div style={{
-        position: "fixed", top: "20%", left: "50%", transform: "translateX(-50%)",
-        width: "600px", height: "300px", borderRadius: "50%",
-        background: "radial-gradient(ellipse, rgba(61,255,160,0.06) 0%, transparent 70%)",
-        pointerEvents: "none",
-      }} />
+    <div className="min-h-screen bg-[#020816] flex items-center justify-center px-4">
+      <div className="w-full max-w-md bg-[#0b1220] border border-[#173056] rounded-3xl p-8 shadow-2xl">
 
-      <div style={{
-        background: "var(--surf)", border: "1px solid var(--b2)",
-        borderRadius: "var(--r2)", padding: "40px 36px",
-        width: "100%", maxWidth: "400px", boxShadow: "var(--sh)",
-        position: "relative",
-      }}>
+        <div className="mb-8">
+          <img
+            src="/logo.png"
+            alt="UrbanGlass"
+            className="h-12 mb-6"
+          />
 
-        {/* Logo */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "32px" }}>
-          <div style={{
-            width: "38px", height: "38px",
-            background: "linear-gradient(135deg, var(--acc), var(--acc2))",
-            borderRadius: "10px", display: "flex", alignItems: "center",
-            justifyContent: "center", fontFamily: "'Syne', sans-serif",
-            fontSize: "13px", fontWeight: 900, color: "#090b10", flexShrink: 0,
-          }}>UG</div>
-          <div>
-            <div style={{
-              fontFamily: "'Syne', sans-serif", fontSize: "17px",
-              fontWeight: 800, letterSpacing: "-0.5px",
-            }}>
-              Urban<span style={{ color: "var(--acc)" }}>Glass</span>
-            </div>
-            <div style={{
-              fontSize: "9px", color: "var(--t3)", letterSpacing: "2px",
-              textTransform: "uppercase", fontFamily: "'DM Mono', monospace",
-            }}>ERP Industrial V3</div>
-          </div>
-        </div>
+          <h1 className="text-4xl font-bold text-white mb-2">
+            Bem-vindo
+          </h1>
 
-        {/* Título */}
-        <div style={{ marginBottom: "24px" }}>
-          <div style={{
-            fontFamily: "'Syne', sans-serif", fontSize: "20px",
-            fontWeight: 700, marginBottom: "6px",
-          }}>Bem-vindo</div>
-          <div style={{ fontSize: "13px", color: "var(--t2)" }}>
+          <p className="text-gray-400 text-sm">
             Entre com suas credenciais para acessar
-          </div>
+          </p>
         </div>
 
-        {/* Erro */}
-        {error && (
-          <div className="al al-e" style={{ marginBottom: "16px" }}>
-            ⚠ {error}
-          </div>
-        )}
-
-        {/* Form */}
         <form onSubmit={handleLogin}>
-          <div className="fg" style={{ marginBottom: "12px" }}>
-            <label className="fl">E-mail</label>
+
+          <div className="mb-4">
+            <label className="block text-xs text-gray-400 uppercase mb-2">
+              E-mail
+            </label>
+
             <input
-              className="fc"
               type="email"
-              placeholder="seu@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
               required
+              value={email}
+              onChange={(e) =>
+                setEmail(e.target.value)
+              }
+              className="w-full bg-[#101827] border border-[#1f365c] rounded-xl px-4 py-4 text-white outline-none focus:border-[#38ef7d]"
             />
           </div>
 
-          <div className="fg" style={{ marginBottom: "24px" }}>
-            <label className="fl">Senha</label>
+          <div className="mb-6">
+            <label className="block text-xs text-gray-400 uppercase mb-2">
+              Senha
+            </label>
+
             <input
-              className="fc"
               type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
               required
+              value={password}
+              onChange={(e) =>
+                setPassword(e.target.value)
+              }
+              className="w-full bg-[#101827] border border-[#1f365c] rounded-xl px-4 py-4 text-white outline-none focus:border-[#38ef7d]"
             />
           </div>
 
           <button
             type="submit"
-            className="btn bp"
             disabled={loading}
-            style={{ width: "100%", justifyContent: "center", padding: "11px" }}
+            className="w-full bg-[#43f08f] hover:opacity-90 transition rounded-xl py-4 font-bold text-black"
           >
-            {loading ? "Entrando..." : "→ Entrar"}
+            {loading
+              ? "Entrando..."
+              : "→ Entrar"}
           </button>
         </form>
 
-        {/* Footer */}
-        <div style={{
-          marginTop: "24px", paddingTop: "20px", borderTop: "1px solid var(--b1)",
-          textAlign: "center", fontSize: "11px", color: "var(--t3)",
-          fontFamily: "'DM Mono', monospace",
-        }}>
-          urban-glass-erp · acesso restrito
+        <div className="mt-8 border-t border-[#1c2b46] pt-6 text-center text-xs text-gray-500">
+          urban-glass-erp • acesso restrito
         </div>
+
       </div>
     </div>
   );

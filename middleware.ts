@@ -5,18 +5,7 @@ import type { CookieOptions } from "@supabase/ssr";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Rotas públicas
-  const publicRoutes = [
-    "/auth",
-    "/set-password",
-  ];
-
-  const isPublicRoute = publicRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
-
-  // Permite acesso sem login
-  if (isPublicRoute) {
+  if (pathname.startsWith("/auth")) {
     return NextResponse.next();
   }
 
@@ -50,7 +39,6 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Sem usuário → login
   if (!user) {
     return NextResponse.redirect(
       new URL("/auth/login", request.url)
@@ -61,7 +49,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
