@@ -8,14 +8,12 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import type { Produto } from "@/types";
 
-// ─── TIPOS ────────────────────────────────────────────────
 interface Peca { l: number; a: number; qtd: number; prod: string; }
 interface PecaPlacada { x: number; y: number; l: number; a: number; idx: number; prod: string; rot: boolean; }
 interface EspacoLivre { x: number; y: number; l: number; a: number; }
 interface ResultadoChapa { placed: PecaPlacada[]; free: EspacoLivre[]; W: number; H: number; }
 interface RetalhoGerado extends EspacoLivre { chapaIdx: number; prod: string; m2: number; }
 
-// ─── ALGORITMO GUILHOTINA — NÃO ALTERAR ──────────────────
 function guilhotina(W: number, H: number, pecas: Peca[], kerf: number): { placed: PecaPlacada[]; free: EspacoLivre[] } {
   let free: EspacoLivre[] = [{ x: 0, y: 0, l: W, a: H }];
   const placed: PecaPlacada[] = [];
@@ -46,7 +44,6 @@ const CHAPAS_PADRAO = [
 
 const COLS_PECA = ["#1f4d32","#173d26","#255c3b","#1a4530","#204228","#2a5c3f","#1e3a2a","#18402e"];
 
-// ─── COMPONENTE ───────────────────────────────────────────
 function OtimizadorContent() {
   const searchParams = useSearchParams();
   const pedidoParam = searchParams.get("pedido");
@@ -209,10 +206,16 @@ function OtimizadorContent() {
 
   return (
     <AppLayout>
+      <div className="tb">
+        <div className="tb-title">Otimizador de Corte</div>
+        {pedidoRef && (
+          <a href={`/pedidos/${pedidoRef}`} className="btn bg sm">← Voltar ao Pedido</a>
+        )}
+      </div>
+
       <div className="con">
         {pedidoRef && (
-          <div style={{ marginBottom: "14px", display: "flex", alignItems: "center", gap: "10px" }}>
-            <a href={`/pedidos/${pedidoRef}`} className="btn bg sm">← Voltar ao Pedido</a>
+          <div style={{ marginBottom: "14px" }}>
             <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>
               Otimizando pedido {pedidoRef}
             </span>
@@ -308,13 +311,11 @@ function OtimizadorContent() {
             <div className="card mb14">
               <div className="ct">
                 Resultado da Otimização
-                <div style={{ display: "flex", gap: "6px" }}>
-                  {resultado && retalhosSalvos && (
-                    <span style={{ fontSize: "11px", color: "var(--ok)", fontFamily: "'DM Mono', monospace", alignSelf: "center" }}>
-                      ✓ Retalhos salvos
-                    </span>
-                  )}
-                </div>
+                {resultado && retalhosSalvos && (
+                  <span style={{ fontSize: "11px", color: "var(--ok)", fontFamily: "'DM Mono', monospace" }}>
+                    ✓ Retalhos salvos
+                  </span>
+                )}
               </div>
 
               <div className="rs">
