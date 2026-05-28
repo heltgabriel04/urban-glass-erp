@@ -13,10 +13,10 @@ const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out'
 const FLUXO_ATIVO = ['Aguardando otimização','Em Produção – Corte','Em Produção – Lapidação','Separação','Saiu para entrega'];
 
 export default function DashboardPage() {
-  const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [pedidos, setPedidos]     = useState<Pedido[]>([]);
   const [financeiro, setFinanceiro] = useState<FinanceiroCliente[]>([]);
   const [fatMensal, setFatMensal] = useState<FaturamentoMensal[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]     = useState(true);
 
   useEffect(() => { load(); }, []);
 
@@ -33,37 +33,28 @@ export default function DashboardPage() {
     setLoading(false);
   }
 
-  // KPIs calculados
-  const fatTotal = financeiro.reduce((a, f) => a + Number(f.faturado), 0);
-  const recTotal = financeiro.reduce((a, f) => a + Number(f.recebido), 0);
-  const aReceber = fatTotal - recTotal;
-  const pedAtivos = pedidos.filter(p => FLUXO_ATIVO.includes(p.status)).length;
+  const fatTotal   = financeiro.reduce((a, f) => a + Number(f.faturado), 0);
+  const recTotal   = financeiro.reduce((a, f) => a + Number(f.recebido), 0);
+  const aReceber   = fatTotal - recTotal;
+  const pedAtivos  = pedidos.filter(p => FLUXO_ATIVO.includes(p.status)).length;
   const ticketMedio = fatTotal / (pedidos.length || 1);
 
-  // Alertas
-  const inadimplentes = financeiro.filter(f => Number(f.recebido) === 0 && Number(f.faturado) > 0);
-  const parciais = financeiro.filter(f => Number(f.recebido) > 0 && Number(f.a_receber) > 0);
+  const inadimplentes  = financeiro.filter(f => Number(f.recebido) === 0 && Number(f.faturado) > 0);
+  const parciais       = financeiro.filter(f => Number(f.recebido) > 0 && Number(f.a_receber) > 0);
   const aguardandoOtim = pedidos.filter(p => p.status === 'Aguardando otimização');
 
-  // Gráfico — monta array dos 12 meses
   const barras = MESES_ABREV.map((mes, i) => {
     const fat = fatMensal.find(f => f.mes === i + 1);
     return { mes, faturado: fat ? Number(fat.faturado) : 0 };
   });
   const maxBar = Math.max(...barras.map(b => b.faturado), 1);
 
-  // Top clientes
   const topCli = [...financeiro].sort((a, b) => Number(b.faturado) - Number(a.faturado)).slice(0, 5);
 
   return (
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Dashboard</div>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <div className="clk">
-            {new Date().toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "short" })}
-          </div>
-        </div>
       </div>
 
       <div className="con">
@@ -71,7 +62,6 @@ export default function DashboardPage() {
           <div className="loading">Carregando dashboard...</div>
         ) : (
           <>
-            {/* KPIs */}
             <div className="g4 mb14">
               <div className="kpi">
                 <div className="kpi-l">Faturamento Total</div>
@@ -100,7 +90,6 @@ export default function DashboardPage() {
             </div>
 
             <div className="g2 mb14">
-              {/* Gráfico faturamento */}
               <div className="card">
                 <div className="ct">
                   Faturamento Mensal
@@ -109,15 +98,13 @@ export default function DashboardPage() {
                 <div style={{ height: "90px", display: "flex", alignItems: "flex-end", gap: "5px" }}>
                   {barras.map((b, i) => (
                     <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer" }}>
-                      <div
-                        style={{
-                          width: "100%",
-                          height: `${b.faturado > 0 ? Math.max((b.faturado / maxBar) * 80, 3) : 3}px`,
-                          borderRadius: "3px 3px 0 0",
-                          background: b.faturado > 0 ? "var(--acc)" : "var(--surf3)",
-                          transition: "0.2s",
-                        }}
-                      />
+                      <div style={{
+                        width: "100%",
+                        height: `${b.faturado > 0 ? Math.max((b.faturado / maxBar) * 80, 3) : 3}px`,
+                        borderRadius: "3px 3px 0 0",
+                        background: b.faturado > 0 ? "var(--acc)" : "var(--surf3)",
+                        transition: "0.2s",
+                      }} />
                       <div style={{ fontSize: "9px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", marginTop: "3px" }}>
                         {b.mes}
                       </div>
@@ -126,7 +113,6 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Alertas */}
               <div className="card">
                 <div className="ct">Alertas</div>
                 {inadimplentes.map(f => (
@@ -151,7 +137,6 @@ export default function DashboardPage() {
             </div>
 
             <div className="g2">
-              {/* Top clientes */}
               <div className="card">
                 <div className="ct">Top Clientes</div>
                 {topCli.map(f => {
@@ -173,7 +158,6 @@ export default function DashboardPage() {
                 })}
               </div>
 
-              {/* Indicadores */}
               <div className="card">
                 <div className="ct">Indicadores</div>
                 <div className="sr">

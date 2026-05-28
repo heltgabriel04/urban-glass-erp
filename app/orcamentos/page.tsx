@@ -7,9 +7,9 @@ import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 
 const CHIP: Record<string, string> = {
-  "Rascunho": "chip cgr",
-  "Enviado":  "chip cy",
-  "Aprovado": "chip cg",
+  "Rascunho":  "chip cgr",
+  "Enviado":   "chip cy",
+  "Aprovado":  "chip cg",
   "Rejeitado": "chip cr",
 };
 
@@ -18,8 +18,8 @@ const FILTROS = ["Todos", "Rascunho", "Enviado", "Aprovado", "Rejeitado"];
 export default function OrcamentosPage() {
   const { toast } = useToast();
   const [orcamentos, setOrcamentos] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busca, setBusca] = useState("");
+  const [loading, setLoading]       = useState(true);
+  const [busca, setBusca]           = useState("");
   const [filtroStatus, setFiltroStatus] = useState("Todos");
 
   useEffect(() => { load(); }, []);
@@ -68,22 +68,22 @@ export default function OrcamentosPage() {
               onClick={() => setFiltroStatus(f)}
               style={{
                 padding: "5px 14px", borderRadius: "99px", border: "1px solid",
-                fontSize: "12px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                fontSize: "12px", cursor: "pointer", fontFamily: "'Inter', sans-serif",
                 fontWeight: filtroStatus === f ? 700 : 400,
                 background: filtroStatus === f
-                  ? f === "Aprovado" ? "rgba(16,185,129,.15)"
+                  ? f === "Aprovado"  ? "rgba(16,185,129,.15)"
                   : f === "Rejeitado" ? "rgba(244,63,94,.15)"
-                  : f === "Enviado" ? "rgba(245,158,11,.15)"
+                  : f === "Enviado"   ? "rgba(245,158,11,.15)"
                   : "var(--surf2)" : "transparent",
                 borderColor: filtroStatus === f
-                  ? f === "Aprovado" ? "var(--ok)"
+                  ? f === "Aprovado"  ? "var(--ok)"
                   : f === "Rejeitado" ? "var(--err)"
-                  : f === "Enviado" ? "var(--warn)"
+                  : f === "Enviado"   ? "var(--warn)"
                   : "var(--b2)" : "var(--b1)",
                 color: filtroStatus === f
-                  ? f === "Aprovado" ? "var(--ok)"
+                  ? f === "Aprovado"  ? "var(--ok)"
                   : f === "Rejeitado" ? "var(--err)"
-                  : f === "Enviado" ? "var(--warn)"
+                  : f === "Enviado"   ? "var(--warn)"
                   : "var(--t1)" : "var(--t2)",
                 transition: "all 0.15s",
               }}
