@@ -81,10 +81,30 @@ export async function avancarStatusPedido(id: string, statusAtual: StatusPedido)
 }
 
 export async function registrarRecebimento(pedidoId: string, valor: number) {
+  // 1. busca pedido para ter cliente_id e valor atual
   const pedido = await getPedidoById(pedidoId);
   if (!pedido) return null;
+
+  // 2. atualiza valor_recebido no pedido
   const novoRecebido = Number(pedido.valor_recebido) + valor;
-  return updatePedido(pedidoId, { valor_recebido: novoRecebido });
+  const pedidoAtualizado = await updatePedido(pedidoId, { valor_recebido: novoRecebido });
+  if (!pedidoAtualizado) return null;
+
+  // 3. cria lançamento em lancamentos para o Fluxo de Caixa refletir
+  const hoje = new Date().toISOString().split('T')[0]; // date → YYYY-MM-DD
+  const { error: errLanc } = await supabase.from('lancamentos').insert({
+    tipo: 'Entrada',
+    descricao: `Recebimento pedido ${pedidoId}`,
+    valor,
+    status: 'Pago',
+    vencimento: hoje,
+    pedido_id: pedidoId,
+    cliente_id: pedido.clientes?.id ?? pedido.cliente_id ?? null,
+  } as never);
+
+  if (errLanc) console.error('registrarRecebimento — lancamento:', errLanc);
+
+  return pedidoAtualizado;
 }
 
 export async function getProximoIdPedido(): Promise<string> {
