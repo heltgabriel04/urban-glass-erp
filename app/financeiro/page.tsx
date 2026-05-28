@@ -5,7 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { getFinanceiroClientes } from "@/services/financeiro.service";
 import { getPedidos, registrarRecebimento } from "@/services/pedidos.service";
 import { formatBRL, formatPercent, formatDate, diffDias, labelDiff } from "@/lib/formatters";
-import { useToast } from "@/components/ui/Toast";
+import { useToast } from "@/components/ui/toast";
 import type { FinanceiroCliente, Pedido } from "@/types";
 
 export default function FinanceiroPage() {
