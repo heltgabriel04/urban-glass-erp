@@ -5,9 +5,12 @@ import AppLayout from "@/components/layout/AppLayout";
 import { getFinanceiroClientes } from "@/services/financeiro.service";
 import { getPedidos, registrarRecebimento } from "@/services/pedidos.service";
 import { formatBRL, formatPercent, formatDate, diffDias, labelDiff } from "@/lib/formatters";
+import { useToast } from "@/components/ui/Toast";
 import type { FinanceiroCliente, Pedido } from "@/types";
 
 export default function FinanceiroPage() {
+  const { toast } = useToast();
+
   const [financeiro, setFinanceiro] = useState<FinanceiroCliente[]>([]);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,8 +73,21 @@ export default function FinanceiroPage() {
     if (val > saldo) { setErro(`Valor máximo: ${formatBRL(saldo)}`); return; }
 
     setSalvando(true);
-    await registrarRecebimento(pedidoSel.id, val);
+    const result = await registrarRecebimento(pedidoSel.id, val);
     setSalvando(false);
+
+    if (!result) {
+      toast("Erro ao registrar recebimento", "err");
+      return;
+    }
+
+    const quitado = val >= saldo;
+    toast(
+      quitado
+        ? `✓ Pedido ${pedidoSel.id} quitado!`
+        : `Recebimento de ${formatBRL(val)} registrado — ${pedidoSel.id}`
+    );
+
     setModal(false);
     load();
   }
@@ -89,7 +105,6 @@ export default function FinanceiroPage() {
 
   const inad = financeiro.filter(f => Number(f.recebido) === 0 && Number(f.faturado) > 0);
 
-  // Pedidos em aberto do cliente selecionado
   const pedidosCliente = clienteSel
     ? pedidos.filter(p =>
         p.cliente_id === clienteSel.cliente_id &&
@@ -115,7 +130,6 @@ export default function FinanceiroPage() {
           <div className="loading">Carregando financeiro...</div>
         ) : (
           <>
-            {/* KPIs */}
             <div className="g4 mb14">
               <div className="kpi">
                 <div className="kpi-l">Total Faturado</div>
@@ -144,7 +158,6 @@ export default function FinanceiroPage() {
             </div>
 
             <div className="g2 mb14">
-              {/* Inadimplência */}
               <div className="card">
                 <div className="ct">Inadimplência Total</div>
                 {inad.length === 0 ? (
@@ -164,7 +177,6 @@ export default function FinanceiroPage() {
                 )}
               </div>
 
-              {/* Vencimentos próximos */}
               <div className="card">
                 <div className="ct">Vencimentos Próximos</div>
                 {vencimentos.map(p => {
@@ -185,7 +197,6 @@ export default function FinanceiroPage() {
               </div>
             </div>
 
-            {/* Tabela por cliente */}
             <div className="tw">
               <table>
                 <thead>
@@ -245,18 +256,14 @@ export default function FinanceiroPage() {
         )}
       </div>
 
-      {/* ── Modal recebimento ── */}
       {modal && clienteSel && (
         <div className="mov open" onClick={e => e.target === e.currentTarget && setModal(false)}>
           <div className="mod" style={{ width: "480px" }}>
-
-            {/* Header */}
             <div className="mhd">
               <div className="mtit">Registrar Recebimento</div>
               <button className="mcl" onClick={() => setModal(false)}>✕</button>
             </div>
 
-            {/* Info cliente */}
             <div className="al al-i" style={{ marginBottom: "16px" }}>
               <div>
                 <strong>{clienteSel.cliente_nome}</strong>
@@ -267,14 +274,9 @@ export default function FinanceiroPage() {
               </div>
             </div>
 
-            {/* Seleção de pedido */}
             <div className="fg" style={{ marginBottom: "14px" }}>
               <label className="fl">Pedido *</label>
-              <select
-                className="fc"
-                value={pedidoSel?.id ?? ""}
-                onChange={e => selecionarPedido(e.target.value)}
-              >
+              <select className="fc" value={pedidoSel?.id ?? ""} onChange={e => selecionarPedido(e.target.value)}>
                 <option value="">Selecione um pedido...</option>
                 {pedidosCliente.map(p => {
                   const saldo = Number(p.valor_total) - Number(p.valor_recebido);
@@ -289,7 +291,6 @@ export default function FinanceiroPage() {
               </select>
             </div>
 
-            {/* Detalhes do pedido selecionado */}
             {pedidoSel && (
               <div style={{
                 background: "var(--surf2)", border: "1px solid var(--b1)",
@@ -307,7 +308,6 @@ export default function FinanceiroPage() {
                   <span style={{ fontSize: "11px", color: "var(--t3)" }}>Saldo restante</span>
                   <span className="mono" style={{ color: "var(--warn)", fontWeight: 700 }}>{formatBRL(saldoPedido)}</span>
                 </div>
-                {/* Barra de progresso */}
                 <div style={{ height: "4px", borderRadius: "2px", background: "var(--surf3)", overflow: "hidden" }}>
                   <div style={{
                     height: "100%", borderRadius: "2px",
@@ -318,32 +318,22 @@ export default function FinanceiroPage() {
               </div>
             )}
 
-            {/* Valor */}
             <div className="fg" style={{ marginBottom: "6px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
                 <label className="fl">Valor Recebido *</label>
                 {pedidoSel && (
-                  <button
-                    className="btn bg xs"
-                    onClick={preencherTotal}
-                    style={{ fontSize: "10px", padding: "2px 8px" }}
-                  >
+                  <button className="btn bg xs" onClick={preencherTotal} style={{ fontSize: "10px", padding: "2px 8px" }}>
                     Preencher total
                   </button>
                 )}
               </div>
               <input
-                className="fc"
-                type="number"
-                placeholder="0,00"
-                value={valorRec}
-                onChange={e => handleValor(e.target.value)}
-                disabled={!pedidoSel}
-                autoFocus={!!pedidoSel}
+                className="fc" type="number" placeholder="0,00"
+                value={valorRec} onChange={e => handleValor(e.target.value)}
+                disabled={!pedidoSel} autoFocus={!!pedidoSel}
               />
             </div>
 
-            {/* Preview da barra após recebimento */}
             {pedidoSel && valorNum > 0 && !erro && (
               <div style={{ marginBottom: "14px" }}>
                 <div style={{ height: "4px", borderRadius: "2px", background: "var(--surf3)", overflow: "hidden" }}>
@@ -360,14 +350,8 @@ export default function FinanceiroPage() {
               </div>
             )}
 
-            {/* Erro */}
-            {erro && (
-              <div className="al al-e" style={{ marginBottom: "12px" }}>
-                {erro}
-              </div>
-            )}
+            {erro && <div className="al al-e" style={{ marginBottom: "12px" }}>{erro}</div>}
 
-            {/* Ações */}
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
               <button className="btn bg" onClick={() => setModal(false)}>Cancelar</button>
               <button
@@ -378,7 +362,6 @@ export default function FinanceiroPage() {
                 {salvando ? "Salvando..." : "✓ Confirmar Recebimento"}
               </button>
             </div>
-
           </div>
         </div>
       )}

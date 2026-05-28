@@ -2,7 +2,7 @@
 
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
-import { ToastProvider } from "@/components/ui/Toast";
+import { ToastProvider } from "@/components/ui/toast";
 
 interface Props {
   children: React.ReactNode;
