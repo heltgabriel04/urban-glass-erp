@@ -75,12 +75,12 @@ export default function PedidoDetalhe() {
   if (loading) return <AppLayout><div className="con"><div className="loading">Carregando pedido...</div></div></AppLayout>;
   if (!pedido) return <AppLayout><div className="con"><div style={{ color:"var(--err)", padding:"32px" }}>Pedido não encontrado.</div></div></AppLayout>;
 
-  const aberto    = Number(pedido.valor_total) - Number(pedido.valor_recebido);
-  const quitado   = aberto <= 0;
-  const pctRec    = pedido.valor_total > 0 ? Math.min(100, (Number(pedido.valor_recebido) / Number(pedido.valor_total)) * 100) : 0;
-  const statusIdx = FLUXO.indexOf(pedido.status);
-  const podeAvancar = !["Entregue","Finalizado","Cancelado"].includes(pedido.status);
-  const temItens  = (pedido.itens_pedido?.length ?? 0) > 0;
+  const aberto      = Number(pedido.valor_total) - Number(pedido.valor_recebido);
+  const quitado     = aberto <= 0;
+  const pctRec      = pedido.valor_total > 0 ? Math.min(100, (Number(pedido.valor_recebido) / Number(pedido.valor_total)) * 100) : 0;
+  const statusIdx   = FLUXO.indexOf(pedido.status);
+  const podeAvancar = !["Finalizado","Cancelado"].includes(pedido.status);
+  const temItens    = (pedido.itens_pedido?.length ?? 0) > 0;
 
   return (
     <AppLayout>
@@ -102,22 +102,39 @@ export default function PedidoDetalhe() {
 
         {/* Progresso */}
         <div className="card" style={{ padding:"20px 24px" }}>
-          <div style={{ display:"flex", alignItems:"center", overflowX:"auto" }}>
+          <div style={{ display:"flex", alignItems:"flex-start" }}>
             {FLUXO.map((step, i) => {
               const done    = i < statusIdx;
               const current = i === statusIdx;
+              const last    = i === FLUXO.length - 1;
               return (
-                <div key={step} style={{ display:"flex", alignItems:"center", flex: i < FLUXO.length - 1 ? 1 : 0, minWidth:0 }}>
+                <div key={step} style={{ display:"flex", alignItems:"flex-start", flex: last ? 0 : 1, minWidth:0 }}>
                   <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"6px", minWidth:"72px" }}>
-                    <div style={{ width:"28px", height:"28px", borderRadius:"50%", background: done ? "var(--ok)" : current ? "var(--acc)" : "var(--surf3)", border: current ? "2px solid var(--acc)" : "2px solid transparent", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"12px", fontWeight:700, color: done || current ? "#000" : "var(--t3)", flexShrink:0 }}>
+                    <div style={{
+                      width:"28px", height:"28px", borderRadius:"50%",
+                      background: done ? "var(--ok)" : current ? "var(--acc)" : "var(--surf3)",
+                      border: current ? "2px solid var(--acc)" : "2px solid transparent",
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      fontSize:"12px", fontWeight:700,
+                      color: done || current ? "#000" : "var(--t3)",
+                      flexShrink:0,
+                    }}>
                       {done ? "✓" : i + 1}
                     </div>
-                    <div style={{ fontSize:"10px", textAlign:"center", lineHeight:1.2, color: current ? "var(--acc)" : done ? "var(--ok)" : "var(--t3)", fontWeight: current ? 700 : 400, maxWidth:"72px" }}>
+                    <div style={{
+                      fontSize:"10px", textAlign:"center", lineHeight:1.2,
+                      color: current ? "var(--acc)" : done ? "var(--ok)" : "var(--t3)",
+                      fontWeight: current ? 700 : 400,
+                      maxWidth:"72px",
+                    }}>
                       {step}
                     </div>
                   </div>
-                  {i < FLUXO.length - 1 && (
-                    <div style={{ flex:1, height:"2px", margin:"0 4px", marginBottom:"20px", background: done ? "var(--ok)" : "var(--surf3)" }} />
+                  {!last && (
+                    <div style={{
+                      flex:1, height:"2px", marginTop:"13px", marginLeft:"4px", marginRight:"4px",
+                      background: done ? "var(--ok)" : "var(--surf3)",
+                    }} />
                   )}
                 </div>
               );
