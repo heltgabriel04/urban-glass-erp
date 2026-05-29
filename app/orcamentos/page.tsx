@@ -31,9 +31,9 @@ export default function OrcamentosPage() {
     setLoading(false);
   }
 
-  async function handleEnviar(id: string) {
-    const result = await updateOrcamento(id, { status: "Enviado" } as any);
-    if (result) { toast(`Orçamento ${id} marcado como Enviado`); load(); }
+  async function handleStatus(id: string, status: "Enviado" | "Aprovado" | "Rejeitado") {
+    const result = await updateOrcamento(id, { status } as any);
+    if (result) { toast(`Orçamento ${id} marcado como ${status}`); load(); }
     else toast("Erro ao atualizar status", "err");
   }
 
@@ -44,6 +44,38 @@ export default function OrcamentosPage() {
     const matchStatus = filtroStatus === "Todos" || o.status === filtroStatus;
     return matchBusca && matchStatus;
   });
+
+  const btnAcao = (
+    cor: string,
+    bg: string,
+    bgHover: string,
+    titulo: string,
+    icone: string,
+    onClick: () => void
+  ) => (
+    <button
+      title={titulo}
+      onClick={onClick}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "28px",
+        height: "28px",
+        borderRadius: "6px",
+        background: bg,
+        border: `1px solid ${cor}`,
+        color: cor,
+        fontSize: "13px",
+        cursor: "pointer",
+        transition: "all 0.15s",
+      }}
+      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = bgHover; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = bg; }}
+    >
+      {icone}
+    </button>
+  );
 
   return (
     <AppLayout>
@@ -67,24 +99,31 @@ export default function OrcamentosPage() {
               key={f}
               onClick={() => setFiltroStatus(f)}
               style={{
-                padding: "5px 14px", borderRadius: "99px", border: "1px solid",
-                fontSize: "12px", cursor: "pointer", fontFamily: "'Inter', sans-serif",
+                padding: "5px 14px",
+                borderRadius: "99px",
+                border: "1px solid",
+                fontSize: "12px",
+                cursor: "pointer",
+                fontFamily: "'Inter', sans-serif",
                 fontWeight: filtroStatus === f ? 700 : 400,
                 background: filtroStatus === f
                   ? f === "Aprovado"  ? "rgba(16,185,129,.15)"
                   : f === "Rejeitado" ? "rgba(244,63,94,.15)"
                   : f === "Enviado"   ? "rgba(245,158,11,.15)"
-                  : "var(--surf2)" : "transparent",
+                  : "var(--surf2)"
+                  : "transparent",
                 borderColor: filtroStatus === f
                   ? f === "Aprovado"  ? "var(--ok)"
                   : f === "Rejeitado" ? "var(--err)"
                   : f === "Enviado"   ? "var(--warn)"
-                  : "var(--b2)" : "var(--b1)",
+                  : "var(--b2)"
+                  : "var(--b1)",
                 color: filtroStatus === f
                   ? f === "Aprovado"  ? "var(--ok)"
                   : f === "Rejeitado" ? "var(--err)"
                   : f === "Enviado"   ? "var(--warn)"
-                  : "var(--t1)" : "var(--t2)",
+                  : "var(--t1)"
+                  : "var(--t2)",
                 transition: "all 0.15s",
               }}
             >
@@ -126,7 +165,9 @@ export default function OrcamentosPage() {
                 )}
                 {filtrados.map(o => (
                   <tr key={o.id}>
-                    <td><span className="mono" style={{ color: "var(--acc)" }}>{o.id}</span></td>
+                    <td>
+                      <span className="mono" style={{ color: "var(--acc)" }}>{o.id}</span>
+                    </td>
                     <td>
                       <strong>{o.clientes?.nome ?? "—"}</strong>
                       {o.clientes?.cidade && <div className="tdim">{o.clientes.cidade}</div>}
@@ -137,10 +178,16 @@ export default function OrcamentosPage() {
                     <td className="mono" style={{ color: "var(--acc)", fontWeight: 600 }}>
                       {formatBRL(o.valor_total)}
                     </td>
-                    <td><span className={CHIP[o.status] ?? "chip cgr"}>{o.status}</span></td>
+                    <td>
+                      <span className={CHIP[o.status] ?? "chip cgr"}>{o.status}</span>
+                    </td>
                     <td>
                       {o.pedido_id ? (
-                        <a href={`/pedidos/${o.pedido_id}`} className="mono" style={{ color: "var(--acc2)", fontSize: "12px" }}>
+                        <a
+                          href={`/pedidos/${o.pedido_id}`}
+                          className="mono"
+                          style={{ color: "var(--acc2)", fontSize: "12px" }}
+                        >
                           {o.pedido_id}
                         </a>
                       ) : (
@@ -148,12 +195,61 @@ export default function OrcamentosPage() {
                       )}
                     </td>
                     <td>
-                      <div style={{ display: "flex", gap: "6px" }}>
-                        <a href={`/orcamentos/${o.id}`} className="btn bg xs">Ver</a>
-                        {o.status === "Rascunho" && (
-                          <button className="btn bs xs" onClick={() => handleEnviar(o.id)}>
-                            Enviar →
-                          </button>
+                      <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                        <a
+                          href={`/orcamentos/${o.id}`}
+                          title="Ver orçamento"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: "28px",
+                            height: "28px",
+                            borderRadius: "6px",
+                            background: "var(--surf2)",
+                            border: "1px solid var(--b2)",
+                            color: "var(--t2)",
+                            fontSize: "13px",
+                            textDecoration: "none",
+                            transition: "all 0.15s",
+                          }}
+                          onMouseEnter={e => {
+                            (e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--acc)";
+                            (e.currentTarget as HTMLAnchorElement).style.color = "var(--acc)";
+                          }}
+                          onMouseLeave={e => {
+                            (e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--b2)";
+                            (e.currentTarget as HTMLAnchorElement).style.color = "var(--t2)";
+                          }}
+                        >
+                          ◉
+                        </a>
+
+                        {o.status === "Rascunho" && btnAcao(
+                          "var(--warn)",
+                          "rgba(245,158,11,.1)",
+                          "rgba(245,158,11,.25)",
+                          "Marcar como Enviado",
+                          "✉",
+                          () => handleStatus(o.id, "Enviado")
+                        )}
+
+                        {(o.status === "Rascunho" || o.status === "Enviado") && btnAcao(
+                          "var(--ok)",
+                          "rgba(16,185,129,.1)",
+                          "rgba(16,185,129,.25)",
+                          "Aprovar orçamento",
+                          "✓",
+                          () => handleStatus(o.id, "Aprovado")
+                        )}
+
+                        {(o.status === "Rascunho" || o.status === "Enviado") && btnAcao(
+                          "var(--err)",
+                          "rgba(244,63,94,.1)",
+                          "rgba(244,63,94,.25)",
+                          "Rejeitar orçamento",
+                          "✕",
+                          () => handleStatus(o.id, "Rejeitado")
                         )}
                       </div>
                     </td>
@@ -185,7 +281,7 @@ export default function OrcamentosPage() {
             <div className="ti">
               <div className="tl">Pendentes</div>
               <div className="tv" style={{ color: "var(--warn)" }}>
-                {orcamentos.filter(o => ["Rascunho","Enviado"].includes(o.status)).length}
+                {orcamentos.filter(o => ["Rascunho", "Enviado"].includes(o.status)).length}
               </div>
             </div>
             <div className="ti">
