@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getOrcamentoById, updateOrcamento, aprovarOrcamento, rejeitarOrcamento } from "@/services/orcamentos.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
@@ -17,6 +17,8 @@ const CHIP: Record<string, string> = {
 export default function OrcamentoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const autoPrint = searchParams.get("print") === "1";
   const { toast } = useToast();
 
   const [orc, setOrc] = useState<any>(null);
@@ -31,6 +33,16 @@ export default function OrcamentoDetalhe() {
     setOrc(data);
     setLoading(false);
   }
+
+  // Auto-print quando ?print=1 e dados já carregados
+  useEffect(() => {
+    if (autoPrint && !loading && orc) {
+      const timer = setTimeout(() => {
+        window.print();
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [autoPrint, loading, orc]);
 
   async function handleEnviar() {
     setSalvando(true);
@@ -292,11 +304,6 @@ export default function OrcamentoDetalhe() {
               </tr>
             </thead>
             <tbody>
-              {itens.length === 0 && (
-                <tr>
-                  <td colSpan={8} style={{ padding: "16px", textAlign: "center", color: "#aaa", fontSize: "11px" }}>Nenhum item registrado</td>
-                </tr>
-              )}
               {itens.map((item: any, i: number) => (
                 <tr key={item.id} style={{ background: i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
                   <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", textAlign: "center", color: "#aaa", fontSize: "10px" }}>{i + 1}</td>

@@ -22,7 +22,6 @@ export default function OrcamentosPage() {
   const [busca, setBusca]           = useState("");
   const [filtroStatus, setFiltroStatus] = useState("Todos");
 
-
   useEffect(() => { load(); }, []);
 
   async function load() {
@@ -63,7 +62,6 @@ export default function OrcamentosPage() {
     return matchBusca && matchStatus;
   });
 
-  // Sempre clicável, sem cor por padrão, cor no hover
   function btnAcao(
     corHover: string,
     bgHover: string,
@@ -181,7 +179,7 @@ export default function OrcamentosPage() {
                   <th>Status</th>
                   <th>Pedido</th>
                   <th>Ações</th>
-                  <th style={{ width: "32px" }}></th>
+                  <th style={{ width: "40px" }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -193,10 +191,7 @@ export default function OrcamentosPage() {
                   </tr>
                 )}
                 {filtrados.map(o => (
-                  <tr
-                    key={o.id}
-
-                  >
+                  <tr key={o.id}>
                     <td>
                       <span className="mono" style={{ color: "var(--acc)" }}>{o.id}</span>
                     </td>
@@ -224,6 +219,7 @@ export default function OrcamentosPage() {
                     </td>
                     <td>
                       <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                        {/* Ver */}
                         <a
                           href={`/orcamentos/${o.id}`}
                           title="Ver orçamento"
@@ -252,6 +248,14 @@ export default function OrcamentosPage() {
                         >
                           ◉
                         </a>
+
+                        {/* PDF — abre orçamento em nova aba para imprimir */}
+                        {btnAcao(
+                          "var(--acc2)", "rgba(99,179,237,.15)",
+                          "Gerar PDF",
+                          "⎙",
+                          () => window.open(`/orcamentos/${o.id}?print=1`, "_blank")
+                        )}
 
                         {btnAcao("var(--warn)", "rgba(245,158,11,.15)", "Marcar como Enviado", "✉",
                           () => handleStatus(o.id, "Enviado"))}
