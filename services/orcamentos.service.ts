@@ -205,8 +205,17 @@ export async function deletarOrcamento(orcamentoId: string): Promise<boolean> {
 }
 
 export async function getProximoIdOrcamento(): Promise<string> {
-  const { count } = await supabase
+  const { data } = await supabase
     .from('orcamentos')
-    .select('*', { count: 'exact', head: true });
-  return `ORC-${String((count || 0) + 1).padStart(3, '0')}`;
+    .select('id')
+    .order('id', { ascending: false });
+
+  let proximoNum = 1;
+  if (data && data.length > 0) {
+    const nums = data
+      .map((o: any) => parseInt(o.id.replace('ORC-', ''), 10))
+      .filter((n: number) => !isNaN(n));
+    if (nums.length > 0) proximoNum = Math.max(...nums) + 1;
+  }
+  return `ORC-${String(proximoNum).padStart(3, '0')}`;
 }
