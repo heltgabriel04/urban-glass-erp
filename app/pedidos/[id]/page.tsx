@@ -7,8 +7,7 @@ import { getPedidoById, avancarStatusPedido, registrarRecebimento, recalcularRec
 import { getLancamentosPorPedido, deletarLancamento } from "@/services/financeiro.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
-import type { Pedido } from "@/types";
-import type { Lancamento } from "@/types";
+import type { Pedido, Lancamento } from "@/types";
 
 const CHIP: Record<string, string> = {
   "Aguardando otimização":   "chip cy",
@@ -29,36 +28,54 @@ const FLUXO = [
   "Entregue",
 ];
 
+function hoje() {
+  return new Date().toISOString().split("T")[0];
+}
+
+function formatarValorDigitado(raw: string): string {
+  const nums = raw.replace(/\D/g, "");
+  if (!nums) return "";
+  const num = parseInt(nums, 10) / 100;
+  return num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function parsearValor(formatted: string): number {
+  return parseFloat(formatted.replace(/\./g, "").replace(",", ".")) || 0;
+}
+
 export default function PedidoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { toast } = useToast();
 
-  const [pedido, setPedido]         = useState<Pedido | null>(null);
+  const [pedido, setPedido]           = useState<Pedido | null>(null);
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [recebendo, setRecebendo]   = useState(false);
-  const [valorRec, setValorRec]     = useState("");
-  const [salvando, setSalvando]     = useState(false);
+  const [loading, setLoading]         = useState(true);
+  const [recebendo, setRecebendo]     = useState(false);
+  const [valorRec, setValorRec]       = useState("");
+  const [dataRec, setDataRec]         = useState(hoje());
+  const [salvando, setSalvando]       = useState(false);
 
   useEffect(() => { load(); }, [id]);
 
   async function load() {
     setLoading(true);
-    const [data, lancs] = await Promise.all([
-      getPedidoById(id),
-      getLancamentosPorPedido(id),
-    ]);
+    const [data, lancs] = await Promise.all([getPedidoById(id), getLancamentosPorPedido(id)]);
     setPedido(data);
     setLancamentos(lancs);
     setLoading(false);
+  }
+
+  function handleValorChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const raw = e.target.value.replace(/\D/g, "");
+    setValorRec(formatarValorDigitado(raw));
   }
 
   async function handleAvancar() {
     if (!pedido) return;
     setSalvando(true);
     const result = await avancarStatusPedido(pedido.id, pedido.status);
-    if (result) { toast(`${pedido.id} → ${result.status}`); }
+    if (result) toast(`${pedido.id} → ${result.status}`);
     else toast("Erro ao avançar status", "err");
     await load();
     setSalvando(false);
@@ -66,16 +83,16 @@ export default function PedidoDetalhe() {
 
   async function handleReceber() {
     if (!pedido) return;
-    const valor = parseFloat(valorRec.replace(",", "."));
+    const valor = parsearValor(valorRec);
     if (!valor || valor <= 0) { toast("Informe um valor válido", "warn"); return; }
     const aberto = Number(pedido.valor_total) - Number(pedido.valor_recebido);
-    if (valor > aberto) { toast(`Valor máximo: ${formatBRL(aberto)}`, "warn"); return; }
+    if (valor > aberto + 0.01) { toast(`Valor máximo: ${formatBRL(aberto)}`, "warn"); return; }
     setSalvando(true);
-    const result = await registrarRecebimento(pedido.id, valor);
+    const result = await registrarRecebimento(pedido.id, valor, dataRec);
     setSalvando(false);
     if (!result) { toast("Erro ao registrar recebimento", "err"); return; }
-    toast(valor >= aberto ? `✓ Pedido ${pedido.id} quitado!` : `${formatBRL(valor)} registrado`);
-    setValorRec(""); setRecebendo(false);
+    toast(valor >= aberto - 0.01 ? `✓ Pedido ${pedido.id} quitado!` : `${formatBRL(valor)} registrado`);
+    setValorRec(""); setDataRec(hoje()); setRecebendo(false);
     await load();
   }
 
@@ -121,7 +138,7 @@ export default function PedidoDetalhe() {
 
         {/* Progresso */}
         <div className="card" style={{ padding:"20px 24px" }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"center", width:"100%", gap:"0" }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"center", width:"100%" }}>
             {FLUXO.map((step, i) => {
               const done    = i < statusIdx;
               const current = i === statusIdx;
@@ -129,35 +146,14 @@ export default function PedidoDetalhe() {
               return (
                 <div key={step} style={{ display:"flex", alignItems:"center", flex: last ? "0 0 auto" : "1 1 0", minWidth:0 }}>
                   <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"6px", width:"80px", flexShrink:0 }}>
-                    <div style={{
-                      width:"26px", height:"26px", borderRadius:"50%",
-                      background: done ? "var(--ok)" : current ? "var(--acc)" : "var(--surf3)",
-                      border: current ? "2px solid var(--acc)" : "2px solid transparent",
-                      display:"flex", alignItems:"center", justifyContent:"center",
-                      fontSize:"10px", fontWeight:700,
-                      color: done || current ? "#000" : "var(--t3)",
-                      flexShrink:0,
-                    }}>
+                    <div style={{ width:"26px", height:"26px", borderRadius:"50%", background: done ? "var(--ok)" : current ? "var(--acc)" : "var(--surf3)", border: current ? "2px solid var(--acc)" : "2px solid transparent", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"10px", fontWeight:700, color: done || current ? "#000" : "var(--t3)", flexShrink:0 }}>
                       {done ? "✓" : i + 1}
                     </div>
-                    <div style={{
-                      fontSize:"9px", textAlign:"center", lineHeight:1.3,
-                      color: current ? "var(--acc)" : done ? "var(--ok)" : "var(--t3)",
-                      fontWeight: current ? 700 : 500,
-                      fontFamily:"'DM Mono', monospace",
-                      letterSpacing:"0.02em",
-                      wordBreak:"break-word",
-                    }}>
+                    <div style={{ fontSize:"9px", textAlign:"center", lineHeight:1.3, color: current ? "var(--acc)" : done ? "var(--ok)" : "var(--t3)", fontWeight: current ? 700 : 500, fontFamily:"'DM Mono', monospace", letterSpacing:"0.02em", wordBreak:"break-word" }}>
                       {step}
                     </div>
                   </div>
-                  {!last && (
-                    <div style={{
-                      flex:"1 1 auto", height:"2px", marginBottom:"18px",
-                      background: done ? "var(--ok)" : "var(--surf3)",
-                      minWidth:"12px",
-                    }} />
-                  )}
+                  {!last && <div style={{ flex:"1 1 auto", height:"2px", marginBottom:"18px", background: done ? "var(--ok)" : "var(--surf3)", minWidth:"12px" }} />}
                 </div>
               );
             })}
@@ -184,14 +180,12 @@ export default function PedidoDetalhe() {
           <div className="card" style={{ padding:"20px 24px" }}>
             <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, marginBottom:"16px", letterSpacing:".06em" }}>FINANCEIRO</div>
 
-            {/* Resumo */}
             <div style={{ display:"flex", flexDirection:"column", gap:"10px", marginBottom:"16px" }}>
               <Row label="Valor total" value={formatBRL(pedido.valor_total)} accent />
               <Row label="Recebido"    value={formatBRL(pedido.valor_recebido)} color={pedido.valor_recebido > 0 ? "var(--ok)" : "var(--t2)"} />
               <Row label="Em aberto"   value={formatBRL(Math.max(0, aberto))} color={quitado ? "var(--ok)" : "var(--err)"} />
             </div>
 
-            {/* Barra */}
             <div style={{ marginBottom:"16px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", fontSize:"11px", color:"var(--t3)", marginBottom:"6px" }}>
                 <span>Recebimento</span><span>{pctRec.toFixed(0)}%</span>
@@ -201,21 +195,19 @@ export default function PedidoDetalhe() {
               </div>
             </div>
 
-            {/* Histórico de recebimentos */}
+            {/* Histórico */}
             {lancamentos.length > 0 && (
               <div style={{ marginBottom:"16px" }}>
                 <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"8px" }}>HISTÓRICO</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
+                <div style={{ display:"flex", flexDirection:"column", gap:"5px" }}>
                   {lancamentos.map(l => (
-                    <div key={l.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--surf2)", borderRadius:"6px", padding:"8px 10px" }}>
-                      <div style={{ display:"flex", flexDirection:"column", gap:"2px" }}>
-                        <span style={{ fontSize:"12px", color:"var(--ok)", fontFamily:"'DM Mono', monospace", fontWeight:600 }}>{formatBRL(l.valor)}</span>
-                        <span style={{ fontSize:"10px", color:"var(--t3)" }}>{formatDate(l.vencimento)}</span>
-                      </div>
+                    <div key={l.id} style={{ display:"flex", alignItems:"center", gap:"8px", background:"var(--surf2)", borderRadius:"6px", padding:"8px 10px" }}>
+                      <span style={{ fontSize:"13px", color:"var(--ok)", fontFamily:"'DM Mono', monospace", fontWeight:600, flex:1 }}>{formatBRL(l.valor)}</span>
+                      <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono', monospace" }}>{formatDate(l.vencimento)}</span>
                       <button
-                        title="Remover recebimento"
+                        title="Remover"
                         onClick={() => handleDeletarLancamento(l.id)}
-                        style={{ background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", fontSize:"11px", cursor:"pointer", padding:"3px 7px", transition:"all 0.15s" }}
+                        style={{ background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", fontSize:"11px", cursor:"pointer", padding:"3px 7px", transition:"all 0.15s", lineHeight:1 }}
                         onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
                         onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
                       >
@@ -227,20 +219,33 @@ export default function PedidoDetalhe() {
               </div>
             )}
 
-            {/* Registrar recebimento */}
+            {/* Registrar */}
             {!quitado && (
               <div>
                 {!recebendo ? (
-                  <button className="btn bp sm" style={{ width:"100%" }} onClick={() => setRecebendo(true)}>+ Registrar Recebimento</button>
+                  <button className="btn bp sm" style={{ width:"100%" }} onClick={() => { setRecebendo(true); setValorRec(""); setDataRec(hoje()); }}>
+                    + Registrar Recebimento
+                  </button>
                 ) : (
                   <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
-                    <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em" }}>VALOR RECEBIDO</div>
-                    <div style={{ display:"flex", gap:"8px" }}>
+                    <div style={{ display:"flex", gap:"6px", alignItems:"center" }}>
+                      <div style={{ flex:2, display:"flex", alignItems:"center", background:"var(--surf2)", border:"1px solid var(--acc)", borderRadius:"6px", padding:"0 10px", gap:"6px" }}>
+                        <span style={{ fontSize:"13px", color:"var(--t3)", fontFamily:"'DM Mono', monospace", flexShrink:0 }}>R$</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0,00"
+                          value={valorRec}
+                          onChange={handleValorChange}
+                          style={{ flex:1, background:"transparent", border:"none", outline:"none", color:"var(--t1)", fontSize:"15px", fontFamily:"'DM Mono', monospace", padding:"10px 0" }}
+                          autoFocus
+                        />
+                      </div>
                       <input
-                        type="number" placeholder="0.00" value={valorRec}
-                        onChange={e => setValorRec(e.target.value)}
-                        style={{ flex:1, background:"var(--surf2)", border:"1px solid var(--acc)", borderRadius:"6px", padding:"10px 12px", color:"var(--t1)", fontSize:"15px", fontFamily:"'DM Mono', monospace", outline:"none" }}
-                        autoFocus
+                        type="date"
+                        value={dataRec}
+                        onChange={e => setDataRec(e.target.value)}
+                        style={{ flex:1, background:"var(--surf2)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"10px 8px", color:"var(--t1)", fontSize:"12px", fontFamily:"'DM Mono', monospace", outline:"none" }}
                       />
                       <button className="btn bp sm" onClick={handleReceber} disabled={salvando}>{salvando ? "..." : "Salvar"}</button>
                       <button className="btn bg sm" onClick={() => { setRecebendo(false); setValorRec(""); }}>✕</button>

@@ -98,7 +98,7 @@ export async function deletarPedido(pedidoId: string): Promise<boolean> {
   return true;
 }
 
-export async function registrarRecebimento(pedidoId: string, valor: number) {
+export async function registrarRecebimento(pedidoId: string, valor: number, data?: string) {
   const pedido = await getPedidoById(pedidoId);
   if (!pedido) return null;
 
@@ -106,13 +106,13 @@ export async function registrarRecebimento(pedidoId: string, valor: number) {
   const pedidoAtualizado = await updatePedido(pedidoId, { valor_recebido: novoRecebido });
   if (!pedidoAtualizado) return null;
 
-  const hoje = new Date().toISOString().split('T')[0];
+  const vencimento = data ?? new Date().toISOString().split('T')[0];
   const { error: errLanc } = await supabase.from('lancamentos').insert({
     tipo: 'Entrada',
     descricao: `Recebimento pedido ${pedidoId}`,
     valor,
     status: 'Pago',
-    vencimento: hoje,
+    vencimento,
     pedido_id: pedidoId,
     cliente_id: pedido.clientes?.id ?? pedido.cliente_id ?? null,
   } as never);
