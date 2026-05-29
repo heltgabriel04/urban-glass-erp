@@ -1,4 +1,3 @@
-// services/financeiro.service.ts
 import { supabase } from '@/lib/supabase/client';
 import type { FinanceiroCliente, FaturamentoMensal, Lancamento, LancamentoInsert } from '@/types';
 
@@ -33,6 +32,23 @@ export async function getLancamentos() {
 
   if (error) { console.error('getLancamentos:', error); return []; }
   return data as Lancamento[];
+}
+
+export async function getLancamentosPorPedido(pedidoId: string) {
+  const { data, error } = await supabase
+    .from('lancamentos')
+    .select('*')
+    .eq('pedido_id', pedidoId)
+    .order('created_at', { ascending: true });
+
+  if (error) { console.error('getLancamentosPorPedido:', error); return []; }
+  return data as Lancamento[];
+}
+
+export async function deletarLancamento(id: number) {
+  const { error } = await supabase.from('lancamentos').delete().eq('id', id);
+  if (error) { console.error('deletarLancamento:', error); return false; }
+  return true;
 }
 
 export async function createLancamento(lancamento: LancamentoInsert) {

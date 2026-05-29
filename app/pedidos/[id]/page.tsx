@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
-import { getPedidoById, avancarStatusPedido, registrarRecebimento } from "@/services/pedidos.service";
+import { getPedidoById, avancarStatusPedido, registrarRecebimento, recalcularRecebido } from "@/services/pedidos.service";
+import { getLancamentosPorPedido, deletarLancamento } from "@/services/financeiro.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import type { Pedido } from "@/types";
+import type { Lancamento } from "@/types";
 
 const CHIP: Record<string, string> = {
   "Aguardando otimização":   "chip cy",
@@ -32,18 +34,23 @@ export default function PedidoDetalhe() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const [pedido, setPedido] = useState<Pedido | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [recebendo, setRecebendo] = useState(false);
-  const [valorRec, setValorRec] = useState("");
-  const [salvando, setSalvando] = useState(false);
+  const [pedido, setPedido]         = useState<Pedido | null>(null);
+  const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [recebendo, setRecebendo]   = useState(false);
+  const [valorRec, setValorRec]     = useState("");
+  const [salvando, setSalvando]     = useState(false);
 
   useEffect(() => { load(); }, [id]);
 
   async function load() {
     setLoading(true);
-    const data = await getPedidoById(id);
+    const [data, lancs] = await Promise.all([
+      getPedidoById(id),
+      getLancamentosPorPedido(id),
+    ]);
     setPedido(data);
+    setLancamentos(lancs);
     setLoading(false);
   }
 
@@ -67,9 +74,21 @@ export default function PedidoDetalhe() {
     const result = await registrarRecebimento(pedido.id, valor);
     setSalvando(false);
     if (!result) { toast("Erro ao registrar recebimento", "err"); return; }
-    toast(valor >= aberto ? `✓ Pedido ${pedido.id} quitado!` : `Recebimento de ${formatBRL(valor)} registrado`);
+    toast(valor >= aberto ? `✓ Pedido ${pedido.id} quitado!` : `${formatBRL(valor)} registrado`);
     setValorRec(""); setRecebendo(false);
     await load();
+  }
+
+  async function handleDeletarLancamento(lancId: number) {
+    if (!pedido) return;
+    if (!confirm("Remover este recebimento?")) return;
+    setSalvando(true);
+    const ok = await deletarLancamento(lancId);
+    if (!ok) { toast("Erro ao remover lançamento", "err"); setSalvando(false); return; }
+    await recalcularRecebido(pedido.id);
+    toast("Recebimento removido");
+    await load();
+    setSalvando(false);
   }
 
   if (loading) return <AppLayout><div className="con"><div className="loading">Carregando pedido...</div></div></AppLayout>;
@@ -109,7 +128,7 @@ export default function PedidoDetalhe() {
               const last    = i === FLUXO.length - 1;
               return (
                 <div key={step} style={{ display:"flex", alignItems:"center", flex: last ? "0 0 auto" : "1 1 0", minWidth:0 }}>
-                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"6px", width: last ? "80px" : "80px", flexShrink:0 }}>
+                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"6px", width:"80px", flexShrink:0 }}>
                     <div style={{
                       width:"26px", height:"26px", borderRadius:"50%",
                       background: done ? "var(--ok)" : current ? "var(--acc)" : "var(--surf3)",
@@ -127,7 +146,6 @@ export default function PedidoDetalhe() {
                       fontWeight: current ? 700 : 500,
                       fontFamily:"'DM Mono', monospace",
                       letterSpacing:"0.02em",
-                      whiteSpace:"normal",
                       wordBreak:"break-word",
                     }}>
                       {step}
@@ -135,8 +153,7 @@ export default function PedidoDetalhe() {
                   </div>
                   {!last && (
                     <div style={{
-                      flex:"1 1 auto", height:"2px",
-                      marginBottom:"18px",
+                      flex:"1 1 auto", height:"2px", marginBottom:"18px",
                       background: done ? "var(--ok)" : "var(--surf3)",
                       minWidth:"12px",
                     }} />
@@ -166,12 +183,16 @@ export default function PedidoDetalhe() {
 
           <div className="card" style={{ padding:"20px 24px" }}>
             <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, marginBottom:"16px", letterSpacing:".06em" }}>FINANCEIRO</div>
-            <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
+
+            {/* Resumo */}
+            <div style={{ display:"flex", flexDirection:"column", gap:"10px", marginBottom:"16px" }}>
               <Row label="Valor total" value={formatBRL(pedido.valor_total)} accent />
               <Row label="Recebido"    value={formatBRL(pedido.valor_recebido)} color={pedido.valor_recebido > 0 ? "var(--ok)" : "var(--t2)"} />
               <Row label="Em aberto"   value={formatBRL(Math.max(0, aberto))} color={quitado ? "var(--ok)" : "var(--err)"} />
             </div>
-            <div style={{ marginTop:"20px" }}>
+
+            {/* Barra */}
+            <div style={{ marginBottom:"16px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", fontSize:"11px", color:"var(--t3)", marginBottom:"6px" }}>
                 <span>Recebimento</span><span>{pctRec.toFixed(0)}%</span>
               </div>
@@ -179,21 +200,61 @@ export default function PedidoDetalhe() {
                 <div style={{ height:"100%", borderRadius:"3px", width:`${pctRec}%`, background: quitado ? "var(--ok)" : "var(--acc)", transition:"width .3s" }} />
               </div>
             </div>
+
+            {/* Histórico de recebimentos */}
+            {lancamentos.length > 0 && (
+              <div style={{ marginBottom:"16px" }}>
+                <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"8px" }}>HISTÓRICO</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
+                  {lancamentos.map(l => (
+                    <div key={l.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--surf2)", borderRadius:"6px", padding:"8px 10px" }}>
+                      <div style={{ display:"flex", flexDirection:"column", gap:"2px" }}>
+                        <span style={{ fontSize:"12px", color:"var(--ok)", fontFamily:"'DM Mono', monospace", fontWeight:600 }}>{formatBRL(l.valor)}</span>
+                        <span style={{ fontSize:"10px", color:"var(--t3)" }}>{formatDate(l.vencimento)}</span>
+                      </div>
+                      <button
+                        title="Remover recebimento"
+                        onClick={() => handleDeletarLancamento(l.id)}
+                        style={{ background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", fontSize:"11px", cursor:"pointer", padding:"3px 7px", transition:"all 0.15s" }}
+                        onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
+                        onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
+                      >
+                        🗑
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Registrar recebimento */}
             {!quitado && (
-              <div style={{ marginTop:"20px" }}>
+              <div>
                 {!recebendo ? (
                   <button className="btn bp sm" style={{ width:"100%" }} onClick={() => setRecebendo(true)}>+ Registrar Recebimento</button>
                 ) : (
-                  <div style={{ display:"flex", gap:"8px" }}>
-                    <input type="text" placeholder="0,00" value={valorRec} onChange={e => setValorRec(e.target.value)} style={{ flex:1, background:"var(--surf2)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"8px 12px", color:"var(--t1)", fontSize:"14px" }} autoFocus />
-                    <button className="btn bp sm" onClick={handleReceber} disabled={salvando}>{salvando ? "..." : "Salvar"}</button>
-                    <button className="btn bg sm" onClick={() => { setRecebendo(false); setValorRec(""); }}>✕</button>
+                  <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
+                    <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em" }}>VALOR RECEBIDO</div>
+                    <div style={{ display:"flex", gap:"8px" }}>
+                      <input
+                        type="number" placeholder="0.00" value={valorRec}
+                        onChange={e => setValorRec(e.target.value)}
+                        style={{ flex:1, background:"var(--surf2)", border:"1px solid var(--acc)", borderRadius:"6px", padding:"10px 12px", color:"var(--t1)", fontSize:"15px", fontFamily:"'DM Mono', monospace", outline:"none" }}
+                        autoFocus
+                      />
+                      <button className="btn bp sm" onClick={handleReceber} disabled={salvando}>{salvando ? "..." : "Salvar"}</button>
+                      <button className="btn bg sm" onClick={() => { setRecebendo(false); setValorRec(""); }}>✕</button>
+                    </div>
+                    <div style={{ fontSize:"11px", color:"var(--t3)", textAlign:"right" }}>
+                      Máximo: {formatBRL(aberto)}
+                    </div>
                   </div>
                 )}
               </div>
             )}
+
             {quitado && (
-              <div style={{ marginTop:"16px", padding:"10px", background:"rgba(0,200,100,.08)", borderRadius:"8px", color:"var(--ok)", fontSize:"13px", textAlign:"center" }}>
+              <div style={{ padding:"10px", background:"rgba(0,200,100,.08)", borderRadius:"8px", color:"var(--ok)", fontSize:"13px", textAlign:"center" }}>
                 ✓ Pagamento quitado
               </div>
             )}

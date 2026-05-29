@@ -55,6 +55,19 @@ export async function updatePedido(id: string, updates: PedidoUpdate) {
   return data as Pedido;
 }
 
+export async function recalcularRecebido(pedidoId: string) {
+  const { data, error } = await supabase
+    .from('lancamentos')
+    .select('valor')
+    .eq('pedido_id', pedidoId)
+    .eq('tipo', 'Entrada');
+
+  if (error) { console.error('recalcularRecebido:', error); return null; }
+
+  const total = (data ?? []).reduce((a, l) => a + Number(l.valor), 0);
+  return updatePedido(pedidoId, { valor_recebido: total });
+}
+
 const FLUXO: StatusPedido[] = [
   'Aguardando otimização',
   'Em Produção – Corte',
