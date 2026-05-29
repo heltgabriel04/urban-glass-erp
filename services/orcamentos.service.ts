@@ -91,7 +91,7 @@ export async function aprovarOrcamento(orcamentoId: string) {
   const orc = await getOrcamentoById(orcamentoId);
   if (!orc) return null;
 
-  // Se já tem pedido vinculado, só atualiza o status do orçamento
+  // Se já tem pedido vinculado, só atualiza o status
   if (orc.pedido_id) {
     return updateOrcamento(orcamentoId, { status: 'Aprovado' } as any);
   }
@@ -151,7 +151,7 @@ export async function aprovarOrcamento(orcamentoId: string) {
     if (errItens) console.error('aprovarOrcamento itens_pedido:', errItens);
   }
 
-  // Atualiza orçamento com status e vínculo ao pedido
+  // Atualiza orçamento — salva pedido_id E status juntos
   await updateOrcamento(orcamentoId, {
     status: 'Aprovado',
     pedido_id: pedidoId,
@@ -160,26 +160,35 @@ export async function aprovarOrcamento(orcamentoId: string) {
   return pedido;
 }
 
-// pedidoId opcional: se passado, usa direto sem buscar no banco
-export async function rejeitarOrcamento(orcamentoId: string, pedidoIdConhecido?: string | null) {
-  let pedidoId = pedidoIdConhecido;
+export async function rejeitarOrcamento(orcamentoId: string) {
+  // Sempre busca o pedido_id direto do banco — nunca confia no estado local
+  const { data: orc, error } = await supabase
+    .from('orcamentos')
+    .select('id, pedido_id')
+    .eq('id', orcamentoId)
+    .single();
 
-  // Se não foi passado, busca no banco
-  if (pedidoId === undefined) {
-    const orc = await getOrcamentoById(orcamentoId);
-    if (!orc) return null;
-    pedidoId = orc.pedido_id;
-  }
+  if (error || !orc) { console.error('rejeitarOrcamento — busca orc:', error); return null; }
 
-  // Deleta pedido se existir
+  const pedidoId = (orc as any).pedido_id;
+
+  // 1. Deleta itens do pedido
   if (pedidoId) {
-    const { error: errItens } = await supabase.from('itens_pedido').delete().eq('pedido_id', pedidoId);
+    const { error: errItens } = await supabase
+      .from('itens_pedido')
+      .delete()
+      .eq('pedido_id', pedidoId);
     if (errItens) console.error('rejeitarOrcamento itens_pedido:', errItens);
-    const { error: errPedido } = await supabase.from('pedidos').delete().eq('id', pedidoId);
+
+    // 2. Deleta o pedido
+    const { error: errPedido } = await supabase
+      .from('pedidos')
+      .delete()
+      .eq('id', pedidoId);
     if (errPedido) console.error('rejeitarOrcamento pedido:', errPedido);
   }
 
-  // Atualiza orçamento
+  // 3. Só depois limpa o orçamento
   return updateOrcamento(orcamentoId, {
     status: 'Rejeitado',
     pedido_id: null,
