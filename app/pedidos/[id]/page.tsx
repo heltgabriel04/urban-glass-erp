@@ -101,30 +101,32 @@ export default function PedidoDetalhe() {
       <div className="con" style={{ display:"flex", flexDirection:"column", gap:"20px" }}>
 
         {/* Progresso */}
-        <div className="card" style={{ padding:"16px 20px", overflow:"hidden" }}>
-          <div style={{ display:"flex", alignItems:"flex-start", width:"100%" }}>
+        <div className="card" style={{ padding:"20px 24px" }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"center", width:"100%", gap:"0" }}>
             {FLUXO.map((step, i) => {
               const done    = i < statusIdx;
               const current = i === statusIdx;
               const last    = i === FLUXO.length - 1;
               return (
-                <div key={step} style={{ display:"flex", alignItems:"flex-start", flex: last ? "0 0 auto" : "1 1 0", minWidth:0 }}>
-                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"5px", width: last ? "52px" : "100%" }}>
+                <div key={step} style={{ display:"flex", alignItems:"center", flex: last ? "0 0 auto" : "1 1 0", minWidth:0 }}>
+                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"6px", width: last ? "80px" : "80px", flexShrink:0 }}>
                     <div style={{
-                      width:"22px", height:"22px", borderRadius:"50%",
+                      width:"26px", height:"26px", borderRadius:"50%",
                       background: done ? "var(--ok)" : current ? "var(--acc)" : "var(--surf3)",
                       border: current ? "2px solid var(--acc)" : "2px solid transparent",
                       display:"flex", alignItems:"center", justifyContent:"center",
-                      fontSize:"9px", fontWeight:700,
+                      fontSize:"10px", fontWeight:700,
                       color: done || current ? "#000" : "var(--t3)",
                       flexShrink:0,
                     }}>
                       {done ? "✓" : i + 1}
                     </div>
                     <div style={{
-                      fontSize:"8px", textAlign:"center", lineHeight:1.2,
+                      fontSize:"9px", textAlign:"center", lineHeight:1.3,
                       color: current ? "var(--acc)" : done ? "var(--ok)" : "var(--t3)",
-                      fontWeight: current ? 700 : 400,
+                      fontWeight: current ? 700 : 500,
+                      fontFamily:"'DM Mono', monospace",
+                      letterSpacing:"0.02em",
                       whiteSpace:"normal",
                       wordBreak:"break-word",
                     }}>
@@ -133,9 +135,10 @@ export default function PedidoDetalhe() {
                   </div>
                   {!last && (
                     <div style={{
-                      flex:"1 1 auto", height:"2px", marginTop:"10px", marginLeft:"3px", marginRight:"3px",
+                      flex:"1 1 auto", height:"2px",
+                      marginBottom:"18px",
                       background: done ? "var(--ok)" : "var(--surf3)",
-                      minWidth:"6px",
+                      minWidth:"12px",
                     }} />
                   )}
                 </div>
