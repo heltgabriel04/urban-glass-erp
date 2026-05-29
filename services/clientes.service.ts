@@ -1,4 +1,3 @@
-// services/clientes.service.ts
 import { supabase } from '@/lib/supabase/client';
 import type { Cliente, ClienteInsert, ClienteUpdate } from '@/types';
 
@@ -51,4 +50,10 @@ export async function updateCliente(id: number, updates: ClienteUpdate) {
 
 export async function toggleAtivoCliente(id: number, ativo: boolean) {
   return updateCliente(id, { ativo });
+}
+
+export async function deletarCliente(id: number): Promise<boolean> {
+  const { error } = await supabase.from('clientes').delete().eq('id', id);
+  if (error) { console.error('deletarCliente:', error); return false; }
+  return true;
 }

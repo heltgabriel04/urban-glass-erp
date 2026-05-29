@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
-import { getClientes, createCliente, updateCliente } from "@/services/clientes.service";
+import { getClientes, createCliente, updateCliente, deletarCliente } from "@/services/clientes.service";
 import { getFinanceiroClientes } from "@/services/financeiro.service";
 import { formatBRL } from "@/lib/formatters";
 import type { Cliente, FinanceiroCliente, ClienteInsert } from "@/types";
@@ -13,14 +13,14 @@ const VAZIO: ClienteInsert = {
 };
 
 export default function ClientesPage() {
-  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [clientes, setClientes]     = useState<Cliente[]>([]);
   const [financeiro, setFinanceiro] = useState<FinanceiroCliente[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filtro, setFiltro] = useState("");
-  const [modal, setModal] = useState(false);
-  const [form, setForm] = useState<ClienteInsert>(VAZIO);
-  const [editId, setEditId] = useState<number | null>(null);
-  const [salvando, setSalvando] = useState(false);
+  const [loading, setLoading]       = useState(true);
+  const [filtro, setFiltro]         = useState("");
+  const [modal, setModal]           = useState(false);
+  const [form, setForm]             = useState<ClienteInsert>(VAZIO);
+  const [editId, setEditId]         = useState<number | null>(null);
+  const [salvando, setSalvando]     = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -39,18 +39,21 @@ export default function ClientesPage() {
   function abrirNovo() { setForm(VAZIO); setEditId(null); setModal(true); }
 
   function abrirEdit(c: Cliente) {
-    setForm({ nome: c.nome, cnpj: c.cnpj, tel: c.tel, email: c.email, endereco: c.endereco, cidade: c.cidade, pgto: c.pgto, tabela: c.tabela, ativo: c.ativo });
-    setEditId(c.id);
-    setModal(true);
+    setForm({ nome:c.nome, cnpj:c.cnpj, tel:c.tel, email:c.email, endereco:c.endereco, cidade:c.cidade, pgto:c.pgto, tabela:c.tabela, ativo:c.ativo });
+    setEditId(c.id); setModal(true);
   }
 
   async function salvar() {
     if (!form.nome.trim()) return;
     setSalvando(true);
     if (editId) { await updateCliente(editId, form); } else { await createCliente(form); }
-    setSalvando(false);
-    setModal(false);
-    load();
+    setSalvando(false); setModal(false); load();
+  }
+
+  async function handleDeletar(c: Cliente) {
+    if (!confirm(`Excluir "${c.nome}" permanentemente? Esta ação não pode ser desfeita.`)) return;
+    const ok = await deletarCliente(c.id);
+    if (ok) load();
   }
 
   const filtrados = clientes.filter(c =>
@@ -60,8 +63,8 @@ export default function ClientesPage() {
     c.cnpj.includes(filtro)
   );
 
-  const totalFaturado     = clientes.reduce((a, c) => a + (finDe(c.id) ? Number(finDe(c.id)!.faturado) : 0), 0);
-  const totalAReceber     = clientes.reduce((a, c) => a + (finDe(c.id) ? Number(finDe(c.id)!.a_receber) : 0), 0);
+  const totalFaturado      = clientes.reduce((a, c) => a + (finDe(c.id) ? Number(finDe(c.id)!.faturado) : 0), 0);
+  const totalAReceber      = clientes.reduce((a, c) => a + (finDe(c.id) ? Number(finDe(c.id)!.a_receber) : 0), 0);
   const totalInadimplentes = clientes.filter(c => { const f = finDe(c.id); return f && Number(f.recebido) === 0 && Number(f.faturado) > 0; }).length;
 
   const riscoChip = (fin: FinanceiroCliente | null) => {
@@ -84,14 +87,13 @@ export default function ClientesPage() {
       </div>
 
       <div className="con">
-
         {/* CARDS */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:"12px", marginBottom:"20px" }}>
           {[
-            { label:"Total",         value: String(clientes.length), color:"var(--t1)",   sub:"clientes" },
-            { label:"Faturado Total", value: formatBRL(totalFaturado), color:"var(--acc)", sub:"soma geral" },
-            { label:"A Receber",      value: formatBRL(totalAReceber), color:"var(--warn)", sub:"em aberto" },
-            { label:"Inadimplentes",  value: String(totalInadimplentes), color:"var(--err)", sub:"sem pagamento" },
+            { label:"Total",          value: String(clientes.length),      color:"var(--t1)",   sub:"clientes" },
+            { label:"Faturado Total", value: formatBRL(totalFaturado),     color:"var(--acc)",  sub:"soma geral" },
+            { label:"A Receber",      value: formatBRL(totalAReceber),     color:"var(--warn)", sub:"em aberto" },
+            { label:"Inadimplentes",  value: String(totalInadimplentes),   color:"var(--err)",  sub:"sem pagamento" },
           ].map(card => (
             <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
               <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
@@ -108,24 +110,14 @@ export default function ClientesPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Cliente</th>
-                  <th>CNPJ</th>
-                  <th>Telefone</th>
-                  <th>Cidade</th>
-                  <th>Tabela</th>
-                  <th>Faturado</th>
-                  <th>A Receber</th>
-                  <th>Risco</th>
-                  <th>Ações</th>
+                  <th>Cliente</th><th>CNPJ</th><th>Telefone</th><th>Cidade</th>
+                  <th>Tabela</th><th>Faturado</th><th>A Receber</th><th>Risco</th>
+                  <th>Ações</th><th style={{ width:"40px" }}></th>
                 </tr>
               </thead>
               <tbody>
                 {filtrados.length === 0 && (
-                  <tr>
-                    <td colSpan={9} style={{ textAlign:"center", color:"var(--t3)", padding:"32px" }}>
-                      Nenhum cliente encontrado
-                    </td>
-                  </tr>
+                  <tr><td colSpan={10} style={{ textAlign:"center", color:"var(--t3)", padding:"32px" }}>Nenhum cliente encontrado</td></tr>
                 )}
                 {filtrados.map(c => {
                   const fin = finDe(c.id);
@@ -154,6 +146,17 @@ export default function ClientesPage() {
                           <button className="btn bg xs" onClick={() => abrirEdit(c)}>Editar</button>
                         </div>
                       </td>
+                      <td style={{ width:"40px", textAlign:"center" }}>
+                        <button
+                          title="Excluir cliente"
+                          onClick={() => handleDeletar(c)}
+                          style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", cursor:"pointer", transition:"all 0.15s" }}
+                          onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
+                          onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
+                        >
+                          🗑
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -172,46 +175,24 @@ export default function ClientesPage() {
               <button className="mcl" onClick={() => setModal(false)}>✕</button>
             </div>
             <div className="fr">
-              <div className="fg">
-                <label className="fl">Nome *</label>
-                <input className="fc" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Nome do cliente" />
-              </div>
-              <div className="fg">
-                <label className="fl">CNPJ</label>
-                <input className="fc" value={form.cnpj} onChange={e => setForm(f => ({ ...f, cnpj: e.target.value }))} placeholder="00.000.000/0001-00" />
-              </div>
+              <div className="fg"><label className="fl">Nome *</label><input className="fc" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Nome do cliente" /></div>
+              <div className="fg"><label className="fl">CNPJ</label><input className="fc" value={form.cnpj} onChange={e => setForm(f => ({ ...f, cnpj: e.target.value }))} placeholder="00.000.000/0001-00" /></div>
             </div>
             <div className="fr">
-              <div className="fg">
-                <label className="fl">Telefone</label>
-                <input className="fc" value={form.tel} onChange={e => setForm(f => ({ ...f, tel: e.target.value }))} placeholder="(00) 00000-0000" />
-              </div>
-              <div className="fg">
-                <label className="fl">E-mail</label>
-                <input className="fc" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="email@empresa.com" />
-              </div>
+              <div className="fg"><label className="fl">Telefone</label><input className="fc" value={form.tel} onChange={e => setForm(f => ({ ...f, tel: e.target.value }))} placeholder="(00) 00000-0000" /></div>
+              <div className="fg"><label className="fl">E-mail</label><input className="fc" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="email@empresa.com" /></div>
             </div>
             <div className="fr">
-              <div className="fg">
-                <label className="fl">Endereço</label>
-                <input className="fc" value={form.endereco} onChange={e => setForm(f => ({ ...f, endereco: e.target.value }))} placeholder="Rua, número" />
-              </div>
-              <div className="fg">
-                <label className="fl">Cidade</label>
-                <input className="fc" value={form.cidade} onChange={e => setForm(f => ({ ...f, cidade: e.target.value }))} placeholder="Cidade/UF" />
-              </div>
+              <div className="fg"><label className="fl">Endereço</label><input className="fc" value={form.endereco} onChange={e => setForm(f => ({ ...f, endereco: e.target.value }))} placeholder="Rua, número" /></div>
+              <div className="fg"><label className="fl">Cidade</label><input className="fc" value={form.cidade} onChange={e => setForm(f => ({ ...f, cidade: e.target.value }))} placeholder="Cidade/UF" /></div>
             </div>
             <div className="fr">
               <div className="fg">
                 <label className="fl">Forma de Pagamento</label>
                 <select className="fc" value={form.pgto} onChange={e => setForm(f => ({ ...f, pgto: e.target.value }))}>
                   <option value="">Selecione...</option>
-                  <option>Dinheiro</option>
-                  <option>PIX</option>
-                  <option>Boleto</option>
-                  <option>Cartão</option>
-                  <option>Cheque</option>
-                  <option>A Prazo</option>
+                  <option>Dinheiro</option><option>PIX</option><option>Boleto</option>
+                  <option>Cartão</option><option>Cheque</option><option>A Prazo</option>
                 </select>
               </div>
               <div className="fg">
