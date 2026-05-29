@@ -57,13 +57,29 @@ export default function Sidebar() {
   return (
     <aside className="sb">
       <div className="logo-area">
-        <div className="logo-row">
-          <div className="logo-ico">UG</div>
-          <div>
-            <div className="logo-name">Urban<span>Glass</span></div>
-          </div>
+        <div
+          style={{
+            fontFamily: "'Syne', sans-serif",
+            fontSize: "18px",
+            fontWeight: 800,
+            letterSpacing: "-0.5px",
+            color: "var(--acc)",
+          }}
+        >
+          UrbanGlass
         </div>
-        <div className="logo-ver">ERP Industrial v3</div>
+        <div
+          style={{
+            fontSize: "9px",
+            color: "var(--t3)",
+            letterSpacing: "2px",
+            textTransform: "uppercase",
+            fontFamily: "'DM Mono', monospace",
+            marginTop: "3px",
+          }}
+        >
+          ERP Industrial
+        </div>
       </div>
 
       {NAV.map((grupo) => (
