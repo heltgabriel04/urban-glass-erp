@@ -78,14 +78,19 @@ export async function retrocederStatusPedido(id: string, statusAtual: StatusPedi
 }
 
 export async function deletarPedido(pedidoId: string): Promise<boolean> {
+  // 1. Deleta lançamentos financeiros vinculados
+  await supabase.from('lancamentos').delete().eq('pedido_id', pedidoId);
+
+  // 2. Deleta itens do pedido
   await supabase.from('itens_pedido').delete().eq('pedido_id', pedidoId);
 
-  // Remove vínculo em orçamentos se existir
+  // 3. Remove vínculo em orçamentos
   await supabase
     .from('orcamentos')
     .update({ pedido_id: null } as never)
     .eq('pedido_id', pedidoId);
 
+  // 4. Deleta o pedido
   const { error } = await supabase.from('pedidos').delete().eq('id', pedidoId);
   if (error) { console.error('deletarPedido:', error); return false; }
   return true;
