@@ -52,10 +52,10 @@ export default function PedidosPage() {
     else toast("Erro ao excluir pedido", "err");
   }
 
-  const totalValor      = pedidos.reduce((a, p) => a + Number(p.valor_total), 0);
-  const totalRecebido   = pedidos.reduce((a, p) => a + Number(p.valor_recebido), 0);
-  const totalAberto     = totalValor - totalRecebido;
-  const emProducao      = pedidos.filter(p => p.status.startsWith("Em Produção")).length;
+  const totalValor    = pedidos.reduce((a, p) => a + Number(p.valor_total), 0);
+  const totalRecebido = pedidos.reduce((a, p) => a + Number(p.valor_recebido), 0);
+  const totalAberto   = totalValor - totalRecebido;
+  const emProducao    = pedidos.filter(p => p.status.startsWith("Em Produção")).length;
 
   const filtrados = pedidos.filter(p =>
     !filtro ||
@@ -143,7 +143,7 @@ export default function PedidosPage() {
                 {filtrados.map(p => {
                   const aberto     = p.valor_total - p.valor_recebido;
                   const quitado    = aberto <= 0;
-                  const finalizado = ["Finalizado","Cancelado"].includes(p.status);
+                  const finalizado = ["Entregue","Cancelado"].includes(p.status);
                   const primeiro   = p.status === "Aguardando otimização";
 
                   return (
@@ -179,7 +179,7 @@ export default function PedidosPage() {
                             ◉
                           </a>
                           {btnAcao("var(--warn)", "rgba(245,158,11,.15)", primeiro ? "Já está no início do fluxo" : "Retroceder etapa", "←", () => !primeiro && handleRetroceder(p.id, p.status))}
-                          {btnAcao("var(--ok)", "rgba(16,185,129,.15)", finalizado ? "Pedido finalizado" : "Avançar etapa", "→", () => !finalizado && handleAvancar(p.id, p.status))}
+                          {btnAcao("var(--ok)", "rgba(16,185,129,.15)", finalizado ? "Pedido encerrado" : "Avançar etapa", "→", () => !finalizado && handleAvancar(p.id, p.status))}
                         </div>
                       </td>
                       <td style={{ width:"40px", textAlign:"center" }}>
