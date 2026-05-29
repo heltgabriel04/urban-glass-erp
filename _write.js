@@ -1,0 +1,1 @@
+const fs=require("fs");const c=fs.readFileSync("app/pedidos/page.tsx","utf8");fs.writeFileSync("app/pedidos/page.tsx",c);
