@@ -63,7 +63,6 @@ export default function OrcamentosPage() {
     return matchBusca && matchStatus;
   });
 
-  // Ativo = clicável com cor. Inativo = cinza, cursor default
   function btnAcao(
     ativo: boolean,
     cor: string,
@@ -176,19 +175,20 @@ export default function OrcamentosPage() {
                   <th>Status</th>
                   <th>Pedido</th>
                   <th>Ações</th>
+                  <th style={{ width: "32px" }}></th>
                 </tr>
               </thead>
               <tbody>
                 {filtrados.length === 0 && (
                   <tr>
-                    <td colSpan={9} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>
+                    <td colSpan={10} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>
                       Nenhum orçamento encontrado
                     </td>
                   </tr>
                 )}
                 {filtrados.map(o => {
-                  const podeEnviar  = o.status === "Rascunho";
-                  const podeAprovar = o.status === "Rascunho" || o.status === "Enviado";
+                  const podeEnviar   = o.status === "Rascunho";
+                  const podeAprovar  = o.status === "Rascunho" || o.status === "Enviado";
                   const podeRejeitar = o.status === "Rascunho" || o.status === "Enviado";
 
                   return (
@@ -198,31 +198,7 @@ export default function OrcamentosPage() {
                       onMouseLeave={() => setHoverId(null)}
                     >
                       <td>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span className="mono" style={{ color: "var(--acc)" }}>{o.id}</span>
-                          <button
-                            title="Excluir orçamento"
-                            onClick={() => handleDeletar(o.id)}
-                            style={{
-                              display: hoverId === o.id ? "inline-flex" : "none",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              width: "16px",
-                              height: "16px",
-                              borderRadius: "50%",
-                              background: "var(--err)",
-                              border: "none",
-                              color: "white",
-                              fontSize: "10px",
-                              fontWeight: 700,
-                              cursor: "pointer",
-                              lineHeight: 1,
-                              flexShrink: 0,
-                            }}
-                          >
-                            ×
-                          </button>
-                        </div>
+                        <span className="mono" style={{ color: "var(--acc)" }}>{o.id}</span>
                       </td>
                       <td>
                         <strong>{o.clientes?.nome ?? "—"}</strong>
@@ -301,6 +277,40 @@ export default function OrcamentosPage() {
                             () => handleStatus(o.id, "Rejeitado")
                           )}
                         </div>
+                      </td>
+                      {/* X excluir — canto direito, aparece no hover */}
+                      <td style={{ width: "32px", textAlign: "center" }}>
+                        {hoverId === o.id && (
+                          <button
+                            title="Excluir orçamento"
+                            onClick={() => handleDeletar(o.id)}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              width: "20px",
+                              height: "20px",
+                              borderRadius: "50%",
+                              background: "transparent",
+                              border: "1px solid var(--err)",
+                              color: "var(--err)",
+                              fontSize: "12px",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              transition: "all 0.15s",
+                            }}
+                            onMouseEnter={e => {
+                              (e.currentTarget as HTMLButtonElement).style.background = "var(--err)";
+                              (e.currentTarget as HTMLButtonElement).style.color = "white";
+                            }}
+                            onMouseLeave={e => {
+                              (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                              (e.currentTarget as HTMLButtonElement).style.color = "var(--err)";
+                            }}
+                          >
+                            ×
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
