@@ -91,10 +91,12 @@ export async function aprovarOrcamento(orcamentoId: string) {
   const orc = await getOrcamentoById(orcamentoId);
   if (!orc) return null;
 
+  // Se já tem pedido vinculado, só atualiza o status
   if (orc.pedido_id) {
     return updateOrcamento(orcamentoId, { status: 'Aprovado' } as any);
   }
 
+  // Gera novo ID baseado no maior número existente
   const { data: todosPedidos } = await supabase
     .from('pedidos')
     .select('id')
@@ -156,39 +158,31 @@ export async function aprovarOrcamento(orcamentoId: string) {
 }
 
 export async function rejeitarOrcamento(orcamentoId: string) {
+  // Busca pedido_id atual do banco
   const { data: orc, error } = await supabase
     .from('orcamentos')
     .select('id, pedido_id')
     .eq('id', orcamentoId)
     .single();
 
-  if (error || !orc) { console.error('rejeitarOrcamento — busca orc:', error); return null; }
+  if (error || !orc) { console.error('rejeitarOrcamento:', error); return null; }
 
   const pedidoId = (orc as any).pedido_id;
 
-  // 1. Remove FK do orçamento primeiro
-  await supabase
-    .from('orcamentos')
-    .update({ pedido_id: null, status: 'Rejeitado', updated_at: new Date().toISOString() } as never)
-    .eq('id', orcamentoId);
-
-  // 2. Agora deleta pedido sem bloqueio de FK
+  // Sem FK: deleta itens e pedido diretamente
   if (pedidoId) {
     await supabase.from('itens_pedido').delete().eq('pedido_id', pedidoId);
     await supabase.from('pedidos').delete().eq('id', pedidoId);
   }
 
-  const { data: orcAtualizado } = await supabase
-    .from('orcamentos')
-    .select('*')
-    .eq('id', orcamentoId)
-    .single();
-
-  return orcAtualizado;
+  // Atualiza orçamento
+  return updateOrcamento(orcamentoId, {
+    status: 'Rejeitado',
+    pedido_id: null,
+  } as any);
 }
 
 export async function deletarOrcamento(orcamentoId: string): Promise<boolean> {
-  // Busca pedido vinculado
   const { data: orc } = await supabase
     .from('orcamentos')
     .select('id, pedido_id')
@@ -197,22 +191,13 @@ export async function deletarOrcamento(orcamentoId: string): Promise<boolean> {
 
   const pedidoId = (orc as any)?.pedido_id;
 
-  // 1. Remove FK do orçamento
-  await supabase
-    .from('orcamentos')
-    .update({ pedido_id: null } as never)
-    .eq('id', orcamentoId);
-
-  // 2. Deleta pedido vinculado se existir
   if (pedidoId) {
     await supabase.from('itens_pedido').delete().eq('pedido_id', pedidoId);
     await supabase.from('pedidos').delete().eq('id', pedidoId);
   }
 
-  // 3. Deleta itens do orçamento
   await supabase.from('itens_orcamento').delete().eq('orcamento_id', orcamentoId);
 
-  // 4. Deleta o orçamento
   const { error } = await supabase.from('orcamentos').delete().eq('id', orcamentoId);
   if (error) { console.error('deletarOrcamento:', error); return false; }
 
