@@ -63,10 +63,9 @@ export default function OrcamentosPage() {
     return matchBusca && matchStatus;
   });
 
+  // Sempre clicável, sem cor por padrão, cor no hover
   function btnAcao(
-    ativo: boolean,
-    cor: string,
-    bg: string,
+    corHover: string,
     bgHover: string,
     titulo: string,
     icone: string,
@@ -75,7 +74,7 @@ export default function OrcamentosPage() {
     return (
       <button
         title={titulo}
-        onClick={ativo ? onClick : undefined}
+        onClick={onClick}
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -83,16 +82,23 @@ export default function OrcamentosPage() {
           width: "28px",
           height: "28px",
           borderRadius: "6px",
-          background: ativo ? bg : "transparent",
-          border: `1px solid ${ativo ? cor : "var(--b1)"}`,
-          color: ativo ? cor : "var(--b2)",
+          background: "transparent",
+          border: "1px solid var(--b2)",
+          color: "var(--t3)",
           fontSize: "13px",
-          cursor: ativo ? "pointer" : "default",
+          cursor: "pointer",
           transition: "all 0.15s",
-          opacity: ativo ? 1 : 0.4,
         }}
-        onMouseEnter={e => { if (ativo) (e.currentTarget as HTMLButtonElement).style.background = bgHover; }}
-        onMouseLeave={e => { if (ativo) (e.currentTarget as HTMLButtonElement).style.background = bg; }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLButtonElement).style.background = bgHover;
+          (e.currentTarget as HTMLButtonElement).style.borderColor = corHover;
+          (e.currentTarget as HTMLButtonElement).style.color = corHover;
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--b2)";
+          (e.currentTarget as HTMLButtonElement).style.color = "var(--t3)";
+        }}
       >
         {icone}
       </button>
@@ -186,135 +192,113 @@ export default function OrcamentosPage() {
                     </td>
                   </tr>
                 )}
-                {filtrados.map(o => {
-                  const podeEnviar   = o.status === "Rascunho";
-                  const podeAprovar  = o.status === "Rascunho" || o.status === "Enviado";
-                  const podeRejeitar = o.status === "Rascunho" || o.status === "Enviado";
+                {filtrados.map(o => (
+                  <tr
+                    key={o.id}
+                    onMouseEnter={() => setHoverId(o.id)}
+                    onMouseLeave={() => setHoverId(null)}
+                  >
+                    <td>
+                      <span className="mono" style={{ color: "var(--acc)" }}>{o.id}</span>
+                    </td>
+                    <td>
+                      <strong>{o.clientes?.nome ?? "—"}</strong>
+                      {o.clientes?.cidade && <div className="tdim">{o.clientes.cidade}</div>}
+                    </td>
+                    <td className="mono">{formatDate(o.dt_orcamento)}</td>
+                    <td className="mono">{formatDate(o.dt_validade) || "—"}</td>
+                    <td className="mono">{Number(o.m2_total).toFixed(2)} m²</td>
+                    <td className="mono" style={{ color: "var(--acc)", fontWeight: 600 }}>
+                      {formatBRL(o.valor_total)}
+                    </td>
+                    <td>
+                      <span className={CHIP[o.status] ?? "chip cgr"}>{o.status}</span>
+                    </td>
+                    <td>
+                      {o.pedido_id ? (
+                        <a href={`/pedidos/${o.pedido_id}`} className="mono" style={{ color: "var(--acc2)", fontSize: "12px" }}>
+                          {o.pedido_id}
+                        </a>
+                      ) : (
+                        <span style={{ color: "var(--t3)" }}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                        <a
+                          href={`/orcamentos/${o.id}`}
+                          title="Ver orçamento"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: "28px",
+                            height: "28px",
+                            borderRadius: "6px",
+                            background: "transparent",
+                            border: "1px solid var(--b2)",
+                            color: "var(--t3)",
+                            fontSize: "13px",
+                            textDecoration: "none",
+                            transition: "all 0.15s",
+                          }}
+                          onMouseEnter={e => {
+                            (e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--acc)";
+                            (e.currentTarget as HTMLAnchorElement).style.color = "var(--acc)";
+                          }}
+                          onMouseLeave={e => {
+                            (e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--b2)";
+                            (e.currentTarget as HTMLAnchorElement).style.color = "var(--t3)";
+                          }}
+                        >
+                          ◉
+                        </a>
 
-                  return (
-                    <tr
-                      key={o.id}
-                      onMouseEnter={() => setHoverId(o.id)}
-                      onMouseLeave={() => setHoverId(null)}
-                    >
-                      <td>
-                        <span className="mono" style={{ color: "var(--acc)" }}>{o.id}</span>
-                      </td>
-                      <td>
-                        <strong>{o.clientes?.nome ?? "—"}</strong>
-                        {o.clientes?.cidade && <div className="tdim">{o.clientes.cidade}</div>}
-                      </td>
-                      <td className="mono">{formatDate(o.dt_orcamento)}</td>
-                      <td className="mono">{formatDate(o.dt_validade) || "—"}</td>
-                      <td className="mono">{Number(o.m2_total).toFixed(2)} m²</td>
-                      <td className="mono" style={{ color: "var(--acc)", fontWeight: 600 }}>
-                        {formatBRL(o.valor_total)}
-                      </td>
-                      <td>
-                        <span className={CHIP[o.status] ?? "chip cgr"}>{o.status}</span>
-                      </td>
-                      <td>
-                        {o.pedido_id ? (
-                          <a href={`/pedidos/${o.pedido_id}`} className="mono" style={{ color: "var(--acc2)", fontSize: "12px" }}>
-                            {o.pedido_id}
-                          </a>
-                        ) : (
-                          <span style={{ color: "var(--t3)" }}>—</span>
-                        )}
-                      </td>
-                      <td>
-                        <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-                          <a
-                            href={`/orcamentos/${o.id}`}
-                            title="Ver orçamento"
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              width: "28px",
-                              height: "28px",
-                              borderRadius: "6px",
-                              background: "var(--surf2)",
-                              border: "1px solid var(--b2)",
-                              color: "var(--t2)",
-                              fontSize: "13px",
-                              textDecoration: "none",
-                              transition: "all 0.15s",
-                            }}
-                            onMouseEnter={e => {
-                              (e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--acc)";
-                              (e.currentTarget as HTMLAnchorElement).style.color = "var(--acc)";
-                            }}
-                            onMouseLeave={e => {
-                              (e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--b2)";
-                              (e.currentTarget as HTMLAnchorElement).style.color = "var(--t2)";
-                            }}
-                          >
-                            ◉
-                          </a>
+                        {btnAcao("var(--warn)", "rgba(245,158,11,.15)", "Marcar como Enviado", "✉",
+                          () => handleStatus(o.id, "Enviado"))}
 
-                          {btnAcao(
-                            podeEnviar,
-                            "var(--warn)", "rgba(245,158,11,.1)", "rgba(245,158,11,.25)",
-                            podeEnviar ? "Marcar como Enviado" : "Só disponível em Rascunho",
-                            "✉",
-                            () => handleStatus(o.id, "Enviado")
-                          )}
+                        {btnAcao("var(--ok)", "rgba(16,185,129,.15)", "Aprovar orçamento", "✓",
+                          () => handleStatus(o.id, "Aprovado"))}
 
-                          {btnAcao(
-                            podeAprovar,
-                            "var(--ok)", "rgba(16,185,129,.1)", "rgba(16,185,129,.25)",
-                            podeAprovar ? "Aprovar orçamento" : "Já processado",
-                            "✓",
-                            () => handleStatus(o.id, "Aprovado")
-                          )}
-
-                          {btnAcao(
-                            podeRejeitar,
-                            "var(--err)", "rgba(244,63,94,.1)", "rgba(244,63,94,.25)",
-                            podeRejeitar ? "Rejeitar orçamento" : "Já processado",
-                            "✕",
-                            () => handleStatus(o.id, "Rejeitado")
-                          )}
-                        </div>
-                      </td>
-                      {/* X excluir — canto direito, aparece no hover */}
-                      <td style={{ width: "32px", textAlign: "center" }}>
-                        {hoverId === o.id && (
-                          <button
-                            title="Excluir orçamento"
-                            onClick={() => handleDeletar(o.id)}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              width: "20px",
-                              height: "20px",
-                              borderRadius: "50%",
-                              background: "transparent",
-                              border: "1px solid var(--err)",
-                              color: "var(--err)",
-                              fontSize: "12px",
-                              fontWeight: 700,
-                              cursor: "pointer",
-                              transition: "all 0.15s",
-                            }}
-                            onMouseEnter={e => {
-                              (e.currentTarget as HTMLButtonElement).style.background = "var(--err)";
-                              (e.currentTarget as HTMLButtonElement).style.color = "white";
-                            }}
-                            onMouseLeave={e => {
-                              (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-                              (e.currentTarget as HTMLButtonElement).style.color = "var(--err)";
-                            }}
-                          >
-                            ×
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                        {btnAcao("var(--err)", "rgba(244,63,94,.15)", "Rejeitar orçamento", "✕",
+                          () => handleStatus(o.id, "Rejeitado"))}
+                      </div>
+                    </td>
+                    <td style={{ width: "32px", textAlign: "center" }}>
+                      {hoverId === o.id && (
+                        <button
+                          title="Excluir orçamento"
+                          onClick={() => handleDeletar(o.id)}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: "20px",
+                            height: "20px",
+                            borderRadius: "50%",
+                            background: "transparent",
+                            border: "1px solid var(--err)",
+                            color: "var(--err)",
+                            fontSize: "12px",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            transition: "all 0.15s",
+                          }}
+                          onMouseEnter={e => {
+                            (e.currentTarget as HTMLButtonElement).style.background = "var(--err)";
+                            (e.currentTarget as HTMLButtonElement).style.color = "white";
+                          }}
+                          onMouseLeave={e => {
+                            (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                            (e.currentTarget as HTMLButtonElement).style.color = "var(--err)";
+                          }}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
