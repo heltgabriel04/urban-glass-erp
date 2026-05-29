@@ -52,8 +52,7 @@ export default function OrcamentoDetalhe() {
   async function handleRejeitar() {
     if (!confirm("Rejeitar orçamento? O pedido vinculado será removido.")) return;
     setSalvando(true);
-    // passa o pedido_id já carregado em memória para evitar busca desatualizada
-    const result = await rejeitarOrcamento(id, orc?.pedido_id ?? null);
+    const result = await rejeitarOrcamento(id);
     setSalvando(false);
     if (result) { toast("Orçamento rejeitado", "warn"); load(); }
     else toast("Erro ao rejeitar", "err");
@@ -62,8 +61,7 @@ export default function OrcamentoDetalhe() {
   async function handleVoltarRascunho() {
     if (!confirm("Voltar para Rascunho? O pedido vinculado será removido.")) return;
     setSalvando(true);
-    // passa o pedido_id já carregado em memória
-    const result = await rejeitarOrcamento(id, orc?.pedido_id ?? null);
+    const result = await rejeitarOrcamento(id);
     if (result) await updateOrcamento(id, { status: "Rascunho" } as any);
     setSalvando(false);
     if (result) { toast("Orçamento voltou para Rascunho"); load(); }
