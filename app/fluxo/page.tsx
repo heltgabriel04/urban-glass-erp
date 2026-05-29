@@ -10,8 +10,7 @@ const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out'
 
 const VAZIO: LancamentoInsert = {
   tipo: "Entrada", descricao: "", valor: 0,
-  status: "Pendente", vencimento: null,
-  pedido_id: null, cliente_id: null,
+  status: "Pendente", vencimento: null, pedido_id: null, cliente_id: null,
 };
 
 export default function FluxoPage() {
@@ -26,43 +25,28 @@ export default function FluxoPage() {
 
   async function load() {
     setLoading(true);
-    const [fat, lanc] = await Promise.all([
-      getFaturamentoMensal(2026),
-      getLancamentos(),
-    ]);
-    setFatMensal(fat);
-    setLancamentos(lanc);
-    setLoading(false);
+    const [fat, lanc] = await Promise.all([getFaturamentoMensal(2026), getLancamentos()]);
+    setFatMensal(fat); setLancamentos(lanc); setLoading(false);
   }
 
   async function salvar() {
     if (!form.descricao || !form.valor) return;
     setSalvando(true);
     await createLancamento(form);
-    setSalvando(false);
-    setModal(false);
-    setForm(VAZIO);
-    load();
+    setSalvando(false); setModal(false); setForm(VAZIO); load();
   }
 
-  // Monta array dos 12 meses
   const meses = MESES_ABREV.map((mes, i) => {
     const fat = fatMensal.find(f => f.mes === i + 1);
-    return {
-      mes,
-      faturado: fat ? Number(fat.faturado) : 0,
-      recebido: fat ? Number(fat.recebido) : 0,
-    };
+    return { mes, faturado: fat ? Number(fat.faturado) : 0, recebido: fat ? Number(fat.recebido) : 0 };
   });
 
   const totalFat = meses.reduce((a, m) => a + m.faturado, 0);
   const totalRec = meses.reduce((a, m) => a + m.recebido, 0);
-
-  // Lançamentos
   const entradas = lancamentos.filter(l => l.tipo === "Entrada");
-  const saidas = lancamentos.filter(l => l.tipo === "Saída");
+  const saidas   = lancamentos.filter(l => l.tipo === "Saída");
   const totalEntradas = entradas.reduce((a, l) => a + Number(l.valor), 0);
-  const totalSaidas = saidas.reduce((a, l) => a + Number(l.valor), 0);
+  const totalSaidas   = saidas.reduce((a, l) => a + Number(l.valor), 0);
   const saldo = totalEntradas - totalSaidas;
 
   const chipStatus = (s: string) => {
@@ -79,50 +63,31 @@ export default function FluxoPage() {
       </div>
 
       <div className="con">
+        {/* CARDS */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:"12px", marginBottom:"20px" }}>
+          {[
+            { label:"Total Entradas", value: formatBRL(totalEntradas), color:"var(--ok)",  sub: entradas.length + " lançamentos" },
+            { label:"Total Saídas",   value: formatBRL(totalSaidas),   color:"var(--err)", sub: saidas.length + " lançamentos" },
+            { label:"Saldo",          value: formatBRL(saldo),         color: saldo >= 0 ? "var(--acc)" : "var(--err)", sub: saldo >= 0 ? "↑ Positivo" : "↓ Negativo" },
+          ].map(card => (
+            <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
+              <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
+              <div style={{ fontSize:"22px", fontWeight:700, color:card.color, fontFamily:"'DM Mono', monospace", lineHeight:1.2 }}>{card.value}</div>
+              <div style={{ fontSize:"11px", color:"var(--t3)" }}>{card.sub}</div>
+            </div>
+          ))}
+        </div>
+
         {loading ? (
           <div className="loading">Carregando fluxo de caixa...</div>
         ) : (
           <>
-            {/* KPIs lançamentos */}
-            <div className="g3 mb14">
-              <div className="kpi">
-                <div className="kpi-l">Total Entradas</div>
-                <div className="kpi-v" style={{ color: "var(--ok)" }}>{formatBRL(totalEntradas)}</div>
-                <div className="kpi-s up">{entradas.length} lançamentos</div>
-                <div className="kpi-bar" style={{ width: "100%", background: "var(--ok)" }} />
-              </div>
-              <div className="kpi">
-                <div className="kpi-l">Total Saídas</div>
-                <div className="kpi-v" style={{ color: "var(--err)" }}>{formatBRL(totalSaidas)}</div>
-                <div className="kpi-s dn">{saidas.length} lançamentos</div>
-                <div className="kpi-bar" style={{ width: "60%", background: "var(--err)" }} />
-              </div>
-              <div className="kpi">
-                <div className="kpi-l">Saldo</div>
-                <div className="kpi-v" style={{ color: saldo >= 0 ? "var(--acc)" : "var(--err)" }}>
-                  {formatBRL(saldo)}
-                </div>
-                <div className={`kpi-s ${saldo >= 0 ? "up" : "dn"}`}>
-                  {saldo >= 0 ? "↑ Positivo" : "↓ Negativo"}
-                </div>
-                <div className="kpi-bar" style={{ width: "80%", background: saldo >= 0 ? "var(--acc)" : "var(--err)" }} />
-              </div>
-            </div>
-
-            {/* Faturamento mensal por pedidos */}
             <div className="card mb14">
               <div className="ct">Faturamento vs Recebimento por Mês</div>
-              <div className="tw" style={{ border: "none", borderRadius: 0 }}>
+              <div className="tw" style={{ border:"none", borderRadius:0 }}>
                 <table>
                   <thead>
-                    <tr>
-                      <th>Mês</th>
-                      <th>Faturado</th>
-                      <th>Recebido</th>
-                      <th>A Receber</th>
-                      <th>Realizado %</th>
-                      <th>Status</th>
-                    </tr>
+                    <tr><th>Mês</th><th>Faturado</th><th>Recebido</th><th>A Receber</th><th>Realizado %</th><th>Status</th></tr>
                   </thead>
                   <tbody>
                     {meses.filter(m => m.faturado > 0 || m.recebido > 0).map((m, i) => {
@@ -132,15 +97,12 @@ export default function FluxoPage() {
                         <tr key={i}>
                           <td><strong>{m.mes}</strong></td>
                           <td className="mono">{formatBRL(m.faturado)}</td>
-                          <td className="mono" style={{ color: "var(--acc)" }}>{formatBRL(m.recebido)}</td>
+                          <td className="mono" style={{ color:"var(--acc)" }}>{formatBRL(m.recebido)}</td>
                           <td className="mono" style={{ color: aRec > 0 ? "var(--warn)" : "var(--t2)" }}>{formatBRL(aRec)}</td>
                           <td>
-                            <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
-                              <div className="prg" style={{ width: "75px", height: "5px" }}>
-                                <div className="prg-f" style={{
-                                  width: `${Math.min(pct, 100)}%`,
-                                  background: pct < 50 ? "var(--err)" : pct < 80 ? "var(--warn)" : "var(--ok)"
-                                }} />
+                            <div style={{ display:"flex", alignItems:"center", gap:"7px" }}>
+                              <div className="prg" style={{ width:"75px", height:"5px" }}>
+                                <div className="prg-f" style={{ width:`${Math.min(pct,100)}%`, background: pct < 50 ? "var(--err)" : pct < 80 ? "var(--warn)" : "var(--ok)" }} />
                               </div>
                               <span className="mono">{formatPercent(pct)}</span>
                             </div>
@@ -149,11 +111,11 @@ export default function FluxoPage() {
                         </tr>
                       );
                     })}
-                    <tr style={{ fontWeight: 700, background: "var(--surf2)" }}>
+                    <tr style={{ fontWeight:700, background:"var(--surf2)" }}>
                       <td>TOTAL</td>
                       <td className="mono">{formatBRL(totalFat)}</td>
-                      <td className="mono" style={{ color: "var(--acc)" }}>{formatBRL(totalRec)}</td>
-                      <td className="mono" style={{ color: "var(--warn)" }}>{formatBRL(totalFat - totalRec)}</td>
+                      <td className="mono" style={{ color:"var(--acc)" }}>{formatBRL(totalRec)}</td>
+                      <td className="mono" style={{ color:"var(--warn)" }}>{formatBRL(totalFat - totalRec)}</td>
                       <td className="mono">{formatPercent(totalFat > 0 ? totalRec / totalFat * 100 : 0)}</td>
                       <td>{chipStatus(totalRec >= totalFat ? "Pago" : totalRec > 0 ? "A Receber" : "Pendente")}</td>
                     </tr>
@@ -162,40 +124,22 @@ export default function FluxoPage() {
               </div>
             </div>
 
-            {/* Lançamentos avulsos */}
             <div className="card">
-              <div className="ct">
-                Lançamentos
-                <button className="btn bp xs" onClick={() => setModal(true)}>+ Novo</button>
-              </div>
+              <div className="ct">Lançamentos<button className="btn bp xs" onClick={() => setModal(true)}>+ Novo</button></div>
               {lancamentos.length === 0 ? (
-                <div style={{ color: "var(--t3)", fontSize: "12px", padding: "16px 0" }}>
-                  Nenhum lançamento cadastrado
-                </div>
+                <div style={{ color:"var(--t3)", fontSize:"12px", padding:"16px 0" }}>Nenhum lançamento cadastrado</div>
               ) : (
-                <div className="tw" style={{ border: "none", borderRadius: 0 }}>
+                <div className="tw" style={{ border:"none", borderRadius:0 }}>
                   <table>
                     <thead>
-                      <tr>
-                        <th>Tipo</th>
-                        <th>Descrição</th>
-                        <th>Valor</th>
-                        <th>Vencimento</th>
-                        <th>Status</th>
-                      </tr>
+                      <tr><th>Tipo</th><th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Status</th></tr>
                     </thead>
                     <tbody>
                       {lancamentos.map(l => (
                         <tr key={l.id}>
-                          <td>
-                            <span className={l.tipo === "Entrada" ? "chip cg" : "chip cr"}>
-                              {l.tipo}
-                            </span>
-                          </td>
+                          <td><span className={l.tipo === "Entrada" ? "chip cg" : "chip cr"}>{l.tipo}</span></td>
                           <td>{l.descricao}</td>
-                          <td className="mono" style={{ color: l.tipo === "Entrada" ? "var(--ok)" : "var(--err)" }}>
-                            {l.tipo === "Saída" ? "− " : ""}{formatBRL(l.valor)}
-                          </td>
+                          <td className="mono" style={{ color: l.tipo === "Entrada" ? "var(--ok)" : "var(--err)" }}>{l.tipo === "Saída" ? "− " : ""}{formatBRL(l.valor)}</td>
                           <td className="mono">{formatDate(l.vencimento)}</td>
                           <td>{chipStatus(l.status)}</td>
                         </tr>
@@ -209,39 +153,28 @@ export default function FluxoPage() {
         )}
       </div>
 
-      {/* Modal novo lançamento */}
       {modal && (
         <div className="mov open" onClick={e => e.target === e.currentTarget && setModal(false)}>
-          <div className="mod" style={{ width: "440px" }}>
+          <div className="mod" style={{ width:"440px" }}>
             <div className="mhd">
               <div className="mtit">Novo Lançamento</div>
               <button className="mcl" onClick={() => setModal(false)}>✕</button>
             </div>
-
-            <div className="fr" style={{ marginBottom: "10px" }}>
+            <div className="fr" style={{ marginBottom:"10px" }}>
               <div className="fg">
                 <label className="fl">Tipo</label>
-                <select className="fc" value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value as any }))}>
-                  <option>Entrada</option>
-                  <option>Saída</option>
-                </select>
+                <select className="fc" value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value as any }))}><option>Entrada</option><option>Saída</option></select>
               </div>
               <div className="fg">
                 <label className="fl">Status</label>
-                <select className="fc" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as any }))}>
-                  <option>Pendente</option>
-                  <option>Pago</option>
-                  <option>A Receber</option>
-                </select>
+                <select className="fc" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as any }))}><option>Pendente</option><option>Pago</option><option>A Receber</option></select>
               </div>
             </div>
-
-            <div className="fg" style={{ marginBottom: "10px" }}>
+            <div className="fg" style={{ marginBottom:"10px" }}>
               <label className="fl">Descrição *</label>
               <input className="fc" value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Ex: Compra de chapas" />
             </div>
-
-            <div className="fr" style={{ marginBottom: "14px" }}>
+            <div className="fr" style={{ marginBottom:"14px" }}>
               <div className="fg">
                 <label className="fl">Valor *</label>
                 <input className="fc" type="number" step="0.01" value={form.valor || ""} onChange={e => setForm(f => ({ ...f, valor: parseFloat(e.target.value) || 0 }))} placeholder="0,00" />
@@ -251,12 +184,9 @@ export default function FluxoPage() {
                 <input className="fc" type="date" value={form.vencimento || ""} onChange={e => setForm(f => ({ ...f, vencimento: e.target.value || null }))} />
               </div>
             </div>
-
-            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+            <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end" }}>
               <button className="btn bg" onClick={() => setModal(false)}>Cancelar</button>
-              <button className="btn bp" onClick={salvar} disabled={salvando}>
-                {salvando ? "Salvando..." : "Salvar"}
-              </button>
+              <button className="btn bp" onClick={salvar} disabled={salvando}>{salvando ? "Salvando..." : "Salvar"}</button>
             </div>
           </div>
         </div>
