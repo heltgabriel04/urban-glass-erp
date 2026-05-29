@@ -60,9 +60,8 @@ export default function NovoOrcamentoPage() {
     setProdutos(prods || []);
     setTabelas(tabs || []);
     setProximoId(pid);
-    if (prods && prods.length > 0) {
-      setItens([{ ...ITEM_VAZIO, produto_id: prods[0].id, produto_nome: prods[0].nome, valor_m2: prods[0].valor }]);
-    }
+    // Começa com item vazio — sem produto pré-selecionado
+    setItens([{ ...ITEM_VAZIO }]);
   }
 
   useEffect(() => {
@@ -79,13 +78,7 @@ export default function NovoOrcamentoPage() {
   }
 
   function addItem() {
-    const prod = produtos[0];
-    setItens(i => [...i, {
-      ...ITEM_VAZIO,
-      produto_id: prod?.id || null,
-      produto_nome: prod?.nome || "",
-      valor_m2: prod?.valor || 0,
-    }]);
+    setItens(i => [...i, { ...ITEM_VAZIO }]);
   }
 
   function remItem(i: number) {
@@ -113,7 +106,7 @@ export default function NovoOrcamentoPage() {
 
   function calcSubtotal(item: ItemForm): number {
     const m2 = calcM2Item(item);
-    return m2 * item.valor_m2 + item.lapidacao * m2;
+    return m2 * item.valor_m2;
   }
 
   const m2Total = itens.reduce((a, i) => a + calcM2Item(i), 0);
@@ -123,6 +116,7 @@ export default function NovoOrcamentoPage() {
 
   async function salvar() {
     if (!clienteId) { alert("Selecione um cliente"); return; }
+    if (itens.some(i => !i.produto_id)) { alert("Selecione o produto em todos os itens"); return; }
     if (itens.some(i => i.largura === 0 || i.altura === 0)) {
       alert("Preencha as dimensões de todos os itens");
       return;
@@ -138,7 +132,7 @@ export default function NovoOrcamentoPage() {
       quantidade: i.quantidade,
       m2: calcM2Item(i),
       valor_m2: i.valor_m2,
-      lapidacao: i.lapidacao,
+      lapidacao: 0,
       desconto: 0,
       subtotal: calcSubtotal(i),
     }));
@@ -308,16 +302,16 @@ export default function NovoOrcamentoPage() {
         <div className="card">
           <div className="ct">
             Itens do Orçamento
-            <button className="btn bp xs" onClick={addItem}>+ Item</button>
+            <button className="btn bp sm" onClick={addItem}>+ Item</button>
           </div>
 
           <div style={{
             display: "grid",
-            gridTemplateColumns: "2fr 80px 80px 60px 100px 100px 80px",
+            gridTemplateColumns: "2fr 80px 80px 60px 100px 40px",
             gap: "8px", padding: "6px 0",
             borderBottom: "1px solid var(--b1)", marginBottom: "8px",
           }}>
-            {["Produto","Larg. (mm)","Alt. (mm)","Qtd","Valor/m²","Lap./m²",""].map((h, i) => (
+            {["Produto","Larg. (mm)","Alt. (mm)","Qtd","Valor/m²",""].map((h, i) => (
               <div key={i} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>
                 {h}
               </div>
@@ -331,17 +325,21 @@ export default function NovoOrcamentoPage() {
               <div key={i} style={{ marginBottom: "10px" }}>
                 <div style={{
                   display: "grid",
-                  gridTemplateColumns: "2fr 80px 80px 60px 100px 100px 80px",
+                  gridTemplateColumns: "2fr 80px 80px 60px 100px 40px",
                   gap: "8px", alignItems: "center",
                 }}>
-                  <select className="fc" value={item.produto_id || ""} onChange={e => updItem(i, "produto_id", Number(e.target.value))}>
+                  <select
+                    className="fc"
+                    value={item.produto_id || ""}
+                    onChange={e => updItem(i, "produto_id", Number(e.target.value))}
+                  >
+                    <option value="">Selecione o produto...</option>
                     {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
                   </select>
                   <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
                   <input className="fc" type="number" value={item.altura || ""} onChange={e => updItem(i, "altura", parseInt(e.target.value) || 0)} placeholder="0" />
                   <input className="fc" type="number" value={item.quantidade} onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
-                  <input className="fc" type="number" step="0.01" value={item.valor_m2} onChange={e => updItem(i, "valor_m2", parseFloat(e.target.value) || 0)} />
-                  <input className="fc" type="number" step="0.01" value={item.lapidacao || ""} onChange={e => updItem(i, "lapidacao", parseFloat(e.target.value) || 0)} placeholder="0" />
+                  <input className="fc" type="number" step="0.01" value={item.valor_m2 || ""} onChange={e => updItem(i, "valor_m2", parseFloat(e.target.value) || 0)} placeholder="0" />
                   <button className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1}>✕</button>
                 </div>
                 {m2 > 0 && (
