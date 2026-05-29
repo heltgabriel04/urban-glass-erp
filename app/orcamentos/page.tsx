@@ -21,7 +21,7 @@ export default function OrcamentosPage() {
   const [loading, setLoading]       = useState(true);
   const [busca, setBusca]           = useState("");
   const [filtroStatus, setFiltroStatus] = useState("Todos");
-  const [hoverId, setHoverId]       = useState<string | null>(null);
+
 
   useEffect(() => { load(); }, []);
 
@@ -195,8 +195,7 @@ export default function OrcamentosPage() {
                 {filtrados.map(o => (
                   <tr
                     key={o.id}
-                    onMouseEnter={() => setHoverId(o.id)}
-                    onMouseLeave={() => setHoverId(null)}
+
                   >
                     <td>
                       <span className="mono" style={{ color: "var(--acc)" }}>{o.id}</span>
@@ -264,38 +263,37 @@ export default function OrcamentosPage() {
                           () => handleStatus(o.id, "Rejeitado"))}
                       </div>
                     </td>
-                    <td style={{ width: "32px", textAlign: "center" }}>
-                      {hoverId === o.id && (
-                        <button
-                          title="Excluir orçamento"
-                          onClick={() => handleDeletar(o.id)}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: "20px",
-                            height: "20px",
-                            borderRadius: "50%",
-                            background: "transparent",
-                            border: "1px solid var(--err)",
-                            color: "var(--err)",
-                            fontSize: "12px",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            transition: "all 0.15s",
-                          }}
-                          onMouseEnter={e => {
-                            (e.currentTarget as HTMLButtonElement).style.background = "var(--err)";
-                            (e.currentTarget as HTMLButtonElement).style.color = "white";
-                          }}
-                          onMouseLeave={e => {
-                            (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-                            (e.currentTarget as HTMLButtonElement).style.color = "var(--err)";
-                          }}
-                        >
-                          ×
-                        </button>
-                      )}
+                    <td style={{ width: "40px", textAlign: "center" }}>
+                      <button
+                        title="Excluir orçamento"
+                        onClick={() => handleDeletar(o.id)}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "28px",
+                          height: "28px",
+                          borderRadius: "6px",
+                          background: "transparent",
+                          border: "1px solid var(--b2)",
+                          color: "var(--t3)",
+                          fontSize: "13px",
+                          cursor: "pointer",
+                          transition: "all 0.15s",
+                        }}
+                        onMouseEnter={e => {
+                          (e.currentTarget as HTMLButtonElement).style.background = "rgba(244,63,94,.15)";
+                          (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--err)";
+                          (e.currentTarget as HTMLButtonElement).style.color = "var(--err)";
+                        }}
+                        onMouseLeave={e => {
+                          (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                          (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--b2)";
+                          (e.currentTarget as HTMLButtonElement).style.color = "var(--t3)";
+                        }}
+                      >
+                        🗑
+                      </button>
                     </td>
                   </tr>
                 ))}
