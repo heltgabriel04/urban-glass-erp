@@ -91,11 +91,25 @@ export async function aprovarOrcamento(orcamentoId: string) {
   const orc = await getOrcamentoById(orcamentoId);
   if (!orc) return null;
 
-  // Gera novo ID de pedido
-  const { count } = await supabase
+  // Se já tem pedido vinculado, só atualiza o status do orçamento
+  if (orc.pedido_id) {
+    return updateOrcamento(orcamentoId, { status: 'Aprovado' } as any);
+  }
+
+  // Gera novo ID baseado no maior número existente (evita duplicar ao usar count)
+  const { data: todosPedidos } = await supabase
     .from('pedidos')
-    .select('*', { count: 'exact', head: true });
-  const pedidoId = `P-${String((count || 0) + 1).padStart(3, '0')}`;
+    .select('id')
+    .order('id', { ascending: false });
+
+  let proximoNum = 1;
+  if (todosPedidos && todosPedidos.length > 0) {
+    const nums = todosPedidos
+      .map((p: any) => parseInt(p.id.replace('P-', ''), 10))
+      .filter((n: number) => !isNaN(n));
+    proximoNum = Math.max(...nums) + 1;
+  }
+  const pedidoId = `P-${String(proximoNum).padStart(3, '0')}`;
 
   // Cria pedido
   const { data: pedido, error: errPedido } = await supabase
@@ -137,7 +151,7 @@ export async function aprovarOrcamento(orcamentoId: string) {
     if (errItens) console.error('aprovarOrcamento itens_pedido:', errItens);
   }
 
-  // Atualiza orçamento
+  // Atualiza orçamento com status e vínculo ao pedido
   await updateOrcamento(orcamentoId, {
     status: 'Aprovado',
     pedido_id: pedidoId,

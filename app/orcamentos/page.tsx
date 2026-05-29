@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
-import { getOrcamentos, updateOrcamento } from "@/services/orcamentos.service";
+import { getOrcamentos, updateOrcamento, aprovarOrcamento, rejeitarOrcamento } from "@/services/orcamentos.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 
@@ -32,9 +32,19 @@ export default function OrcamentosPage() {
   }
 
   async function handleStatus(id: string, status: "Enviado" | "Aprovado" | "Rejeitado") {
-    const result = await updateOrcamento(id, { status } as any);
-    if (result) { toast(`Orçamento ${id} marcado como ${status}`); load(); }
-    else toast("Erro ao atualizar status", "err");
+    if (status === "Aprovado") {
+      const result = await aprovarOrcamento(id);
+      if (result) { toast(`Orçamento ${id} aprovado — pedido gerado`); load(); }
+      else toast("Erro ao aprovar orçamento", "err");
+    } else if (status === "Rejeitado") {
+      const result = await rejeitarOrcamento(id);
+      if (result) { toast(`Orçamento ${id} rejeitado — pedido cancelado`); load(); }
+      else toast("Erro ao rejeitar orçamento", "err");
+    } else {
+      const result = await updateOrcamento(id, { status } as any);
+      if (result) { toast(`Orçamento ${id} marcado como ${status}`); load(); }
+      else toast("Erro ao atualizar status", "err");
+    }
   }
 
   const filtrados = orcamentos.filter(o => {
