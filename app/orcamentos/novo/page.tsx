@@ -302,14 +302,6 @@ export default function NovoOrcamentoPage() {
                 <div className="sv">{formatBRL(valorTotal / parcelas)}</div>
               </div>
             )}
-           <button
-              className="btn bp"
-              style={{ width: "100%", marginTop: "16px", padding: "12px" }}
-              onClick={salvar}
-              disabled={salvando}
-            >
-              {salvando ? "Salvando..." : `✓ Salvar · ${formatBRL(valorTotal)}`}
-            </button>
           </div>
         </div>
 
