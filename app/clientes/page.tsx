@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { getClientes, createCliente, updateCliente } from "@/services/clientes.service";
 import { getFinanceiroClientes } from "@/services/financeiro.service";
-import { formatBRL, formatPercent } from "@/lib/formatters";
+import { formatBRL } from "@/lib/formatters";
 import type { Cliente, FinanceiroCliente, ClienteInsert } from "@/types";
 
 const VAZIO: ClienteInsert = {
@@ -36,18 +36,10 @@ export default function ClientesPage() {
     return financeiro.find(f => f.cliente_id === id) ?? null;
   }
 
-  function abrirNovo() {
-    setForm(VAZIO);
-    setEditId(null);
-    setModal(true);
-  }
+  function abrirNovo() { setForm(VAZIO); setEditId(null); setModal(true); }
 
   function abrirEdit(c: Cliente) {
-    setForm({
-      nome: c.nome, cnpj: c.cnpj, tel: c.tel, email: c.email,
-      endereco: c.endereco, cidade: c.cidade, pgto: c.pgto,
-      tabela: c.tabela, ativo: c.ativo,
-    });
+    setForm({ nome: c.nome, cnpj: c.cnpj, tel: c.tel, email: c.email, endereco: c.endereco, cidade: c.cidade, pgto: c.pgto, tabela: c.tabela, ativo: c.ativo });
     setEditId(c.id);
     setModal(true);
   }
@@ -55,11 +47,7 @@ export default function ClientesPage() {
   async function salvar() {
     if (!form.nome.trim()) return;
     setSalvando(true);
-    if (editId) {
-      await updateCliente(editId, form);
-    } else {
-      await createCliente(form);
-    }
+    if (editId) { await updateCliente(editId, form); } else { await createCliente(form); }
     setSalvando(false);
     setModal(false);
     load();
@@ -71,6 +59,10 @@ export default function ClientesPage() {
     c.cidade.toLowerCase().includes(filtro.toLowerCase()) ||
     c.cnpj.includes(filtro)
   );
+
+  const totalFaturado     = clientes.reduce((a, c) => a + (finDe(c.id) ? Number(finDe(c.id)!.faturado) : 0), 0);
+  const totalAReceber     = clientes.reduce((a, c) => a + (finDe(c.id) ? Number(finDe(c.id)!.a_receber) : 0), 0);
+  const totalInadimplentes = clientes.filter(c => { const f = finDe(c.id); return f && Number(f.recebido) === 0 && Number(f.faturado) > 0; }).length;
 
   const riscoChip = (fin: FinanceiroCliente | null) => {
     if (!fin || fin.faturado === 0) return <span className="chip cgr">—</span>;
@@ -86,123 +78,99 @@ export default function ClientesPage() {
         <div className="tb-title">Clientes</div>
         <div className="tb-search">
           <span className="tb-search-ic">⌕</span>
-          <input
-            placeholder="Buscar cliente, cidade, CNPJ..."
-            value={filtro}
-            onChange={e => setFiltro(e.target.value)}
-          />
+          <input placeholder="Buscar cliente, cidade, CNPJ..." value={filtro} onChange={e => setFiltro(e.target.value)} />
         </div>
         <button className="btn bp sm" onClick={abrirNovo}>+ Novo Cliente</button>
       </div>
 
       <div className="con">
+
+        {/* CARDS */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:"12px", marginBottom:"20px" }}>
+          {[
+            { label:"Total",         value: String(clientes.length), color:"var(--t1)",   sub:"clientes" },
+            { label:"Faturado Total", value: formatBRL(totalFaturado), color:"var(--acc)", sub:"soma geral" },
+            { label:"A Receber",      value: formatBRL(totalAReceber), color:"var(--warn)", sub:"em aberto" },
+            { label:"Inadimplentes",  value: String(totalInadimplentes), color:"var(--err)", sub:"sem pagamento" },
+          ].map(card => (
+            <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
+              <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
+              <div style={{ fontSize:"22px", fontWeight:700, color:card.color, fontFamily:"'DM Mono', monospace", lineHeight:1.2 }}>{card.value}</div>
+              <div style={{ fontSize:"11px", color:"var(--t3)" }}>{card.sub}</div>
+            </div>
+          ))}
+        </div>
+
         {loading ? (
           <div className="loading">Carregando clientes...</div>
         ) : (
-          <>
-            <div className="tw mb14">
-              <table>
-                <thead>
+          <div className="tw">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>CNPJ</th>
+                  <th>Telefone</th>
+                  <th>Cidade</th>
+                  <th>Tabela</th>
+                  <th>Faturado</th>
+                  <th>A Receber</th>
+                  <th>Risco</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtrados.length === 0 && (
                   <tr>
-                    <th>Cliente</th>
-                    <th>CNPJ</th>
-                    <th>Telefone</th>
-                    <th>Cidade</th>
-                    <th>Tabela</th>
-                    <th>Faturado</th>
-                    <th>A Receber</th>
-                    <th>Risco</th>
-                    <th>Ações</th>
+                    <td colSpan={9} style={{ textAlign:"center", color:"var(--t3)", padding:"32px" }}>
+                      Nenhum cliente encontrado
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {filtrados.length === 0 && (
-                    <tr>
-                      <td colSpan={9} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>
-                        Nenhum cliente encontrado
+                )}
+                {filtrados.map(c => {
+                  const fin = finDe(c.id);
+                  return (
+                    <tr key={c.id}>
+                      <td>
+                        <strong>{c.nome}</strong>
+                        {c.email && <div className="tdim">{c.email}</div>}
+                      </td>
+                      <td className="mono">{c.cnpj || "—"}</td>
+                      <td className="mono">{c.tel || "—"}</td>
+                      <td>{c.cidade || "—"}</td>
+                      <td>
+                        <span className={`chip ${c.tabela === "g" ? "cb" : "cgr"}`}>
+                          {c.tabela === "g" ? "Grandes Clientes" : "Padrão"}
+                        </span>
+                      </td>
+                      <td className="mono">{fin ? formatBRL(fin.faturado) : "—"}</td>
+                      <td className="mono" style={{ color: fin && Number(fin.a_receber) > 0 ? "var(--warn)" : "var(--t2)" }}>
+                        {fin ? formatBRL(fin.a_receber) : "—"}
+                      </td>
+                      <td>{riscoChip(fin)}</td>
+                      <td>
+                        <div style={{ display:"flex", gap:"6px" }}>
+                          <a href={`/clientes/${c.id}`} className="btn bg xs">Ver</a>
+                          <button className="btn bg xs" onClick={() => abrirEdit(c)}>Editar</button>
+                        </div>
                       </td>
                     </tr>
-                  )}
-                  {filtrados.map(c => {
-                    const fin = finDe(c.id);
-                    return (
-                      <tr key={c.id}>
-                        <td>
-                          <strong>{c.nome}</strong>
-                          {c.email && <div className="tdim">{c.email}</div>}
-                        </td>
-                        <td className="mono">{c.cnpj || "—"}</td>
-                        <td className="mono">{c.tel || "—"}</td>
-                        <td>{c.cidade || "—"}</td>
-                        <td>
-                          <span className={`chip ${c.tabela === "g" ? "cb" : "cgr"}`}>
-                            {c.tabela === "g" ? "Grandes Clientes" : "Padrão"}
-                          </span>
-                        </td>
-                        <td className="mono">{fin ? formatBRL(fin.faturado) : "—"}</td>
-                        <td className="mono" style={{ color: fin && Number(fin.a_receber) > 0 ? "var(--warn)" : "var(--t2)" }}>
-                          {fin ? formatBRL(fin.a_receber) : "—"}
-                        </td>
-                        <td>{riscoChip(fin)}</td>
-                        <td>
-                          <div style={{ display: "flex", gap: "6px" }}>
-                            <a href={`/clientes/${c.id}`} className="btn bg xs">Ver</a>
-                            <button className="btn bg xs" onClick={() => abrirEdit(c)}>Editar</button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="totbar">
-              <div className="ti">
-                <div className="tl">Total Clientes</div>
-                <div className="tv">{filtrados.length}</div>
-              </div>
-              <div className="ti">
-                <div className="tl">Faturado Total</div>
-                <div className="tv" style={{ color: "var(--acc)" }}>
-                  {formatBRL(filtrados.reduce((a, c) => {
-                    const fin = finDe(c.id);
-                    return a + (fin ? Number(fin.faturado) : 0);
-                  }, 0))}
-                </div>
-              </div>
-              <div className="ti">
-                <div className="tl">A Receber</div>
-                <div className="tv" style={{ color: "var(--warn)" }}>
-                  {formatBRL(filtrados.reduce((a, c) => {
-                    const fin = finDe(c.id);
-                    return a + (fin ? Number(fin.a_receber) : 0);
-                  }, 0))}
-                </div>
-              </div>
-              <div className="ti">
-                <div className="tl">Inadimplentes</div>
-                <div className="tv" style={{ color: "var(--err)" }}>
-                  {filtrados.filter(c => {
-                    const fin = finDe(c.id);
-                    return fin && Number(fin.recebido) === 0 && Number(fin.faturado) > 0;
-                  }).length}
-                </div>
-              </div>
-            </div>
-          </>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
       {/* Modal */}
       {modal && (
         <div className="mov open" onClick={e => e.target === e.currentTarget && setModal(false)}>
-          <div className="mod" style={{ width: "560px" }}>
+          <div className="mod" style={{ width:"560px" }}>
             <div className="mhd">
               <div className="mtit">{editId ? "Editar Cliente" : "Novo Cliente"}</div>
               <button className="mcl" onClick={() => setModal(false)}>✕</button>
             </div>
-
             <div className="fr">
               <div className="fg">
                 <label className="fl">Nome *</label>
@@ -213,7 +181,6 @@ export default function ClientesPage() {
                 <input className="fc" value={form.cnpj} onChange={e => setForm(f => ({ ...f, cnpj: e.target.value }))} placeholder="00.000.000/0001-00" />
               </div>
             </div>
-
             <div className="fr">
               <div className="fg">
                 <label className="fl">Telefone</label>
@@ -224,7 +191,6 @@ export default function ClientesPage() {
                 <input className="fc" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="email@empresa.com" />
               </div>
             </div>
-
             <div className="fr">
               <div className="fg">
                 <label className="fl">Endereço</label>
@@ -235,7 +201,6 @@ export default function ClientesPage() {
                 <input className="fc" value={form.cidade} onChange={e => setForm(f => ({ ...f, cidade: e.target.value }))} placeholder="Cidade/UF" />
               </div>
             </div>
-
             <div className="fr">
               <div className="fg">
                 <label className="fl">Forma de Pagamento</label>
@@ -257,12 +222,9 @@ export default function ClientesPage() {
                 </select>
               </div>
             </div>
-
-            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginTop: "8px" }}>
+            <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end", marginTop:"8px" }}>
               <button className="btn bg" onClick={() => setModal(false)}>Cancelar</button>
-              <button className="btn bp" onClick={salvar} disabled={salvando}>
-                {salvando ? "Salvando..." : "Salvar Cliente"}
-              </button>
+              <button className="btn bp" onClick={salvar} disabled={salvando}>{salvando ? "Salvando..." : "Salvar Cliente"}</button>
             </div>
           </div>
         </div>
