@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
-import { getPedidos, avancarStatusPedido } from "@/services/pedidos.service";
+import { getPedidos, avancarStatusPedido, retrocederStatusPedido, deletarPedido } from "@/services/pedidos.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import type { Pedido } from "@/types";
@@ -35,12 +35,21 @@ export default function PedidosPage() {
 
   async function handleAvancar(id: string, status: Pedido["status"]) {
     const result = await avancarStatusPedido(id, status);
-    if (result) {
-      toast(`${id} → ${result.status}`);
-    } else {
-      toast("Erro ao avançar status", "err");
-    }
-    load();
+    if (result) { toast(`${id} → ${result.status}`); load(); }
+    else toast("Erro ao avançar status", "err");
+  }
+
+  async function handleRetroceder(id: string, status: Pedido["status"]) {
+    const result = await retrocederStatusPedido(id, status);
+    if (result) { toast(`${id} → ${result.status}`); load(); }
+    else toast("Erro ao retroceder status", "err");
+  }
+
+  async function handleDeletar(id: string) {
+    if (!confirm(`Excluir pedido ${id} permanentemente?`)) return;
+    const ok = await deletarPedido(id);
+    if (ok) { toast(`${id} excluído`); load(); }
+    else toast("Erro ao excluir pedido", "err");
   }
 
   const filtrados = pedidos.filter(p =>
@@ -49,6 +58,47 @@ export default function PedidosPage() {
     p.clientes?.nome.toLowerCase().includes(filtro.toLowerCase()) ||
     p.status.toLowerCase().includes(filtro.toLowerCase())
   );
+
+  function btnAcao(
+    corHover: string,
+    bgHover: string,
+    titulo: string,
+    icone: string,
+    onClick: () => void
+  ) {
+    return (
+      <button
+        title={titulo}
+        onClick={onClick}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "28px",
+          height: "28px",
+          borderRadius: "6px",
+          background: "transparent",
+          border: "1px solid var(--b2)",
+          color: "var(--t3)",
+          fontSize: "13px",
+          cursor: "pointer",
+          transition: "all 0.15s",
+        }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLButtonElement).style.background = bgHover;
+          (e.currentTarget as HTMLButtonElement).style.borderColor = corHover;
+          (e.currentTarget as HTMLButtonElement).style.color = corHover;
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--b2)";
+          (e.currentTarget as HTMLButtonElement).style.color = "var(--t3)";
+        }}
+      >
+        {icone}
+      </button>
+    );
+  }
 
   return (
     <AppLayout>
@@ -82,12 +132,13 @@ export default function PedidosPage() {
                   <th>Recebido</th>
                   <th>Status</th>
                   <th>Ações</th>
+                  <th style={{ width: "40px" }}></th>
                 </tr>
               </thead>
               <tbody>
                 {filtrados.length === 0 && (
                   <tr>
-                    <td colSpan={9} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>
+                    <td colSpan={10} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>
                       Nenhum pedido encontrado
                     </td>
                   </tr>
@@ -95,14 +146,15 @@ export default function PedidosPage() {
                 {filtrados.map(p => {
                   const aberto = p.valor_total - p.valor_recebido;
                   const quitado = aberto <= 0;
+                  const finalizado = ["Entregue","Finalizado","Cancelado"].includes(p.status);
+                  const primeiro = p.status === "Aguardando otimização";
+
                   return (
                     <tr key={p.id}>
                       <td><span className="mono" style={{ color: "var(--acc)" }}>{p.id}</span></td>
                       <td>
                         <strong>{p.clientes?.nome ?? "—"}</strong>
-                        {p.clientes?.cidade && (
-                          <div className="tdim">{p.clientes.cidade}</div>
-                        )}
+                        {p.clientes?.cidade && <div className="tdim">{p.clientes.cidade}</div>}
                       </td>
                       <td className="mono">{formatDate(p.dt_pedido)}</td>
                       <td className="mono">{formatDate(p.dt_retirada)}</td>
@@ -119,22 +171,90 @@ export default function PedidosPage() {
                         )}
                       </td>
                       <td>
-                        <span className={CHIP[p.status] ?? "chip cgr"}>
-                          {p.status}
-                        </span>
+                        <span className={CHIP[p.status] ?? "chip cgr"}>{p.status}</span>
                       </td>
                       <td>
-                        <div style={{ display: "flex", gap: "6px" }}>
-                          <a href={`/pedidos/${p.id}`} className="btn bg xs">Ver</a>
-                          {!["Entregue","Finalizado","Cancelado"].includes(p.status) && (
-                            <button
-                              className="btn bp xs"
-                              onClick={() => handleAvancar(p.id, p.status)}
-                            >
-                              Avançar →
-                            </button>
+                        <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                          {/* Ver */}
+                          <a
+                            href={`/pedidos/${p.id}`}
+                            title="Ver pedido"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              width: "28px",
+                              height: "28px",
+                              borderRadius: "6px",
+                              background: "transparent",
+                              border: "1px solid var(--b2)",
+                              color: "var(--t3)",
+                              fontSize: "13px",
+                              textDecoration: "none",
+                              transition: "all 0.15s",
+                            }}
+                            onMouseEnter={e => {
+                              (e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--acc)";
+                              (e.currentTarget as HTMLAnchorElement).style.color = "var(--acc)";
+                            }}
+                            onMouseLeave={e => {
+                              (e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--b2)";
+                              (e.currentTarget as HTMLAnchorElement).style.color = "var(--t3)";
+                            }}
+                          >
+                            ◉
+                          </a>
+
+                          {/* Retroceder */}
+                          {btnAcao(
+                            "var(--warn)", "rgba(245,158,11,.15)",
+                            primeiro ? "Já está no início do fluxo" : "Retroceder etapa",
+                            "←",
+                            () => !primeiro && handleRetroceder(p.id, p.status)
+                          )}
+
+                          {/* Avançar */}
+                          {btnAcao(
+                            "var(--ok)", "rgba(16,185,129,.15)",
+                            finalizado ? "Pedido finalizado" : "Avançar etapa",
+                            "→",
+                            () => !finalizado && handleAvancar(p.id, p.status)
                           )}
                         </div>
+                      </td>
+
+                      {/* Lixeira */}
+                      <td style={{ width: "40px", textAlign: "center" }}>
+                        <button
+                          title="Excluir pedido"
+                          onClick={() => handleDeletar(p.id)}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: "28px",
+                            height: "28px",
+                            borderRadius: "6px",
+                            background: "transparent",
+                            border: "1px solid var(--b2)",
+                            color: "var(--t3)",
+                            fontSize: "13px",
+                            cursor: "pointer",
+                            transition: "all 0.15s",
+                          }}
+                          onMouseEnter={e => {
+                            (e.currentTarget as HTMLButtonElement).style.background = "rgba(244,63,94,.15)";
+                            (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--err)";
+                            (e.currentTarget as HTMLButtonElement).style.color = "var(--err)";
+                          }}
+                          onMouseLeave={e => {
+                            (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                            (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--b2)";
+                            (e.currentTarget as HTMLButtonElement).style.color = "var(--t3)";
+                          }}
+                        >
+                          🗑
+                        </button>
                       </td>
                     </tr>
                   );
