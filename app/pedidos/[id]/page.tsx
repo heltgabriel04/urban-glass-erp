@@ -101,39 +101,40 @@ export default function PedidoDetalhe() {
       <div className="con" style={{ display:"flex", flexDirection:"column", gap:"20px" }}>
 
         {/* Progresso */}
-        <div className="card" style={{ padding:"20px 24px" }}>
-          <div style={{ display:"flex", alignItems:"flex-start" }}>
+        <div className="card" style={{ padding:"16px 20px" }}>
+          <div style={{ display:"flex", alignItems:"flex-start", width:"100%" }}>
             {FLUXO.map((step, i) => {
               const done    = i < statusIdx;
               const current = i === statusIdx;
               const last    = i === FLUXO.length - 1;
               return (
                 <div key={step} style={{ display:"flex", alignItems:"flex-start", flex: last ? 0 : 1, minWidth:0 }}>
-                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"6px", minWidth:"68px" }}>
+                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"5px", minWidth:"56px", maxWidth:"80px" }}>
                     <div style={{
-                      width:"28px", height:"28px", borderRadius:"50%",
+                      width:"24px", height:"24px", borderRadius:"50%",
                       background: done ? "var(--ok)" : current ? "var(--acc)" : "var(--surf3)",
                       border: current ? "2px solid var(--acc)" : "2px solid transparent",
                       display:"flex", alignItems:"center", justifyContent:"center",
-                      fontSize:"12px", fontWeight:700,
+                      fontSize:"10px", fontWeight:700,
                       color: done || current ? "#000" : "var(--t3)",
                       flexShrink:0,
                     }}>
                       {done ? "✓" : i + 1}
                     </div>
                     <div style={{
-                      fontSize:"9px", textAlign:"center", lineHeight:1.2,
+                      fontSize:"8.5px", textAlign:"center", lineHeight:1.2,
                       color: current ? "var(--acc)" : done ? "var(--ok)" : "var(--t3)",
                       fontWeight: current ? 700 : 400,
-                      maxWidth:"68px",
+                      wordBreak:"break-word",
                     }}>
                       {step}
                     </div>
                   </div>
                   {!last && (
                     <div style={{
-                      flex:1, height:"2px", marginTop:"13px", marginLeft:"4px", marginRight:"4px",
+                      flex:1, height:"2px", marginTop:"11px", marginLeft:"4px", marginRight:"4px",
                       background: done ? "var(--ok)" : "var(--surf3)",
+                      minWidth:"8px",
                     }} />
                   )}
                 </div>
