@@ -253,8 +253,14 @@ export default function OrcamentosPage() {
                         {btnAcao(
                           "var(--acc2)", "rgba(99,179,237,.15)",
                           "Gerar PDF",
-                          "⎙",
-                          () => window.open(`/orcamentos/${o.id}?print=1`, "_blank")
+                          "\u238a",
+                          () => {
+                            const iframe = document.createElement("iframe");
+                            iframe.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:9999;background:white;";
+                            iframe.src = `/orcamentos/${o.id}?print=1`;
+                            document.body.appendChild(iframe);
+                            setTimeout(() => { document.body.removeChild(iframe); }, 4000);
+                          }
                         )}
 
                         {btnAcao("var(--warn)", "rgba(245,158,11,.15)", "Marcar como Enviado", "✉",
