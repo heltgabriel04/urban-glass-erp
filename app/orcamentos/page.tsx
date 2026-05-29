@@ -250,18 +250,45 @@ export default function OrcamentosPage() {
                         </a>
 
                         {/* PDF — abre orçamento em nova aba para imprimir */}
-                        {btnAcao(
-                          "var(--acc2)", "rgba(99,179,237,.15)",
-                          "Gerar PDF",
-                          "\u238a",
-                          () => {
+                        <button
+                          title="Gerar PDF"
+                          onClick={() => {
                             const iframe = document.createElement("iframe");
                             iframe.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:9999;background:white;";
                             iframe.src = `/orcamentos/${o.id}?print=1`;
                             document.body.appendChild(iframe);
                             setTimeout(() => { document.body.removeChild(iframe); }, 4000);
-                          }
-                        )}
+                          }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            height: "28px",
+                            padding: "0 8px",
+                            borderRadius: "6px",
+                            background: "transparent",
+                            border: "1px solid var(--b2)",
+                            color: "var(--t3)",
+                            fontSize: "10px",
+                            fontWeight: 700,
+                            fontFamily: "'DM Mono', monospace",
+                            letterSpacing: "0.5px",
+                            cursor: "pointer",
+                            transition: "all 0.15s",
+                          }}
+                          onMouseEnter={e => {
+                            (e.currentTarget as HTMLButtonElement).style.background = "rgba(99,179,237,.15)";
+                            (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--acc2)";
+                            (e.currentTarget as HTMLButtonElement).style.color = "var(--acc2)";
+                          }}
+                          onMouseLeave={e => {
+                            (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                            (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--b2)";
+                            (e.currentTarget as HTMLButtonElement).style.color = "var(--t3)";
+                          }}
+                        >
+                          PDF
+                        </button>
 
                         {btnAcao("var(--warn)", "rgba(245,158,11,.15)", "Marcar como Enviado", "✉",
                           () => handleStatus(o.id, "Enviado"))}
