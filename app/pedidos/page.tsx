@@ -141,9 +141,9 @@ export default function PedidosPage() {
                   </tr>
                 )}
                 {filtrados.map(p => {
-                  const aberto   = p.valor_total - p.valor_recebido;
-                  const quitado  = aberto <= 0;
-                  const finalizado = ["Entregue","Finalizado","Cancelado"].includes(p.status);
+                  const aberto     = p.valor_total - p.valor_recebido;
+                  const quitado    = aberto <= 0;
+                  const finalizado = ["Finalizado","Cancelado"].includes(p.status);
                   const primeiro   = p.status === "Aguardando otimização";
 
                   return (
@@ -170,8 +170,7 @@ export default function PedidosPage() {
                       <td><span className={CHIP[p.status] ?? "chip cgr"}>{p.status}</span></td>
                       <td>
                         <div style={{ display:"flex", gap:"4px", alignItems:"center" }}>
-                          
-                            <a href={`/pedidos/${p.id}`}
+                          <a href={`/pedidos/${p.id}`}
                             title="Ver pedido"
                             style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", textDecoration:"none", transition:"all 0.15s" }}
                             onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.borderColor = "var(--acc)"; a.style.color = "var(--acc)"; }}
