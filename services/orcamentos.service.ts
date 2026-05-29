@@ -91,12 +91,10 @@ export async function aprovarOrcamento(orcamentoId: string) {
   const orc = await getOrcamentoById(orcamentoId);
   if (!orc) return null;
 
-  // Se já tem pedido vinculado, só atualiza o status
   if (orc.pedido_id) {
     return updateOrcamento(orcamentoId, { status: 'Aprovado' } as any);
   }
 
-  // Gera novo ID baseado no maior número existente
   const { data: todosPedidos } = await supabase
     .from('pedidos')
     .select('id')
@@ -158,7 +156,6 @@ export async function aprovarOrcamento(orcamentoId: string) {
 }
 
 export async function rejeitarOrcamento(orcamentoId: string) {
-  // Busca pedido_id atual direto do banco
   const { data: orc, error } = await supabase
     .from('orcamentos')
     .select('id, pedido_id')
@@ -169,20 +166,18 @@ export async function rejeitarOrcamento(orcamentoId: string) {
 
   const pedidoId = (orc as any).pedido_id;
 
-  // ORDEM OBRIGATÓRIA por causa da foreign key orcamentos_pedido_id_fkey:
-  // 1. Primeiro remove o vínculo do orçamento com o pedido
+  // 1. Remove FK do orçamento primeiro
   await supabase
     .from('orcamentos')
     .update({ pedido_id: null, status: 'Rejeitado', updated_at: new Date().toISOString() } as never)
     .eq('id', orcamentoId);
 
-  // 2. Agora deleta os itens e o pedido (sem mais foreign key bloqueando)
+  // 2. Agora deleta pedido sem bloqueio de FK
   if (pedidoId) {
     await supabase.from('itens_pedido').delete().eq('pedido_id', pedidoId);
     await supabase.from('pedidos').delete().eq('id', pedidoId);
   }
 
-  // Retorna o orçamento atualizado
   const { data: orcAtualizado } = await supabase
     .from('orcamentos')
     .select('*')
@@ -190,6 +185,38 @@ export async function rejeitarOrcamento(orcamentoId: string) {
     .single();
 
   return orcAtualizado;
+}
+
+export async function deletarOrcamento(orcamentoId: string): Promise<boolean> {
+  // Busca pedido vinculado
+  const { data: orc } = await supabase
+    .from('orcamentos')
+    .select('id, pedido_id')
+    .eq('id', orcamentoId)
+    .single();
+
+  const pedidoId = (orc as any)?.pedido_id;
+
+  // 1. Remove FK do orçamento
+  await supabase
+    .from('orcamentos')
+    .update({ pedido_id: null } as never)
+    .eq('id', orcamentoId);
+
+  // 2. Deleta pedido vinculado se existir
+  if (pedidoId) {
+    await supabase.from('itens_pedido').delete().eq('pedido_id', pedidoId);
+    await supabase.from('pedidos').delete().eq('id', pedidoId);
+  }
+
+  // 3. Deleta itens do orçamento
+  await supabase.from('itens_orcamento').delete().eq('orcamento_id', orcamentoId);
+
+  // 4. Deleta o orçamento
+  const { error } = await supabase.from('orcamentos').delete().eq('id', orcamentoId);
+  if (error) { console.error('deletarOrcamento:', error); return false; }
+
+  return true;
 }
 
 export async function getProximoIdOrcamento(): Promise<string> {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
-import { getOrcamentos, updateOrcamento, aprovarOrcamento, rejeitarOrcamento } from "@/services/orcamentos.service";
+import { getOrcamentos, updateOrcamento, aprovarOrcamento, rejeitarOrcamento, deletarOrcamento } from "@/services/orcamentos.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 
@@ -21,6 +21,7 @@ export default function OrcamentosPage() {
   const [loading, setLoading]       = useState(true);
   const [busca, setBusca]           = useState("");
   const [filtroStatus, setFiltroStatus] = useState("Todos");
+  const [hoverId, setHoverId]       = useState<string | null>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -38,13 +39,20 @@ export default function OrcamentosPage() {
       else toast("Erro ao aprovar orçamento", "err");
     } else if (status === "Rejeitado") {
       const result = await rejeitarOrcamento(id);
-      if (result) { toast(`Orçamento ${id} rejeitado — pedido cancelado`); load(); }
+      if (result) { toast(`Orçamento ${id} rejeitado`); load(); }
       else toast("Erro ao rejeitar orçamento", "err");
     } else {
       const result = await updateOrcamento(id, { status } as any);
       if (result) { toast(`Orçamento ${id} marcado como ${status}`); load(); }
       else toast("Erro ao atualizar status", "err");
     }
+  }
+
+  async function handleDeletar(id: string) {
+    if (!confirm(`Excluir ${id} permanentemente? O pedido vinculado também será removido.`)) return;
+    const ok = await deletarOrcamento(id);
+    if (ok) { toast(`${id} excluído`); load(); }
+    else toast("Erro ao excluir orçamento", "err");
   }
 
   const filtrados = orcamentos.filter(o => {
@@ -174,9 +182,41 @@ export default function OrcamentosPage() {
                   </tr>
                 )}
                 {filtrados.map(o => (
-                  <tr key={o.id}>
-                    <td>
+                  <tr
+                    key={o.id}
+                    style={{ position: "relative" }}
+                    onMouseEnter={() => setHoverId(o.id)}
+                    onMouseLeave={() => setHoverId(null)}
+                  >
+                    <td style={{ position: "relative" }}>
                       <span className="mono" style={{ color: "var(--acc)" }}>{o.id}</span>
+                      {/* Botão X flutuante */}
+                      <button
+                        title="Excluir orçamento"
+                        onClick={() => handleDeletar(o.id)}
+                        style={{
+                          position: "absolute",
+                          top: "50%",
+                          right: "-8px",
+                          transform: "translateY(-50%)",
+                          display: hoverId === o.id ? "inline-flex" : "none",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "18px",
+                          height: "18px",
+                          borderRadius: "50%",
+                          background: "var(--err)",
+                          border: "none",
+                          color: "white",
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          zIndex: 10,
+                          lineHeight: 1,
+                        }}
+                      >
+                        ×
+                      </button>
                     </td>
                     <td>
                       <strong>{o.clientes?.nome ?? "—"}</strong>
@@ -206,6 +246,7 @@ export default function OrcamentosPage() {
                     </td>
                     <td>
                       <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                        {/* Ver — sempre visível */}
                         <a
                           href={`/orcamentos/${o.id}`}
                           title="Ver orçamento"
@@ -235,31 +276,34 @@ export default function OrcamentosPage() {
                           ◉
                         </a>
 
-                        {o.status === "Rascunho" && btnAcao(
-                          "var(--warn)",
-                          "rgba(245,158,11,.1)",
-                          "rgba(245,158,11,.25)",
-                          "Marcar como Enviado",
+                        {/* Enviar — sempre visível, só ativo em Rascunho */}
+                        {btnAcao(
+                          o.status === "Rascunho" ? "var(--warn)" : "var(--b2)",
+                          o.status === "Rascunho" ? "rgba(245,158,11,.1)" : "transparent",
+                          o.status === "Rascunho" ? "rgba(245,158,11,.25)" : "transparent",
+                          o.status === "Rascunho" ? "Marcar como Enviado" : "Só disponível em Rascunho",
                           "✉",
-                          () => handleStatus(o.id, "Enviado")
+                          () => o.status === "Rascunho" && handleStatus(o.id, "Enviado")
                         )}
 
-                        {(o.status === "Rascunho" || o.status === "Enviado") && btnAcao(
-                          "var(--ok)",
-                          "rgba(16,185,129,.1)",
-                          "rgba(16,185,129,.25)",
-                          "Aprovar orçamento",
+                        {/* Aprovar — sempre visível, ativo em Rascunho e Enviado */}
+                        {btnAcao(
+                          (o.status === "Rascunho" || o.status === "Enviado") ? "var(--ok)" : "var(--b2)",
+                          (o.status === "Rascunho" || o.status === "Enviado") ? "rgba(16,185,129,.1)" : "transparent",
+                          (o.status === "Rascunho" || o.status === "Enviado") ? "rgba(16,185,129,.25)" : "transparent",
+                          (o.status === "Rascunho" || o.status === "Enviado") ? "Aprovar orçamento" : "Já processado",
                           "✓",
-                          () => handleStatus(o.id, "Aprovado")
+                          () => (o.status === "Rascunho" || o.status === "Enviado") && handleStatus(o.id, "Aprovado")
                         )}
 
-                        {(o.status === "Rascunho" || o.status === "Enviado") && btnAcao(
-                          "var(--err)",
-                          "rgba(244,63,94,.1)",
-                          "rgba(244,63,94,.25)",
-                          "Rejeitar orçamento",
+                        {/* Rejeitar — sempre visível, ativo em Rascunho e Enviado */}
+                        {btnAcao(
+                          (o.status === "Rascunho" || o.status === "Enviado") ? "var(--err)" : "var(--b2)",
+                          (o.status === "Rascunho" || o.status === "Enviado") ? "rgba(244,63,94,.1)" : "transparent",
+                          (o.status === "Rascunho" || o.status === "Enviado") ? "rgba(244,63,94,.25)" : "transparent",
+                          (o.status === "Rascunho" || o.status === "Enviado") ? "Rejeitar orçamento" : "Já processado",
                           "✕",
-                          () => handleStatus(o.id, "Rejeitado")
+                          () => (o.status === "Rascunho" || o.status === "Enviado") && handleStatus(o.id, "Rejeitado")
                         )}
                       </div>
                     </td>
