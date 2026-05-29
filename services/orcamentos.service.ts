@@ -111,7 +111,6 @@ export async function aprovarOrcamento(orcamentoId: string) {
   }
   const pedidoId = `P-${String(proximoNum).padStart(3, '0')}`;
 
-  // Cria pedido
   const { data: pedido, error: errPedido } = await supabase
     .from('pedidos')
     .insert([{
@@ -133,7 +132,6 @@ export async function aprovarOrcamento(orcamentoId: string) {
 
   if (errPedido) { console.error('aprovarOrcamento pedido:', errPedido); return null; }
 
-  // Cria itens do pedido
   if (orc.itens_orcamento?.length > 0) {
     const itensPedido = orc.itens_orcamento.map((i: any) => ({
       pedido_id: pedidoId,
@@ -151,7 +149,6 @@ export async function aprovarOrcamento(orcamentoId: string) {
     if (errItens) console.error('aprovarOrcamento itens_pedido:', errItens);
   }
 
-  // Atualiza orçamento — salva pedido_id E status juntos
   await updateOrcamento(orcamentoId, {
     status: 'Aprovado',
     pedido_id: pedidoId,
@@ -161,7 +158,7 @@ export async function aprovarOrcamento(orcamentoId: string) {
 }
 
 export async function rejeitarOrcamento(orcamentoId: string) {
-  // Sempre busca o pedido_id direto do banco — nunca confia no estado local
+  // Busca pedido_id atual direto do banco
   const { data: orc, error } = await supabase
     .from('orcamentos')
     .select('id, pedido_id')
@@ -172,27 +169,27 @@ export async function rejeitarOrcamento(orcamentoId: string) {
 
   const pedidoId = (orc as any).pedido_id;
 
-  // 1. Deleta itens do pedido
-  if (pedidoId) {
-    const { error: errItens } = await supabase
-      .from('itens_pedido')
-      .delete()
-      .eq('pedido_id', pedidoId);
-    if (errItens) console.error('rejeitarOrcamento itens_pedido:', errItens);
+  // ORDEM OBRIGATÓRIA por causa da foreign key orcamentos_pedido_id_fkey:
+  // 1. Primeiro remove o vínculo do orçamento com o pedido
+  await supabase
+    .from('orcamentos')
+    .update({ pedido_id: null, status: 'Rejeitado', updated_at: new Date().toISOString() } as never)
+    .eq('id', orcamentoId);
 
-    // 2. Deleta o pedido
-    const { error: errPedido } = await supabase
-      .from('pedidos')
-      .delete()
-      .eq('id', pedidoId);
-    if (errPedido) console.error('rejeitarOrcamento pedido:', errPedido);
+  // 2. Agora deleta os itens e o pedido (sem mais foreign key bloqueando)
+  if (pedidoId) {
+    await supabase.from('itens_pedido').delete().eq('pedido_id', pedidoId);
+    await supabase.from('pedidos').delete().eq('id', pedidoId);
   }
 
-  // 3. Só depois limpa o orçamento
-  return updateOrcamento(orcamentoId, {
-    status: 'Rejeitado',
-    pedido_id: null,
-  } as any);
+  // Retorna o orçamento atualizado
+  const { data: orcAtualizado } = await supabase
+    .from('orcamentos')
+    .select('*')
+    .eq('id', orcamentoId)
+    .single();
+
+  return orcAtualizado;
 }
 
 export async function getProximoIdOrcamento(): Promise<string> {
