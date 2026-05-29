@@ -96,7 +96,7 @@ export async function aprovarOrcamento(orcamentoId: string) {
     return updateOrcamento(orcamentoId, { status: 'Aprovado' } as any);
   }
 
-  // Gera novo ID baseado no maior número existente (evita duplicar ao usar count)
+  // Gera novo ID baseado no maior número existente
   const { data: todosPedidos } = await supabase
     .from('pedidos')
     .select('id')
@@ -160,17 +160,26 @@ export async function aprovarOrcamento(orcamentoId: string) {
   return pedido;
 }
 
-export async function rejeitarOrcamento(orcamentoId: string) {
-  const orc = await getOrcamentoById(orcamentoId);
-  if (!orc) return null;
+// pedidoId opcional: se passado, usa direto sem buscar no banco
+export async function rejeitarOrcamento(orcamentoId: string, pedidoIdConhecido?: string | null) {
+  let pedidoId = pedidoIdConhecido;
 
-  // Se tinha pedido vinculado, deleta completamente
-  if (orc.pedido_id) {
-    await supabase.from('itens_pedido').delete().eq('pedido_id', orc.pedido_id);
-    await supabase.from('pedidos').delete().eq('id', orc.pedido_id);
+  // Se não foi passado, busca no banco
+  if (pedidoId === undefined) {
+    const orc = await getOrcamentoById(orcamentoId);
+    if (!orc) return null;
+    pedidoId = orc.pedido_id;
   }
 
-  // Atualiza orçamento como rejeitado e remove vínculo com pedido
+  // Deleta pedido se existir
+  if (pedidoId) {
+    const { error: errItens } = await supabase.from('itens_pedido').delete().eq('pedido_id', pedidoId);
+    if (errItens) console.error('rejeitarOrcamento itens_pedido:', errItens);
+    const { error: errPedido } = await supabase.from('pedidos').delete().eq('id', pedidoId);
+    if (errPedido) console.error('rejeitarOrcamento pedido:', errPedido);
+  }
+
+  // Atualiza orçamento
   return updateOrcamento(orcamentoId, {
     status: 'Rejeitado',
     pedido_id: null,

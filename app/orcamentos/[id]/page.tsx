@@ -45,14 +45,15 @@ export default function OrcamentoDetalhe() {
     setSalvando(true);
     const pedido = await aprovarOrcamento(id);
     setSalvando(false);
-    if (pedido) { toast(`✓ Pedido ${pedido.id} gerado!`); load(); }
+    if (pedido) { toast(`✓ Pedido ${(pedido as any).id} gerado!`); load(); }
     else toast("Erro ao aprovar orçamento", "err");
   }
 
   async function handleRejeitar() {
     if (!confirm("Rejeitar orçamento? O pedido vinculado será removido.")) return;
     setSalvando(true);
-    const result = await rejeitarOrcamento(id);
+    // passa o pedido_id já carregado em memória para evitar busca desatualizada
+    const result = await rejeitarOrcamento(id, orc?.pedido_id ?? null);
     setSalvando(false);
     if (result) { toast("Orçamento rejeitado", "warn"); load(); }
     else toast("Erro ao rejeitar", "err");
@@ -61,7 +62,8 @@ export default function OrcamentoDetalhe() {
   async function handleVoltarRascunho() {
     if (!confirm("Voltar para Rascunho? O pedido vinculado será removido.")) return;
     setSalvando(true);
-    const result = await rejeitarOrcamento(id);
+    // passa o pedido_id já carregado em memória
+    const result = await rejeitarOrcamento(id, orc?.pedido_id ?? null);
     if (result) await updateOrcamento(id, { status: "Rascunho" } as any);
     setSalvando(false);
     if (result) { toast("Orçamento voltou para Rascunho"); load(); }
@@ -132,7 +134,6 @@ export default function OrcamentoDetalhe() {
           )}
         </div>
 
-        {/* Tela normal */}
         <div className="con no-print" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
             <div className="card" style={{ padding: "20px 24px" }}>
@@ -220,19 +221,14 @@ export default function OrcamentoDetalhe() {
           minHeight: "auto",
           boxSizing: "border-box",
         }}>
-
-          {/* Cabeçalho */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px", paddingBottom: "16px", borderBottom: "3px solid #2d5fa6" }}>
             <div>
-              <div style={{ fontSize: "26px", fontWeight: 900, color: "#2d5fa6", letterSpacing: "-1px" }}>
-                urbanglass
-              </div>
+              <div style={{ fontSize: "26px", fontWeight: 900, color: "#2d5fa6", letterSpacing: "-1px" }}>urbanglass</div>
               <div style={{ fontSize: "9px", color: "#888", textTransform: "uppercase", letterSpacing: "1.5px", marginTop: "2px" }}>Urban Glass Comércio Ltda</div>
               <div style={{ fontSize: "9px", color: "#888", marginTop: "2px" }}>CNPJ: 65.668.970/0001-05</div>
               <div style={{ fontSize: "9px", color: "#888" }}>Av. Vereador Raymundo Hargreaves, 1250 – Fontesville – Juiz de Fora/MG</div>
               <div style={{ fontSize: "9px", color: "#888" }}>(32) 99986-0317</div>
             </div>
-
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: "11px", color: "#888", textTransform: "uppercase", letterSpacing: "2px", marginBottom: "4px" }}>Orçamento</div>
               <div style={{ fontSize: "28px", fontWeight: 900, color: "#2d5fa6", letterSpacing: "-1px" }}>{orc.id}</div>
@@ -250,7 +246,6 @@ export default function OrcamentoDetalhe() {
             </div>
           </div>
 
-          {/* Cliente + Condições */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "18px" }}>
             <div style={{ padding: "12px", background: "#f0f4ff", borderRadius: "8px", borderLeft: "4px solid #2d5fa6" }}>
               <div style={{ fontSize: "9px", fontWeight: 700, color: "#2d5fa6", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: "8px" }}>Cliente</div>
@@ -286,7 +281,6 @@ export default function OrcamentoDetalhe() {
             </div>
           </div>
 
-          {/* Tabela de itens */}
           <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "16px", fontSize: "11px" }}>
             <thead>
               <tr style={{ background: "#2d5fa6" }}>
@@ -302,9 +296,7 @@ export default function OrcamentoDetalhe() {
             <tbody>
               {itens.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ padding: "16px", textAlign: "center", color: "#aaa", fontSize: "11px" }}>
-                    Nenhum item registrado
-                  </td>
+                  <td colSpan={8} style={{ padding: "16px", textAlign: "center", color: "#aaa", fontSize: "11px" }}>Nenhum item registrado</td>
                 </tr>
               )}
               {itens.map((item: any, i: number) => (
@@ -322,7 +314,6 @@ export default function OrcamentoDetalhe() {
             </tbody>
           </table>
 
-          {/* Totais — sem m² total */}
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "18px" }}>
             <div style={{ minWidth: "260px", background: "#f0f4ff", borderRadius: "8px", padding: "12px", border: "1px solid #d0daf0" }}>
               {orc.desconto > 0 && (
@@ -338,28 +329,21 @@ export default function OrcamentoDetalhe() {
             </div>
           </div>
 
-          {/* Observações */}
           {orc.obs && (
             <div style={{ padding: "10px 14px", background: "#fffbea", borderRadius: "8px", marginBottom: "16px", fontSize: "10px", borderLeft: "3px solid #f59e0b" }}>
               <strong style={{ color: "#92400e" }}>Observações:</strong> <span style={{ color: "#555" }}>{orc.obs}</span>
             </div>
           )}
 
-          {/* Assinatura */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "40px", marginBottom: "16px", marginTop: "24px" }}>
             <div style={{ textAlign: "center" }}>
-              <div style={{ borderTop: "1px solid #999", paddingTop: "8px", fontSize: "10px", color: "#555" }}>
-                Vendedor / Urban Glass
-              </div>
+              <div style={{ borderTop: "1px solid #999", paddingTop: "8px", fontSize: "10px", color: "#555" }}>Vendedor / Urban Glass</div>
             </div>
             <div style={{ textAlign: "center" }}>
-              <div style={{ borderTop: "1px solid #999", paddingTop: "8px", fontSize: "10px", color: "#555" }}>
-                Cliente / Aprovação
-              </div>
+              <div style={{ borderTop: "1px solid #999", paddingTop: "8px", fontSize: "10px", color: "#555" }}>Cliente / Aprovação</div>
             </div>
           </div>
 
-          {/* Rodapé */}
           <div style={{ borderTop: "2px solid #2d5fa6", paddingTop: "8px", display: "flex", justifyContent: "space-between", fontSize: "8px", color: "#aaa" }}>
             <div>Urban Glass Comércio Ltda · CNPJ 65.668.970/0001-05 · Av. Vereador Raymundo Hargreaves, 1250 – Fontesville – Juiz de Fora/MG</div>
             <div style={{ color: "#e00", fontStyle: "italic" }}>Não substitui a Nota Fiscal Eletrônica</div>
