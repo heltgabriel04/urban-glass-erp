@@ -40,7 +40,7 @@ html, body { height: 100%; }
 body {
   background: var(--bg);
   color: var(--t1);
-  font-family: 'Inter', sans-serif;
+  font-family: 'DM Mono', monospace;
   font-size: 14px;
   font-weight: 500;
   overflow: hidden;
@@ -209,7 +209,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
   font-size: 12px;
   outline: none;
   width: 100%;
-  font-family: 'Inter', sans-serif;
+  font-family: 'DM Mono', monospace;
 }
 
 .tb-search input:focus { border-color: var(--acc); }
@@ -242,7 +242,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
-  font-family: 'Inter', sans-serif;
+  font-family: 'DM Mono', monospace;
   transition: all 0.12s;
   display: inline-flex;
   align-items: center;
@@ -293,7 +293,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
   color: var(--t1);
 }
 
-.ct-a { font-size: 11px; color: var(--acc); cursor: pointer; font-weight: 400; font-family: 'Inter', sans-serif; }
+.ct-a { font-size: 11px; color: var(--acc); cursor: pointer; font-weight: 400; font-family: 'DM Mono', monospace; }
 .ct-a:hover { text-decoration: underline; }
 
 /* ─── CONTENT ────────────────────────────────────────────── */
@@ -424,7 +424,7 @@ tbody tr:hover td { background: rgba(255,255,255,.012); }
   padding: 8px 11px;
   color: var(--t1);
   font-size: 13px;
-  font-family: 'Inter', sans-serif;
+  font-family: 'DM Mono', monospace;
   outline: none;
   transition: 0.1s;
   width: 100%;
@@ -606,7 +606,7 @@ textarea.fc { resize: vertical; min-height: 64px; }
   background: transparent; color: var(--t3); cursor: pointer;
   font-size: 12px; display: flex; align-items: center;
   justify-content: center; gap: 6px; transition: .15s;
-  font-family: 'Inter', sans-serif;
+  font-family: 'DM Mono', monospace;
 }
 .add-il:hover { border-color: var(--acc); color: var(--acc); background: rgba(61,255,160,.04); }
 
