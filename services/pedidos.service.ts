@@ -60,8 +60,8 @@ const FLUXO: StatusPedido[] = [
   'Em Produção – Corte',
   'Em Produção – Lapidação',
   'Separação',
-  'Entregue',
   'Finalizado',
+  'Entregue',
 ];
 
 export async function avancarStatusPedido(id: string, statusAtual: StatusPedido) {

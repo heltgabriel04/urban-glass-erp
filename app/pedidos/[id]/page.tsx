@@ -13,8 +13,8 @@ const CHIP: Record<string, string> = {
   "Em Produção – Corte":     "chip cp",
   "Em Produção – Lapidação": "chip co",
   "Separação":               "chip cb",
-  "Entregue":                "chip cg",
   "Finalizado":              "chip cg",
+  "Entregue":                "chip cg",
   "Cancelado":               "chip cr",
 };
 
@@ -23,8 +23,8 @@ const FLUXO = [
   "Em Produção – Corte",
   "Em Produção – Lapidação",
   "Separação",
-  "Entregue",
   "Finalizado",
+  "Entregue",
 ];
 
 export default function PedidoDetalhe() {
@@ -79,7 +79,7 @@ export default function PedidoDetalhe() {
   const quitado     = aberto <= 0;
   const pctRec      = pedido.valor_total > 0 ? Math.min(100, (Number(pedido.valor_recebido) / Number(pedido.valor_total)) * 100) : 0;
   const statusIdx   = FLUXO.indexOf(pedido.status);
-  const podeAvancar = !["Finalizado","Cancelado"].includes(pedido.status);
+  const podeAvancar = !["Entregue","Cancelado"].includes(pedido.status);
   const temItens    = (pedido.itens_pedido?.length ?? 0) > 0;
 
   return (
@@ -109,7 +109,7 @@ export default function PedidoDetalhe() {
               const last    = i === FLUXO.length - 1;
               return (
                 <div key={step} style={{ display:"flex", alignItems:"flex-start", flex: last ? 0 : 1, minWidth:0 }}>
-                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"6px", minWidth:"72px" }}>
+                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"6px", minWidth:"68px" }}>
                     <div style={{
                       width:"28px", height:"28px", borderRadius:"50%",
                       background: done ? "var(--ok)" : current ? "var(--acc)" : "var(--surf3)",
@@ -122,10 +122,10 @@ export default function PedidoDetalhe() {
                       {done ? "✓" : i + 1}
                     </div>
                     <div style={{
-                      fontSize:"10px", textAlign:"center", lineHeight:1.2,
+                      fontSize:"9px", textAlign:"center", lineHeight:1.2,
                       color: current ? "var(--acc)" : done ? "var(--ok)" : "var(--t3)",
                       fontWeight: current ? 700 : 400,
-                      maxWidth:"72px",
+                      maxWidth:"68px",
                     }}>
                       {step}
                     </div>
