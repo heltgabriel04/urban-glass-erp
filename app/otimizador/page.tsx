@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { Suspense, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { salvarOtimizacao } from "@/services/otimizador.service";
@@ -68,33 +68,29 @@ const COLS_PECA = ["#1f4d32","#173d26","#255c3b","#1a4530","#204228","#2a5c3f","
 
 function OtimizadorContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const pedidoParam = searchParams.get("pedido");
 
-  const [produtos, setProdutos]           = useState<Produto[]>([]);
-  const [pecas, setPecas]                 = useState<Peca[]>([{ l: 0, a: 0, qtd: 1, prod: "" }]);
-  const [chapaW, setChapaW]               = useState(3300);
-  const [chapaH, setChapaH]               = useState(2250);
-  const [kerf, setKerf]                   = useState(4);
-  const [bord, setBord]                   = useState(3);
-  const [resultado, setResultado]         = useState<ResultadoChapa[] | null>(null);
-  const [chapaIdx, setChapaIdx]           = useState(0);
-  const [pedidoRef, setPedidoRef]         = useState<string | null>(null);
-  const [carregando, setCarregando]       = useState(false);
-  const [statAprov, setStatAprov]         = useState("—");
-  const [statPerda, setStatPerda]         = useState("—");
-  const [statChapas, setStatChapas]       = useState("—");
-  const [statRetalhos, setStatRetalhos]   = useState("—");
-  const [msg, setMsg]                     = useState("");
+  const [produtos, setProdutos]         = useState<Produto[]>([]);
+  const [pecas, setPecas]               = useState<Peca[]>([{ l: 0, a: 0, qtd: 1, prod: "" }]);
+  const [chapaW, setChapaW]             = useState(3300);
+  const [chapaH, setChapaH]             = useState(2250);
+  const [kerf, setKerf]                 = useState(4);
+  const [bord, setBord]                 = useState(3);
+  const [resultado, setResultado]       = useState<ResultadoChapa[] | null>(null);
+  const [chapaIdx, setChapaIdx]         = useState(0);
+  const [pedidoRef, setPedidoRef]       = useState<string | null>(null);
+  const [carregando, setCarregando]     = useState(false);
+  const [statAprov, setStatAprov]       = useState("—");
+  const [statPerda, setStatPerda]       = useState("—");
+  const [statChapas, setStatChapas]     = useState("—");
+  const [statRetalhos, setStatRetalhos] = useState("—");
+  const [msg, setMsg]                   = useState("");
   const [retalhosGerados, setRetalhosGerados] = useState<RetalhoGerado[]>([]);
-  const [mostrarCardRet, setMostrarCardRet]   = useState(false);
-  const [salvandoRetalhos, setSalvandoRetalhos] = useState(false);
-  const [retalhosSalvos, setRetalhosSalvos]     = useState(false);
-  const [erroRetalhos, setErroRetalhos]         = useState<string | null>(null);
-  const [salvandoPlano, setSalvandoPlano]       = useState(false);
-  const [planoSalvo, setPlanoSalvo]             = useState(false);
-  const [aprovNum, setAprovNum]                 = useState(0);
-  const [perdaNum, setPerdaNum]                 = useState(0);
-  const [totalPecasNum, setTotalPecasNum]       = useState(0);
+  const [salvando, setSalvando]         = useState(false);
+  const [aprovNum, setAprovNum]         = useState(0);
+  const [perdaNum, setPerdaNum]         = useState(0);
+  const [totalPecasNum, setTotalPecasNum] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -223,7 +219,8 @@ function OtimizadorContent() {
       }
     });
 
-    setResultado(results); setChapaIdx(0); setRetalhosSalvos(false); setErroRetalhos(null); setPlanoSalvo(false);
+    setResultado(results);
+    setChapaIdx(0);
 
     let totA = 0, usedA = 0;
     results.forEach((r) => { totA += r.W * r.H; r.placed.forEach((p) => (usedA += p.l * p.a)); });
@@ -238,17 +235,22 @@ function OtimizadorContent() {
     results.forEach((r, ri) => r.free.filter((fr) => fr.l >= 200 && fr.a >= 200).forEach((fr) => {
       retPend.push({ ...fr, chapaIdx: ri, prod: r.prod, m2: parseFloat(((fr.l * fr.a) / 1e6).toFixed(4)) });
     }));
-    setRetalhosGerados(retPend); setStatRetalhos(String(retPend.length)); setMostrarCardRet(retPend.length > 0);
+    setRetalhosGerados(retPend);
+    setStatRetalhos(String(retPend.length));
 
     const naoCouberam = totalPecas - totalPlaced;
     const gruposLabel = grupos.size > 1 ? ` · ${grupos.size} produtos separados` : "";
     setMsg(`${totalPecas} peças · ${results.length} superfície(s)${gruposLabel} · ${naoCouberam > 0 ? naoCouberam + " não couberam" : "Todas alocadas!"}`);
   }
 
-  async function handleSalvarPlano() {
+  // Salva plano + retalhos juntos e redireciona para o pedido
+  async function handleSalvar() {
     if (!resultado || !pedidoRef) return;
-    setSalvandoPlano(true);
+    setSalvando(true);
+
     const hoje = new Date().toISOString().split("T")[0];
+
+    // 1. Salvar otimização
     const ok = await salvarOtimizacao({
       pedido_id:        pedidoRef,
       dt_otim:          hoje,
@@ -265,24 +267,31 @@ function OtimizadorContent() {
       chapas_json:      resultado.map(r => ({ W: r.W, H: r.H, prod: r.prod, placed: r.placed, free: r.free })),
       usuario:          null,
     });
-    setSalvandoPlano(false);
-    if (ok) setPlanoSalvo(true);
-    else alert("Erro ao salvar plano de corte.");
-  }
 
-  async function salvarRetalhos() {
-    if (retalhosGerados.length === 0) return;
-    setSalvandoRetalhos(true); setErroRetalhos(null);
-    const hoje = new Date().toISOString().split("T")[0];
-    const rows = retalhosGerados.map((fr) => ({
-      produto_nome: fr.prod, largura: fr.l, altura: fr.a, m2: fr.m2,
-      chapa_origem: "CHAPA " + (fr.chapaIdx + 1), pedido_origem: pedidoRef ?? null,
-      status: "Disponível", dt_gerado: hoje,
-    }));
-    const { error } = await supabase.from("retalhos").insert(rows);
-    setSalvandoRetalhos(false);
-    if (error) setErroRetalhos("Erro: " + error.message);
-    else { setRetalhosSalvos(true); setMostrarCardRet(false); }
+    if (!ok) {
+      setSalvando(false);
+      alert("Erro ao salvar plano de corte.");
+      return;
+    }
+
+    // 2. Salvar retalhos automaticamente (se houver)
+    if (retalhosGerados.length > 0) {
+      const rows = retalhosGerados.map((fr) => ({
+        produto_nome:  fr.prod,
+        largura:       fr.l,
+        altura:        fr.a,
+        m2:            fr.m2,
+        chapa_origem:  "CHAPA " + (fr.chapaIdx + 1),
+        pedido_origem: pedidoRef,
+        status:        "Disponível",
+        dt_gerado:     hoje,
+      }));
+      await supabase.from("retalhos").insert(rows);
+      // Erro de retalhos não bloqueia — plano já foi salvo
+    }
+
+    // 3. Redirecionar para o pedido
+    router.push("/pedidos/" + pedidoRef);
   }
 
   function addPeca() { setPecas((p) => [...p, { l: 0, a: 0, qtd: 1, prod: produtos[0]?.nome || "" }]); }
@@ -402,18 +411,13 @@ function OtimizadorContent() {
           {/* ── COL DIREITA ── */}
           <div>
             <div className="card mb14">
-              <div className="ct">
-                Resultado da Otimização
-                {planoSalvo && (
-                  <span style={{ fontSize: "11px", color: "var(--ok)", fontFamily: "'DM Mono', monospace" }}>✓ Plano salvo</span>
-                )}
-              </div>
+              <div className="ct">Resultado da Otimização</div>
 
               <div className="rs">
                 <div className="rsi"><div className="rsv" style={{ color: "var(--acc)" }}>{statAprov}</div><div className="rsl">Aproveitamento</div></div>
                 <div className="rsi"><div className="rsv" style={{ color: "var(--err)" }}>{statPerda}</div><div className="rsl">Perda</div></div>
                 <div className="rsi"><div className="rsv">{statChapas}</div><div className="rsl">Chapas</div></div>
-                <div className="rsi"><div className="rsv" style={{ color: "var(--acc2)" }}>{statRetalhos}</div><div className="rsl">Retalhos Gerados</div></div>
+                <div className="rsi"><div className="rsv" style={{ color: "var(--acc2)" }}>{statRetalhos}</div><div className="rsl">Retalhos</div></div>
               </div>
 
               {msg && <div style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", marginBottom: "10px" }}>{msg}</div>}
@@ -443,68 +447,34 @@ function OtimizadorContent() {
                 <div className="cvli"><div className="cvld" style={{ background: "#1a1a2a" }} />Descarte</div>
               </div>
 
-              {/* Botão Salvar Plano */}
-              {resultado && pedidoRef && !planoSalvo && (
-                <div style={{ marginTop: "12px" }}>
-                  <button
-                    className="btn bp sm"
-                    style={{ width: "100%" }}
-                    onClick={handleSalvarPlano}
-                    disabled={salvandoPlano}
-                  >
-                    {salvandoPlano ? "Salvando..." : "✓ Salvar Plano de Corte"}
-                  </button>
-                </div>
-              )}
-
-              {resultado && pedidoRef && planoSalvo && (
-                <div style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
-                  <a
-                    href={"/pedidos/" + pedidoRef + "/plano"}
-                    className="btn bp sm"
-                    style={{ flex: 1, textAlign: "center", textDecoration: "none" }}
-                  >
-                    ◈ Ver Plano de Corte
-                  </a>
-                  <a
-                    href={"/pedidos/" + pedidoRef}
-                    className="btn bg sm"
-                    style={{ textDecoration: "none" }}
-                  >
-                    ← Voltar ao Pedido
-                  </a>
-                </div>
-              )}
-            </div>
-
-            {mostrarCardRet && (
-              <div className="card">
-                <div className="ct">Retalhos Gerados — Rastreabilidade</div>
-                <div>
+              {/* Retalhos preview — só leitura, sem botão de salvar */}
+              {resultado && retalhosGerados.length > 0 && (
+                <div style={{ marginTop: "12px", padding: "10px 12px", background: "rgba(16,185,129,.06)", border: "1px solid rgba(16,185,129,.2)", borderRadius: "8px" }}>
+                  <div style={{ fontSize: "10px", color: "var(--ok)", fontWeight: 700, marginBottom: "6px", letterSpacing: ".04em" }}>
+                    ↺ {retalhosGerados.length} retalho(s) aproveitável(is) — serão salvos automaticamente
+                  </div>
                   {retalhosGerados.map((r, i) => (
-                    <div key={i} className="sr">
-                      <div className="sl">
-                        Retalho {i + 1} — {r.prod}
-                        <small>{r.l}×{r.a}mm · {r.m2} m² · Chapa {r.chapaIdx + 1}</small>
-                      </div>
-                      <span className="rtag">↺ Reutilizável</span>
+                    <div key={i} style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", lineHeight: 1.6 }}>
+                      {r.l}×{r.a}mm · {r.m2} m² · {r.prod} · Chapa {r.chapaIdx + 1}
                     </div>
                   ))}
                 </div>
-                <div style={{ marginTop: "12px", display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-                  <button className="btn bp sm" onClick={salvarRetalhos} disabled={salvandoRetalhos}>
-                    {salvandoRetalhos ? "Salvando..." : "✓ Salvar Retalhos"}
+              )}
+
+              {/* Botão único de salvar — só aparece com resultado e pedido vinculado */}
+              {resultado && pedidoRef && (
+                <div style={{ marginTop: "14px" }}>
+                  <button
+                    className="btn bp sm"
+                    style={{ width: "100%" }}
+                    onClick={handleSalvar}
+                    disabled={salvando}
+                  >
+                    {salvando ? "Salvando plano e retalhos..." : "✓ Salvar e Voltar ao Pedido"}
                   </button>
-                  <button className="btn bg sm" onClick={() => setMostrarCardRet(false)}>Descartar</button>
-                  {!pedidoRef && (
-                    <span style={{ fontSize: "10px", color: "var(--warn)", fontFamily: "'DM Mono', monospace" }}>
-                      ⚠ Sem pedido vinculado
-                    </span>
-                  )}
-                  {erroRetalhos && <span style={{ fontSize: "10px", color: "var(--err)" }}>{erroRetalhos}</span>}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
