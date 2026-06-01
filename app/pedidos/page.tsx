@@ -145,6 +145,7 @@ export default function PedidosPage() {
                   const quitado    = aberto <= 0;
                   const finalizado = ["Entregue","Cancelado"].includes(p.status);
                   const primeiro   = p.status === "Aguardando otimização";
+                  const podeRomaneio = ["Finalizado","Entregue"].includes(p.status);
 
                   return (
                     <tr key={p.id}>
@@ -178,7 +179,8 @@ export default function PedidosPage() {
                           >
                             ◉
                           </a>
-                          {btnAcao("var(--warn)", "rgba(245,158,11,.15)", primeiro ? "Já está no início do fluxo" : "Retroceder etapa", "←", () => !primeiro && handleRetroceder(p.id, p.status))}
+                          {podeRomaneio && (<button title="Imprimir Romaneio de Saída" onClick={()=>{const i=document.createElement("iframe");i.style.cssText="position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:9999;background:white;";i.src="/pedidos/"+p.id+"?print=1";document.body.appendChild(i);setTimeout(()=>{document.body.removeChild(i);},4000);}} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",height:"28px",padding:"0 8px",borderRadius:"6px",background:"transparent",border:"1px solid var(--b2)",color:"var(--t3)",fontSize:"10px",fontWeight:700,fontFamily:"DM Mono, monospace",letterSpacing:"0.5px",cursor:"pointer",transition:"all 0.15s"}} onMouseEnter={e=>{const b=e.currentTarget;b.style.background="rgba(16,185,129,.15)";b.style.borderColor="var(--ok)";b.style.color="var(--ok)";}} onMouseLeave={e=>{const b=e.currentTarget;b.style.background="transparent";b.style.borderColor="var(--b2)";b.style.color="var(--t3)";}}>R</button>)}
+          {btnAcao("var(--warn)", "rgba(245,158,11,.15)", primeiro ? "Já está no início do fluxo" : "Retroceder etapa", "←", () => !primeiro && handleRetroceder(p.id, p.status))}
                           {btnAcao("var(--ok)", "rgba(16,185,129,.15)", finalizado ? "Pedido encerrado" : "Avançar etapa", "→", () => !finalizado && handleAvancar(p.id, p.status))}
                         </div>
                       </td>

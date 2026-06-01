@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidoById, avancarStatusPedido, registrarRecebimento, recalcularRecebido } from "@/services/pedidos.service";
 import { getLancamentosPorPedido, deletarLancamento } from "@/services/financeiro.service";
@@ -46,6 +46,8 @@ function parsearValor(formatted: string): number {
 export default function PedidoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const autoPrint = searchParams.get("print") === "1";
   const { toast } = useToast();
 
   const [pedido, setPedido]           = useState<Pedido | null>(null);
@@ -57,6 +59,13 @@ export default function PedidoDetalhe() {
   const [salvando, setSalvando]       = useState(false);
 
   useEffect(() => { load(); }, [id]);
+
+  useEffect(() => {
+    if (autoPrint && !loading && pedido) {
+      const timer = setTimeout(() => { window.print(); }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [autoPrint, loading, pedido]);
 
   async function load() {
     setLoading(true);
@@ -117,7 +126,7 @@ export default function PedidoDetalhe() {
   const statusIdx   = FLUXO.indexOf(pedido.status);
   const podeAvancar = !["Entregue","Cancelado"].includes(pedido.status);
   const temItens    = (pedido.itens_pedido?.length ?? 0) > 0;
-  const romaneioDestacado = pedido.status === "Finalizado";
+  const podeRomaneio = ["Finalizado","Entregue"].includes(pedido.status);
 
   return (
     <>
@@ -145,18 +154,20 @@ export default function PedidoDetalhe() {
           <span className={CHIP[pedido.status] ?? "chip cgr"}>{pedido.status}</span>
           {temItens && <a href={`/otimizador?pedido=${pedido.id}`} className="btn bg sm">◈ Otimizar Corte</a>}
 
-          {/* Botão Romaneio — sempre visível, destaque verde quando Finalizado */}
+          {/* Botão Romaneio */}
           <button
             className="btn sm"
-            onClick={() => window.print()}
+            onClick={() => podeRomaneio && window.print()}
+            title={podeRomaneio ? "Imprimir Romaneio de Saída" : "Disponível a partir de Finalizado"}
             style={{
-              background: romaneioDestacado ? "var(--ok)" : "transparent",
-              border: `1px solid ${romaneioDestacado ? "var(--ok)" : "var(--b2)"}`,
-              color: romaneioDestacado ? "#000" : "var(--t3)",
-              fontWeight: romaneioDestacado ? 700 : 400,
+              background: podeRomaneio ? "rgba(16,185,129,.15)" : "transparent",
+              border: `1px solid ${podeRomaneio ? "var(--ok)" : "var(--b2)"}`,
+              color: podeRomaneio ? "var(--ok)" : "var(--t3)",
+              fontWeight: 700,
+              cursor: podeRomaneio ? "pointer" : "default",
+              opacity: podeRomaneio ? 1 : 0.35,
               transition: "all 0.2s",
             }}
-            title="Imprimir Romaneio de Saída"
           >
             R
           </button>
@@ -361,9 +372,7 @@ export default function PedidoDetalhe() {
               <div style={{
                 display:"inline-block", marginTop:"8px", padding:"3px 14px",
                 borderRadius:"99px", fontSize:"10px", fontWeight:700, letterSpacing:"1px",
-                background: pedido.status === "Entregue" ? "#d4edda" : pedido.status === "Finalizado" ? "#d4edda" : "#fff3cd",
-                color: pedido.status === "Entregue" ? "#155724" : pedido.status === "Finalizado" ? "#155724" : "#856404",
-                border: `1px solid ${pedido.status === "Entregue" ? "#c3e6cb" : "#ffeeba"}`,
+                background:"#d4edda", color:"#155724", border:"1px solid #c3e6cb",
               }}>
                 {pedido.status.toUpperCase()}
               </div>
@@ -376,7 +385,7 @@ export default function PedidoDetalhe() {
             <div style={{ padding:"12px", background:"#f0f4ff", borderRadius:"8px", borderLeft:"4px solid #2d5fa6" }}>
               <div style={{ fontSize:"9px", fontWeight:700, color:"#2d5fa6", textTransform:"uppercase", letterSpacing:"1.5px", marginBottom:"8px" }}>Comprador</div>
               <div style={{ fontSize:"13px", fontWeight:700, color:"#1a1a2e" }}>{pedido.clientes?.nome ?? "—"}</div>
-              {pedido.clientes?.cnpj && <div style={{ fontSize:"10px", color:"#555", marginTop:"3px" }}>CNPJ: {pedido.clientes.cnpj}</div>}
+              {(pedido.clientes as any)?.cnpj && <div style={{ fontSize:"10px", color:"#555", marginTop:"3px" }}>CNPJ: {(pedido.clientes as any).cnpj}</div>}
               {pedido.clientes?.cidade && <div style={{ fontSize:"10px", color:"#555" }}>{pedido.clientes.cidade}</div>}
               {pedido.clientes?.tel && <div style={{ fontSize:"10px", color:"#555" }}>Tel: {pedido.clientes.tel}</div>}
             </div>
@@ -436,7 +445,6 @@ export default function PedidoDetalhe() {
 
           {/* Totais + Financeiro */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"12px", marginBottom:"18px" }}>
-            {/* Financeiro */}
             <div style={{ padding:"12px", background:"#f0f4ff", borderRadius:"8px", borderLeft:"4px solid #2d5fa6" }}>
               <div style={{ fontSize:"9px", fontWeight:700, color:"#2d5fa6", textTransform:"uppercase", letterSpacing:"1.5px", marginBottom:"8px" }}>Condições de Pagamento</div>
               <div style={{ display:"flex", flexDirection:"column", gap:"6px", fontSize:"11px" }}>
@@ -458,8 +466,6 @@ export default function PedidoDetalhe() {
                 </div>
               </div>
             </div>
-
-            {/* Valor total destaque */}
             <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"flex-end" }}>
               <div style={{ minWidth:"220px", background:"#f0f4ff", borderRadius:"8px", padding:"12px", border:"1px solid #d0daf0" }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingTop:"10px", borderTop:"2px solid #2d5fa6" }}>
