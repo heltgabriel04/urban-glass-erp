@@ -28,14 +28,16 @@ const FORM_VAZIO = {
 };
 
 export default function RetalhoPage() {
-  const [retalhos, setRetalhos] = useState<Retalho[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filtro, setFiltro] = useState<StatusRetalho | "">("");
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(FORM_VAZIO);
-  const [salvando, setSalvando] = useState(false);
+  const [retalhos, setRetalhos]     = useState<Retalho[]>([]);
+  const [produtos, setProdutos]     = useState<{ id: number; nome: string }[]>([]);
+  const [pedidos, setPedidos]       = useState<{ id: string }[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [filtro, setFiltro]         = useState<StatusRetalho | "">("");
+  const [showForm, setShowForm]     = useState(false);
+  const [form, setForm]             = useState(FORM_VAZIO);
+  const [salvando, setSalvando]     = useState(false);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); loadProdutos(); loadPedidos(); }, []);
 
   async function load() {
     setLoading(true);
@@ -46,6 +48,16 @@ export default function RetalhoPage() {
     if (error) console.error(error);
     else setRetalhos(data as Retalho[]);
     setLoading(false);
+  }
+
+  async function loadProdutos() {
+    const { data } = await supabase.from("produtos").select("id, nome").order("nome");
+    if (data) setProdutos(data);
+  }
+
+  async function loadPedidos() {
+    const { data } = await supabase.from("pedidos").select("id").order("id", { ascending: false });
+    if (data) setPedidos(data);
   }
 
   async function mudarStatus(id: string, status: StatusRetalho) {
@@ -60,7 +72,7 @@ export default function RetalhoPage() {
   }
 
   async function handleSalvar() {
-    if (!form.produto_nome.trim()) { alert("Informe o produto."); return; }
+    if (!form.produto_nome.trim()) { alert("Selecione o produto."); return; }
     if (!form.largura || !form.altura) { alert("Informe as dimensões."); return; }
 
     setSalvando(true);
@@ -69,7 +81,6 @@ export default function RetalhoPage() {
     const altura  = parseInt(form.altura);
     const m2      = parseFloat(((largura * altura) / 1_000_000).toFixed(4));
 
-    // Gera próximo ID
     const ids = retalhos.map(r => parseInt(r.id.replace("R-", ""))).filter(n => !isNaN(n));
     const nextNum = ids.length > 0 ? Math.max(...ids) + 1 : 1;
     const id = "R-" + String(nextNum).padStart(3, "0");
@@ -121,6 +132,12 @@ export default function RetalhoPage() {
     outline:"none", width:"100%", boxSizing:"border-box",
   };
 
+  const selectStyle: React.CSSProperties = {
+    ...inputStyle,
+    cursor:"pointer",
+    appearance: "none" as any,
+  };
+
   const labelStyle: React.CSSProperties = {
     fontSize:"11px", color:"var(--t3)", fontWeight:600,
     textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:"4px", display:"block",
@@ -165,15 +182,21 @@ export default function RetalhoPage() {
           <div style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"20px 24px", marginBottom:"20px" }}>
             <div style={{ fontSize:"12px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em", marginBottom:"16px" }}>NOVO RETALHO</div>
             <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr 1fr", gap:"12px", alignItems:"end" }}>
+
               <div>
                 <label style={labelStyle}>Produto *</label>
-                <input
-                  style={inputStyle}
-                  placeholder="Ex: Chapa 4+4 Incolor"
+                <select
+                  style={selectStyle}
                   value={form.produto_nome}
                   onChange={e => setForm(f => ({ ...f, produto_nome: e.target.value }))}
-                />
+                >
+                  <option value="">Selecione o produto...</option>
+                  {produtos.map(p => (
+                    <option key={p.id} value={p.nome}>{p.nome}</option>
+                  ))}
+                </select>
               </div>
+
               <div>
                 <label style={labelStyle}>Largura (mm) *</label>
                 <input
@@ -184,6 +207,7 @@ export default function RetalhoPage() {
                   onChange={e => setForm(f => ({ ...f, largura: e.target.value }))}
                 />
               </div>
+
               <div>
                 <label style={labelStyle}>Altura (mm) *</label>
                 <input
@@ -194,6 +218,7 @@ export default function RetalhoPage() {
                   onChange={e => setForm(f => ({ ...f, altura: e.target.value }))}
                 />
               </div>
+
               <div>
                 <label style={labelStyle}>Chapa Origem</label>
                 <input
@@ -203,15 +228,21 @@ export default function RetalhoPage() {
                   onChange={e => setForm(f => ({ ...f, chapa_origem: e.target.value }))}
                 />
               </div>
+
               <div>
                 <label style={labelStyle}>Pedido Origem</label>
-                <input
-                  style={inputStyle}
-                  placeholder="P-001"
+                <select
+                  style={selectStyle}
                   value={form.pedido_origem}
                   onChange={e => setForm(f => ({ ...f, pedido_origem: e.target.value }))}
-                />
+                >
+                  <option value="">— nenhum —</option>
+                  {pedidos.map(p => (
+                    <option key={p.id} value={p.id}>{p.id}</option>
+                  ))}
+                </select>
               </div>
+
               <div>
                 <label style={labelStyle}>Data</label>
                 <input
@@ -222,6 +253,7 @@ export default function RetalhoPage() {
                 />
               </div>
             </div>
+
             <div style={{ display:"flex", gap:"8px", marginTop:"14px", justifyContent:"flex-end" }}>
               {form.largura && form.altura && (
                 <span style={{ fontSize:"12px", color:"var(--t3)", alignSelf:"center", fontFamily:"'DM Mono', monospace" }}>
