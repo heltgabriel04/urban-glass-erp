@@ -50,13 +50,13 @@ function LogoIcon({ size = 32 }: { size?: number }) {
     <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect x="1" y="1" width="62" height="62" rx="13" fill="#0f1219" stroke="#2d5fa6" strokeWidth="2" />
       <text
-        x="32" y="43"
+        x="32" y="40"
         textAnchor="middle"
         fontFamily="'Syne', sans-serif"
-        fontSize="26"
+        fontSize="20"
         fontWeight="800"
         fill="white"
-        letterSpacing="-1"
+        letterSpacing="1"
       >UG</text>
     </svg>
   );
@@ -115,7 +115,7 @@ export default function Sidebar() {
           font-size: 15px;
           font-weight: 800;
           letter-spacing: -0.5px;
-          color: var(--acc);
+          color: var(--t1);
           line-height: 1.1;
         }
         .sb-logo-sub {
