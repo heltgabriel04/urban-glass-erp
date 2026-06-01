@@ -5,9 +5,11 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidoById, avancarStatusPedido, registrarRecebimento, recalcularRecebido } from "@/services/pedidos.service";
 import { getLancamentosPorPedido, deletarLancamento } from "@/services/financeiro.service";
+import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import type { Pedido, Lancamento } from "@/types";
+import type { HistoricoOtimizador } from "@/services/otimizador.service";
 
 const CHIP: Record<string, string> = {
   "Aguardando otimização":   "chip cy",
@@ -28,9 +30,7 @@ const FLUXO = [
   "Entregue",
 ];
 
-function hoje() {
-  return new Date().toISOString().split("T")[0];
-}
+function hoje() { return new Date().toISOString().split("T")[0]; }
 
 function formatarValorDigitado(raw: string): string {
   const nums = raw.replace(/\D/g, "");
@@ -50,13 +50,14 @@ export default function PedidoDetalhe() {
   const autoPrint = searchParams.get("print") === "1";
   const { toast } = useToast();
 
-  const [pedido, setPedido]           = useState<Pedido | null>(null);
-  const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [recebendo, setRecebendo]     = useState(false);
-  const [valorRec, setValorRec]       = useState("");
-  const [dataRec, setDataRec]         = useState(hoje());
-  const [salvando, setSalvando]       = useState(false);
+  const [pedido, setPedido]               = useState<Pedido | null>(null);
+  const [lancamentos, setLancamentos]     = useState<Lancamento[]>([]);
+  const [otimizacoes, setOtimizacoes]     = useState<HistoricoOtimizador[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [recebendo, setRecebendo]         = useState(false);
+  const [valorRec, setValorRec]           = useState("");
+  const [dataRec, setDataRec]             = useState(hoje());
+  const [salvando, setSalvando]           = useState(false);
 
   useEffect(() => { load(); }, [id]);
 
@@ -69,9 +70,14 @@ export default function PedidoDetalhe() {
 
   async function load() {
     setLoading(true);
-    const [data, lancs] = await Promise.all([getPedidoById(id), getLancamentosPorPedido(id)]);
+    const [data, lancs, otims] = await Promise.all([
+      getPedidoById(id),
+      getLancamentosPorPedido(id),
+      getOtimizacoesPorPedido(id),
+    ]);
     setPedido(data);
     setLancamentos(lancs);
+    setOtimizacoes(otims);
     setLoading(false);
   }
 
@@ -82,6 +88,13 @@ export default function PedidoDetalhe() {
 
   async function handleAvancar() {
     if (!pedido) return;
+
+    // Bloqueia avanço de "Aguardando otimização" para "Em Produção – Corte" sem plano salvo
+    if (pedido.status === "Aguardando otimização" && otimizacoes.length === 0) {
+      toast("Realize a otimização de corte antes de avançar para produção.", "warn");
+      return;
+    }
+
     setSalvando(true);
     const result = await avancarStatusPedido(pedido.id, pedido.status);
     if (result) toast(`${pedido.id} → ${result.status}`);
@@ -120,13 +133,16 @@ export default function PedidoDetalhe() {
   if (loading) return <AppLayout><div className="con"><div className="loading">Carregando pedido...</div></div></AppLayout>;
   if (!pedido) return <AppLayout><div className="con"><div style={{ color:"var(--err)", padding:"32px" }}>Pedido não encontrado.</div></div></AppLayout>;
 
-  const aberto      = Number(pedido.valor_total) - Number(pedido.valor_recebido);
-  const quitado     = aberto <= 0;
-  const pctRec      = pedido.valor_total > 0 ? Math.min(100, (Number(pedido.valor_recebido) / Number(pedido.valor_total)) * 100) : 0;
-  const statusIdx   = FLUXO.indexOf(pedido.status);
-  const podeAvancar = !["Entregue","Cancelado"].includes(pedido.status);
-  const temItens    = (pedido.itens_pedido?.length ?? 0) > 0;
+  const aberto       = Number(pedido.valor_total) - Number(pedido.valor_recebido);
+  const quitado      = aberto <= 0;
+  const pctRec       = pedido.valor_total > 0 ? Math.min(100, (Number(pedido.valor_recebido) / Number(pedido.valor_total)) * 100) : 0;
+  const statusIdx    = FLUXO.indexOf(pedido.status);
+  const podeAvancar  = !["Entregue","Cancelado"].includes(pedido.status);
+  const temItens     = (pedido.itens_pedido?.length ?? 0) > 0;
   const podeRomaneio = ["Finalizado","Entregue"].includes(pedido.status);
+  const temOtimizacao = otimizacoes.length > 0;
+  const bloqueadoSemOtim = pedido.status === "Aguardando otimização" && !temOtimizacao;
+  const ultimaOtim   = otimizacoes[0] ?? null;
 
   return (
     <>
@@ -152,34 +168,70 @@ export default function PedidoDetalhe() {
             Pedido <span style={{ color:"var(--acc)" }}>{pedido.id}</span>
           </div>
           <span className={CHIP[pedido.status] ?? "chip cgr"}>{pedido.status}</span>
-          {temItens && <a href={`/otimizador?pedido=${pedido.id}`} className="btn bg sm">◈ Otimizar Corte</a>}
-
-          {/* Botão Romaneio */}
+          {temItens && (
+            <a href={"/otimizador?pedido=" + pedido.id} className="btn bg sm">◈ Otimizar Corte</a>
+          )}
           <button
             className="btn sm"
             onClick={() => podeRomaneio && window.print()}
             title={podeRomaneio ? "Imprimir Romaneio de Saída" : "Disponível a partir de Finalizado"}
             style={{
               background: podeRomaneio ? "rgba(16,185,129,.15)" : "transparent",
-              border: `1px solid ${podeRomaneio ? "var(--ok)" : "var(--b2)"}`,
+              border: "1px solid " + (podeRomaneio ? "var(--ok)" : "var(--b2)"),
               color: podeRomaneio ? "var(--ok)" : "var(--t3)",
-              fontWeight: 700,
-              cursor: podeRomaneio ? "pointer" : "default",
-              opacity: podeRomaneio ? 1 : 0.35,
-              transition: "all 0.2s",
+              fontWeight: 700, cursor: podeRomaneio ? "pointer" : "default",
+              opacity: podeRomaneio ? 1 : 0.35, transition: "all 0.2s",
             }}
           >
             R
           </button>
-
           {podeAvancar && (
-            <button className="btn bp sm" onClick={handleAvancar} disabled={salvando}>
-              {salvando ? "Salvando..." : "Avançar Status →"}
+            <button
+              className="btn bp sm"
+              onClick={handleAvancar}
+              disabled={salvando}
+              title={bloqueadoSemOtim ? "Realize a otimização de corte antes de avançar" : ""}
+              style={bloqueadoSemOtim ? { opacity: 0.45, cursor: "not-allowed" } : {}}
+            >
+              {salvando ? "Salvando..." : bloqueadoSemOtim ? "⚠ Otimização pendente" : "Avançar Status →"}
             </button>
           )}
         </div>
 
         <div className="con no-print" style={{ display:"flex", flexDirection:"column", gap:"20px" }}>
+
+          {/* Alerta de otimização pendente */}
+          {bloqueadoSemOtim && (
+            <div style={{ background:"rgba(245,158,11,.1)", border:"1px solid var(--warn)", borderRadius:"10px", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px" }}>
+              <div>
+                <div style={{ fontSize:"13px", fontWeight:700, color:"var(--warn)", marginBottom:"4px" }}>⚠ Otimização de corte pendente</div>
+                <div style={{ fontSize:"12px", color:"var(--t3)" }}>Este pedido não pode avançar para produção sem um plano de corte gerado.</div>
+              </div>
+              <a href={"/otimizador?pedido=" + pedido.id} className="btn bp sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>
+                ◈ Otimizar Agora
+              </a>
+            </div>
+          )}
+
+          {/* Card de otimização salva */}
+          {temOtimizacao && ultimaOtim && (
+            <div style={{ background:"rgba(16,185,129,.06)", border:"1px solid rgba(16,185,129,.3)", borderRadius:"10px", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px" }}>
+              <div style={{ display:"flex", gap:"24px", alignItems:"center" }}>
+                <div>
+                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"2px" }}>PLANO DE CORTE</div>
+                  <div style={{ fontSize:"13px", color:"var(--ok)", fontWeight:700 }}>✓ Otimização gerada</div>
+                </div>
+                <div style={{ fontSize:"12px", color:"var(--t3)", fontFamily:"'DM Mono', monospace", display:"flex", gap:"16px" }}>
+                  <span>Aproveitamento: <strong style={{ color:"var(--ok)" }}>{ultimaOtim.aproveitamento}%</strong></span>
+                  <span>Chapas: <strong style={{ color:"var(--t1)" }}>{ultimaOtim.chapas_usadas}</strong></span>
+                  <span>Data: <strong style={{ color:"var(--t1)" }}>{formatDate(ultimaOtim.dt_otim)}</strong></span>
+                </div>
+              </div>
+              <a href={"/pedidos/" + pedido.id + "/plano"} className="btn bg sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>
+                ◈ Ver Plano
+              </a>
+            </div>
+          )}
 
           {/* Progresso */}
           <div className="card" style={{ padding:"20px 24px" }}>
@@ -215,22 +267,20 @@ export default function PedidoDetalhe() {
                 <Row label="Telefone"           value={pedido.clientes?.tel ?? "—"} />
                 <Row label="Data do pedido"     value={formatDate(pedido.dt_pedido)} />
                 <Row label="Retirada prevista"  value={formatDate(pedido.dt_retirada)} />
-                <Row label="m² total"           value={`${Number(pedido.m2_total).toFixed(2)} m²`} />
+                <Row label="m² total"           value={Number(pedido.m2_total).toFixed(2) + " m²"} />
                 <Row label="Forma de pagamento" value={pedido.forma_pgto || "—"} />
-                {pedido.parcelas > 1 && <Row label="Parcelas" value={`${pedido.parcelas}×`} />}
+                {pedido.parcelas > 1 && <Row label="Parcelas" value={pedido.parcelas + "×"} />}
                 {pedido.obs && <Row label="Observações" value={pedido.obs} />}
               </div>
             </div>
 
             <div className="card" style={{ padding:"20px 24px" }}>
               <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, marginBottom:"16px", letterSpacing:".06em" }}>FINANCEIRO</div>
-
               <div style={{ display:"flex", flexDirection:"column", gap:"10px", marginBottom:"16px" }}>
                 <Row label="Valor total" value={formatBRL(pedido.valor_total)} accent />
                 <Row label="Recebido"    value={formatBRL(pedido.valor_recebido)} color={pedido.valor_recebido > 0 ? "var(--ok)" : "var(--t2)"} />
                 <Row label="Em aberto"   value={formatBRL(Math.max(0, aberto))} color={quitado ? "var(--ok)" : "var(--err)"} />
               </div>
-
               <div style={{ marginBottom:"16px" }}>
                 <div style={{ display:"flex", justifyContent:"space-between", fontSize:"11px", color:"var(--t3)", marginBottom:"6px" }}>
                   <span>Recebimento</span><span>{pctRec.toFixed(0)}%</span>
@@ -239,8 +289,6 @@ export default function PedidoDetalhe() {
                   <div style={{ height:"100%", borderRadius:"3px", width:`${pctRec}%`, background: quitado ? "var(--ok)" : "var(--acc)", transition:"width .3s" }} />
                 </div>
               </div>
-
-              {/* Histórico */}
               {lancamentos.length > 0 && (
                 <div style={{ marginBottom:"16px" }}>
                   <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"8px" }}>HISTÓRICO</div>
@@ -263,8 +311,6 @@ export default function PedidoDetalhe() {
                   </div>
                 </div>
               )}
-
-              {/* Registrar */}
               {!quitado && (
                 <div>
                   {!recebendo ? (
@@ -276,33 +322,19 @@ export default function PedidoDetalhe() {
                       <div style={{ display:"flex", gap:"6px", alignItems:"center" }}>
                         <div style={{ flex:2, display:"flex", alignItems:"center", background:"var(--surf2)", border:"1px solid var(--acc)", borderRadius:"6px", padding:"0 10px", gap:"6px" }}>
                           <span style={{ fontSize:"13px", color:"var(--t3)", fontFamily:"'DM Mono', monospace", flexShrink:0 }}>R$</span>
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            placeholder="0,00"
-                            value={valorRec}
-                            onChange={handleValorChange}
-                            style={{ flex:1, background:"transparent", border:"none", outline:"none", color:"var(--t1)", fontSize:"15px", fontFamily:"'DM Mono', monospace", padding:"10px 0" }}
-                            autoFocus
-                          />
+                          <input type="text" inputMode="numeric" placeholder="0,00" value={valorRec} onChange={handleValorChange}
+                            style={{ flex:1, background:"transparent", border:"none", outline:"none", color:"var(--t1)", fontSize:"15px", fontFamily:"'DM Mono', monospace", padding:"10px 0" }} autoFocus />
                         </div>
-                        <input
-                          type="date"
-                          value={dataRec}
-                          onChange={e => setDataRec(e.target.value)}
-                          style={{ flex:1, background:"var(--surf2)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"10px 8px", color:"var(--t1)", fontSize:"12px", fontFamily:"'DM Mono', monospace", outline:"none" }}
-                        />
+                        <input type="date" value={dataRec} onChange={e => setDataRec(e.target.value)}
+                          style={{ flex:1, background:"var(--surf2)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"10px 8px", color:"var(--t1)", fontSize:"12px", fontFamily:"'DM Mono', monospace", outline:"none" }} />
                         <button className="btn bp sm" onClick={handleReceber} disabled={salvando}>{salvando ? "..." : "Salvar"}</button>
                         <button className="btn bg sm" onClick={() => { setRecebendo(false); setValorRec(""); }}>✕</button>
                       </div>
-                      <div style={{ fontSize:"11px", color:"var(--t3)", textAlign:"right" }}>
-                        Máximo: {formatBRL(aberto)}
-                      </div>
+                      <div style={{ fontSize:"11px", color:"var(--t3)", textAlign:"right" }}>Máximo: {formatBRL(aberto)}</div>
                     </div>
                   )}
                 </div>
               )}
-
               {quitado && (
                 <div style={{ padding:"10px", background:"rgba(0,200,100,.08)", borderRadius:"8px", color:"var(--ok)", fontSize:"13px", textAlign:"center" }}>
                   ✓ Pagamento quitado
@@ -315,7 +347,7 @@ export default function PedidoDetalhe() {
           <div className="card" style={{ padding:"20px 24px" }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px" }}>
               <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>ITENS DO PEDIDO ({pedido.itens_pedido?.length ?? 0})</div>
-              {temItens && <a href={`/otimizador?pedido=${pedido.id}`} className="btn bg xs">◈ Otimizar Corte</a>}
+              {temItens && <a href={"/otimizador?pedido=" + pedido.id} className="btn bg xs">◈ Otimizar Corte</a>}
             </div>
             {!temItens ? (
               <div style={{ color:"var(--t3)", padding:"24px 0", textAlign:"center" }}>Nenhum item registrado neste pedido.</div>
@@ -346,16 +378,7 @@ export default function PedidoDetalhe() {
         </div>
 
         {/* ─── ROMANEIO PDF ─── */}
-        <div className="print-area" style={{
-          padding: "20px 28px",
-          fontFamily: "Arial, sans-serif",
-          color: "#1a1a2e",
-          background: "white",
-          width: "210mm",
-          minHeight: "auto",
-          boxSizing: "border-box",
-        }}>
-          {/* Cabeçalho */}
+        <div className="print-area" style={{ padding:"20px 28px", fontFamily:"Arial, sans-serif", color:"#1a1a2e", background:"white", width:"210mm", minHeight:"auto", boxSizing:"border-box" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"20px", paddingBottom:"16px", borderBottom:"3px solid #2d5fa6" }}>
             <div>
               <div style={{ fontSize:"26px", fontWeight:900, color:"#2d5fa6", letterSpacing:"-1px" }}>urbanglass</div>
@@ -369,18 +392,12 @@ export default function PedidoDetalhe() {
               <div style={{ fontSize:"28px", fontWeight:900, color:"#2d5fa6", letterSpacing:"-1px" }}>{pedido.id}</div>
               <div style={{ fontSize:"11px", color:"#555", marginTop:"6px" }}>Emissão: <strong>{new Date().toLocaleDateString("pt-BR")}</strong></div>
               <div style={{ fontSize:"11px", color:"#555" }}>Pedido: <strong>{formatDate(pedido.dt_pedido)}</strong></div>
-              <div style={{
-                display:"inline-block", marginTop:"8px", padding:"3px 14px",
-                borderRadius:"99px", fontSize:"10px", fontWeight:700, letterSpacing:"1px",
-                background:"#d4edda", color:"#155724", border:"1px solid #c3e6cb",
-              }}>
+              <div style={{ display:"inline-block", marginTop:"8px", padding:"3px 14px", borderRadius:"99px", fontSize:"10px", fontWeight:700, letterSpacing:"1px", background:"#d4edda", color:"#155724", border:"1px solid #c3e6cb" }}>
                 {pedido.status.toUpperCase()}
               </div>
               <div style={{ fontSize:"9px", color:"#c00", marginTop:"6px", fontStyle:"italic" }}>⚠ Não tem validade fiscal</div>
             </div>
           </div>
-
-          {/* Cliente + Condições */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"12px", marginBottom:"18px" }}>
             <div style={{ padding:"12px", background:"#f0f4ff", borderRadius:"8px", borderLeft:"4px solid #2d5fa6" }}>
               <div style={{ fontSize:"9px", fontWeight:700, color:"#2d5fa6", textTransform:"uppercase", letterSpacing:"1.5px", marginBottom:"8px" }}>Comprador</div>
@@ -392,38 +409,18 @@ export default function PedidoDetalhe() {
             <div style={{ padding:"12px", background:"#f0f4ff", borderRadius:"8px", borderLeft:"4px solid #3d8c5c" }}>
               <div style={{ fontSize:"9px", fontWeight:700, color:"#3d8c5c", textTransform:"uppercase", letterSpacing:"1.5px", marginBottom:"8px" }}>Condições Comerciais</div>
               <div style={{ fontSize:"11px", color:"#333", display:"flex", flexDirection:"column", gap:"4px" }}>
-                <div style={{ display:"flex", justifyContent:"space-between" }}>
-                  <span style={{ color:"#777" }}>Pagamento</span>
-                  <strong>{pedido.forma_pgto || "—"}</strong>
-                </div>
-                {pedido.parcelas > 1 && (
-                  <div style={{ display:"flex", justifyContent:"space-between" }}>
-                    <span style={{ color:"#777" }}>Parcelas</span>
-                    <strong>{pedido.parcelas}×</strong>
-                  </div>
-                )}
-                <div style={{ display:"flex", justifyContent:"space-between" }}>
-                  <span style={{ color:"#777" }}>Retirada prevista</span>
-                  <strong>{formatDate(pedido.dt_retirada)}</strong>
-                </div>
-                <div style={{ display:"flex", justifyContent:"space-between" }}>
-                  <span style={{ color:"#777" }}>m² total</span>
-                  <strong>{Number(pedido.m2_total).toFixed(2)} m²</strong>
-                </div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#777" }}>Pagamento</span><strong>{pedido.forma_pgto || "—"}</strong></div>
+                {pedido.parcelas > 1 && <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#777" }}>Parcelas</span><strong>{pedido.parcelas}×</strong></div>}
+                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#777" }}>Retirada prevista</span><strong>{formatDate(pedido.dt_retirada)}</strong></div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#777" }}>m² total</span><strong>{Number(pedido.m2_total).toFixed(2)} m²</strong></div>
               </div>
             </div>
           </div>
-
-          {/* Itens */}
           <table style={{ width:"100%", borderCollapse:"collapse", marginBottom:"16px", fontSize:"11px" }}>
             <thead>
               <tr style={{ background:"#2d5fa6" }}>
                 {["#","Produto","Dimensão (mm)","m²","Qtd","R$/m²","Lapidação","Subtotal"].map((h, i) => (
-                  <th key={i} style={{
-                    padding:"8px", color:"white", fontWeight:700, fontSize:"9px",
-                    textAlign: i === 0 || i === 4 ? "center" : i >= 5 ? "right" : "left",
-                    letterSpacing:"0.5px",
-                  }}>{h}</th>
+                  <th key={i} style={{ padding:"8px", color:"white", fontWeight:700, fontSize:"9px", textAlign: i === 0 || i === 4 ? "center" : i >= 5 ? "right" : "left", letterSpacing:"0.5px" }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -442,27 +439,15 @@ export default function PedidoDetalhe() {
               ))}
             </tbody>
           </table>
-
-          {/* Totais + Financeiro */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"12px", marginBottom:"18px" }}>
             <div style={{ padding:"12px", background:"#f0f4ff", borderRadius:"8px", borderLeft:"4px solid #2d5fa6" }}>
               <div style={{ fontSize:"9px", fontWeight:700, color:"#2d5fa6", textTransform:"uppercase", letterSpacing:"1.5px", marginBottom:"8px" }}>Condições de Pagamento</div>
               <div style={{ display:"flex", flexDirection:"column", gap:"6px", fontSize:"11px" }}>
-                <div style={{ display:"flex", justifyContent:"space-between" }}>
-                  <span style={{ color:"#777" }}>Valor total</span>
-                  <strong style={{ fontFamily:"monospace" }}>{formatBRL(pedido.valor_total)}</strong>
-                </div>
-                <div style={{ display:"flex", justifyContent:"space-between" }}>
-                  <span style={{ color:"#777" }}>Recebido</span>
-                  <strong style={{ fontFamily:"monospace", color:"#155724" }}>{formatBRL(pedido.valor_recebido)}</strong>
-                </div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#777" }}>Valor total</span><strong style={{ fontFamily:"monospace" }}>{formatBRL(pedido.valor_total)}</strong></div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#777" }}>Recebido</span><strong style={{ fontFamily:"monospace", color:"#155724" }}>{formatBRL(pedido.valor_recebido)}</strong></div>
                 <div style={{ display:"flex", justifyContent:"space-between", borderTop:"1px solid #d0daf0", paddingTop:"6px" }}>
-                  <span style={{ color: aberto > 0 ? "#c00" : "#155724", fontWeight:700 }}>
-                    {aberto > 0 ? "Em aberto" : "✓ Quitado"}
-                  </span>
-                  <strong style={{ fontFamily:"monospace", color: aberto > 0 ? "#c00" : "#155724" }}>
-                    {aberto > 0 ? formatBRL(aberto) : formatBRL(0)}
-                  </strong>
+                  <span style={{ color: aberto > 0 ? "#c00" : "#155724", fontWeight:700 }}>{aberto > 0 ? "Em aberto" : "✓ Quitado"}</span>
+                  <strong style={{ fontFamily:"monospace", color: aberto > 0 ? "#c00" : "#155724" }}>{aberto > 0 ? formatBRL(aberto) : formatBRL(0)}</strong>
                 </div>
               </div>
             </div>
@@ -475,24 +460,18 @@ export default function PedidoDetalhe() {
               </div>
             </div>
           </div>
-
-          {/* Observações */}
           {pedido.obs && (
             <div style={{ padding:"10px 14px", background:"#fffbea", borderRadius:"8px", marginBottom:"16px", fontSize:"10px", borderLeft:"3px solid #f59e0b" }}>
               <strong style={{ color:"#92400e" }}>Observações:</strong> <span style={{ color:"#555" }}>{pedido.obs}</span>
             </div>
           )}
-
-          {/* Assinaturas */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"32px", marginBottom:"16px", marginTop:"32px" }}>
-            {["Vendedor / Urban Glass", "Recebido por / Comprador", "Motorista / Entregador"].map(label => (
+            {["Vendedor / Urban Glass","Recebido por / Comprador","Motorista / Entregador"].map(label => (
               <div key={label} style={{ textAlign:"center" }}>
                 <div style={{ borderTop:"1px solid #999", paddingTop:"8px", fontSize:"10px", color:"#555" }}>{label}</div>
               </div>
             ))}
           </div>
-
-          {/* Rodapé */}
           <div style={{ borderTop:"2px solid #2d5fa6", paddingTop:"8px", display:"flex", justifyContent:"space-between", fontSize:"8px", color:"#aaa" }}>
             <div>Urban Glass Comércio Ltda · CNPJ 65.668.970/0001-05 · Av. Vereador Raymundo Hargreaves, 1250 – Fontesville – Juiz de Fora/MG</div>
             <div style={{ color:"#e00", fontStyle:"italic" }}>Este documento não substitui a Nota Fiscal Eletrônica</div>

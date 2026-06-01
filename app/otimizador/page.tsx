@@ -6,6 +6,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
+import { salvarOtimizacao } from "@/services/otimizador.service";
 import type { Produto } from "@/types";
 
 interface Peca { l: number; a: number; qtd: number; prod: string; }
@@ -37,32 +38,30 @@ function guilhotina(W: number, H: number, pecas: Peca[], kerf: number): { placed
 }
 
 const CHAPAS_PADRAO = [
-  { label: "Chapa 4+4 Incolor — 3300 × 2250 mm",        w: 3300, h: 2250 },
-  { label: "Chapa 3+3 Incolor — 3300 × 2250 mm",        w: 3300, h: 2250 },
-  { label: "Chapa 4+4 Verde — 3300 × 2250 mm",          w: 3300, h: 2250 },
-  { label: "Reflecta 4+4 — 2150 × 3660 mm",             w: 2150, h: 3660 },
-  { label: "Reflecta 4+4 Silver Grey — 3660 × 2140 mm", w: 3660, h: 2140 },
-  { label: "Reflecta 4+4 Champagne — 3660 × 2140 mm",   w: 3660, h: 2140 },
-  { label: "Euro Grey Laminado 4+4 — 3660 × 2140 mm",   w: 3660, h: 2140 },
-  { label: "French Green Laminado 4+4 — 3660 × 2140 mm",w: 3660, h: 2140 },
-  { label: "Reflecta Silver Grey 4mm — 3660 × 2140 mm", w: 3660, h: 2140 },
-  { label: "Reflecta Silver Grey 6mm — 3660 × 2140 mm", w: 3660, h: 2140 },
-  { label: "Vidro Monolítico 4mm — 3660 × 2140 mm",     w: 3660, h: 2140 },
-  { label: "Vidro Monolítico 6mm — 3660 × 2140 mm",     w: 3660, h: 2140 },
-  { label: "Personalizado",                              w: 3300, h: 2250 },
+  { label: "Chapa 4+4 Incolor — 3300 × 2250 mm",         w: 3300, h: 2250 },
+  { label: "Chapa 3+3 Incolor — 3300 × 2250 mm",         w: 3300, h: 2250 },
+  { label: "Chapa 4+4 Verde — 3300 × 2250 mm",           w: 3300, h: 2250 },
+  { label: "Reflecta 4+4 — 2150 × 3660 mm",              w: 2150, h: 3660 },
+  { label: "Reflecta 4+4 Silver Grey — 3660 × 2140 mm",  w: 3660, h: 2140 },
+  { label: "Reflecta 4+4 Champagne — 3660 × 2140 mm",    w: 3660, h: 2140 },
+  { label: "Euro Grey Laminado 4+4 — 3660 × 2140 mm",    w: 3660, h: 2140 },
+  { label: "French Green Laminado 4+4 — 3660 × 2140 mm", w: 3660, h: 2140 },
+  { label: "Reflecta Silver Grey 4mm — 3660 × 2140 mm",  w: 3660, h: 2140 },
+  { label: "Reflecta Silver Grey 6mm — 3660 × 2140 mm",  w: 3660, h: 2140 },
+  { label: "Vidro Monolítico 4mm — 3660 × 2140 mm",      w: 3660, h: 2140 },
+  { label: "Vidro Monolítico 6mm — 3660 × 2140 mm",      w: 3660, h: 2140 },
+  { label: "Personalizado",                               w: 3300, h: 2250 },
 ];
 
-// Mapa produto → índice da chapa padrão correspondente
 const PRODUTO_CHAPA: Record<string, number> = {
-  "Vidro Laminado 4+4":           0,
-  "Vidro Laminado 3+3":           1,
-  "Verde Laminado 4+4":           2,
-  "Reflecta 4+4 Prata":           3,
-  "Reflecta 4+4 Silver Grey":     4,
-  "Reflecta 4+4 Champagne":       5,
-  "Laminado 4+4 Fumê":            6,
-  "Reflecta 4+4 Prata (cópia)":   3,
-  "Vidro Monolítico 4mm":         10,
+  "Vidro Laminado 4+4":        0,
+  "Vidro Laminado 3+3":        1,
+  "Verde Laminado 4+4":        2,
+  "Reflecta 4+4 Prata":        3,
+  "Reflecta 4+4 Silver Grey":  4,
+  "Reflecta 4+4 Champagne":    5,
+  "Laminado 4+4 Fumê":         6,
+  "Vidro Monolítico 4mm":      10,
 };
 
 const COLS_PECA = ["#1f4d32","#173d26","#255c3b","#1a4530","#204228","#2a5c3f","#1e3a2a","#18402e"];
@@ -71,26 +70,31 @@ function OtimizadorContent() {
   const searchParams = useSearchParams();
   const pedidoParam = searchParams.get("pedido");
 
-  const [produtos, setProdutos] = useState<Produto[]>([]);
-  const [pecas, setPecas] = useState<Peca[]>([{ l: 0, a: 0, qtd: 1, prod: "" }]);
-  const [chapaW, setChapaW] = useState(3300);
-  const [chapaH, setChapaH] = useState(2250);
-  const [kerf, setKerf] = useState(4);
-  const [bord, setBord] = useState(3);
-  const [resultado, setResultado] = useState<ResultadoChapa[] | null>(null);
-  const [chapaIdx, setChapaIdx] = useState(0);
-  const [pedidoRef, setPedidoRef] = useState<string | null>(null);
-  const [carregando, setCarregando] = useState(false);
-  const [statAprov, setStatAprov] = useState("—");
-  const [statPerda, setStatPerda] = useState("—");
-  const [statChapas, setStatChapas] = useState("—");
-  const [statRetalhos, setStatRetalhos] = useState("—");
-  const [msg, setMsg] = useState("");
+  const [produtos, setProdutos]           = useState<Produto[]>([]);
+  const [pecas, setPecas]                 = useState<Peca[]>([{ l: 0, a: 0, qtd: 1, prod: "" }]);
+  const [chapaW, setChapaW]               = useState(3300);
+  const [chapaH, setChapaH]               = useState(2250);
+  const [kerf, setKerf]                   = useState(4);
+  const [bord, setBord]                   = useState(3);
+  const [resultado, setResultado]         = useState<ResultadoChapa[] | null>(null);
+  const [chapaIdx, setChapaIdx]           = useState(0);
+  const [pedidoRef, setPedidoRef]         = useState<string | null>(null);
+  const [carregando, setCarregando]       = useState(false);
+  const [statAprov, setStatAprov]         = useState("—");
+  const [statPerda, setStatPerda]         = useState("—");
+  const [statChapas, setStatChapas]       = useState("—");
+  const [statRetalhos, setStatRetalhos]   = useState("—");
+  const [msg, setMsg]                     = useState("");
   const [retalhosGerados, setRetalhosGerados] = useState<RetalhoGerado[]>([]);
-  const [mostrarCardRet, setMostrarCardRet] = useState(false);
+  const [mostrarCardRet, setMostrarCardRet]   = useState(false);
   const [salvandoRetalhos, setSalvandoRetalhos] = useState(false);
-  const [retalhosSalvos, setRetalhosSalvos] = useState(false);
-  const [erroRetalhos, setErroRetalhos] = useState<string | null>(null);
+  const [retalhosSalvos, setRetalhosSalvos]     = useState(false);
+  const [erroRetalhos, setErroRetalhos]         = useState<string | null>(null);
+  const [salvandoPlano, setSalvandoPlano]       = useState(false);
+  const [planoSalvo, setPlanoSalvo]             = useState(false);
+  const [aprovNum, setAprovNum]                 = useState(0);
+  const [perdaNum, setPerdaNum]                 = useState(0);
+  const [totalPecasNum, setTotalPecasNum]       = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -98,9 +102,9 @@ function OtimizadorContent() {
       const prods = (data as Produto[]) || [];
       setProdutos(prods);
       if (prods.length > 0 && !pedidoParam) {
-        const primProd = prods[0].nome;
-        setPecas([{ l: 0, a: 0, qtd: 1, prod: primProd }]);
-        autoSetChapa(primProd);
+        const nome = prods[0].nome;
+        setPecas([{ l: 0, a: 0, qtd: 1, prod: nome }]);
+        autoSetChapa(nome);
       }
     });
   }, []);
@@ -117,11 +121,10 @@ function OtimizadorContent() {
         if (map.has(key)) map.get(key)!.qtd += item.quantidade;
         else map.set(key, { l: item.largura, a: item.altura, qtd: item.quantidade, prod: item.produto_nome });
       });
-      const pecasCarregadas = Array.from(map.values());
-      setPecas(pecasCarregadas);
+      const carregadas = Array.from(map.values());
+      setPecas(carregadas);
       setPedidoRef(pedidoParam);
-      // Autoseleciona chapa pelo primeiro produto do pedido
-      if (pecasCarregadas.length > 0) autoSetChapa(pecasCarregadas[0].prod);
+      if (carregadas.length > 0) autoSetChapa(carregadas[0].prod);
     });
   }, [pedidoParam]);
 
@@ -143,10 +146,8 @@ function OtimizadorContent() {
     const ctx = cv.getContext("2d");
     if (!ctx) return;
     const dpr = window.devicePixelRatio || 1;
-    const displayW = cv.offsetWidth;
-    const displayH = cv.offsetHeight;
-    cv.width = displayW * dpr;
-    cv.height = displayH * dpr;
+    const displayW = cv.offsetWidth, displayH = cv.offsetHeight;
+    cv.width = displayW * dpr; cv.height = displayH * dpr;
     ctx.scale(dpr, dpr);
     const CW = displayW - 14, CH = displayH - 14;
     const scale = Math.min(CW / r.W, CH / r.H);
@@ -195,59 +196,78 @@ function OtimizadorContent() {
         grupos.set(p.prod, grupo);
       }
     });
-
     if (grupos.size === 0) return;
 
     const results: ResultadoChapa[] = [];
-    let totalPlacedGlobal = 0;
-    let totalPecasGlobal = 0;
+    let totalPlaced = 0, totalPecas = 0;
 
     grupos.forEach((expandidas, prodNome) => {
-      // Determina dimensões da chapa para este produto
-      const chapaIdxProd = PRODUTO_CHAPA[prodNome];
-      const chapa = chapaIdxProd !== undefined ? CHAPAS_PADRAO[chapaIdxProd] : null;
+      const ci2 = PRODUTO_CHAPA[prodNome];
+      const chapa = ci2 !== undefined ? CHAPAS_PADRAO[ci2] : null;
       const W = (chapa ? chapa.w : chapaW) - bord * 2;
       const H = (chapa ? chapa.h : chapaH) - bord * 2;
       const CW = chapa ? chapa.w : chapaW;
       const CH = chapa ? chapa.h : chapaH;
 
       expandidas.sort((a, b) => b.l * b.a - a.l * a.a);
-      totalPecasGlobal += expandidas.length;
+      totalPecas += expandidas.length;
       let rem = [...expandidas], ci = 0;
       while (rem.length && ci < 15) {
         const r = guilhotina(W, H, rem, kerf);
         results.push({ W: CW, H: CH, prod: prodNome, ...r });
         const used = new Set(r.placed.map((p) => p.idx));
         rem = rem.filter((_, i) => !used.has(i));
-        totalPlacedGlobal += r.placed.length;
+        totalPlaced += r.placed.length;
         ci++;
         if (!r.placed.length) break;
       }
     });
 
-    setResultado(results);
-    setChapaIdx(0);
-    setRetalhosSalvos(false);
-    setErroRetalhos(null);
+    setResultado(results); setChapaIdx(0); setRetalhosSalvos(false); setErroRetalhos(null); setPlanoSalvo(false);
 
     let totA = 0, usedA = 0;
     results.forEach((r) => { totA += r.W * r.H; r.placed.forEach((p) => (usedA += p.l * p.a)); });
     const aprov = totA > 0 ? (usedA / totA) * 100 : 0;
+    const perda = 100 - aprov;
+    setAprovNum(aprov); setPerdaNum(perda); setTotalPecasNum(totalPecas);
     setStatAprov(aprov.toFixed(2) + "%");
-    setStatPerda((100 - aprov).toFixed(2) + "%");
+    setStatPerda(perda.toFixed(2) + "%");
     setStatChapas(String(results.length));
 
     const retPend: RetalhoGerado[] = [];
     results.forEach((r, ri) => r.free.filter((fr) => fr.l >= 200 && fr.a >= 200).forEach((fr) => {
       retPend.push({ ...fr, chapaIdx: ri, prod: r.prod, m2: parseFloat(((fr.l * fr.a) / 1e6).toFixed(4)) });
     }));
-    setRetalhosGerados(retPend);
-    setStatRetalhos(String(retPend.length));
-    setMostrarCardRet(retPend.length > 0);
+    setRetalhosGerados(retPend); setStatRetalhos(String(retPend.length)); setMostrarCardRet(retPend.length > 0);
 
-    const naoCouberam = totalPecasGlobal - totalPlacedGlobal;
+    const naoCouberam = totalPecas - totalPlaced;
     const gruposLabel = grupos.size > 1 ? ` · ${grupos.size} produtos separados` : "";
-    setMsg(`${totalPecasGlobal} peças · ${results.length} superfície(s)${gruposLabel} · ${naoCouberam > 0 ? naoCouberam + " não couberam" : "Todas alocadas!"}`);
+    setMsg(`${totalPecas} peças · ${results.length} superfície(s)${gruposLabel} · ${naoCouberam > 0 ? naoCouberam + " não couberam" : "Todas alocadas!"}`);
+  }
+
+  async function handleSalvarPlano() {
+    if (!resultado || !pedidoRef) return;
+    setSalvandoPlano(true);
+    const hoje = new Date().toISOString().split("T")[0];
+    const ok = await salvarOtimizacao({
+      pedido_id:        pedidoRef,
+      dt_otim:          hoje,
+      aproveitamento:   parseFloat(aprovNum.toFixed(2)),
+      perda:            parseFloat(perdaNum.toFixed(2)),
+      chapas_usadas:    resultado.length,
+      retalhos_gerados: retalhosGerados.length,
+      total_pecas:      totalPecasNum,
+      chapa_w:          chapaW,
+      chapa_h:          chapaH,
+      kerf,
+      borda:            bord,
+      pecas_json:       pecas,
+      chapas_json:      resultado.map(r => ({ W: r.W, H: r.H, prod: r.prod, placed: r.placed, free: r.free })),
+      usuario:          null,
+    });
+    setSalvandoPlano(false);
+    if (ok) setPlanoSalvo(true);
+    else alert("Erro ao salvar plano de corte.");
   }
 
   async function salvarRetalhos() {
@@ -270,10 +290,8 @@ function OtimizadorContent() {
   function updPeca(i: number, field: keyof Peca, value: string | number) {
     setPecas((p) => p.map((pc, idx) => {
       if (idx !== i) return pc;
-      const updated = { ...pc, [field]: value };
-      // Autoseleciona chapa ao mudar produto
       if (field === "prod") autoSetChapa(value as string);
-      return updated;
+      return { ...pc, [field]: value };
     }));
   }
   function aplicarChapaPadrao(e: React.ChangeEvent<HTMLSelectElement>) {
@@ -286,9 +304,7 @@ function OtimizadorContent() {
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Otimizador de Corte</div>
-        {pedidoRef && (
-          <a href={"/pedidos/" + pedidoRef} className="btn bg sm">← Voltar ao Pedido</a>
-        )}
+        {pedidoRef && <a href={"/pedidos/" + pedidoRef} className="btn bg sm">← Voltar ao Pedido</a>}
       </div>
 
       <div className="con">
@@ -310,9 +326,7 @@ function OtimizadorContent() {
                 <div className="fg">
                   <label className="fl">Tipo de Chapa</label>
                   <select className="fc" onChange={aplicarChapaPadrao}>
-                    {CHAPAS_PADRAO.map((c, i) => (
-                      <option key={i} value={i}>{c.label}</option>
-                    ))}
+                    {CHAPAS_PADRAO.map((c, i) => <option key={i} value={i}>{c.label}</option>)}
                   </select>
                 </div>
                 <div className="fg">
@@ -390,10 +404,8 @@ function OtimizadorContent() {
             <div className="card mb14">
               <div className="ct">
                 Resultado da Otimização
-                {resultado && retalhosSalvos && (
-                  <span style={{ fontSize: "11px", color: "var(--ok)", fontFamily: "'DM Mono', monospace" }}>
-                    ✓ Retalhos salvos
-                  </span>
+                {planoSalvo && (
+                  <span style={{ fontSize: "11px", color: "var(--ok)", fontFamily: "'DM Mono', monospace" }}>✓ Plano salvo</span>
                 )}
               </div>
 
@@ -430,6 +442,39 @@ function OtimizadorContent() {
                 <div className="cvli"><div className="cvld" style={{ background: "rgba(255,107,53,0.4)" }} />Perda borda</div>
                 <div className="cvli"><div className="cvld" style={{ background: "#1a1a2a" }} />Descarte</div>
               </div>
+
+              {/* Botão Salvar Plano */}
+              {resultado && pedidoRef && !planoSalvo && (
+                <div style={{ marginTop: "12px" }}>
+                  <button
+                    className="btn bp sm"
+                    style={{ width: "100%" }}
+                    onClick={handleSalvarPlano}
+                    disabled={salvandoPlano}
+                  >
+                    {salvandoPlano ? "Salvando..." : "✓ Salvar Plano de Corte"}
+                  </button>
+                </div>
+              )}
+
+              {resultado && pedidoRef && planoSalvo && (
+                <div style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
+                  <a
+                    href={"/pedidos/" + pedidoRef + "/plano"}
+                    className="btn bp sm"
+                    style={{ flex: 1, textAlign: "center", textDecoration: "none" }}
+                  >
+                    ◈ Ver Plano de Corte
+                  </a>
+                  <a
+                    href={"/pedidos/" + pedidoRef}
+                    className="btn bg sm"
+                    style={{ textDecoration: "none" }}
+                  >
+                    ← Voltar ao Pedido
+                  </a>
+                </div>
+              )}
             </div>
 
             {mostrarCardRet && (
