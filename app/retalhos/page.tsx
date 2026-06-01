@@ -32,14 +32,16 @@ export default function RetalhoPage() {
   }
 
   async function mudarStatus(id: string, status: StatusRetalho) {
+    // Atualiza localmente de imediato
+    setRetalhos(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+    // Persiste no banco em background
     await supabase.from("retalhos").update({ status }).eq("id", id);
-    load();
   }
 
   async function deletar(id: string) {
     if (!confirm(`Excluir retalho ${id} permanentemente?`)) return;
+    setRetalhos(prev => prev.filter(r => r.id !== id));
     await supabase.from("retalhos").delete().eq("id", id);
-    load();
   }
 
   const filtrados   = filtro ? retalhos.filter(r => r.status === filtro) : retalhos;
@@ -147,9 +149,9 @@ export default function RetalhoPage() {
                         <td><span className={CHIP[r.status as StatusRetalho] ?? "chip cgr"}>{r.status}</span></td>
                         <td>
                           <div style={{ display:"flex", gap:"4px", alignItems:"center" }}>
-                            {r.status !== "Disponível" && btnStatus("Disponível", "var(--ok)",   "rgba(16,185,129,.15)",  () => mudarStatus(r.id, "Disponível"))}
-                            {r.status !== "Reservado"  && btnStatus("Reservado",  "var(--warn)", "rgba(245,158,11,.15)",  () => mudarStatus(r.id, "Reservado"))}
-                            {r.status !== "Em uso"     && btnStatus("Em uso",     "var(--acc2)", "rgba(99,179,237,.15)",  () => mudarStatus(r.id, "Em uso"))}
+                            {r.status !== "Disponível" && btnStatus("Disponível", "var(--ok)",   "rgba(16,185,129,.15)", () => mudarStatus(r.id, "Disponível"))}
+                            {r.status !== "Reservado"  && btnStatus("Reservado",  "var(--warn)", "rgba(245,158,11,.15)", () => mudarStatus(r.id, "Reservado"))}
+                            {r.status !== "Em uso"     && btnStatus("Em uso",     "var(--acc2)", "rgba(99,179,237,.15)", () => mudarStatus(r.id, "Em uso"))}
                           </div>
                         </td>
                         <td style={{ width:"40px", textAlign:"center" }}>
