@@ -149,11 +149,7 @@ function OtimizadorContent() {
     supabase.from("produtos").select("*").eq("ativo", true).then(({ data }) => {
       const prods = (data as Produto[]) || [];
       setProdutos(prods);
-      if (prods.length > 0 && !pedidoParam) {
-        const nome = prods[0].nome;
-        setPecas([{ l: 0, a: 0, qtd: 1, prod: nome }]);
-        autoSetChapa(nome);
-      }
+      // Não pré-seleciona produto — usuário escolhe manualmente
     });
   }, []);
 
@@ -547,7 +543,7 @@ function OtimizadorContent() {
     router.push("/pedidos/" + pedidoRef);
   }
 
-  function addPeca() { setPecas(p => [...p, { l: 0, a: 0, qtd: 1, prod: produtos[0]?.nome || "", pedidoId: pedidoRef ?? undefined }]); }
+  function addPeca() { setPecas(p => [...p, { l: 0, a: 0, qtd: 1, prod: "", pedidoId: pedidoRef ?? undefined }]); }
   function remPeca(i: number) { setPecas(p => p.filter((_, idx) => idx !== i)); }
   function updPeca(i: number, field: keyof Peca, value: string | number) {
     setPecas(p => p.map((pc, idx) => {
@@ -739,6 +735,7 @@ function OtimizadorContent() {
                     <div className="fg" style={{ margin: 0 }}>
                       <label className="fl" style={{ fontSize: "9px" }}>Produto</label>
                       <select className="fc" style={{ fontSize: "11px" }} value={p.prod} onChange={(e) => updPeca(i, "prod", e.target.value)}>
+                        <option value="">Selecionar produto...</option>
                         {produtos.map((pr) => <option key={pr.id} value={pr.nome}>{pr.nome}</option>)}
                       </select>
                     </div>
