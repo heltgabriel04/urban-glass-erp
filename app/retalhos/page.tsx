@@ -13,10 +13,27 @@ const CHIP: Record<StatusRetalho, string> = {
   "Descartado": "chip cr",
 };
 
+function hoje() {
+  return new Date().toISOString().split("T")[0];
+}
+
+const FORM_VAZIO = {
+  produto_nome: "",
+  largura: "",
+  altura: "",
+  chapa_origem: "",
+  pedido_origem: "",
+  dt_gerado: hoje(),
+  status: "Disponível" as StatusRetalho,
+};
+
 export default function RetalhoPage() {
   const [retalhos, setRetalhos] = useState<Retalho[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState<StatusRetalho | "">("");
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(FORM_VAZIO);
+  const [salvando, setSalvando] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -32,9 +49,7 @@ export default function RetalhoPage() {
   }
 
   async function mudarStatus(id: string, status: StatusRetalho) {
-    // Atualiza localmente de imediato
     setRetalhos(prev => prev.map(r => r.id === id ? { ...r, status } : r));
-    // Persiste no banco em background
     await supabase.from("retalhos").update({ status }).eq("id", id);
   }
 
@@ -42,6 +57,42 @@ export default function RetalhoPage() {
     if (!confirm(`Excluir retalho ${id} permanentemente?`)) return;
     setRetalhos(prev => prev.filter(r => r.id !== id));
     await supabase.from("retalhos").delete().eq("id", id);
+  }
+
+  async function handleSalvar() {
+    if (!form.produto_nome.trim()) { alert("Informe o produto."); return; }
+    if (!form.largura || !form.altura) { alert("Informe as dimensões."); return; }
+
+    setSalvando(true);
+
+    const largura = parseInt(form.largura);
+    const altura  = parseInt(form.altura);
+    const m2      = parseFloat(((largura * altura) / 1_000_000).toFixed(4));
+
+    // Gera próximo ID
+    const ids = retalhos.map(r => parseInt(r.id.replace("R-", ""))).filter(n => !isNaN(n));
+    const nextNum = ids.length > 0 ? Math.max(...ids) + 1 : 1;
+    const id = "R-" + String(nextNum).padStart(3, "0");
+
+    const { data, error } = await supabase.from("retalhos").insert([{
+      id,
+      produto_nome:  form.produto_nome.trim(),
+      largura,
+      altura,
+      m2,
+      chapa_origem:  form.chapa_origem.trim() || null,
+      pedido_origem: form.pedido_origem.trim() || null,
+      dt_gerado:     form.dt_gerado || hoje(),
+      status:        form.status,
+    }]).select().single();
+
+    setSalvando(false);
+
+    if (error) { alert("Erro ao salvar: " + error.message); return; }
+
+    setRetalhos(prev => [data as Retalho, ...prev]);
+    setForm(FORM_VAZIO);
+    setShowForm(false);
   }
 
   const filtrados   = filtro ? retalhos.filter(r => r.status === filtro) : retalhos;
@@ -63,6 +114,17 @@ export default function RetalhoPage() {
       </button>
     );
   }
+
+  const inputStyle: React.CSSProperties = {
+    background:"var(--surf2)", border:"1px solid var(--b2)", borderRadius:"6px",
+    padding:"9px 12px", color:"var(--t1)", fontSize:"13px", fontFamily:"'Inter', sans-serif",
+    outline:"none", width:"100%", boxSizing:"border-box",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize:"11px", color:"var(--t3)", fontWeight:600,
+    textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:"4px", display:"block",
+  };
 
   return (
     <AppLayout>
@@ -91,9 +153,88 @@ export default function RetalhoPage() {
             </button>
           ))}
         </div>
+        <button className="btn bp sm" onClick={() => setShowForm(v => !v)}>
+          {showForm ? "✕ Cancelar" : "+ Novo Retalho"}
+        </button>
       </div>
 
       <div className="con">
+
+        {/* FORM */}
+        {showForm && (
+          <div style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"20px 24px", marginBottom:"20px" }}>
+            <div style={{ fontSize:"12px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em", marginBottom:"16px" }}>NOVO RETALHO</div>
+            <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr 1fr", gap:"12px", alignItems:"end" }}>
+              <div>
+                <label style={labelStyle}>Produto *</label>
+                <input
+                  style={inputStyle}
+                  placeholder="Ex: Chapa 4+4 Incolor"
+                  value={form.produto_nome}
+                  onChange={e => setForm(f => ({ ...f, produto_nome: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Largura (mm) *</label>
+                <input
+                  style={inputStyle}
+                  type="number"
+                  placeholder="1200"
+                  value={form.largura}
+                  onChange={e => setForm(f => ({ ...f, largura: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Altura (mm) *</label>
+                <input
+                  style={inputStyle}
+                  type="number"
+                  placeholder="800"
+                  value={form.altura}
+                  onChange={e => setForm(f => ({ ...f, altura: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Chapa Origem</label>
+                <input
+                  style={inputStyle}
+                  placeholder="CH-441-0012"
+                  value={form.chapa_origem}
+                  onChange={e => setForm(f => ({ ...f, chapa_origem: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Pedido Origem</label>
+                <input
+                  style={inputStyle}
+                  placeholder="P-001"
+                  value={form.pedido_origem}
+                  onChange={e => setForm(f => ({ ...f, pedido_origem: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Data</label>
+                <input
+                  style={inputStyle}
+                  type="date"
+                  value={form.dt_gerado}
+                  onChange={e => setForm(f => ({ ...f, dt_gerado: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div style={{ display:"flex", gap:"8px", marginTop:"14px", justifyContent:"flex-end" }}>
+              {form.largura && form.altura && (
+                <span style={{ fontSize:"12px", color:"var(--t3)", alignSelf:"center", fontFamily:"'DM Mono', monospace" }}>
+                  m² calculado: {((parseInt(form.largura||"0") * parseInt(form.altura||"0")) / 1_000_000).toFixed(4)}
+                </span>
+              )}
+              <button className="btn bg sm" onClick={() => { setShowForm(false); setForm(FORM_VAZIO); }}>Cancelar</button>
+              <button className="btn bp sm" onClick={handleSalvar} disabled={salvando}>
+                {salvando ? "Salvando..." : "Salvar Retalho"}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* CARDS */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:"12px", marginBottom:"20px" }}>
