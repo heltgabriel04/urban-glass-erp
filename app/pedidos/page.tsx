@@ -5,6 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { getPedidos, avancarStatusPedido, retrocederStatusPedido, deletarPedido } from "@/services/pedidos.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
+import { supabase } from "@/lib/supabase/client";
 import type { Pedido } from "@/types";
 
 const CHIP: Record<string, string> = {
@@ -20,16 +21,24 @@ const CHIP: Record<string, string> = {
 
 export default function PedidosPage() {
   const { toast } = useToast();
-  const [pedidos, setPedidos] = useState<Pedido[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filtro, setFiltro] = useState("");
+  const [pedidos, setPedidos]           = useState<Pedido[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [filtro, setFiltro]             = useState("");
+  const [comOtimizacao, setComOtimizacao] = useState<Set<string>>(new Set());
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     setLoading(true);
-    const data = await getPedidos();
+    const [data, otimRows] = await Promise.all([
+      getPedidos(),
+      supabase.from("historico_otimizador").select("pedido_id"),
+    ]);
     setPedidos(data);
+    const ids = new Set<string>(
+      (otimRows.data ?? []).map((r: any) => r.pedido_id as string)
+    );
+    setComOtimizacao(ids);
     setLoading(false);
   }
 
@@ -78,6 +87,20 @@ export default function PedidosPage() {
     );
   }
 
+  function btnLink(href: string, titulo: string, icone: string, corHover: string, bgHover: string) {
+    return (
+      <a
+        href={href}
+        title={titulo}
+        style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", textDecoration:"none", transition:"all 0.15s" }}
+        onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.background = bgHover; a.style.borderColor = corHover; a.style.color = corHover; }}
+        onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.background = "transparent"; a.style.borderColor = "var(--b2)"; a.style.color = "var(--t3)"; }}
+      >
+        {icone}
+      </a>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="tb">
@@ -98,11 +121,11 @@ export default function PedidosPage() {
         {/* CARDS */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:"12px", marginBottom:"20px" }}>
           {[
-            { label:"Total",       value: String(pedidos.length), color:"var(--t1)",   sub:"pedidos" },
-            { label:"Valor Total", value: formatBRL(totalValor),  color:"var(--acc)",  sub:"soma geral" },
-            { label:"Recebido",    value: formatBRL(totalRecebido), color:"var(--ok)", sub:"pagamentos" },
-            { label:"A Receber",   value: formatBRL(totalAberto), color:"var(--warn)", sub:"em aberto" },
-            { label:"Em Produção", value: String(emProducao),     color:"var(--acc2)", sub:"em andamento" },
+            { label:"Total",       value: String(pedidos.length),    color:"var(--t1)",   sub:"pedidos" },
+            { label:"Valor Total", value: formatBRL(totalValor),     color:"var(--acc)",  sub:"soma geral" },
+            { label:"Recebido",    value: formatBRL(totalRecebido),  color:"var(--ok)",   sub:"pagamentos" },
+            { label:"A Receber",   value: formatBRL(totalAberto),    color:"var(--warn)", sub:"em aberto" },
+            { label:"Em Produção", value: String(emProducao),        color:"var(--acc2)", sub:"em andamento" },
           ].map(card => (
             <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
               <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
@@ -141,11 +164,12 @@ export default function PedidosPage() {
                   </tr>
                 )}
                 {filtrados.map(p => {
-                  const aberto     = p.valor_total - p.valor_recebido;
-                  const quitado    = aberto <= 0;
-                  const finalizado = ["Entregue","Cancelado"].includes(p.status);
-                  const primeiro   = p.status === "Aguardando otimização";
+                  const aberto       = p.valor_total - p.valor_recebido;
+                  const quitado      = aberto <= 0;
+                  const finalizado   = ["Entregue","Cancelado"].includes(p.status);
+                  const primeiro     = p.status === "Aguardando otimização";
                   const podeRomaneio = ["Finalizado","Entregue"].includes(p.status);
+                  const temOtim      = comOtimizacao.has(p.id);
 
                   return (
                     <tr key={p.id}>
@@ -171,17 +195,50 @@ export default function PedidosPage() {
                       <td><span className={CHIP[p.status] ?? "chip cgr"}>{p.status}</span></td>
                       <td>
                         <div style={{ display:"flex", gap:"4px", alignItems:"center" }}>
-                          <a href={`/pedidos/${p.id}`}
-                            title="Ver pedido"
-                            style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", textDecoration:"none", transition:"all 0.15s" }}
-                            onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.borderColor = "var(--acc)"; a.style.color = "var(--acc)"; }}
-                            onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.borderColor = "var(--b2)"; a.style.color = "var(--t3)"; }}
-                          >
-                            ◉
-                          </a>
-                          {podeRomaneio && (<button title="Imprimir Romaneio de Saída" onClick={()=>{const i=document.createElement("iframe");i.style.cssText="position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:9999;background:white;";i.src="/pedidos/"+p.id+"?print=1";document.body.appendChild(i);setTimeout(()=>{document.body.removeChild(i);},4000);}} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",height:"28px",padding:"0 8px",borderRadius:"6px",background:"transparent",border:"1px solid var(--b2)",color:"var(--t3)",fontSize:"10px",fontWeight:700,fontFamily:"DM Mono, monospace",letterSpacing:"0.5px",cursor:"pointer",transition:"all 0.15s"}} onMouseEnter={e=>{const b=e.currentTarget;b.style.background="rgba(16,185,129,.15)";b.style.borderColor="var(--ok)";b.style.color="var(--ok)";}} onMouseLeave={e=>{const b=e.currentTarget;b.style.background="transparent";b.style.borderColor="var(--b2)";b.style.color="var(--t3)";}}>R</button>)}
-          {btnAcao("var(--warn)", "rgba(245,158,11,.15)", primeiro ? "Já está no início do fluxo" : "Retroceder etapa", "←", () => !primeiro && handleRetroceder(p.id, p.status))}
-                          {btnAcao("var(--ok)", "rgba(16,185,129,.15)", finalizado ? "Pedido encerrado" : "Avançar etapa", "→", () => !finalizado && handleAvancar(p.id, p.status))}
+
+                          {/* Ver pedido */}
+                          {btnLink(`/pedidos/${p.id}`, "Ver pedido", "◉", "var(--acc)", "rgba(99,102,241,.12)")}
+
+                          {/* Plano de corte — só se tiver otimização */}
+                          {temOtim && btnLink(
+                            `/pedidos/${p.id}/plano`,
+                            "Ver Plano de Corte",
+                            "◈",
+                            "var(--ok)",
+                            "rgba(16,185,129,.12)"
+                          )}
+
+                          {/* Etiquetas — só se tiver otimização */}
+                          {temOtim && btnLink(
+                            `/pedidos/${p.id}/etiquetas`,
+                            "Imprimir Etiquetas",
+                            "🏷",
+                            "var(--acc2)",
+                            "rgba(139,92,246,.12)"
+                          )}
+
+                          {/* Romaneio */}
+                          {podeRomaneio && (
+                            <button
+                              title="Imprimir Romaneio de Saída"
+                              onClick={() => {
+                                const i = document.createElement("iframe");
+                                i.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:9999;background:white;";
+                                i.src = "/pedidos/" + p.id + "?print=1";
+                                document.body.appendChild(i);
+                                setTimeout(() => { document.body.removeChild(i); }, 4000);
+                              }}
+                              style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", height:"28px", padding:"0 8px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"10px", fontWeight:700, fontFamily:"DM Mono, monospace", letterSpacing:"0.5px", cursor:"pointer", transition:"all 0.15s" }}
+                              onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(16,185,129,.15)"; b.style.borderColor = "var(--ok)"; b.style.color = "var(--ok)"; }}
+                              onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
+                            >
+                              R
+                            </button>
+                          )}
+
+                          {/* Retroceder / Avançar */}
+                          {btnAcao("var(--warn)", "rgba(245,158,11,.15)", primeiro ? "Já está no início do fluxo" : "Retroceder etapa", "←", () => !primeiro && handleRetroceder(p.id, p.status))}
+                          {btnAcao("var(--ok)",   "rgba(16,185,129,.15)", finalizado ? "Pedido encerrado" : "Avançar etapa",         "→", () => !finalizado && handleAvancar(p.id, p.status))}
                         </div>
                       </td>
                       <td style={{ width:"40px", textAlign:"center" }}>
