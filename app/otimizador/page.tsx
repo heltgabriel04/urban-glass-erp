@@ -466,6 +466,43 @@ function OtimizadorContent() {
       await supabase.from("retalhos").insert(rows);
     }
 
+    // 4. Baixar estoque — consumo por produto
+    const consumoPorProd = new Map<string, { chapas: number; m2: number }>();
+    resultado.forEach(r => {
+      const prev = consumoPorProd.get(r.prod) ?? { chapas: 0, m2: 0 };
+      const m2Chapa = (r.W * r.H) / 1e6;
+      consumoPorProd.set(r.prod, {
+        chapas: prev.chapas + 1,
+        m2:     parseFloat((prev.m2 + m2Chapa).toFixed(4)),
+      });
+    });
+
+    for (const [prodNome, consumo] of consumoPorProd.entries()) {
+      // Buscar item do estoque via join com produtos(nome)
+      const { data: estoqueItems } = await supabase
+        .from("estoque")
+        .select("id, chapas_saldo, m2_saldo, m2_consumido, produtos!inner(nome)")
+        .eq("produtos.nome", prodNome)
+        .limit(1);
+
+      if (!estoqueItems || estoqueItems.length === 0) continue;
+      const item = estoqueItems[0];
+
+      const novoSaldoChapas = Math.max(0, Number(item.chapas_saldo) - consumo.chapas);
+      const novoSaldoM2     = parseFloat(Math.max(0, Number(item.m2_saldo) - consumo.m2).toFixed(4));
+      const novoConsumidoM2 = parseFloat((Number(item.m2_consumido) + consumo.m2).toFixed(4));
+
+      await supabase
+        .from("estoque")
+        .update({
+          chapas_saldo:  novoSaldoChapas,
+          m2_saldo:      novoSaldoM2,
+          m2_consumido:  novoConsumidoM2,
+          updated_at:    new Date().toISOString(),
+        })
+        .eq("id", item.id);
+    }
+
     router.push("/pedidos/" + pedidoRef);
   }
 

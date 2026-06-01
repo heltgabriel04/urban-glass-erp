@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidos, avancarStatusPedido } from "@/services/pedidos.service";
+import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { formatBRL, formatDate, formatM2 } from "@/lib/formatters";
 import type { Pedido, StatusPedido } from "@/types";
+import { useToast } from "@/components/ui/toast";
 
 const COLUNAS: StatusPedido[] = [
   "Aguardando otimização",
@@ -23,20 +25,37 @@ const COR_COL: Record<string, string> = {
 };
 
 export default function ProducaoPage() {
-  const [pedidos, setPedidos] = useState<Pedido[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+  const [pedidos, setPedidos]           = useState<Pedido[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [comOtimizacao, setComOtimizacao] = useState<Set<string>>(new Set());
+  const [avancando, setAvancando]       = useState<string | null>(null);
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     setLoading(true);
-    const data = await getPedidos();
-    setPedidos(data.filter(p => COLUNAS.includes(p.status as StatusPedido)));
+    const { supabase } = await import("@/lib/supabase/client");
+    const [data, otimRows] = await Promise.all([
+      getPedidos(),
+      supabase.from("historico_otimizador").select("pedido_id"),
+    ]);
+    const filtrados = data.filter(p => COLUNAS.includes(p.status as StatusPedido));
+    setPedidos(filtrados);
+    const ids = new Set<string>((otimRows.data ?? []).map((r: any) => r.pedido_id as string));
+    setComOtimizacao(ids);
     setLoading(false);
   }
 
-  async function handleAvancar(id: string, status: StatusPedido) {
-    await avancarStatusPedido(id, status);
+  async function handleAvancar(p: Pedido) {
+    // Bloquear avanço de "Aguardando otimização" sem plano salvo
+    if (p.status === "Aguardando otimização" && !comOtimizacao.has(p.id)) {
+      toast("Gere a otimização de corte antes de avançar para produção.", "warn");
+      return;
+    }
+    setAvancando(p.id);
+    await avancarStatusPedido(p.id, p.status as StatusPedido);
+    setAvancando(null);
     load();
   }
 
@@ -45,6 +64,15 @@ export default function ProducaoPage() {
   const totalVal = pedidos.reduce((a, p) => a + Number(p.valor_total), 0);
   const finalizados = porCol("Finalizado").length;
 
+  // Pedidos com retirada nos próximos 3 dias
+  const hoje = new Date();
+  const em3dias = new Date(hoje); em3dias.setDate(hoje.getDate() + 3);
+  const retiradaProxima = pedidos.filter(p => {
+    if (!p.dt_retirada) return false;
+    const d = new Date(p.dt_retirada);
+    return d >= hoje && d <= em3dias && p.status !== "Finalizado";
+  });
+
   return (
     <AppLayout>
       <div className="tb">
@@ -52,22 +80,47 @@ export default function ProducaoPage() {
       </div>
 
       <div className="con">
-
         {/* CARDS */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:"12px", marginBottom:"20px" }}>
           {[
-            { label:"Em Produção",  value: String(pedidos.length),  color:"var(--t1)",   sub:"pedidos ativos" },
-            { label:"m² Total",     value: formatM2(totalM2),        color:"var(--acc2)", sub:"em processamento" },
-            { label:"Valor Total",  value: formatBRL(totalVal),      color:"var(--acc)",  sub:"em produção" },
-            { label:"Finalizados",  value: String(finalizados),      color:"var(--ok)",   sub:"aguardando entrega" },
+            { label:"Em Produção",        value: String(pedidos.length), color:"var(--t1)",   sub:"pedidos ativos" },
+            { label:"m² Total",           value: formatM2(totalM2),      color:"var(--acc2)", sub:"em processamento" },
+            { label:"Valor Total",        value: formatBRL(totalVal),    color:"var(--acc)",  sub:"em produção" },
+            { label:"Retirada em 3 dias", value: String(retiradaProxima.length), color: retiradaProxima.length > 0 ? "var(--warn)" : "var(--ok)", sub: retiradaProxima.length > 0 ? "⚠ atenção" : "✓ sem urgência" },
           ].map(card => (
-            <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
+            <div key={card.label} style={{ background:"var(--surf)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
               <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
               <div style={{ fontSize:"22px", fontWeight:700, color:card.color, fontFamily:"'DM Mono', monospace", lineHeight:1.2 }}>{card.value}</div>
               <div style={{ fontSize:"11px", color:"var(--t3)" }}>{card.sub}</div>
             </div>
           ))}
         </div>
+
+        {/* Alerta retirada próxima */}
+        {retiradaProxima.length > 0 && (
+          <div style={{ marginBottom:"16px", display:"flex", flexDirection:"column", gap:"6px" }}>
+            {retiradaProxima.map(p => {
+              const dias = Math.ceil((new Date(p.dt_retirada!).getTime() - hoje.getTime()) / 86400000);
+              return (
+                <div key={p.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 16px", background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)", borderRadius:"8px" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:"12px" }}>
+                    <span style={{ fontSize:"13px", fontWeight:700, color:"var(--warn)" }}>⚠</span>
+                    <div>
+                      <span style={{ fontSize:"13px", fontWeight:700, color:"var(--acc)", fontFamily:"'DM Mono', monospace" }}>{p.id}</span>
+                      <span style={{ fontSize:"12px", color:"var(--t2)", marginLeft:"10px" }}>{p.clientes?.nome}</span>
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:"16px" }}>
+                    <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono', monospace" }}>{p.status}</span>
+                    <span style={{ fontSize:"12px", fontWeight:700, color:"var(--warn)", fontFamily:"'DM Mono', monospace" }}>
+                      {dias === 0 ? "hoje" : dias === 1 ? "amanhã" : `em ${dias} dias`} · {formatDate(p.dt_retirada)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {loading ? (
           <div className="loading">Carregando produção...</div>
@@ -93,30 +146,54 @@ export default function ProducaoPage() {
                       </div>
                     )}
 
-                    {items.map(p => (
-                      <div key={p.id} className="kbcard">
-                        <div className="kbcid">{p.id}</div>
-                        <div className="kbcn">{p.clientes?.nome ?? "—"}</div>
-                        <div className="kbcm">
-                          <span>{formatM2(p.m2_total)}</span>
-                          <span style={{ color:"var(--acc)" }}>{formatBRL(p.valor_total)}</span>
-                        </div>
-                        {p.dt_retirada && (
-                          <div style={{ fontSize:"10px", color:"var(--t3)", marginTop:"4px", fontFamily:"'DM Mono', monospace" }}>
-                            Ret: {formatDate(p.dt_retirada)}
+                    {items.map(p => {
+                      const semOtim = p.status === "Aguardando otimização" && !comOtimizacao.has(p.id);
+                      const diasRet = p.dt_retirada
+                        ? Math.ceil((new Date(p.dt_retirada).getTime() - hoje.getTime()) / 86400000)
+                        : null;
+                      const retUrgente = diasRet !== null && diasRet <= 3 && !ultimo;
+
+                      return (
+                        <div key={p.id} className="kbcard" style={{ borderLeft: retUrgente ? "3px solid var(--warn)" : undefined }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                            <span className="kbcid">{p.id}</span>
+                            {retUrgente && (
+                              <span style={{ fontSize:"9px", color:"var(--warn)", fontFamily:"'DM Mono', monospace", fontWeight:700 }}>
+                                {diasRet === 0 ? "HOJE" : diasRet === 1 ? "AMANHÃ" : `${diasRet}d`}
+                              </span>
+                            )}
                           </div>
-                        )}
-                        {!ultimo && (
-                          <button
-                            className="btn bp xs"
-                            style={{ marginTop:"8px", width:"100%" }}
-                            onClick={() => handleAvancar(p.id, p.status as StatusPedido)}
-                          >
-                            Avançar →
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                          <div className="kbcn">{p.clientes?.nome ?? "—"}</div>
+                          <div className="kbcm">
+                            <span>{formatM2(p.m2_total)}</span>
+                            <span style={{ color:"var(--acc)" }}>{formatBRL(p.valor_total)}</span>
+                          </div>
+                          {p.dt_retirada && (
+                            <div style={{ fontSize:"10px", color: retUrgente ? "var(--warn)" : "var(--t3)", marginTop:"4px", fontFamily:"'DM Mono', monospace" }}>
+                              Ret: {formatDate(p.dt_retirada)}
+                            </div>
+                          )}
+                          {semOtim && (
+                            <a
+                              href={`/otimizador?pedido=${p.id}`}
+                              style={{ display:"block", marginTop:"8px", textAlign:"center", fontSize:"10px", color:"var(--warn)", background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)", borderRadius:"5px", padding:"4px 0", textDecoration:"none" }}
+                            >
+                              ◈ Otimizar primeiro
+                            </a>
+                          )}
+                          {!ultimo && !semOtim && (
+                            <button
+                              className="btn bp xs"
+                              style={{ marginTop:"8px", width:"100%" }}
+                              disabled={avancando === p.id}
+                              onClick={() => handleAvancar(p)}
+                            >
+                              {avancando === p.id ? "..." : "Avançar →"}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}
@@ -137,27 +214,41 @@ export default function ProducaoPage() {
                     {pedidos.length === 0 && (
                       <tr><td colSpan={7} style={{ textAlign:"center", color:"var(--t3)", padding:"24px" }}>Nenhum pedido em produção</td></tr>
                     )}
-                    {pedidos.map(p => (
-                      <tr key={p.id}>
-                        <td><span className="mono" style={{ color:"var(--acc)" }}>{p.id}</span></td>
-                        <td><strong>{p.clientes?.nome ?? "—"}</strong></td>
-                        <td>
-                          <span className="chip" style={{ background: COR_COL[p.status] + "22", color: COR_COL[p.status], border:`1px solid ${COR_COL[p.status]}44` }}>
-                            {p.status}
-                          </span>
-                        </td>
-                        <td className="mono">{formatM2(p.m2_total)}</td>
-                        <td className="mono">{formatBRL(p.valor_total)}</td>
-                        <td className="mono">{formatDate(p.dt_retirada)}</td>
-                        <td>
-                          {p.status !== "Finalizado" && (
-                            <button className="btn bp xs" onClick={() => handleAvancar(p.id, p.status as StatusPedido)}>
-                              Avançar →
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {pedidos.map(p => {
+                      const semOtim  = p.status === "Aguardando otimização" && !comOtimizacao.has(p.id);
+                      const diasRet  = p.dt_retirada ? Math.ceil((new Date(p.dt_retirada).getTime() - hoje.getTime()) / 86400000) : null;
+                      const urgente  = diasRet !== null && diasRet <= 3;
+                      return (
+                        <tr key={p.id}>
+                          <td><span className="mono" style={{ color:"var(--acc)" }}>{p.id}</span></td>
+                          <td><strong>{p.clientes?.nome ?? "—"}</strong></td>
+                          <td>
+                            <span className="chip" style={{ background: COR_COL[p.status] + "22", color: COR_COL[p.status], border:`1px solid ${COR_COL[p.status]}44` }}>
+                              {p.status}
+                            </span>
+                          </td>
+                          <td className="mono">{formatM2(p.m2_total)}</td>
+                          <td className="mono">{formatBRL(p.valor_total)}</td>
+                          <td className="mono" style={{ color: urgente ? "var(--warn)" : "var(--t2)", fontWeight: urgente ? 700 : 400 }}>
+                            {formatDate(p.dt_retirada)}
+                            {urgente && <span style={{ marginLeft:"6px", fontSize:"10px" }}>⚠</span>}
+                          </td>
+                          <td>
+                            {p.status !== "Finalizado" && (
+                              semOtim ? (
+                                <a href={`/otimizador?pedido=${p.id}`} className="btn bg xs" style={{ textDecoration:"none", color:"var(--warn)", borderColor:"rgba(245,158,11,.4)" }}>
+                                  ◈ Otimizar
+                                </a>
+                              ) : (
+                                <button className="btn bp xs" disabled={avancando === p.id} onClick={() => handleAvancar(p)}>
+                                  {avancando === p.id ? "..." : "Avançar →"}
+                                </button>
+                              )
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
