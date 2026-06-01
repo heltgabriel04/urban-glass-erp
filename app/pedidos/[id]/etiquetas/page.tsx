@@ -125,8 +125,10 @@ export default function EtiquetasPage() {
 
         chapas.forEach((chapa, ci) => {
           chapa.placed.forEach((peca, pi) => {
+            // QR aponta para o pedido dono da peça (pode ser pedido agrupado)
+            const pidDaPeca = (peca as any).pedidoId ?? id;
             ets.push({
-              pedidoId:          id,
+              pedidoId:          pidDaPeca,
               clienteNome:       ped?.clientes?.nome ?? "—",
               material:          peca.prod || chapa.prod,
               largura:           peca.l,
@@ -137,7 +139,7 @@ export default function EtiquetasPage() {
               totalPecasNaChapa: chapa.placed.length,
               totalPecasGeral:   totalGeral,
               loteCorte:         lote,
-              qrUrl:             `https://urbanglasserp.vercel.app/pedidos/${id}`,
+              qrUrl:             `https://urbanglasserp.vercel.app/pedidos/${pidDaPeca}`,
             });
           });
         });

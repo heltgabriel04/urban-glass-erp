@@ -123,7 +123,7 @@ export default function ProdutosPage() {
                     <td>
                       <div style={{ display:"flex", gap:"4px" }}>
                         <button className="btn bg xs" onClick={() => abrirEdit(p)}>Editar</button>
-                        <button className="btn bg xs" onClick={() => duplicar(p)}>Dup.</button>
+                        <button className="btn bg xs" onClick={() => duplicar(p)}>Duplicar</button>
                       </div>
                     </td>
                     {/* Lixeira — padrão do sistema */}

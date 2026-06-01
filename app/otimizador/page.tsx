@@ -410,8 +410,24 @@ function OtimizadorContent() {
     const hoje = new Date().toISOString().split("T")[0];
     const todosPedidos = [pedidoRef, ...Array.from(pedidosSelecionados)];
 
-    // 1. Salvar otimização para cada pedido envolvido
+    // chapas_json compartilhado (layout completo de todas as chapas)
+    const chapasJson = resultado.map(r => ({
+      W: r.W, H: r.H, prod: r.prod, placed: r.placed, free: r.free,
+    }));
+
+    // 1. Salvar otimização para cada pedido — pecas_json filtradas por pedido
     for (const pid of todosPedidos) {
+      // peças que pertencem a este pedido específico
+      const pecasDoPedido = pid === pedidoRef
+        ? pecas.filter(p => !p.pedidoId || p.pedidoId === pedidoRef)
+        : (pedidosSugeridos.find(s => s.id === pid)?.itens ?? []);
+
+      // peças colocadas nas chapas que pertencem a este pedido
+      const chapasComPecasDoPedido = chapasJson.map(chapa => ({
+        ...chapa,
+        placed: chapa.placed.filter((p: any) => (p.pedidoId ?? pedidoRef) === pid),
+      }));
+
       await salvarOtimizacao({
         pedido_id:        pid,
         dt_otim:          hoje,
@@ -419,13 +435,13 @@ function OtimizadorContent() {
         perda:            parseFloat(perdaNum.toFixed(2)),
         chapas_usadas:    resultado.length,
         retalhos_gerados: retalhosGerados.length,
-        total_pecas:      totalPecasNum,
+        total_pecas:      pecasDoPedido.reduce((a, p) => a + (p.qtd || 1), 0),
         chapa_w:          chapaW,
         chapa_h:          chapaH,
         kerf,
         borda:            bord,
-        pecas_json:       pecas,
-        chapas_json:      resultado.map(r => ({ W: r.W, H: r.H, prod: r.prod, placed: r.placed, free: r.free })),
+        pecas_json:       pecasDoPedido,
+        chapas_json:      chapasComPecasDoPedido,
         usuario:          null,
       });
     }
