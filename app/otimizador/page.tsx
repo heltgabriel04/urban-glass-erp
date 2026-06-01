@@ -21,9 +21,9 @@ function guilhotina(W: number, H: number, pecas: Peca[], kerf: number): { placed
   pecas.forEach((peca, idx) => {
     if (!free.length) return;
     let best = Infinity, bR: EspacoLivre | null = null, bI = -1, rot = false;
-    free.forEach((fr, fi) => {
-      if (peca.l <= fr.l && peca.a <= fr.a) { const s = Math.min(fr.l - peca.l, fr.a - peca.a); if (s < best) { best = s; bR = fr; bI = fi; rot = false; } }
-      if (peca.a <= fr.l && peca.l <= fr.a) { const s = Math.min(fr.l - peca.a, fr.a - peca.l); if (s < best) { best = s; bR = fr; bI = fi; rot = true; } }
+    free.forEach((fr) => {
+      if (peca.l <= fr.l && peca.a <= fr.a) { const s = Math.min(fr.l - peca.l, fr.a - peca.a); if (s < best) { best = s; bR = fr; bI = free.indexOf(fr); rot = false; } }
+      if (peca.a <= fr.l && peca.l <= fr.a) { const s = Math.min(fr.l - peca.a, fr.a - peca.l); if (s < best) { best = s; bR = fr; bI = free.indexOf(fr); rot = true; } }
     });
     if (!bR || bI === -1) return;
     const fr = bR as EspacoLivre;
@@ -54,43 +54,50 @@ const CHAPAS_PADRAO = [
 ];
 
 const PRODUTO_CHAPA: Record<string, number> = {
-  "Vidro Laminado 4+4":        0,
-  "Vidro Laminado 3+3":        1,
-  "Verde Laminado 4+4":        2,
-  "Reflecta 4+4 Prata":        3,
-  "Reflecta 4+4 Silver Grey":  4,
-  "Reflecta 4+4 Champagne":    5,
-  "Laminado 4+4 Fumê":         6,
-  "Vidro Monolítico 4mm":      10,
+  "Vidro Laminado 4+4":       0,
+  "Vidro Laminado 3+3":       1,
+  "Verde Laminado 4+4":       2,
+  "Reflecta 4+4 Prata":       3,
+  "Reflecta 4+4 Silver Grey": 4,
+  "Reflecta 4+4 Champagne":   5,
+  "Laminado 4+4 Fumê":        6,
+  "Vidro Monolítico 4mm":     10,
 };
 
-const COLS_PECA = ["#1f4d32","#173d26","#255c3b","#1a4530","#204228","#2a5c3f","#1e3a2a","#18402e"];
+// Paleta de peças vibrante — sem tons de verde
+const COLS_PECA = [
+  "#1e40af","#7c3aed","#be185d","#b45309",
+  "#0e7490","#065f46","#7f1d1d","#1d4ed8",
+  "#4c1d95","#9d174d","#92400e","#164e63",
+];
+const COLS_STROKE = [
+  "#60a5fa","#a78bfa","#f472b6","#fbbf24",
+  "#22d3ee","#34d399","#fca5a5","#93c5fd",
+  "#c4b5fd","#f9a8d4","#fde68a","#67e8f9",
+];
 
 function OtimizadorContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pedidoParam = searchParams.get("pedido");
 
-  const [produtos, setProdutos]         = useState<Produto[]>([]);
-  const [pecas, setPecas]               = useState<Peca[]>([{ l: 0, a: 0, qtd: 1, prod: "" }]);
-  const [chapaW, setChapaW]             = useState(3300);
-  const [chapaH, setChapaH]             = useState(2250);
-  const [kerf, setKerf]                 = useState(4);
-  const [bord, setBord]                 = useState(3);
-  const [resultado, setResultado]       = useState<ResultadoChapa[] | null>(null);
-  const [chapaIdx, setChapaIdx]         = useState(0);
-  const [pedidoRef, setPedidoRef]       = useState<string | null>(null);
-  const [carregando, setCarregando]     = useState(false);
-  const [statAprov, setStatAprov]       = useState("—");
-  const [statPerda, setStatPerda]       = useState("—");
-  const [statChapas, setStatChapas]     = useState("—");
-  const [statRetalhos, setStatRetalhos] = useState("—");
-  const [msg, setMsg]                   = useState("");
-  const [retalhosGerados, setRetalhosGerados] = useState<RetalhoGerado[]>([]);
-  const [salvando, setSalvando]         = useState(false);
-  const [aprovNum, setAprovNum]         = useState(0);
-  const [perdaNum, setPerdaNum]         = useState(0);
+  const [produtos, setProdutos]           = useState<Produto[]>([]);
+  const [pecas, setPecas]                 = useState<Peca[]>([{ l: 0, a: 0, qtd: 1, prod: "" }]);
+  const [chapaW, setChapaW]               = useState(3300);
+  const [chapaH, setChapaH]               = useState(2250);
+  const [kerf, setKerf]                   = useState(4);
+  const [bord, setBord]                   = useState(3);
+  const [resultado, setResultado]         = useState<ResultadoChapa[] | null>(null);
+  const [chapaIdx, setChapaIdx]           = useState(0);
+  const [pedidoRef, setPedidoRef]         = useState<string | null>(null);
+  const [carregando, setCarregando]       = useState(false);
+  const [aprovNum, setAprovNum]           = useState(0);
+  const [perdaNum, setPerdaNum]           = useState(0);
   const [totalPecasNum, setTotalPecasNum] = useState(0);
+  const [statChapas, setStatChapas]       = useState(0);
+  const [msg, setMsg]                     = useState("");
+  const [retalhosGerados, setRetalhosGerados] = useState<RetalhoGerado[]>([]);
+  const [salvando, setSalvando]           = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -145,42 +152,104 @@ function OtimizadorContent() {
     const displayW = cv.offsetWidth, displayH = cv.offsetHeight;
     cv.width = displayW * dpr; cv.height = displayH * dpr;
     ctx.scale(dpr, dpr);
-    const CW = displayW - 14, CH = displayH - 14;
+    const CW = displayW - 16, CH = displayH - 16;
     const scale = Math.min(CW / r.W, CH / r.H);
     const dW = r.W * scale, dH = r.H * scale;
-    const ox = (CW - dW) / 2 + 7, oy = (CH - dH) / 2 + 7;
-    ctx.clearRect(0, 0, displayW, displayH);
-    ctx.fillStyle = "#0a1710"; ctx.fillRect(ox, oy, dW, dH);
-    ctx.strokeStyle = "#1a4028"; ctx.lineWidth = 1.5; ctx.strokeRect(ox, oy, dW, dH);
+    const ox = (CW - dW) / 2 + 8, oy = (CH - dH) / 2 + 8;
+
+    // Fundo escuro neutro — nem tão verde
+    ctx.fillStyle = "#0d1117";
+    ctx.fillRect(0, 0, displayW, displayH);
+
+    // Chapa: cinza escuro com leve azul
+    ctx.fillStyle = "#1a1f2e";
+    ctx.fillRect(ox, oy, dW, dH);
+    ctx.strokeStyle = "#2d3550";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(ox, oy, dW, dH);
+
+    // Borda lapidação em laranja
     if (bordMm > 0) {
       const bs = bordMm * scale;
-      ctx.fillStyle = "rgba(255,107,53,0.12)";
-      ctx.fillRect(ox, oy, dW, bs); ctx.fillRect(ox, oy + dH - bs, dW, bs);
-      ctx.fillRect(ox, oy, bs, dH); ctx.fillRect(ox + dW - bs, oy, bs, dH);
-      ctx.setLineDash([3, 3]); ctx.strokeStyle = "rgba(255,107,53,0.35)"; ctx.lineWidth = 0.6;
-      ctx.strokeRect(ox + bs, oy + bs, dW - bs * 2, dH - bs * 2); ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(255,107,53,0.18)";
+      ctx.fillRect(ox, oy, dW, bs);
+      ctx.fillRect(ox, oy + dH - bs, dW, bs);
+      ctx.fillRect(ox, oy, bs, dH);
+      ctx.fillRect(ox + dW - bs, oy, bs, dH);
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = "rgba(255,107,53,0.55)";
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(ox + bs, oy + bs, dW - bs * 2, dH - bs * 2);
+      ctx.setLineDash([]);
     }
-    ctx.fillStyle = "#444e68"; ctx.font = "9px 'DM Mono', monospace";
-    ctx.fillText("CHAPA " + (idx + 1) + " · " + r.W + "×" + r.H + "mm" + (r.prod ? " · " + r.prod : ""), ox, oy - 3);
+
+    // Label da chapa
+    ctx.fillStyle = "#4a5568";
+    ctx.font = "bold 9px 'DM Mono', monospace";
+    ctx.fillText("CHAPA " + (idx + 1) + "  ·  " + r.W + " × " + r.H + " mm" + (r.prod ? "  ·  " + r.prod : ""), ox + 4, oy - 4);
+
+    // Peças com paleta colorida distinta
     r.placed.forEach((p, i) => {
-      const px = ox + (p.x + bordMm) * scale, py = oy + (p.y + bordMm) * scale;
-      const pw = p.l * scale, ph = p.a * scale;
-      ctx.fillStyle = COLS_PECA[i % COLS_PECA.length]; ctx.fillRect(px, py, pw, ph);
-      ctx.strokeStyle = "rgba(61,255,160,.45)"; ctx.lineWidth = 0.7; ctx.strokeRect(px, py, pw, ph);
-      if (pw > 35 && ph > 18) {
-        ctx.fillStyle = "rgba(200,255,230,.88)";
-        ctx.font = `${Math.max(7, Math.min(10, pw / 8))}px 'DM Sans', sans-serif`;
-        ctx.fillText(p.l + "×" + p.a, px + 3, py + 11);
-        if (ph > 23 && pw > 55) { ctx.font = "7px 'DM Mono', monospace"; ctx.fillStyle = "rgba(150,220,180,.7)"; ctx.fillText(((p.l * p.a) / 1e6).toFixed(3) + "m²", px + 3, py + 20); }
+      const px = ox + (p.x + bordMm) * scale;
+      const py = oy + (p.y + bordMm) * scale;
+      const pw = p.l * scale;
+      const ph = p.a * scale;
+      const fill   = COLS_PECA[i % COLS_PECA.length];
+      const stroke = COLS_STROKE[i % COLS_STROKE.length];
+
+      ctx.fillStyle = fill;
+      ctx.fillRect(px, py, pw, ph);
+
+      // Gradiente sutil de brilho no topo
+      const grad = ctx.createLinearGradient(px, py, px, py + ph * 0.4);
+      grad.addColorStop(0, "rgba(255,255,255,0.12)");
+      grad.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(px, py, pw, ph * 0.4);
+
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(px, py, pw, ph);
+
+      if (pw > 30 && ph > 18) {
+        ctx.fillStyle = "rgba(255,255,255,0.92)";
+        const fs = Math.max(7, Math.min(11, pw / 7));
+        ctx.font = `bold ${fs}px 'DM Mono', monospace`;
+        ctx.fillText(p.l + "×" + p.a, px + 4, py + fs + 3);
+        if (ph > 28 && pw > 50) {
+          ctx.fillStyle = "rgba(255,255,255,0.55)";
+          ctx.font = `7px 'DM Mono', monospace`;
+          ctx.fillText(((p.l * p.a) / 1e6).toFixed(3) + " m²", px + 4, py + fs + 14);
+        }
       }
     });
+
+    // Retalhos aproveitáveis em azul ciano
     r.free.forEach((fr) => {
       const isLg = fr.l >= 200 && fr.a >= 200;
-      const fx = ox + (fr.x + bordMm) * scale, fy = oy + (fr.y + bordMm) * scale;
-      const fw = fr.l * scale, fh = fr.a * scale;
-      ctx.fillStyle = isLg ? "rgba(0,200,255,.05)" : "rgba(255,255,255,.015)"; ctx.fillRect(fx, fy, fw, fh);
-      if (isLg && fw > 18 && fh > 12) { ctx.fillStyle = "rgba(0,200,255,.4)"; ctx.font = "9px 'DM Mono', monospace"; ctx.fillText("↺", fx + 3, fy + 10); }
+      if (!isLg) return;
+      const fx = ox + (fr.x + bordMm) * scale;
+      const fy = oy + (fr.y + bordMm) * scale;
+      const fw = fr.l * scale;
+      const fh = fr.a * scale;
+      ctx.fillStyle = "rgba(0,200,255,0.07)";
+      ctx.fillRect(fx, fy, fw, fh);
+      ctx.strokeStyle = "rgba(0,200,255,0.35)";
+      ctx.setLineDash([3, 3]);
+      ctx.lineWidth = 0.7;
+      ctx.strokeRect(fx, fy, fw, fh);
+      ctx.setLineDash([]);
+      if (fw > 20 && fh > 14) {
+        ctx.fillStyle = "rgba(0,200,255,0.7)";
+        ctx.font = "bold 9px 'DM Mono', monospace";
+        ctx.fillText("↺ ret", fx + 3, fy + 11);
+      }
     });
+
+    // Borda final da chapa
+    ctx.strokeStyle = "#3d4a6a";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(ox, oy, dW, dH);
   }
 
   function rodar() {
@@ -204,7 +273,6 @@ function OtimizadorContent() {
       const H = (chapa ? chapa.h : chapaH) - bord * 2;
       const CW = chapa ? chapa.w : chapaW;
       const CH = chapa ? chapa.h : chapaH;
-
       expandidas.sort((a, b) => b.l * b.a - a.l * a.a);
       totalPecas += expandidas.length;
       let rem = [...expandidas], ci = 0;
@@ -226,31 +294,27 @@ function OtimizadorContent() {
     results.forEach((r) => { totA += r.W * r.H; r.placed.forEach((p) => (usedA += p.l * p.a)); });
     const aprov = totA > 0 ? (usedA / totA) * 100 : 0;
     const perda = 100 - aprov;
-    setAprovNum(aprov); setPerdaNum(perda); setTotalPecasNum(totalPecas);
-    setStatAprov(aprov.toFixed(2) + "%");
-    setStatPerda(perda.toFixed(2) + "%");
-    setStatChapas(String(results.length));
+    setAprovNum(aprov);
+    setPerdaNum(perda);
+    setTotalPecasNum(totalPecas);
+    setStatChapas(results.length);
 
     const retPend: RetalhoGerado[] = [];
     results.forEach((r, ri) => r.free.filter((fr) => fr.l >= 200 && fr.a >= 200).forEach((fr) => {
       retPend.push({ ...fr, chapaIdx: ri, prod: r.prod, m2: parseFloat(((fr.l * fr.a) / 1e6).toFixed(4)) });
     }));
     setRetalhosGerados(retPend);
-    setStatRetalhos(String(retPend.length));
 
     const naoCouberam = totalPecas - totalPlaced;
-    const gruposLabel = grupos.size > 1 ? ` · ${grupos.size} produtos separados` : "";
-    setMsg(`${totalPecas} peças · ${results.length} superfície(s)${gruposLabel} · ${naoCouberam > 0 ? naoCouberam + " não couberam" : "Todas alocadas!"}`);
+    const gruposLabel = grupos.size > 1 ? ` · ${grupos.size} produtos` : "";
+    setMsg(`${totalPecas} peças · ${results.length} chapa(s)${gruposLabel} · ${naoCouberam > 0 ? naoCouberam + " não couberam" : "✓ Todas alocadas"}`);
   }
 
-  // Salva plano + retalhos juntos e redireciona para o pedido
   async function handleSalvar() {
     if (!resultado || !pedidoRef) return;
     setSalvando(true);
-
     const hoje = new Date().toISOString().split("T")[0];
 
-    // 1. Salvar otimização
     const ok = await salvarOtimizacao({
       pedido_id:        pedidoRef,
       dt_otim:          hoje,
@@ -268,13 +332,8 @@ function OtimizadorContent() {
       usuario:          null,
     });
 
-    if (!ok) {
-      setSalvando(false);
-      alert("Erro ao salvar plano de corte.");
-      return;
-    }
+    if (!ok) { setSalvando(false); alert("Erro ao salvar plano de corte."); return; }
 
-    // 2. Salvar retalhos automaticamente (se houver)
     if (retalhosGerados.length > 0) {
       const rows = retalhosGerados.map((fr) => ({
         produto_nome:  fr.prod,
@@ -287,10 +346,8 @@ function OtimizadorContent() {
         dt_gerado:     hoje,
       }));
       await supabase.from("retalhos").insert(rows);
-      // Erro de retalhos não bloqueia — plano já foi salvo
     }
 
-    // 3. Redirecionar para o pedido
     router.push("/pedidos/" + pedidoRef);
   }
 
@@ -309,22 +366,27 @@ function OtimizadorContent() {
     setChapaW(CHAPAS_PADRAO[v].w); setChapaH(CHAPAS_PADRAO[v].h);
   }
 
+  // Cards de stat com cores e ícones distintos
+  const stats = [
+    { label: "Aproveitamento", value: resultado ? aprovNum.toFixed(1) + "%" : "—", color: "#3dffa0", bg: "rgba(61,255,160,.08)",  border: "rgba(61,255,160,.2)",  icon: "◈" },
+    { label: "Perda",          value: resultado ? perdaNum.toFixed(1) + "%" : "—", color: "#f43f5e", bg: "rgba(244,63,94,.08)",   border: "rgba(244,63,94,.2)",   icon: "▽" },
+    { label: "Chapas",         value: resultado ? String(statChapas)         : "—", color: "#00c8ff", bg: "rgba(0,200,255,.08)",   border: "rgba(0,200,255,.2)",   icon: "▦" },
+    { label: "Retalhos",       value: resultado ? String(retalhosGerados.length) : "—", color: "#f59e0b", bg: "rgba(245,158,11,.08)", border: "rgba(245,158,11,.2)", icon: "↺" },
+  ];
+
   return (
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Otimizador de Corte</div>
+        {pedidoRef && (
+          <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>
+            Pedido <strong style={{ color: "var(--acc)" }}>{pedidoRef}</strong>
+          </span>
+        )}
         {pedidoRef && <a href={"/pedidos/" + pedidoRef} className="btn bg sm">← Voltar ao Pedido</a>}
       </div>
 
       <div className="con">
-        {pedidoRef && (
-          <div style={{ marginBottom: "14px" }}>
-            <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>
-              Otimizando pedido {pedidoRef}
-            </span>
-          </div>
-        )}
-
         <div className="g2" style={{ alignItems: "start", gap: "14px" }}>
 
           {/* ── COL ESQUERDA ── */}
@@ -339,7 +401,7 @@ function OtimizadorContent() {
                   </select>
                 </div>
                 <div className="fg">
-                  <label className="fl">Folga do Corte / Diamante (mm)</label>
+                  <label className="fl">Folga / Diamante (mm)</label>
                   <input type="number" className="fc" value={kerf} min={0} max={20} onChange={(e) => setKerf(Number(e.target.value))} />
                 </div>
               </div>
@@ -355,7 +417,7 @@ function OtimizadorContent() {
               </div>
               <div className="fr">
                 <div className="fg">
-                  <label className="fl">Perda de Borda Lapidação (mm)</label>
+                  <label className="fl">Borda Lapidação (mm)</label>
                   <input type="number" className="fc" value={bord} min={0} max={30} onChange={(e) => setBord(Number(e.target.value))} />
                 </div>
               </div>
@@ -413,64 +475,99 @@ function OtimizadorContent() {
             <div className="card mb14">
               <div className="ct">Resultado da Otimização</div>
 
-              <div className="rs">
-                <div className="rsi"><div className="rsv" style={{ color: "var(--acc)" }}>{statAprov}</div><div className="rsl">Aproveitamento</div></div>
-                <div className="rsi"><div className="rsv" style={{ color: "var(--err)" }}>{statPerda}</div><div className="rsl">Perda</div></div>
-                <div className="rsi"><div className="rsv">{statChapas}</div><div className="rsl">Chapas</div></div>
-                <div className="rsi"><div className="rsv" style={{ color: "var(--acc2)" }}>{statRetalhos}</div><div className="rsl">Retalhos</div></div>
+              {/* STATS — 4 cards coloridos distintos */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "8px", marginBottom: "14px" }}>
+                {stats.map((s) => (
+                  <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: "10px", padding: "12px 10px", textAlign: "center" }}>
+                    <div style={{ fontSize: "18px", color: s.color, marginBottom: "2px" }}>{s.icon}</div>
+                    <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: "20px", color: s.color, lineHeight: 1.1 }}>{s.value}</div>
+                    <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono', monospace", marginTop: "4px" }}>{s.label}</div>
+                  </div>
+                ))}
               </div>
 
-              {msg && <div style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", marginBottom: "10px" }}>{msg}</div>}
+              {msg && (
+                <div style={{ fontSize: "11px", color: "var(--t2)", fontFamily: "'DM Mono', monospace", marginBottom: "10px", padding: "7px 10px", background: "var(--surf2)", borderRadius: "6px", border: "1px solid var(--b1)" }}>
+                  {msg}
+                </div>
+              )}
 
+              {/* Seletor de chapas */}
               {resultado && resultado.length > 1 && (
                 <div style={{ display: "flex", gap: "5px", flexWrap: "wrap", marginBottom: "9px" }}>
                   {resultado.map((r, i) => (
                     <button key={i} className="btn bg sm" onClick={() => setChapaIdx(i)}
-                      style={chapaIdx === i ? { borderColor: "var(--acc)", color: "var(--acc)" } : {}}>
+                      style={chapaIdx === i ? { borderColor: "var(--acc2)", color: "var(--acc2)", background: "rgba(0,200,255,.08)" } : {}}>
                       Chapa {i + 1}
-                      {r.prod && <span style={{ fontSize:"9px", opacity:0.6, marginLeft:"4px" }}>· {r.prod.split(" ").slice(0,2).join(" ")}</span>}
+                      {r.prod && <span style={{ fontSize: "9px", opacity: 0.6, marginLeft: "4px" }}>· {r.prod.split(" ").slice(0, 2).join(" ")}</span>}
                     </button>
                   ))}
                 </div>
               )}
 
-              <div className="cvw">
-                <div className="cvi">
-                  {!resultado ? "Configure peças e calcule" : "Chapa " + (chapaIdx + 1) + " · " + (resultado[chapaIdx]?.placed.length || 0) + " peças · " + (resultado[chapaIdx]?.prod || "")}
+              {/* Canvas */}
+              <div style={{ background: "#0d1117", border: "1px solid #2d3550", borderRadius: "10px", padding: "8px", position: "relative" }}>
+                <div style={{ position: "absolute", top: "10px", left: "10px", fontSize: "10px", fontFamily: "'DM Mono', monospace", color: "#4a5568", pointerEvents: "none", zIndex: 1 }}>
+                  {!resultado ? "Configure as peças e clique em Calcular" : "Chapa " + (chapaIdx + 1) + " · " + (resultado[chapaIdx]?.placed.length || 0) + " peças"}
                 </div>
-                <canvas ref={canvasRef} width={554} height={365} style={{ display: "block", width: "100%", height: "365px" }} />
+                <canvas ref={canvasRef} width={554} height={370} style={{ display: "block", width: "100%", height: "370px" }} />
               </div>
 
-              <div className="cvleg">
-                <div className="cvli"><div className="cvld" style={{ background: "#1f4d32" }} />Peça cortada</div>
-                <div className="cvli"><div className="cvld" style={{ background: "rgba(255,107,53,0.4)" }} />Perda borda</div>
-                <div className="cvli"><div className="cvld" style={{ background: "#1a1a2a" }} />Descarte</div>
-              </div>
-
-              {/* Retalhos preview — só leitura, sem botão de salvar */}
-              {resultado && retalhosGerados.length > 0 && (
-                <div style={{ marginTop: "12px", padding: "10px 12px", background: "rgba(16,185,129,.06)", border: "1px solid rgba(16,185,129,.2)", borderRadius: "8px" }}>
-                  <div style={{ fontSize: "10px", color: "var(--ok)", fontWeight: 700, marginBottom: "6px", letterSpacing: ".04em" }}>
-                    ↺ {retalhosGerados.length} retalho(s) aproveitável(is) — serão salvos automaticamente
+              {/* Legenda */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginTop: "10px", padding: "8px 10px", background: "var(--surf2)", borderRadius: "7px" }}>
+                {[
+                  { color: COLS_PECA[0],             label: "Peças cortadas" },
+                  { color: "rgba(255,107,53,0.5)",    label: "Borda lapidação" },
+                  { color: "rgba(0,200,255,0.25)",    label: "Retalho aproveitável" },
+                  { color: "#1a1f2e",                 label: "Descarte" },
+                ].map((item) => (
+                  <div key={item.label} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "var(--t2)" }}>
+                    <div style={{ width: "13px", height: "13px", borderRadius: "3px", background: item.color, flexShrink: 0, border: "1px solid rgba(255,255,255,0.1)" }} />
+                    {item.label}
                   </div>
-                  {retalhosGerados.map((r, i) => (
-                    <div key={i} style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", lineHeight: 1.6 }}>
-                      {r.l}×{r.a}mm · {r.m2} m² · {r.prod} · Chapa {r.chapaIdx + 1}
-                    </div>
-                  ))}
+                ))}
+              </div>
+
+              {/* Retalhos gerados — cards legíveis */}
+              {resultado && retalhosGerados.length > 0 && (
+                <div style={{ marginTop: "14px" }}>
+                  <div style={{ fontSize: "11px", fontWeight: 700, color: "#f59e0b", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px", fontFamily: "'DM Mono', monospace" }}>
+                    <span style={{ fontSize: "14px" }}>↺</span>
+                    {retalhosGerados.length} retalho(s) aproveitável(is) — salvos automaticamente ao confirmar
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    {retalhosGerados.map((r, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(245,158,11,.06)", border: "1px solid rgba(245,158,11,.2)", borderRadius: "8px", padding: "10px 14px" }}>
+                        <div>
+                          <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", fontFamily: "'DM Mono', monospace" }}>
+                            {r.l} × {r.a} mm
+                          </div>
+                          <div style={{ fontSize: "11px", color: "var(--t2)", marginTop: "2px" }}>
+                            {r.prod} · Chapa {r.chapaIdx + 1}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 800, color: "#f59e0b", fontFamily: "'Syne', sans-serif" }}>
+                            {r.m2} m²
+                          </div>
+                          <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "1px" }}>aproveitável</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              {/* Botão único de salvar — só aparece com resultado e pedido vinculado */}
+              {/* Botão único de salvar */}
               {resultado && pedidoRef && (
-                <div style={{ marginTop: "14px" }}>
+                <div style={{ marginTop: "16px" }}>
                   <button
                     className="btn bp sm"
-                    style={{ width: "100%" }}
+                    style={{ width: "100%", padding: "12px", fontSize: "13px" }}
                     onClick={handleSalvar}
                     disabled={salvando}
                   >
-                    {salvando ? "Salvando plano e retalhos..." : "✓ Salvar e Voltar ao Pedido"}
+                    {salvando ? "Salvando plano e retalhos..." : "✓ Salvar Plano e Voltar ao Pedido"}
                   </button>
                 </div>
               )}
