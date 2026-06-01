@@ -594,18 +594,37 @@ function OtimizadorContent() {
           <div>
             <div className="card mb14">
               <div className="ct">Configuração da Chapa</div>
-              <div className="fr">
-                <div className="fg">
-                  <label className="fl">Tipo de Chapa</label>
-                  <select className="fc" onChange={aplicarChapaPadrao}>
-                    {CHAPAS_PADRAO.map((c, i) => <option key={i} value={i}>{c.label}</option>)}
-                  </select>
-                </div>
-                <div className="fg">
-                  <label className="fl">Folga / Diamante (mm)</label>
-                  <input type="number" className="fc" value={kerf} min={0} max={20} onChange={(e) => setKerf(Number(e.target.value))} />
+
+              {/* Atalhos rápidos */}
+              <div style={{ marginBottom: "12px" }}>
+                <label className="fl" style={{ marginBottom: "6px", display: "block" }}>Tamanho Padrão</label>
+                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                  {[
+                    { label: "3300 × 2250", w: 3300, h: 2250 },
+                    { label: "3660 × 2140", w: 3660, h: 2140 },
+                    { label: "2150 × 3660", w: 2150, h: 3660 },
+                  ].map(c => {
+                    const ativo = chapaW === c.w && chapaH === c.h;
+                    return (
+                      <button
+                        key={c.label}
+                        onClick={() => { setChapaW(c.w); setChapaH(c.h); }}
+                        style={{
+                          padding: "5px 12px", borderRadius: "6px", cursor: "pointer",
+                          fontSize: "11px", fontFamily: "'DM Mono', monospace", fontWeight: 600,
+                          border: `1px solid ${ativo ? "var(--acc)" : "var(--b2)"}`,
+                          background: ativo ? "rgba(61,255,160,.1)" : "transparent",
+                          color: ativo ? "var(--acc)" : "var(--t2)",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {c.label} mm
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
+
               <div className="fr">
                 <div className="fg">
                   <label className="fl">Largura Chapa (mm)</label>
@@ -617,6 +636,10 @@ function OtimizadorContent() {
                 </div>
               </div>
               <div className="fr">
+                <div className="fg">
+                  <label className="fl">Folga / Diamante (mm)</label>
+                  <input type="number" className="fc" value={kerf} min={0} max={20} onChange={(e) => setKerf(Number(e.target.value))} />
+                </div>
                 <div className="fg">
                   <label className="fl">Borda Lapidação (mm)</label>
                   <input type="number" className="fc" value={bord} min={0} max={30} onChange={(e) => setBord(Number(e.target.value))} />
