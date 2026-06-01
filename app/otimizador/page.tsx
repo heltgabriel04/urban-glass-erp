@@ -11,7 +11,7 @@ import type { Produto } from "@/types";
 interface Peca { l: number; a: number; qtd: number; prod: string; }
 interface PecaPlacada { x: number; y: number; l: number; a: number; idx: number; prod: string; rot: boolean; }
 interface EspacoLivre { x: number; y: number; l: number; a: number; }
-interface ResultadoChapa { placed: PecaPlacada[]; free: EspacoLivre[]; W: number; H: number; }
+interface ResultadoChapa { placed: PecaPlacada[]; free: EspacoLivre[]; W: number; H: number; prod: string; }
 interface RetalhoGerado extends EspacoLivre { chapaIdx: number; prod: string; m2: number; }
 
 function guilhotina(W: number, H: number, pecas: Peca[], kerf: number): { placed: PecaPlacada[]; free: EspacoLivre[] } {
@@ -125,8 +125,9 @@ function OtimizadorContent() {
       ctx.setLineDash([3, 3]); ctx.strokeStyle = "rgba(255,107,53,0.35)"; ctx.lineWidth = 0.6;
       ctx.strokeRect(ox + bs, oy + bs, dW - bs * 2, dH - bs * 2); ctx.setLineDash([]);
     }
+    // Label com produto na chapa
     ctx.fillStyle = "#444e68"; ctx.font = "9px 'DM Mono', monospace";
-    ctx.fillText("CHAPA " + (idx + 1) + " · " + r.W + "×" + r.H + "mm", ox, oy - 3);
+    ctx.fillText("CHAPA " + (idx + 1) + " · " + r.W + "×" + r.H + "mm" + (r.prod ? " · " + r.prod : ""), ox, oy - 3);
     r.placed.forEach((p, i) => {
       const px = ox + (p.x + bordMm) * scale, py = oy + (p.y + bordMm) * scale;
       const pw = p.l * scale, ph = p.a * scale;
@@ -149,35 +150,60 @@ function OtimizadorContent() {
   }
 
   function rodar() {
-    const tipoProd = pecas.find((p) => p.prod)?.prod || "Retalho";
-    let expandidas: Peca[] = [];
-    pecas.forEach((p) => { if (p.l > 0 && p.a > 0) for (let q = 0; q < (p.qtd || 1); q++) expandidas.push({ ...p, qtd: 1 }); });
-    if (!expandidas.length) return;
-    expandidas.sort((a, b) => b.l * b.a - a.l * a.a);
+    // Agrupa peças por produto — NUNCA mistura produtos diferentes na mesma chapa
+    const grupos = new Map<string, Peca[]>();
+    pecas.forEach((p) => {
+      if (p.l > 0 && p.a > 0) {
+        const grupo = grupos.get(p.prod) || [];
+        for (let q = 0; q < (p.qtd || 1); q++) grupo.push({ ...p, qtd: 1 });
+        grupos.set(p.prod, grupo);
+      }
+    });
+
+    if (grupos.size === 0) return;
+
     const results: ResultadoChapa[] = [];
-    let rem = [...expandidas], ci = 0;
-    while (rem.length && ci < 15) {
-      const r = guilhotina(chapaW - bord * 2, chapaH - bord * 2, rem, kerf);
-      results.push({ W: chapaW, H: chapaH, ...r });
-      const used = new Set(r.placed.map((p) => p.idx));
-      rem = rem.filter((_, i) => !used.has(i));
-      ci++; if (!r.placed.length) break;
-    }
-    setResultado(results); setChapaIdx(0); setRetalhosSalvos(false); setErroRetalhos(null);
+    let totalPlacedGlobal = 0;
+    let totalPecasGlobal = 0;
+
+    grupos.forEach((expandidas, prodNome) => {
+      expandidas.sort((a, b) => b.l * b.a - a.l * a.a);
+      totalPecasGlobal += expandidas.length;
+      let rem = [...expandidas], ci = 0;
+      while (rem.length && ci < 15) {
+        const r = guilhotina(chapaW - bord * 2, chapaH - bord * 2, rem, kerf);
+        results.push({ W: chapaW, H: chapaH, prod: prodNome, ...r });
+        const used = new Set(r.placed.map((p) => p.idx));
+        rem = rem.filter((_, i) => !used.has(i));
+        totalPlacedGlobal += r.placed.length;
+        ci++;
+        if (!r.placed.length) break;
+      }
+    });
+
+    setResultado(results);
+    setChapaIdx(0);
+    setRetalhosSalvos(false);
+    setErroRetalhos(null);
+
     let totA = 0, usedA = 0;
     results.forEach((r) => { totA += r.W * r.H; r.placed.forEach((p) => (usedA += p.l * p.a)); });
     const aprov = totA > 0 ? (usedA / totA) * 100 : 0;
     setStatAprov(aprov.toFixed(2) + "%");
     setStatPerda((100 - aprov).toFixed(2) + "%");
     setStatChapas(String(results.length));
+
     const retPend: RetalhoGerado[] = [];
     results.forEach((r, ri) => r.free.filter((fr) => fr.l >= 200 && fr.a >= 200).forEach((fr) => {
-      retPend.push({ ...fr, chapaIdx: ri, prod: tipoProd, m2: parseFloat(((fr.l * fr.a) / 1e6).toFixed(4)) });
+      retPend.push({ ...fr, chapaIdx: ri, prod: r.prod, m2: parseFloat(((fr.l * fr.a) / 1e6).toFixed(4)) });
     }));
-    setRetalhosGerados(retPend); setStatRetalhos(String(retPend.length)); setMostrarCardRet(retPend.length > 0);
-    const totalPlaced = results.reduce((s, r) => s + r.placed.length, 0);
-    const naoCouberam = expandidas.length - totalPlaced;
-    setMsg(`${expandidas.length} peças · ${results.length} superfície(s) · ${naoCouberam > 0 ? naoCouberam + " não couberam" : "Todas alocadas!"}`);
+    setRetalhosGerados(retPend);
+    setStatRetalhos(String(retPend.length));
+    setMostrarCardRet(retPend.length > 0);
+
+    const naoCouberam = totalPecasGlobal - totalPlacedGlobal;
+    const gruposLabel = grupos.size > 1 ? ` · ${grupos.size} produtos separados` : "";
+    setMsg(`${totalPecasGlobal} peças · ${results.length} superfície(s)${gruposLabel} · ${naoCouberam > 0 ? naoCouberam + " não couberam" : "Todas alocadas!"}`);
   }
 
   async function salvarRetalhos() {
@@ -209,7 +235,7 @@ function OtimizadorContent() {
       <div className="tb">
         <div className="tb-title">Otimizador de Corte</div>
         {pedidoRef && (
-          <a href={`/pedidos/${pedidoRef}`} className="btn bg sm">← Voltar ao Pedido</a>
+          <a href={"/pedidos/" + pedidoRef} className="btn bg sm">← Voltar ao Pedido</a>
         )}
       </div>
 
@@ -329,10 +355,11 @@ function OtimizadorContent() {
 
               {resultado && resultado.length > 1 && (
                 <div style={{ display: "flex", gap: "5px", flexWrap: "wrap", marginBottom: "9px" }}>
-                  {resultado.map((_, i) => (
+                  {resultado.map((r, i) => (
                     <button key={i} className="btn bg sm" onClick={() => setChapaIdx(i)}
                       style={chapaIdx === i ? { borderColor: "var(--acc)", color: "var(--acc)" } : {}}>
                       Chapa {i + 1}
+                      {r.prod && <span style={{ fontSize:"9px", opacity:0.6, marginLeft:"4px" }}>· {r.prod.split(" ").slice(0,2).join(" ")}</span>}
                     </button>
                   ))}
                 </div>
@@ -340,7 +367,7 @@ function OtimizadorContent() {
 
               <div className="cvw">
                 <div className="cvi">
-                  {!resultado ? "Configure peças e calcule" : `Chapa ${chapaIdx + 1} · ${resultado[chapaIdx]?.placed.length || 0} peças`}
+                  {!resultado ? "Configure peças e calcule" : `Chapa ${chapaIdx + 1} · ${resultado[chapaIdx]?.placed.length || 0} peças · ${resultado[chapaIdx]?.prod || ""}`}
                 </div>
                 <canvas ref={canvasRef} width={554} height={365} style={{ display: "block", width: "100%", height: "365px" }} />
               </div>
