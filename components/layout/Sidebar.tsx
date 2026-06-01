@@ -8,42 +8,59 @@ const NAV = [
   {
     grupo: "VISÃO GERAL",
     items: [
-      { href: "/dashboard", label: "Dashboard",        icon: "⬡" },
+      { href: "/dashboard", label: "Dashboard",            icon: "⬡" },
     ],
   },
   {
     grupo: "COMERCIAL",
     items: [
-      { href: "/orcamentos", label: "Orçamentos",      icon: "◻" },
-      { href: "/pedidos",    label: "Pedidos",          icon: "◈" },
-      { href: "/clientes",   label: "Clientes",         icon: "◎" },
+      { href: "/orcamentos", label: "Orçamentos",          icon: "◻" },
+      { href: "/pedidos",    label: "Pedidos",              icon: "◈" },
+      { href: "/clientes",   label: "Clientes",             icon: "◎" },
     ],
   },
   {
     grupo: "OPERAÇÃO",
     items: [
       { href: "/otimizador", label: "Otimizador de Corte", icon: "◇" },
-      { href: "/producao",   label: "Produção",            icon: "⬡" },
-      { href: "/estoque",    label: "Estoque · Chapas",    icon: "▣" },
-      { href: "/retalhos",   label: "Retalhos",            icon: "▤" },
+      { href: "/producao",   label: "Produção",             icon: "⬡" },
+      { href: "/estoque",    label: "Estoque · Chapas",     icon: "▣" },
+      { href: "/retalhos",   label: "Retalhos",             icon: "▤" },
     ],
   },
   {
     grupo: "FINANCEIRO",
     items: [
-      { href: "/financeiro", label: "Contas a Receber", icon: "◉" },
-      { href: "/fluxo",      label: "Fluxo de Caixa",   icon: "◈" },
+      { href: "/financeiro", label: "Contas a Receber",    icon: "◉" },
+      { href: "/fluxo",      label: "Fluxo de Caixa",      icon: "◈" },
     ],
   },
   {
     grupo: "GESTÃO",
     items: [
-      { href: "/produtos",   label: "Produtos",          icon: "◫" },
-      { href: "/tabelas",    label: "Tabelas de Preço",  icon: "▦" },
-      { href: "/relatorios", label: "Relatórios & BI",   icon: "◭" },
+      { href: "/produtos",   label: "Produtos",             icon: "◫" },
+      { href: "/tabelas",    label: "Tabelas de Preço",     icon: "▦" },
+      { href: "/relatorios", label: "Relatórios & BI",      icon: "◭" },
     ],
   },
 ];
+
+function LogoIcon({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="1" y="1" width="62" height="62" rx="13" fill="#0f1219" stroke="#2d5fa6" strokeWidth="2" />
+      <text
+        x="32" y="43"
+        textAnchor="middle"
+        fontFamily="'Syne', sans-serif"
+        fontSize="26"
+        fontWeight="800"
+        fill="white"
+        letterSpacing="-1"
+      >UG</text>
+    </svg>
+  );
+}
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -66,59 +83,95 @@ export default function Sidebar() {
           overflow: hidden;
           z-index: 30;
         }
-
         .sb:hover {
           width: 232px;
           min-width: 232px;
           box-shadow: 4px 0 24px rgba(0,0,0,.4);
         }
 
-        /* Logo: só ícone quando colapsado */
-        .logo-area { overflow: hidden; white-space: nowrap; }
-        .logo-name-full { transition: opacity 0.15s 0.08s; }
-        .sb:not(:hover) .logo-name-full { opacity: 0; }
+        .sb-logo-wrap {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 16px 12px;
+          border-bottom: 1px solid var(--b1);
+          text-decoration: none;
+          transition: background 0.12s;
+          cursor: pointer;
+        }
+        .sb-logo-wrap:hover { background: rgba(61,255,160,.04); }
 
-        /* Labels dos itens: ocultos quando colapsado */
+        .sb-logo-text {
+          opacity: 0;
+          transition: opacity 0.12s 0.06s;
+          white-space: nowrap;
+          overflow: hidden;
+          min-width: 0;
+        }
+        .sb:hover .sb-logo-text { opacity: 1; }
+
+        .sb-logo-name {
+          font-family: 'Syne', sans-serif;
+          font-size: 15px;
+          font-weight: 800;
+          letter-spacing: -0.5px;
+          color: var(--acc);
+          line-height: 1.1;
+        }
+        .sb-logo-sub {
+          font-size: 8px;
+          color: var(--t3);
+          letter-spacing: 2px;
+          text-transform: uppercase;
+          font-family: 'DM Mono', monospace;
+          margin-top: 1px;
+        }
+
         .ni-label {
-          opacity: 1;
+          opacity: 0;
           transition: opacity 0.12s 0.06s;
           white-space: nowrap;
           overflow: hidden;
         }
-        .sb:not(:hover) .ni-label { opacity: 0; }
+        .sb:hover .ni-label { opacity: 1; }
 
-        /* Grupos: ocultos quando colapsado */
         .ns {
           overflow: hidden;
           white-space: nowrap;
           transition: opacity 0.12s;
+          opacity: 0;
         }
-        .sb:not(:hover) .ns { opacity: 0; }
+        .sb:hover .ns { opacity: 1; }
 
-        /* Footer */
-        .sb-ft { overflow: hidden; white-space: nowrap; }
-        .sb-ft-label {
-          transition: opacity 0.12s;
+        .sb-ft {
+          padding: 12px;
+          border-top: 1px solid var(--b1);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-top: auto;
+          overflow: hidden;
           white-space: nowrap;
         }
-        .sb:not(:hover) .sb-ft-label { opacity: 0; width: 0; overflow: hidden; }
-
-        /* Ícone sempre centrado quando colapsado, alinhado à esq quando expandido */
-        .ni {
-          justify-content: flex-start;
+        .sb-ft-ver {
+          font-size: 9px;
+          color: var(--t3);
+          font-family: 'DM Mono', monospace;
+          opacity: 0;
+          transition: opacity 0.12s;
+          overflow: hidden;
+          white-space: nowrap;
         }
-        .ni-ic {
-          flex-shrink: 0;
-          width: 18px;
-          text-align: center;
-        }
+        .sb:hover .sb-ft-ver { opacity: 1; }
 
-        /* Tooltip no ícone quando colapsado */
         .ni { position: relative; }
-        .sb:not(:hover) .ni::after {
+        .ni-ic { flex-shrink: 0; width: 18px; text-align: center; }
+
+        /* Tooltip quando colapsado */
+        .sb:not(:hover) .ni[data-label]::after {
           content: attr(data-label);
           position: absolute;
-          left: 56px;
+          left: 52px;
           top: 50%;
           transform: translateY(-50%);
           background: var(--surf3);
@@ -134,28 +187,21 @@ export default function Sidebar() {
           z-index: 100;
           font-family: 'DM Mono', monospace;
         }
-        .sb:not(:hover) .ni:hover::after {
-          opacity: 1;
-        }
+        .sb:not(:hover) .ni[data-label]:hover::after { opacity: 1; }
       `}</style>
 
       <aside className="sb">
-        {/* Logo */}
-        <div className="logo-area" style={{ padding:"20px 14px 14px", borderBottom:"1px solid var(--b1)" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
-            <div style={{ width:"28px", height:"28px", background:"linear-gradient(135deg, var(--acc), var(--acc2))", borderRadius:"7px", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"11px", fontWeight:900, color:"#090b10", flexShrink:0, fontFamily:"'Syne', sans-serif" }}>
-              UG
-            </div>
-            <div className="logo-name-full">
-              <div style={{ fontFamily:"'Syne', sans-serif", fontSize:"15px", fontWeight:800, letterSpacing:"-0.5px", color:"var(--acc)" }}>
-                UrbanGlass
-              </div>
-              <div style={{ fontSize:"8px", color:"var(--t3)", letterSpacing:"2px", textTransform:"uppercase", fontFamily:"'DM Mono', monospace", marginTop:"1px" }}>
-                ERP Industrial
-              </div>
-            </div>
+
+        {/* Logo — botão para o dashboard */}
+        <Link href="/dashboard" className="sb-logo-wrap">
+          <div style={{ flexShrink: 0 }}>
+            <LogoIcon size={32} />
           </div>
-        </div>
+          <div className="sb-logo-text">
+            <div className="sb-logo-name">UrbanGlass</div>
+            <div className="sb-logo-sub">ERP Industrial</div>
+          </div>
+        </Link>
 
         {/* Nav */}
         {NAV.map((grupo) => (
@@ -169,7 +215,6 @@ export default function Sidebar() {
                   href={item.href}
                   data-label={item.label}
                   className={`ni${ativo ? " active" : ""}`}
-                  title=""
                 >
                   <span className="ni-ic">{item.icon}</span>
                   <span className="ni-label">{item.label}</span>
@@ -181,11 +226,16 @@ export default function Sidebar() {
 
         {/* Footer */}
         <div className="sb-ft">
-          <span className="ver-tag sb-ft-label">v3.0.0 · 2026</span>
+          <span className="sb-ft-ver">v3.0.0 · 2026</span>
           <button
             onClick={handleLogout}
             title="Sair"
-            style={{ background:"transparent", border:"1px solid var(--b2)", borderRadius:"6px", color:"var(--t3)", fontSize:"10px", padding:"4px 9px", cursor:"pointer", fontFamily:"'DM Mono', monospace", transition:"0.1s", flexShrink:0 }}
+            style={{
+              background: "transparent", border: "1px solid var(--b2)",
+              borderRadius: "6px", color: "var(--t3)", fontSize: "10px",
+              padding: "4px 9px", cursor: "pointer",
+              fontFamily: "'DM Mono', monospace", transition: "0.1s", flexShrink: 0,
+            }}
             onMouseEnter={e => { const b = e.currentTarget; b.style.color = "var(--err)"; b.style.borderColor = "var(--err)"; }}
             onMouseLeave={e => { const b = e.currentTarget; b.style.color = "var(--t3)"; b.style.borderColor = "var(--b2)"; }}
           >
