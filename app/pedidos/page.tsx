@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidos, avancarStatusPedido, retrocederStatusPedido, deletarPedido } from "@/services/pedidos.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
@@ -23,7 +24,8 @@ export default function PedidosPage() {
   const { toast } = useToast();
   const [pedidos, setPedidos]           = useState<Pedido[]>([]);
   const [loading, setLoading]           = useState(true);
-  const [filtro, setFiltro]             = useState("");
+  const searchParams = useSearchParams();
+  const [filtro, setFiltro]             = useState(searchParams.get("busca") ?? "");
   const [comOtimizacao, setComOtimizacao] = useState<Set<string>>(new Set());
 
   useEffect(() => { load(); }, []);
