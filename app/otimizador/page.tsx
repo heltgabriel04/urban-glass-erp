@@ -20,22 +20,58 @@ interface PedidoSugerido { id: string; clienteNome: string; totalPecas: number; 
 function guilhotina(W: number, H: number, pecas: Peca[], kerf: number): { placed: PecaPlacada[]; free: EspacoLivre[] } {
   let free: EspacoLivre[] = [{ x: 0, y: 0, l: W, a: H }];
   const placed: PecaPlacada[] = [];
-  pecas.forEach((peca, idx) => {
-    if (!free.length) return;
-    let best = Infinity, bR: EspacoLivre | null = null, bI = -1, rot = false;
-    free.forEach((fr, fi) => {
-      if (peca.l <= fr.l && peca.a <= fr.a) { const s = Math.min(fr.l - peca.l, fr.a - peca.a); if (s < best) { best = s; bR = fr; bI = fi; rot = false; } }
-      if (peca.a <= fr.l && peca.l <= fr.a) { const s = Math.min(fr.l - peca.a, fr.a - peca.l); if (s < best) { best = s; bR = fr; bI = fi; rot = true; } }
+
+  // Tenta encaixar uma peça (com ou sem rotação) num espaço livre
+  // Retorna o melhor encaixe ou null
+  function melhorEncaixe(peca: Peca, freeList: EspacoLivre[]): { fi: number; rot: boolean; score: number } | null {
+    let best: { fi: number; rot: boolean; score: number } | null = null;
+    freeList.forEach((fr, fi) => {
+      // Orientação normal
+      if (peca.l <= fr.l && peca.a <= fr.a) {
+        // Score: menor sobra — preferimos espaços que ficam mais "cheios"
+        const score = (fr.l - peca.l) * (fr.a - peca.a);
+        if (!best || score < best.score) best = { fi, rot: false, score };
+      }
+      // Orientação rotacionada (90°)
+      if (peca.a <= fr.l && peca.l <= fr.a) {
+        const score = (fr.l - peca.a) * (fr.a - peca.l);
+        if (!best || score < best.score) best = { fi, rot: true, score };
+      }
     });
-    if (!bR || bI === -1) return;
-    const fr = bR as EspacoLivre;
-    const pl = rot ? peca.a : peca.l, pa = rot ? peca.l : peca.a;
+    return best;
+  }
+
+  function colocar(peca: Peca, idx: number, fi: number, rot: boolean) {
+    const fr = free[fi];
+    const pl = rot ? peca.a : peca.l;
+    const pa = rot ? peca.l : peca.a;
     placed.push({ x: fr.x, y: fr.y, l: pl, a: pa, idx, prod: peca.prod, rot, pedidoId: peca.pedidoId });
+
+    // Divisão guilhotina: dois novos espaços
     const nr: EspacoLivre[] = [];
-    if (fr.l - (pl + kerf) >= 100) nr.push({ x: fr.x + pl + kerf, y: fr.y, l: fr.l - (pl + kerf), a: pa });
-    if (fr.a - (pa + kerf) >= 100) nr.push({ x: fr.x, y: fr.y + pa + kerf, l: fr.l, a: fr.a - (pa + kerf) });
-    free.splice(bI, 1, ...nr);
+    const remX = fr.l - pl - kerf;
+    const remY = fr.a - pa - kerf;
+
+    if (remX >= 100) nr.push({ x: fr.x + pl + kerf, y: fr.y,        l: remX,  a: pa });
+    if (remY >= 100) nr.push({ x: fr.x,              y: fr.y + pa + kerf, l: fr.l, a: remY });
+
+    free.splice(fi, 1, ...nr);
+
+    // Mesclar espaços redundantes (remove espaços totalmente cobertos por outros)
+    free = free.filter((a, ai) =>
+      !free.some((b, bi) => bi !== ai && b.x <= a.x && b.y <= a.y && b.x + b.l >= a.x + a.l && b.y + b.a >= a.y + a.a)
+    );
+
+    // Ordenar por y,x para favorecer preenchimento top-left
+    free.sort((a, b) => a.y !== b.y ? a.y - b.y : a.x - b.x);
+  }
+
+  pecas.forEach((peca, idx) => {
+    const enc = melhorEncaixe(peca, free);
+    if (!enc) return; // não cabe — será tratado no loop externo
+    colocar(peca, idx, enc.fi, enc.rot);
   });
+
   return { placed, free };
 }
 
@@ -363,7 +399,12 @@ function OtimizadorContent() {
       const H = (chapa ? chapa.h : chapaH) - bord * 2;
       const CW = chapa ? chapa.w : chapaW;
       const CH = chapa ? chapa.h : chapaH;
-      expandidas.sort((a, b) => b.l * b.a - a.l * a.a);
+      // Ordenação: maior área primeiro, desempate por maior dimensão
+      expandidas.sort((a, b) => {
+        const diff = b.l * b.a - a.l * a.a;
+        if (diff !== 0) return diff;
+        return Math.max(b.l, b.a) - Math.max(a.l, a.a);
+      });
       let rem = [...expandidas], ci = 0;
       while (rem.length && ci < 15) {
         const r = guilhotina(W, H, rem, kerf);
