@@ -13,8 +13,6 @@ const CHIP: Record<StatusRetalho, string> = {
   "Descartado": "chip cr",
 };
 
-const STATUS_ORDEM: StatusRetalho[] = ["Disponível", "Reservado", "Em uso", "Descartado"];
-
 export default function RetalhoPage() {
   const [retalhos, setRetalhos] = useState<Retalho[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,20 +36,6 @@ export default function RetalhoPage() {
     load();
   }
 
-  async function avancarStatus(r: Retalho) {
-    const idx = STATUS_ORDEM.indexOf(r.status as StatusRetalho);
-    if (idx < STATUS_ORDEM.length - 1) {
-      await mudarStatus(r.id, STATUS_ORDEM[idx + 1]);
-    }
-  }
-
-  async function retrocederStatus(r: Retalho) {
-    const idx = STATUS_ORDEM.indexOf(r.status as StatusRetalho);
-    if (idx > 0) {
-      await mudarStatus(r.id, STATUS_ORDEM[idx - 1]);
-    }
-  }
-
   async function deletar(id: string) {
     if (!confirm(`Excluir retalho ${id} permanentemente?`)) return;
     await supabase.from("retalhos").delete().eq("id", id);
@@ -64,6 +48,19 @@ export default function RetalhoPage() {
   const m2Disp      = disponiveis.reduce((a, r) => a + Number(r.m2), 0);
 
   const FILTROS = ["", "Disponível", "Reservado", "Em uso", "Descartado"] as const;
+
+  function btnStatus(label: string, cor: string, bg: string, onClick: () => void) {
+    return (
+      <button
+        onClick={onClick}
+        style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", height:"28px", padding:"0 10px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"10px", fontWeight:700, fontFamily:"'DM Mono', monospace", letterSpacing:"0.4px", cursor:"pointer", transition:"all 0.15s" }}
+        onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = bg; b.style.borderColor = cor; b.style.color = cor; }}
+        onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
+      >
+        {label}
+      </button>
+    );
+  }
 
   return (
     <AppLayout>
@@ -99,10 +96,10 @@ export default function RetalhoPage() {
         {/* CARDS */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:"12px", marginBottom:"20px" }}>
           {[
-            { label:"Total",          value: String(retalhos.length),    color:"var(--t1)",   sub:"cadastrados" },
-            { label:"Disponíveis",    value: String(disponiveis.length),  color:"var(--ok)",   sub:"prontos para uso" },
-            { label:"m² Disponível",  value: m2Disp.toFixed(2) + " m²",  color:"var(--acc)",  sub:"aproveitável" },
-            { label:"Reservados",     value: String(reservados.length),   color:"var(--warn)", sub:"em uso pendente" },
+            { label:"Total",         value: String(retalhos.length),   color:"var(--t1)",   sub:"cadastrados" },
+            { label:"Disponíveis",   value: String(disponiveis.length), color:"var(--ok)",   sub:"prontos para uso" },
+            { label:"m² Disponível", value: m2Disp.toFixed(2) + " m²", color:"var(--acc)",  sub:"aproveitável" },
+            { label:"Reservados",    value: String(reservados.length),  color:"var(--warn)", sub:"em uso pendente" },
           ].map(card => (
             <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
               <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
@@ -138,59 +135,36 @@ export default function RetalhoPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtrados.map(r => {
-                      const idx      = STATUS_ORDEM.indexOf(r.status as StatusRetalho);
-                      const podaVoltar  = idx > 0;
-                      const podeAvancar = idx < STATUS_ORDEM.length - 1;
-
-                      return (
-                        <tr key={r.id}>
-                          <td><span className="mono" style={{ color:"var(--acc2)" }}>{r.id}</span></td>
-                          <td><strong>{r.produto_nome}</strong></td>
-                          <td className="mono">{r.largura} × {r.altura} mm</td>
-                          <td className="mono">{formatM2(r.m2)}</td>
-                          <td className="mono" style={{ color:"var(--t2)" }}>{r.chapa_origem || "—"}</td>
-                          <td className="mono" style={{ color:"var(--acc)" }}>{r.pedido_origem || "—"}</td>
-                          <td className="mono">{formatDate(r.dt_gerado)}</td>
-                          <td><span className={CHIP[r.status as StatusRetalho] ?? "chip cgr"}>{r.status}</span></td>
-                          <td>
-                            <div style={{ display:"flex", gap:"4px", alignItems:"center" }}>
-                              {/* Retroceder */}
-                              <button
-                                title={podaVoltar ? `Voltar para ${STATUS_ORDEM[idx - 1]}` : "Já está no início"}
-                                onClick={() => podaVoltar && retrocederStatus(r)}
-                                style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color: podaVoltar ? "var(--t3)" : "var(--t3)", fontSize:"13px", cursor: podaVoltar ? "pointer" : "default", opacity: podaVoltar ? 1 : 0.3, transition:"all 0.15s" }}
-                                onMouseEnter={e => { if (podaVoltar) { const b = e.currentTarget; b.style.background = "rgba(245,158,11,.15)"; b.style.borderColor = "var(--warn)"; b.style.color = "var(--warn)"; }}}
-                                onMouseLeave={e => { const b = e.currentTarget; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
-                              >
-                                ←
-                              </button>
-                              {/* Avançar */}
-                              <button
-                                title={podeAvancar ? `Avançar para ${STATUS_ORDEM[idx + 1]}` : "Já está no final"}
-                                onClick={() => podeAvancar && avancarStatus(r)}
-                                style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", cursor: podeAvancar ? "pointer" : "default", opacity: podeAvancar ? 1 : 0.3, transition:"all 0.15s" }}
-                                onMouseEnter={e => { if (podeAvancar) { const b = e.currentTarget; b.style.background = "rgba(16,185,129,.15)"; b.style.borderColor = "var(--ok)"; b.style.color = "var(--ok)"; }}}
-                                onMouseLeave={e => { const b = e.currentTarget; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
-                              >
-                                →
-                              </button>
-                            </div>
-                          </td>
-                          <td style={{ width:"40px", textAlign:"center" }}>
-                            <button
-                              title="Excluir retalho"
-                              onClick={() => deletar(r.id)}
-                              style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", cursor:"pointer", transition:"all 0.15s" }}
-                              onMouseEnter={e => { const b = e.currentTarget; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
-                              onMouseLeave={e => { const b = e.currentTarget; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
-                            >
-                              🗑
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {filtrados.map(r => (
+                      <tr key={r.id}>
+                        <td><span className="mono" style={{ color:"var(--acc2)" }}>{r.id}</span></td>
+                        <td><strong>{r.produto_nome}</strong></td>
+                        <td className="mono">{r.largura} × {r.altura} mm</td>
+                        <td className="mono">{formatM2(r.m2)}</td>
+                        <td className="mono" style={{ color:"var(--t2)" }}>{r.chapa_origem || "—"}</td>
+                        <td className="mono" style={{ color:"var(--acc)" }}>{r.pedido_origem || "—"}</td>
+                        <td className="mono">{formatDate(r.dt_gerado)}</td>
+                        <td><span className={CHIP[r.status as StatusRetalho] ?? "chip cgr"}>{r.status}</span></td>
+                        <td>
+                          <div style={{ display:"flex", gap:"4px", alignItems:"center" }}>
+                            {r.status !== "Disponível" && btnStatus("Disponível", "var(--ok)",   "rgba(16,185,129,.15)",  () => mudarStatus(r.id, "Disponível"))}
+                            {r.status !== "Reservado"  && btnStatus("Reservado",  "var(--warn)", "rgba(245,158,11,.15)",  () => mudarStatus(r.id, "Reservado"))}
+                            {r.status !== "Em uso"     && btnStatus("Em uso",     "var(--acc2)", "rgba(99,179,237,.15)",  () => mudarStatus(r.id, "Em uso"))}
+                          </div>
+                        </td>
+                        <td style={{ width:"40px", textAlign:"center" }}>
+                          <button
+                            title="Excluir retalho"
+                            onClick={() => deletar(r.id)}
+                            style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", cursor:"pointer", transition:"all 0.15s" }}
+                            onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
+                            onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
+                          >
+                            🗑
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
