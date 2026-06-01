@@ -64,6 +64,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .erp-main {
@@ -72,9 +73,8 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
 }
 
 /* ─── SIDEBAR ────────────────────────────────────────────── */
+/* width/min-width controlados pelo Sidebar.tsx via CSS hover */
 .sb {
-  width: 232px;
-  min-width: 232px;
   background: var(--surf);
   border-right: 1px solid var(--b1);
   display: flex;
