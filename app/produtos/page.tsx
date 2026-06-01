@@ -13,11 +13,11 @@ const VAZIO: ProdutoInsert = {
 
 export default function ProdutosPage() {
   const [produtos, setProdutos] = useState<Produto[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filtro, setFiltro] = useState("");
-  const [modal, setModal] = useState(false);
-  const [form, setForm] = useState<ProdutoInsert>(VAZIO);
-  const [editId, setEditId] = useState<number | null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [filtro, setFiltro]     = useState("");
+  const [modal, setModal]       = useState(false);
+  const [form, setForm]         = useState<ProdutoInsert>(VAZIO);
+  const [editId, setEditId]     = useState<number | null>(null);
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => { load(); }, []);
@@ -44,17 +44,27 @@ export default function ProdutosPage() {
     setSalvando(false); setModal(false); load();
   }
 
-  async function toggleAtivo(p: Produto) {
-    await supabase.from("produtos").update({ ativo: !p.ativo } as never).eq("id", p.id);
-    load();
-  }
-
   async function duplicar(p: Produto) {
-    await supabase.from("produtos").insert([{ cod:p.cod+"-C", nome:p.nome+" (cópia)", tipo:p.tipo, espessura:p.espessura, cor:p.cor, categoria:p.categoria, valor:p.valor, unidade:p.unidade, ativo:true, obs:p.obs } as never]);
+    await supabase.from("produtos").insert([{
+      cod: p.cod + "-C", nome: p.nome + " (cópia)", tipo: p.tipo,
+      espessura: p.espessura, cor: p.cor, categoria: p.categoria,
+      valor: p.valor, unidade: p.unidade, ativo: true, obs: p.obs,
+    } as never]);
     load();
   }
 
-  const filtrados = produtos.filter(p => !filtro || p.nome.toLowerCase().includes(filtro.toLowerCase()) || p.cod.toLowerCase().includes(filtro.toLowerCase()) || p.tipo.toLowerCase().includes(filtro.toLowerCase()));
+  async function excluir(p: Produto) {
+    if (!confirm(`Excluir "${p.nome}" permanentemente? Esta ação não pode ser desfeita.`)) return;
+    await supabase.from("produtos").delete().eq("id", p.id);
+    load();
+  }
+
+  const filtrados = produtos.filter(p =>
+    !filtro ||
+    p.nome.toLowerCase().includes(filtro.toLowerCase()) ||
+    p.cod.toLowerCase().includes(filtro.toLowerCase()) ||
+    p.tipo.toLowerCase().includes(filtro.toLowerCase())
+  );
   const ativos = produtos.filter(p => p.ativo).length;
 
   return (
@@ -90,14 +100,20 @@ export default function ProdutosPage() {
           <div className="tw">
             <table>
               <thead>
-                <tr><th>Código</th><th>Nome</th><th>Tipo</th><th>Espessura</th><th>Cor</th><th>Valor/m²</th><th>Unidade</th><th>Status</th><th>Ações</th></tr>
+                <tr>
+                  <th>Código</th><th>Nome</th><th>Tipo</th><th>Espessura</th>
+                  <th>Cor</th><th>Valor/m²</th><th>Unidade</th><th>Status</th>
+                  <th>Ações</th><th style={{ width:"40px" }}></th>
+                </tr>
               </thead>
               <tbody>
-                {filtrados.length === 0 && <tr><td colSpan={9} style={{ textAlign:"center", color:"var(--t3)", padding:"32px" }}>Nenhum produto encontrado</td></tr>}
+                {filtrados.length === 0 && (
+                  <tr><td colSpan={10} style={{ textAlign:"center", color:"var(--t3)", padding:"32px" }}>Nenhum produto encontrado</td></tr>
+                )}
                 {filtrados.map(p => (
-                  <tr key={p.id} style={{ opacity: p.ativo ? 1 : 0.5 }}>
+                  <tr key={p.id} style={{ opacity: p.ativo ? 1 : 0.55 }}>
                     <td><span className="mono" style={{ color:"var(--acc)" }}>{p.cod}</span></td>
-                    <td><strong>{p.nome}</strong>{p.obs && <div className="tdim">{p.obs}</div>}</td>
+                    <td><strong>{p.nome}</strong>{!p.ativo && <div className="tdim">Descontinuado</div>}</td>
                     <td>{p.tipo || "—"}</td>
                     <td className="mono">{p.espessura || "—"}</td>
                     <td>{p.cor || "—"}</td>
@@ -108,8 +124,19 @@ export default function ProdutosPage() {
                       <div style={{ display:"flex", gap:"4px" }}>
                         <button className="btn bg xs" onClick={() => abrirEdit(p)}>Editar</button>
                         <button className="btn bg xs" onClick={() => duplicar(p)}>Dup.</button>
-                        <button className={`btn xs ${p.ativo ? "bw" : "bp"}`} onClick={() => toggleAtivo(p)}>{p.ativo ? "Desativar" : "Ativar"}</button>
                       </div>
+                    </td>
+                    {/* Lixeira — padrão do sistema */}
+                    <td style={{ width:"40px", textAlign:"center" }}>
+                      <button
+                        title="Excluir produto"
+                        onClick={() => excluir(p)}
+                        style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", cursor:"pointer", transition:"all 0.15s" }}
+                        onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
+                        onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
+                      >
+                        🗑
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -131,13 +158,24 @@ export default function ProdutosPage() {
               <div className="fg"><label className="fl">Nome *</label><input className="fc" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Vidro Laminado 4+4" /></div>
             </div>
             <div className="fr3">
-              <div className="fg"><label className="fl">Tipo</label><select className="fc" value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}><option value="">Selecione...</option><option>Laminado</option><option>Reflecta</option><option>Monolítico</option></select></div>
+              <div className="fg">
+                <label className="fl">Tipo</label>
+                <select className="fc" value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}>
+                  <option value="">Selecione...</option>
+                  <option>Laminado</option><option>Reflecta</option><option>Monolítico</option>
+                </select>
+              </div>
               <div className="fg"><label className="fl">Espessura</label><input className="fc" value={form.espessura} onChange={e => setForm(f => ({ ...f, espessura: e.target.value }))} placeholder="4+4" /></div>
               <div className="fg"><label className="fl">Cor</label><input className="fc" value={form.cor} onChange={e => setForm(f => ({ ...f, cor: e.target.value }))} placeholder="Incolor" /></div>
             </div>
             <div className="fr">
               <div className="fg"><label className="fl">Valor (R$/m²) *</label><input className="fc" type="number" value={form.valor} onChange={e => setForm(f => ({ ...f, valor: parseFloat(e.target.value) || 0 }))} placeholder="0.00" /></div>
-              <div className="fg"><label className="fl">Unidade</label><select className="fc" value={form.unidade} onChange={e => setForm(f => ({ ...f, unidade: e.target.value }))}><option>m²</option><option>un</option><option>ml</option></select></div>
+              <div className="fg">
+                <label className="fl">Unidade</label>
+                <select className="fc" value={form.unidade} onChange={e => setForm(f => ({ ...f, unidade: e.target.value }))}>
+                  <option>m²</option><option>un</option><option>ml</option>
+                </select>
+              </div>
             </div>
             <div className="fg" style={{ marginBottom:"14px" }}>
               <label className="fl">Observação</label>
