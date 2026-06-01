@@ -238,7 +238,7 @@ export default function PedidosPage() {
 
                           {/* Retroceder / Avançar */}
                           {btnAcao("var(--warn)", "rgba(245,158,11,.15)", primeiro ? "Já está no início do fluxo" : "Retroceder etapa", "←", () => !primeiro && handleRetroceder(p.id, p.status))}
-                          {btnAcao("var(--ok)",   "rgba(16,185,129,.15)", finalizado ? "Pedido encerrado" : "Avançar etapa",         "→", () => !finalizado && handleAvancar(p.id, p.status))}
+                          {btnAcao("var(--ok)",   "rgba(16,185,129,.15)", finalizado ? "Pedido encerrado" : (!temOtim && p.status === "Aguardando otimização") ? "Otimização pendente — gere o plano antes de avançar" : "Avançar etapa", "→", () => { if (finalizado) return; if (!temOtim && p.status === "Aguardando otimização") { toast("Gere a otimização de corte antes de avançar este pedido.", "warn"); return; } handleAvancar(p.id, p.status); })}
                         </div>
                       </td>
                       <td style={{ width:"40px", textAlign:"center" }}>
