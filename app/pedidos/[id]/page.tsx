@@ -50,14 +50,14 @@ export default function PedidoDetalhe() {
   const autoPrint = searchParams.get("print") === "1";
   const { toast } = useToast();
 
-  const [pedido, setPedido]               = useState<Pedido | null>(null);
-  const [lancamentos, setLancamentos]     = useState<Lancamento[]>([]);
-  const [otimizacoes, setOtimizacoes]     = useState<HistoricoOtimizador[]>([]);
-  const [loading, setLoading]             = useState(true);
-  const [recebendo, setRecebendo]         = useState(false);
-  const [valorRec, setValorRec]           = useState("");
-  const [dataRec, setDataRec]             = useState(hoje());
-  const [salvando, setSalvando]           = useState(false);
+  const [pedido, setPedido]           = useState<Pedido | null>(null);
+  const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
+  const [otimizacoes, setOtimizacoes] = useState<HistoricoOtimizador[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [recebendo, setRecebendo]     = useState(false);
+  const [valorRec, setValorRec]       = useState("");
+  const [dataRec, setDataRec]         = useState(hoje());
+  const [salvando, setSalvando]       = useState(false);
 
   useEffect(() => { load(); }, [id]);
 
@@ -88,13 +88,10 @@ export default function PedidoDetalhe() {
 
   async function handleAvancar() {
     if (!pedido) return;
-
-    // Bloqueia avanço de "Aguardando otimização" para "Em Produção – Corte" sem plano salvo
     if (pedido.status === "Aguardando otimização" && otimizacoes.length === 0) {
       toast("Realize a otimização de corte antes de avançar para produção.", "warn");
       return;
     }
-
     setSalvando(true);
     const result = await avancarStatusPedido(pedido.id, pedido.status);
     if (result) toast(`${pedido.id} → ${result.status}`);
@@ -133,16 +130,16 @@ export default function PedidoDetalhe() {
   if (loading) return <AppLayout><div className="con"><div className="loading">Carregando pedido...</div></div></AppLayout>;
   if (!pedido) return <AppLayout><div className="con"><div style={{ color:"var(--err)", padding:"32px" }}>Pedido não encontrado.</div></div></AppLayout>;
 
-  const aberto       = Number(pedido.valor_total) - Number(pedido.valor_recebido);
-  const quitado      = aberto <= 0;
-  const pctRec       = pedido.valor_total > 0 ? Math.min(100, (Number(pedido.valor_recebido) / Number(pedido.valor_total)) * 100) : 0;
-  const statusIdx    = FLUXO.indexOf(pedido.status);
-  const podeAvancar  = !["Entregue","Cancelado"].includes(pedido.status);
-  const temItens     = (pedido.itens_pedido?.length ?? 0) > 0;
-  const podeRomaneio = ["Finalizado","Entregue"].includes(pedido.status);
-  const temOtimizacao = otimizacoes.length > 0;
+  const aberto          = Number(pedido.valor_total) - Number(pedido.valor_recebido);
+  const quitado         = aberto <= 0;
+  const pctRec          = pedido.valor_total > 0 ? Math.min(100, (Number(pedido.valor_recebido) / Number(pedido.valor_total)) * 100) : 0;
+  const statusIdx       = FLUXO.indexOf(pedido.status);
+  const podeAvancar     = !["Entregue","Cancelado"].includes(pedido.status);
+  const temItens        = (pedido.itens_pedido?.length ?? 0) > 0;
+  const podeRomaneio    = ["Finalizado","Entregue"].includes(pedido.status);
+  const temOtimizacao   = otimizacoes.length > 0;
   const bloqueadoSemOtim = pedido.status === "Aguardando otimização" && !temOtimizacao;
-  const ultimaOtim   = otimizacoes[0] ?? null;
+  const ultimaOtim      = otimizacoes[0] ?? null;
 
   return (
     <>
@@ -168,9 +165,22 @@ export default function PedidoDetalhe() {
             Pedido <span style={{ color:"var(--acc)" }}>{pedido.id}</span>
           </div>
           <span className={CHIP[pedido.status] ?? "chip cgr"}>{pedido.status}</span>
+
           {temItens && (
             <a href={"/otimizador?pedido=" + pedido.id} className="btn bg sm">◈ Otimizar Corte</a>
           )}
+
+          {/* BOTÃO ETIQUETAS — aparece só quando há otimização salva */}
+          {temOtimizacao && (
+            <a
+              href={"/pedidos/" + pedido.id + "/etiquetas"}
+              className="btn bg sm"
+              style={{ textDecoration: "none" }}
+            >
+              🏷 Etiquetas
+            </a>
+          )}
+
           <button
             className="btn sm"
             onClick={() => podeRomaneio && window.print()}
@@ -185,6 +195,7 @@ export default function PedidoDetalhe() {
           >
             R
           </button>
+
           {podeAvancar && (
             <button
               className="btn bp sm"
@@ -200,7 +211,7 @@ export default function PedidoDetalhe() {
 
         <div className="con no-print" style={{ display:"flex", flexDirection:"column", gap:"20px" }}>
 
-          {/* Alerta de otimização pendente */}
+          {/* Alerta otimização pendente */}
           {bloqueadoSemOtim && (
             <div style={{ background:"rgba(245,158,11,.1)", border:"1px solid var(--warn)", borderRadius:"10px", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px" }}>
               <div>
@@ -213,7 +224,7 @@ export default function PedidoDetalhe() {
             </div>
           )}
 
-          {/* Card de otimização salva */}
+          {/* Card otimização salva */}
           {temOtimizacao && ultimaOtim && (
             <div style={{ background:"rgba(16,185,129,.06)", border:"1px solid rgba(16,185,129,.3)", borderRadius:"10px", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px" }}>
               <div style={{ display:"flex", gap:"24px", alignItems:"center" }}>
@@ -227,9 +238,23 @@ export default function PedidoDetalhe() {
                   <span>Data: <strong style={{ color:"var(--t1)" }}>{formatDate(ultimaOtim.dt_otim)}</strong></span>
                 </div>
               </div>
-              <a href={"/pedidos/" + pedido.id + "/plano"} className="btn bg sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>
-                ◈ Ver Plano
-              </a>
+              {/* BOTÕES: Ver Plano + Etiquetas lado a lado */}
+              <div style={{ display:"flex", gap:"8px" }}>
+                <a
+                  href={"/pedidos/" + pedido.id + "/plano"}
+                  className="btn bg sm"
+                  style={{ whiteSpace:"nowrap", textDecoration:"none" }}
+                >
+                  ◈ Ver Plano
+                </a>
+                <a
+                  href={"/pedidos/" + pedido.id + "/etiquetas"}
+                  className="btn bg sm"
+                  style={{ whiteSpace:"nowrap", textDecoration:"none" }}
+                >
+                  🏷 Etiquetas
+                </a>
+              </div>
             </div>
           )}
 
