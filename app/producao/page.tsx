@@ -40,22 +40,35 @@ export default function ProducaoPage() {
     load();
   }
 
-  const porCol  = (col: StatusPedido) => pedidos.filter(p => p.status === col);
+  const porCol   = (col: StatusPedido) => pedidos.filter(p => p.status === col);
   const totalM2  = pedidos.reduce((a, p) => a + Number(p.m2_total), 0);
   const totalVal = pedidos.reduce((a, p) => a + Number(p.valor_total), 0);
+  const finalizados = porCol("Finalizado").length;
 
   return (
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Produção</div>
-        <div style={{ display:"flex", gap:"12px", alignItems:"center" }}>
-          <span className="clk">{pedidos.length} pedidos em produção</span>
-          <span className="clk">{formatM2(totalM2)}</span>
-          <span className="clk" style={{ color:"var(--acc)" }}>{formatBRL(totalVal)}</span>
-        </div>
       </div>
 
       <div className="con">
+
+        {/* CARDS */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:"12px", marginBottom:"20px" }}>
+          {[
+            { label:"Em Produção",  value: String(pedidos.length),  color:"var(--t1)",   sub:"pedidos ativos" },
+            { label:"m² Total",     value: formatM2(totalM2),        color:"var(--acc2)", sub:"em processamento" },
+            { label:"Valor Total",  value: formatBRL(totalVal),      color:"var(--acc)",  sub:"em produção" },
+            { label:"Finalizados",  value: String(finalizados),      color:"var(--ok)",   sub:"aguardando entrega" },
+          ].map(card => (
+            <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
+              <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
+              <div style={{ fontSize:"22px", fontWeight:700, color:card.color, fontFamily:"'DM Mono', monospace", lineHeight:1.2 }}>{card.value}</div>
+              <div style={{ fontSize:"11px", color:"var(--t3)" }}>{card.sub}</div>
+            </div>
+          ))}
+        </div>
+
         {loading ? (
           <div className="loading">Carregando produção...</div>
         ) : (
