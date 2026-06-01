@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidos, avancarStatusPedido, retrocederStatusPedido, deletarPedido } from "@/services/pedidos.service";
@@ -20,11 +20,11 @@ const CHIP: Record<string, string> = {
   "Cancelado":                "chip cr",
 };
 
-export default function PedidosPage() {
+function PedidosContent() {
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [pedidos, setPedidos]           = useState<Pedido[]>([]);
   const [loading, setLoading]           = useState(true);
-  const searchParams = useSearchParams();
   const [filtro, setFiltro]             = useState(searchParams.get("busca") ?? "");
   const [comOtimizacao, setComOtimizacao] = useState<Set<string>>(new Set());
 
@@ -263,5 +263,13 @@ export default function PedidosPage() {
         )}
       </div>
     </AppLayout>
+  );
+}
+
+export default function PedidosPage() {
+  return (
+    <Suspense fallback={<div />}>
+      <PedidosContent />
+    </Suspense>
   );
 }
