@@ -66,14 +66,14 @@ const PRODUTO_CHAPA: Record<string, number> = {
 
 // Paleta de peças vibrante — sem tons de verde
 const COLS_PECA = [
-  "#1e40af","#7c3aed","#be185d","#b45309",
-  "#0e7490","#065f46","#7f1d1d","#1d4ed8",
-  "#4c1d95","#9d174d","#92400e","#164e63",
+  "#1e2d45","#1c2b40","#1a293c","#1d2e48",
+  "#182840","#1b2c42","#172638","#1e3050",
+  "#162235","#1a2a3e","#1c2d44","#182a3c",
 ];
 const COLS_STROKE = [
-  "#60a5fa","#a78bfa","#f472b6","#fbbf24",
-  "#22d3ee","#34d399","#fca5a5","#93c5fd",
-  "#c4b5fd","#f9a8d4","#fde68a","#67e8f9",
+  "#4a7fa5","#456d95","#3d7a90","#4a7598",
+  "#3f6e88","#4a7a9a","#3d6880","#4a7295",
+  "#3f7088","#456880","#4a709a","#3d7285",
 ];
 
 function OtimizadorContent() {
