@@ -92,12 +92,12 @@ export default function EtiquetasPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
-  const [pedido, setPedido]               = useState<Pedido | null>(null);
-  const [otim, setOtim]                   = useState<HistoricoOtimizador | null>(null);
-  const [etiquetas, setEtiquetas]         = useState<Etiqueta[]>([]);
-  const [loading, setLoading]             = useState(true);
-  const [filtroChapa, setFiltroChapa]     = useState<number | "todas">("todas");
-  const [totalChapas, setTotalChapas]     = useState(0);
+  const [pedido, setPedido]           = useState<Pedido | null>(null);
+  const [otim, setOtim]               = useState<HistoricoOtimizador | null>(null);
+  const [etiquetas, setEtiquetas]     = useState<Etiqueta[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [filtroChapa, setFiltroChapa] = useState<number | "todas">("todas");
+  const [totalChapas, setTotalChapas] = useState(0);
 
   useEffect(() => {
     async function load() {
@@ -117,15 +117,13 @@ export default function EtiquetasPage() {
           new Date(o.dt_otim)
             .toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })
             .replace(/\//g, "") +
-          "-" +
-          id;
+          "-" + id;
 
         const totalGeral = chapas.reduce((s, c) => s + c.placed.length, 0);
         const ets: Etiqueta[] = [];
 
         chapas.forEach((chapa, ci) => {
           chapa.placed.forEach((peca, pi) => {
-            // QR aponta para o pedido dono da peça (pode ser pedido agrupado)
             const pidDaPeca = (peca as any).pedidoId ?? id;
             ets.push({
               pedidoId:          pidDaPeca,
@@ -139,7 +137,8 @@ export default function EtiquetasPage() {
               totalPecasNaChapa: chapa.placed.length,
               totalPecasGeral:   totalGeral,
               loteCorte:         lote,
-              qrUrl:             `https://urbanglasserp.vercel.app/pedidos/${pidDaPeca}`,
+              // QR aponta para a view de produção (sem sidebar, sem financeiro)
+              qrUrl: `https://urbanglasserp.vercel.app/pedidos/${pidDaPeca}/producao`,
             });
           });
         });
@@ -211,7 +210,6 @@ export default function EtiquetasPage() {
           display: flex; flex-direction: column; align-items: center; gap: 16px;
         }
 
-        /* Etiqueta em tela: escala visual 1mm = 3px → 300x150px */
         .etiqueta {
           width: 300px; height: 150px;
           background: white; border: 1.5px solid #888; border-radius: 6px;
@@ -252,7 +250,6 @@ export default function EtiquetasPage() {
         .et-sep { color: #bbb; }
         .et-lote { font-size: 6.5px; font-family: 'Courier New', monospace; color: #aaa; margin-top: 1px; }
 
-        /* ── PRINT ── */
         @media print {
           .toolbar, .info-bar { display: none !important; }
           html, body { background: white; margin: 0; padding: 0; }
