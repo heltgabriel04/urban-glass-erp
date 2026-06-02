@@ -18,9 +18,15 @@ const CHIP: Record<string, string> = {
   "Cancelado":               "chip cr",
 };
 
+const IND_IE: Record<string, string> = {
+  "1": "Contribuinte ICMS",
+  "2": "Contribuinte Isento",
+  "9": "Não Contribuinte",
+};
+
 export default function ClienteDetalhe() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
+  const router  = useRouter();
 
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
@@ -52,6 +58,16 @@ export default function ClienteDetalhe() {
   const pedAtivos = pedidos.filter(p => !["Entregue","Finalizado","Cancelado"].includes(p.status));
   const ticketMed = pedidos.length > 0 ? faturado / pedidos.length : 0;
 
+  const enderecoCompleto = [
+    cliente.logradouro && cliente.numero
+      ? `${cliente.logradouro}, ${cliente.numero}`
+      : cliente.logradouro || cliente.endereco,
+    cliente.complemento,
+    cliente.bairro,
+    cliente.cidade && cliente.uf ? `${cliente.cidade} / ${cliente.uf}` : cliente.cidade,
+    cliente.cep,
+  ].filter(Boolean).join(" — ");
+
   return (
     <AppLayout>
       <div className="tb">
@@ -81,41 +97,87 @@ export default function ClienteDetalhe() {
           ))}
         </div>
 
-        {/* Grid dados + financeiro */}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"16px" }}>
+        {/* Grid dados */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"16px" }}>
+
+          {/* Dados gerais */}
           <div className="card" style={{ padding:"20px 24px" }}>
             <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, marginBottom:"16px", letterSpacing:".06em" }}>DADOS CADASTRAIS</div>
             <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
-              <Row label="CNPJ"            value={cliente.cnpj || "—"} />
-              <Row label="Telefone"        value={cliente.tel  || "—"} />
-              <Row label="E-mail"          value={cliente.email || "—"} />
-              <Row label="Endereço"        value={cliente.endereco || "—"} />
-              <Row label="Cidade"          value={cliente.cidade || "—"} />
-              <Row label="Pagamento"       value={cliente.pgto || "—"} />
-              <Row label="Tabela de preço" value={cliente.tabela === "g" ? "Grandes Clientes" : "Padrão"} />
+              <Row label="Tipo"      value={cliente.tipo_pessoa === "PF" ? "Pessoa Física" : "Pessoa Jurídica"} />
+              {cliente.tipo_pessoa === "PJ"
+                ? <Row label="CNPJ"  value={cliente.cnpj || "—"} />
+                : <Row label="CPF"   value={cliente.cpf  || "—"} />
+              }
+              <Row label="Telefone"  value={cliente.tel   || "—"} />
+              <Row label="E-mail"    value={cliente.email || "—"} />
+              <Row label="Pagamento" value={cliente.pgto  || "—"} />
+              <Row label="Tabela"    value={cliente.tabela === "g" ? "Grandes Clientes" : "Padrão"} />
             </div>
           </div>
 
+          {/* Endereço */}
           <div className="card" style={{ padding:"20px 24px" }}>
-            <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, marginBottom:"16px", letterSpacing:".06em" }}>RESUMO FINANCEIRO</div>
+            <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, marginBottom:"16px", letterSpacing:".06em" }}>ENDEREÇO</div>
             <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
-              <Row label="Total faturado" value={formatBRL(faturado)} accent />
-              <Row label="Recebido"       value={formatBRL(recebido)} color="var(--ok)" />
-              <Row label="A receber"      value={formatBRL(aReceber)} color={aReceber > 0 ? "var(--warn)" : "var(--t2)"} />
-              <Row label="Ticket médio"   value={formatBRL(ticketMed)} />
+              {cliente.logradouro ? (
+                <>
+                  <Row label="Logradouro"  value={`${cliente.logradouro}${cliente.numero ? ", " + cliente.numero : ""}`} />
+                  {cliente.complemento && <Row label="Complemento" value={cliente.complemento} />}
+                  {cliente.bairro      && <Row label="Bairro"      value={cliente.bairro} />}
+                  <Row label="Cidade / UF" value={[cliente.cidade, cliente.uf].filter(Boolean).join(" / ") || "—"} />
+                  {cliente.cep         && <Row label="CEP"         value={cliente.cep} />}
+                  {cliente.cod_ibge    && <Row label="Cód. IBGE"   value={cliente.cod_ibge} />}
+                </>
+              ) : (
+                <Row label="Endereço" value={cliente.endereco || "—"} />
+              )}
             </div>
-            <div style={{ marginTop:"20px" }}>
-              <div style={{ display:"flex", justifyContent:"space-between", fontSize:"11px", color:"var(--t3)", marginBottom:"6px" }}>
-                <span>Recebimento geral</span><span>{pctRec.toFixed(0)}%</span>
+          </div>
+
+          {/* Fiscal */}
+          <div className="card" style={{ padding:"20px 24px" }}>
+            <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, marginBottom:"16px", letterSpacing:".06em" }}>DADOS FISCAIS</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
+              <Row label="Inscrição Estadual" value={cliente.ie || "—"} />
+              <Row label="Indicador IE"       value={IND_IE[cliente.ind_ie ?? "9"] ?? "—"} />
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <span style={{ fontSize:"13px", color:"var(--t3)" }}>Consumidor Final</span>
+                <span className={`chip ${cliente.consumidor_final ? "cy" : "cgr"}`}>
+                  {cliente.consumidor_final ? "Sim" : "Não"}
+                </span>
               </div>
-              <div style={{ height:"6px", borderRadius:"3px", background:"var(--surf3)", overflow:"hidden" }}>
-                <div style={{ height:"100%", borderRadius:"3px", width:`${pctRec}%`, background: pctRec >= 100 ? "var(--ok)" : pctRec >= 50 ? "var(--acc)" : "var(--warn)", transition:"width .3s" }} />
+              {cliente.obs_nfe && <Row label="Obs NF-e" value={cliente.obs_nfe} />}
+            </div>
+
+            {/* Alerta fiscal */}
+            {!cliente.cnpj && !cliente.cpf && (
+              <div style={{ marginTop:"14px", background:"rgba(244,63,94,.1)", border:"1px solid rgba(244,63,94,.3)", borderRadius:"8px", padding:"10px 12px", fontSize:"11px", color:"var(--err)" }}>
+                ⚠ Sem CPF/CNPJ — não será possível emitir NF-e para este cliente.
               </div>
-            </div>
-            <div style={{ marginTop:"16px", display:"flex", alignItems:"center", gap:"8px" }}>
-              <span style={{ fontSize:"12px", color:"var(--t3)" }}>Risco de inadimplência:</span>
-              {faturado === 0 ? <span className="chip cgr">—</span> : aReceber === 0 ? <span className="chip cg">Zero</span> : aReceber / faturado < 0.5 ? <span className="chip cy">Médio</span> : <span className="chip cr">Alto</span>}
-            </div>
+            )}
+            {!cliente.logradouro && !cliente.endereco && (
+              <div style={{ marginTop:"8px", background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)", borderRadius:"8px", padding:"10px 12px", fontSize:"11px", color:"var(--warn)" }}>
+                ⚠ Endereço incompleto — preencha para emitir NF-e.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Resumo financeiro */}
+        <div className="card" style={{ padding:"20px 24px" }}>
+          <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, marginBottom:"16px", letterSpacing:".06em" }}>RESUMO FINANCEIRO</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"12px", marginBottom:"16px" }}>
+            <div><div style={{ fontSize:"11px", color:"var(--t3)" }}>Total faturado</div><div style={{ fontSize:"18px", fontWeight:700, color:"var(--acc)", fontFamily:"'DM Mono', monospace" }}>{formatBRL(faturado)}</div></div>
+            <div><div style={{ fontSize:"11px", color:"var(--t3)" }}>Recebido</div><div style={{ fontSize:"18px", fontWeight:700, color:"var(--ok)", fontFamily:"'DM Mono', monospace" }}>{formatBRL(recebido)}</div></div>
+            <div><div style={{ fontSize:"11px", color:"var(--t3)" }}>A receber</div><div style={{ fontSize:"18px", fontWeight:700, color: aReceber > 0 ? "var(--warn)" : "var(--t2)", fontFamily:"'DM Mono', monospace" }}>{formatBRL(aReceber)}</div></div>
+            <div><div style={{ fontSize:"11px", color:"var(--t3)" }}>Ticket médio</div><div style={{ fontSize:"18px", fontWeight:700, color:"var(--acc2)", fontFamily:"'DM Mono', monospace" }}>{formatBRL(ticketMed)}</div></div>
+          </div>
+          <div style={{ height:"6px", borderRadius:"3px", background:"var(--surf3)", overflow:"hidden" }}>
+            <div style={{ height:"100%", borderRadius:"3px", width:`${pctRec}%`, background: pctRec >= 100 ? "var(--ok)" : pctRec >= 50 ? "var(--acc)" : "var(--warn)", transition:"width .3s" }} />
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:"11px", color:"var(--t3)", marginTop:"6px" }}>
+            <span>Recebimento geral</span><span>{pctRec.toFixed(0)}%</span>
           </div>
         </div>
 
@@ -174,7 +236,7 @@ export default function ClienteDetalhe() {
   );
 }
 
-function Row({ label, value, accent, color }: { label: string; value: string | number; accent?: boolean; color?: string; }) {
+function Row({ label, value, accent, color }: { label: string; value: string | number; accent?: boolean; color?: string }) {
   return (
     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:"12px" }}>
       <span style={{ fontSize:"13px", color:"var(--t3)", flexShrink:0 }}>{label}</span>

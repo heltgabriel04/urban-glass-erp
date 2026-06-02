@@ -12,11 +12,13 @@ export type StatusPedido =
   | 'Finalizado'
   | 'Cancelado';
 
-export type StatusOrcamento = 'Pendente' | 'Aprovado' | 'Recusado';
-export type StatusRetalho = 'Disponível' | 'Reservado' | 'Em uso' | 'Descartado';
+export type StatusOrcamento  = 'Pendente' | 'Aprovado' | 'Recusado';
+export type StatusRetalho    = 'Disponível' | 'Reservado' | 'Em uso' | 'Descartado';
 export type StatusLancamento = 'Pago' | 'Pendente' | 'A Receber';
-export type TipoLancamento = 'Entrada' | 'Saída';
-export type TabelaCliente = 'p' | 'g';
+export type TipoLancamento   = 'Entrada' | 'Saída';
+export type TabelaCliente    = 'p' | 'g';
+export type TipoPessoa       = 'PF' | 'PJ';
+export type IndIE            = '1' | '2' | '9'; // 1=contribuinte, 2=isento, 9=não contribuinte
 
 export type StatusNota =
   | 'rascunho'
@@ -30,10 +32,27 @@ export interface Cliente {
   id: number;
   nome: string;
   cnpj: string;
+  cpf: string;
+  tipo_pessoa: TipoPessoa;
   tel: string;
   email: string;
+  // Endereço legado (campo texto único)
   endereco: string;
   cidade: string;
+  // Endereço estruturado para NF-e
+  cep: string;
+  logradouro: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
+  uf: string;
+  cod_ibge: string;
+  // Fiscal
+  ie: string;
+  ind_ie: IndIE;
+  consumidor_final: boolean;
+  obs_nfe: string;
+  // Comercial
   pgto: string;
   tabela: TabelaCliente;
   ativo: boolean;
@@ -223,34 +242,26 @@ export interface NotaFiscal {
   id: number;
   pedido_id: string | null;
   cliente_id: number | null;
-
   numero: string | null;
   serie: string;
   chave: string | null;
   protocolo: string | null;
-
   status: StatusNota;
-
   valor_produtos: number;
   valor_icms: number;
   valor_pis: number;
   valor_cofins: number;
   valor_total: number;
-
   cfop: string;
   natureza_op: string;
-
   nuvem_fiscal_id: string | null;
   xml_url: string | null;
   danfe_url: string | null;
   motivo_rejeicao: string | null;
-
   dt_emissao: string;
   dt_autorizacao: string | null;
   created_at: string;
   updated_at: string;
-
-  // joins
   pedidos?: Pick<Pedido, 'id'>;
   clientes?: Pick<Cliente, 'id' | 'nome' | 'cnpj' | 'cidade'>;
 }
