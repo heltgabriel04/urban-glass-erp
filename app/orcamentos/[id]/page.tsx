@@ -34,7 +34,7 @@ export default function OrcamentoDetalhe() {
     setLoading(false);
   }
 
-  // Auto-print quando ?print=1 e dados já carregados
+  // Auto-print com nome de arquivo customizado
   useEffect(() => {
     if (autoPrint && !loading && orc) {
       const timer = setTimeout(() => {
@@ -43,6 +43,18 @@ export default function OrcamentoDetalhe() {
       return () => clearTimeout(timer);
     }
   }, [autoPrint, loading, orc]);
+
+  // Define o título da página (usado como nome padrão do PDF ao salvar)
+  useEffect(() => {
+    if (orc) {
+      const cliente = orc.clientes?.nome ?? "Cliente";
+      const data = orc.dt_orcamento
+        ? new Date(orc.dt_orcamento + "T00:00:00").toLocaleDateString("pt-BR").replace(/\//g, "-")
+        : "";
+      document.title = `Orçamento - ${cliente} - ${data}`;
+    }
+    return () => { document.title = "Urban Glass ERP"; };
+  }, [orc]);
 
   async function handleEnviar() {
     setSalvando(true);
@@ -197,11 +209,7 @@ export default function OrcamentoDetalhe() {
                 </thead>
                 <tbody>
                   {itens.length === 0 && (
-                    <tr>
-                      <td colSpan={8} style={{ textAlign: "center", color: "var(--t3)", padding: "24px" }}>
-                        Nenhum item neste orçamento
-                      </td>
-                    </tr>
+                    <tr><td colSpan={8} style={{ textAlign: "center", color: "var(--t3)", padding: "24px" }}>Nenhum item neste orçamento</td></tr>
                   )}
                   {itens.map((item: any, i: number) => (
                     <tr key={item.id}>
@@ -225,28 +233,29 @@ export default function OrcamentoDetalhe() {
         <div className="print-area" style={{
           padding: "20px 28px",
           fontFamily: "Arial, sans-serif",
-          color: "#1a1a2e",
+          color: "#111",
           background: "white",
           width: "210mm",
           minHeight: "auto",
           boxSizing: "border-box",
         }}>
+          {/* Cabeçalho */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px", paddingBottom: "16px", borderBottom: "3px solid #2d5fa6" }}>
             <div>
               <div style={{ fontSize: "26px", fontWeight: 900, color: "#2d5fa6", letterSpacing: "-1px" }}>urbanglass</div>
-              <div style={{ fontSize: "9px", color: "#888", textTransform: "uppercase", letterSpacing: "1.5px", marginTop: "2px" }}>Urban Glass Comércio Ltda</div>
-              <div style={{ fontSize: "9px", color: "#888", marginTop: "2px" }}>CNPJ: 65.668.970/0001-05</div>
-              <div style={{ fontSize: "9px", color: "#888" }}>Av. Vereador Raymundo Hargreaves, 1250 – Fontesville – Juiz de Fora/MG</div>
-              <div style={{ fontSize: "9px", color: "#888" }}>(32) 99986-0317</div>
+              <div style={{ fontSize: "9px", fontWeight: 700, color: "#444", textTransform: "uppercase", letterSpacing: "1.5px", marginTop: "2px" }}>Urban Glass Comércio Ltda</div>
+              <div style={{ fontSize: "9px", fontWeight: 600, color: "#444", marginTop: "2px" }}>CNPJ: 65.668.970/0001-05</div>
+              <div style={{ fontSize: "9px", fontWeight: 600, color: "#444" }}>Av. Vereador Raymundo Hargreaves, 1250 – Fontesville – Juiz de Fora/MG</div>
+              <div style={{ fontSize: "9px", fontWeight: 600, color: "#444" }}>(32) 99986-0317</div>
             </div>
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: "11px", color: "#888", textTransform: "uppercase", letterSpacing: "2px", marginBottom: "4px" }}>Orçamento</div>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: "#444", textTransform: "uppercase", letterSpacing: "2px", marginBottom: "4px" }}>Orçamento</div>
               <div style={{ fontSize: "28px", fontWeight: 900, color: "#2d5fa6", letterSpacing: "-1px" }}>{orc.id}</div>
-              <div style={{ fontSize: "11px", color: "#555", marginTop: "6px" }}>Emissão: <strong>{formatDate(orc.dt_orcamento)}</strong></div>
-              {orc.dt_validade && <div style={{ fontSize: "11px", color: "#c00" }}>Válido até: <strong>{formatDate(orc.dt_validade)}</strong></div>}
+              <div style={{ fontSize: "11px", fontWeight: 700, color: "#333", marginTop: "6px" }}>Emissão: <strong>{formatDate(orc.dt_orcamento)}</strong></div>
+              {orc.dt_validade && <div style={{ fontSize: "11px", fontWeight: 700, color: "#c00" }}>Válido até: <strong>{formatDate(orc.dt_validade)}</strong></div>}
               <div style={{
                 display: "inline-block", marginTop: "8px", padding: "3px 14px",
-                borderRadius: "99px", fontSize: "10px", fontWeight: 700, letterSpacing: "1px",
+                borderRadius: "99px", fontSize: "10px", fontWeight: 800, letterSpacing: "1px",
                 background: orc.status === "Aprovado" ? "#d4edda" : orc.status === "Rejeitado" ? "#f8d7da" : "#fff3cd",
                 color: orc.status === "Aprovado" ? "#155724" : orc.status === "Rejeitado" ? "#721c24" : "#856404",
                 border: `1px solid ${orc.status === "Aprovado" ? "#c3e6cb" : orc.status === "Rejeitado" ? "#f5c6cb" : "#ffeeba"}`,
@@ -256,34 +265,35 @@ export default function OrcamentoDetalhe() {
             </div>
           </div>
 
+          {/* Cliente + Condições */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "18px" }}>
             <div style={{ padding: "12px", background: "#f0f4ff", borderRadius: "8px", borderLeft: "4px solid #2d5fa6" }}>
-              <div style={{ fontSize: "9px", fontWeight: 700, color: "#2d5fa6", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: "8px" }}>Cliente</div>
-              <div style={{ fontSize: "13px", fontWeight: 700, color: "#1a1a2e" }}>{orc.clientes?.nome ?? "—"}</div>
-              {orc.clientes?.cnpj && <div style={{ fontSize: "10px", color: "#555", marginTop: "3px" }}>CNPJ: {orc.clientes.cnpj}</div>}
-              {orc.clientes?.cidade && <div style={{ fontSize: "10px", color: "#555" }}>{orc.clientes.cidade}</div>}
-              {orc.clientes?.tel && <div style={{ fontSize: "10px", color: "#555" }}>Tel: {orc.clientes.tel}</div>}
+              <div style={{ fontSize: "9px", fontWeight: 800, color: "#2d5fa6", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: "8px" }}>Cliente</div>
+              <div style={{ fontSize: "14px", fontWeight: 800, color: "#111" }}>{orc.clientes?.nome ?? "—"}</div>
+              {orc.clientes?.cnpj && <div style={{ fontSize: "10px", fontWeight: 600, color: "#333", marginTop: "3px" }}>CNPJ: {orc.clientes.cnpj}</div>}
+              {orc.clientes?.cidade && <div style={{ fontSize: "10px", fontWeight: 600, color: "#333" }}>{orc.clientes.cidade}</div>}
+              {orc.clientes?.tel && <div style={{ fontSize: "10px", fontWeight: 600, color: "#333" }}>Tel: {orc.clientes.tel}</div>}
             </div>
             <div style={{ padding: "12px", background: "#f0f4ff", borderRadius: "8px", borderLeft: "4px solid #3d8c5c" }}>
-              <div style={{ fontSize: "9px", fontWeight: 700, color: "#3d8c5c", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: "8px" }}>Condições Comerciais</div>
-              <div style={{ fontSize: "11px", color: "#333", display: "flex", flexDirection: "column", gap: "4px" }}>
+              <div style={{ fontSize: "9px", fontWeight: 800, color: "#3d8c5c", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: "8px" }}>Condições Comerciais</div>
+              <div style={{ fontSize: "11px", color: "#222", display: "flex", flexDirection: "column", gap: "4px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "#777" }}>Pagamento</span>
+                  <span style={{ fontWeight: 600, color: "#444" }}>Pagamento</span>
                   <strong>{orc.forma_pgto || "—"}</strong>
                 </div>
                 {orc.parcelas > 1 && (
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "#777" }}>Parcelas</span>
+                    <span style={{ fontWeight: 600, color: "#444" }}>Parcelas</span>
                     <strong>{orc.parcelas}× de {formatBRL(orc.valor_total / orc.parcelas)}</strong>
                   </div>
                 )}
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "#777" }}>Frete</span>
+                  <span style={{ fontWeight: 600, color: "#444" }}>Frete</span>
                   <strong>{orc.frete || "Retirada"}</strong>
                 </div>
                 {orc.dt_entrega && (
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "#777" }}>Entrega prev.</span>
+                    <span style={{ fontWeight: 600, color: "#444" }}>Entrega prev.</span>
                     <strong>{formatDate(orc.dt_entrega)}</strong>
                   </div>
                 )}
@@ -291,12 +301,13 @@ export default function OrcamentoDetalhe() {
             </div>
           </div>
 
+          {/* Tabela de itens */}
           <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "16px", fontSize: "11px" }}>
             <thead>
               <tr style={{ background: "#2d5fa6" }}>
                 {["#","Produto","Dimensão (mm)","m²","Qtd","R$/m²","Lapidação","Subtotal"].map((h, i) => (
                   <th key={i} style={{
-                    padding: "8px", color: "white", fontWeight: 700, fontSize: "9px",
+                    padding: "8px", color: "white", fontWeight: 800, fontSize: "10px",
                     textAlign: i === 0 || i === 4 ? "center" : i >= 5 ? "right" : "left",
                     letterSpacing: "0.5px",
                   }}>{h}</th>
@@ -306,52 +317,56 @@ export default function OrcamentoDetalhe() {
             <tbody>
               {itens.map((item: any, i: number) => (
                 <tr key={item.id} style={{ background: i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
-                  <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", textAlign: "center", color: "#aaa", fontSize: "10px" }}>{i + 1}</td>
-                  <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", fontWeight: 600, color: "#1a1a2e" }}>{item.produto_nome}</td>
-                  <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", fontFamily: "monospace", fontSize: "10px" }}>{item.largura} × {item.altura}</td>
-                  <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", fontFamily: "monospace", fontSize: "10px" }}>{Number(item.m2).toFixed(3)}</td>
-                  <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", textAlign: "center" }}>{item.quantidade}</td>
-                  <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", textAlign: "right", fontFamily: "monospace", fontSize: "10px" }}>{formatBRL(item.valor_m2)}</td>
-                  <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", textAlign: "right", fontFamily: "monospace", fontSize: "10px" }}>{item.lapidacao > 0 ? formatBRL(item.lapidacao) : "—"}</td>
-                  <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", textAlign: "right", fontFamily: "monospace", fontWeight: 700, color: "#2d5fa6" }}>{formatBRL(item.subtotal)}</td>
+                  <td style={{ padding: "7px 8px", borderBottom: "1px solid #e0e6f5", textAlign: "center", fontWeight: 700, color: "#666", fontSize: "10px" }}>{i + 1}</td>
+                  <td style={{ padding: "7px 8px", borderBottom: "1px solid #e0e6f5", fontWeight: 800, color: "#111" }}>{item.produto_nome}</td>
+                  <td style={{ padding: "7px 8px", borderBottom: "1px solid #e0e6f5", fontFamily: "monospace", fontSize: "10px", fontWeight: 700, color: "#222" }}>{item.largura} × {item.altura}</td>
+                  <td style={{ padding: "7px 8px", borderBottom: "1px solid #e0e6f5", fontFamily: "monospace", fontSize: "10px", fontWeight: 700, color: "#222" }}>{Number(item.m2).toFixed(3)}</td>
+                  <td style={{ padding: "7px 8px", borderBottom: "1px solid #e0e6f5", textAlign: "center", fontWeight: 700 }}>{item.quantidade}</td>
+                  <td style={{ padding: "7px 8px", borderBottom: "1px solid #e0e6f5", textAlign: "right", fontFamily: "monospace", fontSize: "10px", fontWeight: 700, color: "#222" }}>{formatBRL(item.valor_m2)}</td>
+                  <td style={{ padding: "7px 8px", borderBottom: "1px solid #e0e6f5", textAlign: "right", fontFamily: "monospace", fontSize: "10px", fontWeight: 700, color: "#222" }}>{item.lapidacao > 0 ? formatBRL(item.lapidacao) : "—"}</td>
+                  <td style={{ padding: "7px 8px", borderBottom: "1px solid #e0e6f5", textAlign: "right", fontFamily: "monospace", fontWeight: 800, color: "#2d5fa6", fontSize: "11px" }}>{formatBRL(item.subtotal)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
 
+          {/* Total */}
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "18px" }}>
             <div style={{ minWidth: "260px", background: "#f0f4ff", borderRadius: "8px", padding: "12px", border: "1px solid #d0daf0" }}>
               {orc.desconto > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "11px" }}>
-                  <span style={{ color: "#c00" }}>Desconto ({orc.desconto}%)</span>
-                  <span style={{ fontFamily: "monospace", color: "#c00" }}>− {formatBRL(orc.valor_total / (1 - orc.desconto/100) * orc.desconto/100)}</span>
+                  <span style={{ fontWeight: 700, color: "#c00" }}>Desconto ({orc.desconto}%)</span>
+                  <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#c00" }}>− {formatBRL(orc.valor_total / (1 - orc.desconto/100) * orc.desconto/100)}</span>
                 </div>
               )}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "10px", borderTop: "2px solid #2d5fa6" }}>
-                <span style={{ fontWeight: 700, fontSize: "13px", color: "#2d5fa6" }}>VALOR TOTAL</span>
+                <span style={{ fontWeight: 800, fontSize: "13px", color: "#2d5fa6" }}>VALOR TOTAL</span>
                 <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: "18px", color: "#2d5fa6" }}>{formatBRL(orc.valor_total)}</span>
               </div>
             </div>
           </div>
 
+          {/* Observações */}
           {orc.obs && (
             <div style={{ padding: "10px 14px", background: "#fffbea", borderRadius: "8px", marginBottom: "16px", fontSize: "10px", borderLeft: "3px solid #f59e0b" }}>
-              <strong style={{ color: "#92400e" }}>Observações:</strong> <span style={{ color: "#555" }}>{orc.obs}</span>
+              <strong style={{ fontWeight: 800, color: "#7a3500" }}>Observações:</strong> <span style={{ fontWeight: 600, color: "#333" }}>{orc.obs}</span>
             </div>
           )}
 
+          {/* Assinaturas */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "40px", marginBottom: "16px", marginTop: "24px" }}>
             <div style={{ textAlign: "center" }}>
-              <div style={{ borderTop: "1px solid #999", paddingTop: "8px", fontSize: "10px", color: "#555" }}>Vendedor / Urban Glass</div>
+              <div style={{ borderTop: "1px solid #666", paddingTop: "8px", fontSize: "10px", fontWeight: 700, color: "#333" }}>Vendedor / Urban Glass</div>
             </div>
             <div style={{ textAlign: "center" }}>
-              <div style={{ borderTop: "1px solid #999", paddingTop: "8px", fontSize: "10px", color: "#555" }}>Cliente / Aprovação</div>
+              <div style={{ borderTop: "1px solid #666", paddingTop: "8px", fontSize: "10px", fontWeight: 700, color: "#333" }}>Cliente / Aprovação</div>
             </div>
           </div>
 
-          <div style={{ borderTop: "2px solid #2d5fa6", paddingTop: "8px", display: "flex", justifyContent: "space-between", fontSize: "8px", color: "#aaa" }}>
+          {/* Rodapé */}
+          <div style={{ borderTop: "2px solid #2d5fa6", paddingTop: "8px", display: "flex", justifyContent: "space-between", fontSize: "8px", color: "#555", fontWeight: 600 }}>
             <div>Urban Glass Comércio Ltda · CNPJ 65.668.970/0001-05 · Av. Vereador Raymundo Hargreaves, 1250 – Fontesville – Juiz de Fora/MG</div>
-            <div style={{ color: "#e00", fontStyle: "italic" }}>Não substitui a Nota Fiscal Eletrônica</div>
+            <div style={{ color: "#c00", fontStyle: "italic", fontWeight: 700 }}>Não substitui a Nota Fiscal Eletrônica</div>
           </div>
         </div>
       </AppLayout>
