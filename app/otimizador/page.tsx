@@ -17,51 +17,8 @@ interface ResultadoChapa { placed: PecaPlacada[]; free: EspacoLivre[]; W: number
 interface RetalhoGerado extends EspacoLivre { chapaIdx: number; prod: string; m2: number; }
 interface PedidoSugerido { id: string; clienteNome: string; totalPecas: number; produtos: string[]; itens: Peca[]; }
 
-// ─── ALGORITMO GUILLOTINE RECURSIVO ──────────────────────────────────────────
+// ─── ALGORITMO GUILLOTINE — MAX FIT COUNT ─────────────────────────────────────
 interface Retangulo { x: number; y: number; w: number; h: number; }
-
-function guillotineInserirMelhor(
-  espacos: Retangulo[],
-  peca: { l: number; a: number },
-): { espacoIdx: number; rotacionado: boolean } | null {
-  let melhor: { espacoIdx: number; rotacionado: boolean; shortSide: number; longSide: number } | null = null;
-
-  for (let i = 0; i < espacos.length; i++) {
-    const e = espacos[i];
-    const normal = peca.l <= e.w && peca.a <= e.h;
-    const rotac  = peca.a <= e.w && peca.l <= e.h;
-
-    if (!normal && !rotac) continue;
-
-    const candidatos: { rotacionado: boolean; shortSide: number; longSide: number }[] = [];
-
-    if (normal) {
-      candidatos.push({
-        rotacionado: false,
-        shortSide: Math.min(e.w - peca.l, e.h - peca.a), // menor sobra lateral
-        longSide:  Math.max(e.w - peca.l, e.h - peca.a),
-      });
-    }
-    if (rotac) {
-      candidatos.push({
-        rotacionado: true,
-        shortSide: Math.min(e.w - peca.a, e.h - peca.l),
-        longSide:  Math.max(e.w - peca.a, e.h - peca.l),
-      });
-    }
-
-    for (const c of candidatos) {
-      const melhorQue = melhor === null
-        || c.shortSide < melhor.shortSide
-        || (c.shortSide === melhor.shortSide && c.longSide < melhor.longSide);
-      if (melhorQue) {
-        melhor = { espacoIdx: i, rotacionado: c.rotacionado, shortSide: c.shortSide, longSide: c.longSide };
-      }
-    }
-  }
-
-  return melhor ? { espacoIdx: melhor.espacoIdx, rotacionado: melhor.rotacionado } : null;
-}
 
 function empacotar(
   W: number,
@@ -71,7 +28,6 @@ function empacotar(
 ): { placed: PecaPlacada[]; usados: Set<number>; free: EspacoLivre[] } {
   const placed: PecaPlacada[] = [];
   const usados = new Set<number>();
-
   let espacos: Retangulo[] = [{ x: 0, y: 0, w: W, h: H }];
 
   const ordem = pecas
@@ -81,13 +37,35 @@ function empacotar(
   for (const peca of ordem) {
     if (usados.has(peca.origIdx)) continue;
 
-    const resultado = guillotineInserirMelhor(espacos, peca);
-    if (!resultado) continue;
+    let melhor: {
+      espacoIdx: number; rotacionado: boolean;
+      fit: number; areaLivre: number; pl: number; pa: number;
+    } | null = null;
 
-    const { espacoIdx, rotacionado } = resultado;
+    for (let i = 0; i < espacos.length; i++) {
+      const e = espacos[i];
+      for (const rot of [false, true]) {
+        const pl = rot ? peca.a : peca.l;
+        const pa = rot ? peca.l : peca.a;
+        if (pl > e.w || pa > e.h) continue;
+
+        // Quantas peças cabem teoricamente neste espaço com esta orientação
+        const fit = Math.floor(e.w / pl) * Math.floor(e.h / pa);
+        const areaLivre = e.w * e.h - pl * pa;
+
+        if (
+          !melhor ||
+          fit > melhor.fit ||
+          (fit === melhor.fit && areaLivre < melhor.areaLivre)
+        ) {
+          melhor = { espacoIdx: i, rotacionado: rot, fit, areaLivre, pl, pa };
+        }
+      }
+    }
+
+    if (!melhor) continue;
+    const { espacoIdx, rotacionado, pl, pa } = melhor;
     const e = espacos[espacoIdx];
-    const pl = rotacionado ? peca.a : peca.l;
-    const pa = rotacionado ? peca.l : peca.a;
 
     placed.push({
       x: e.x, y: e.y, l: pl, a: pa,
@@ -95,31 +73,21 @@ function empacotar(
     });
     usados.add(peca.origIdx);
 
-    // Testa as duas estratégias de corte e escolhe a que gera o maior espaço livre
-    const corteHorizontal = {
-      dir:   { x: e.x + pl + kerf, y: e.y,            w: e.w - pl - kerf, h: pa              },
-      baixo: { x: e.x,             y: e.y + pa + kerf, w: e.w,             h: e.h - pa - kerf },
-    };
-    const corteVertical = {
-      dir:   { x: e.x + pl + kerf, y: e.y,            w: e.w - pl - kerf, h: e.h             },
-      baixo: { x: e.x,             y: e.y + pa + kerf, w: pl,              h: e.h - pa - kerf },
-    };
-
-    const areaH = Math.max(
-      corteHorizontal.dir.w   * corteHorizontal.dir.h,
-      corteHorizontal.baixo.w * corteHorizontal.baixo.h
-    );
-    const areaV = Math.max(
-      corteVertical.dir.w   * corteVertical.dir.h,
-      corteVertical.baixo.w * corteVertical.baixo.h
-    );
-
-    const corte = areaV >= areaH ? corteVertical : corteHorizontal;
+    // Longer Axis Split: divide pelo eixo maior do espaço restante
+    const dx = e.w - pl - kerf;
+    const dy = e.h - pa - kerf;
+    let dir: Retangulo, baixo: Retangulo;
+    if (dx >= dy) {
+      dir   = { x: e.x + pl + kerf, y: e.y,            w: dx,  h: e.h };
+      baixo = { x: e.x,             y: e.y + pa + kerf, w: pl,  h: dy  };
+    } else {
+      dir   = { x: e.x + pl + kerf, y: e.y,            w: dx,  h: pa  };
+      baixo = { x: e.x,             y: e.y + pa + kerf, w: e.w, h: dy  };
+    }
 
     espacos.splice(espacoIdx, 1);
-    if (corte.dir.w   > 0 && corte.dir.h   > 0) espacos.push(corte.dir);
-    if (corte.baixo.w > 0 && corte.baixo.h > 0) espacos.push(corte.baixo);
-
+    if (dir.w   > 0 && dir.h   > 0) espacos.push(dir);
+    if (baixo.w > 0 && baixo.h > 0) espacos.push(baixo);
     espacos.sort((a, b) => a.w * a.h - b.w * b.h);
   }
 
@@ -129,7 +97,7 @@ function empacotar(
 
   return { placed, usados, free };
 }
-// ─────────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────────
 
 const CHAPAS_PADRAO = [
   { label: "Chapa 4+4 Incolor — 3300 × 2250 mm",         w: 3300, h: 2250 },
@@ -369,10 +337,8 @@ function OtimizadorContent() {
       while (rem.length > 0 && ci < 100) {
         const { placed, usados, free } = empacotar(W, H, rem, kerf);
         if (placed.length === 0) break;
-
         results.push({ W: CW, H: CH, prod: prodNome, placed, free });
         totalPlaced += placed.length;
-
         rem = rem.filter((_, i) => !usados.has(i));
         ci++;
       }
