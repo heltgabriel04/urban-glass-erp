@@ -119,6 +119,7 @@ export interface Pedido {
   cliente_id: number;
   dt_pedido: string;
   dt_retirada: string | null;
+  datas_pgto: string[]; 
   m2_total: number;
   valor_total: number;
   valor_recebido: number;
@@ -328,6 +329,7 @@ export interface DashboardKPIs {
   ticketMedio: number;
   aproveitamentoMedio: number;
 }
+
 
 // ─── DATABASE TYPES (Supabase) ─────────────────────────────
 export type Database = {

@@ -32,6 +32,12 @@ function arredondarParaMultiplo50(v: number): number {
   return Math.ceil(v / 50) * 50;
 }
 
+function addMeses(dateStr: string, meses: number): string {
+  const d = new Date(dateStr + "T12:00:00");
+  d.setMonth(d.getMonth() + meses);
+  return d.toISOString().split("T")[0];
+}
+
 export default function NovoPedidoPage() {
   const router = useRouter();
 
@@ -50,6 +56,9 @@ export default function NovoPedidoPage() {
   const [itens, setItens]           = useState<ItemForm[]>([{ ...ITEM_VAZIO }]);
   const [salvando, setSalvando]     = useState(false);
   const [totalPedidoInput, setTotalPedidoInput] = useState(0);
+
+  // Datas de pagamento
+  const [datasPgto, setDatasPgto] = useState<string[]>([""]);
 
   useEffect(() => { load(); }, []);
 
@@ -74,6 +83,31 @@ export default function NovoPedidoPage() {
     const cli = clientes.find(c => c.id === clienteId);
     if (cli) setFormaPgto(cli.pgto || "");
   }, [clienteId, clientes]);
+
+  // Ao mudar parcelas ou primeira data, recalcula todas as datas
+  useEffect(() => {
+    const primeira = datasPgto[0] || "";
+    if (!primeira) {
+      setDatasPgto(Array(parcelas).fill(""));
+      return;
+    }
+    const novas = Array.from({ length: parcelas }, (_, i) =>
+      i === 0 ? primeira : addMeses(primeira, i)
+    );
+    setDatasPgto(novas);
+  }, [parcelas]);
+
+  function handlePrimeiraDtPgto(data: string) {
+    if (!data) { setDatasPgto(Array(parcelas).fill("")); return; }
+    const novas = Array.from({ length: parcelas }, (_, i) =>
+      i === 0 ? data : addMeses(data, i)
+    );
+    setDatasPgto(novas);
+  }
+
+  function handleDtPgto(idx: number, data: string) {
+    setDatasPgto(prev => prev.map((d, i) => i === idx ? data : d));
+  }
 
   function getTabela(): TabelaPreco | null {
     if (!clienteId) return tabelas[0] || null;
@@ -113,7 +147,6 @@ export default function NovoPedidoPage() {
     }));
   }
 
-  // Modo Total do item → deriva valor/m²
   function updTotalItem(i: number, total: number) {
     setItens(items => items.map((item, idx) => {
       if (idx !== i) return item;
@@ -122,7 +155,6 @@ export default function NovoPedidoPage() {
     }));
   }
 
-  // Modo Valor unitário por peça → deriva valor/m²
   function updUnitItem(i: number, unit: number) {
     setItens(items => items.map((item, idx) => {
       if (idx !== i) return item;
@@ -133,7 +165,6 @@ export default function NovoPedidoPage() {
     }));
   }
 
-  // Modo Total geral → distribui proporcionalmente por m²
   function aplicarTotalPedido(total: number) {
     if (total <= 0) return;
     const m2Tot = itens.reduce((a, i) => a + calcM2Item(i), 0);
@@ -160,6 +191,7 @@ export default function NovoPedidoPage() {
       cliente_id: clienteId as number,
       dt_pedido: dtPedido,
       dt_retirada: dtRetirada || null,
+      datas_pgto: datasPgto.filter(d => d),
       m2_total: m2Total,
       valor_total: valorTotal,
       valor_recebido: 0,
@@ -247,7 +279,40 @@ export default function NovoPedidoPage() {
                 </select>
               </div>
             </div>
-            <div className="fg">
+
+            {/* ── Datas de Pagamento ── */}
+            <div style={{ marginTop: "10px", padding: "12px 14px", background: "var(--surf2)", borderRadius: "8px", border: "1px solid var(--b2)" }}>
+              <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", marginBottom: "10px", textTransform: "uppercase" }}>
+                {parcelas === 1 ? "Data de Pagamento" : `Datas de Pagamento (${parcelas}x)`}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                {datasPgto.map((d, idx) => (
+                  <div key={idx} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    {parcelas > 1 && (
+                      <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", width: "60px", flexShrink: 0 }}>
+                        {idx + 1}ª parcela
+                      </span>
+                    )}
+                    <DateInput
+                      value={d}
+                      onChange={v => idx === 0 ? handlePrimeiraDtPgto(v) : handleDtPgto(idx, v)}
+                    />
+                    {parcelas > 1 && valorTotal > 0 && (
+                      <span style={{ fontSize: "11px", color: "var(--acc)", fontFamily: "'DM Mono', monospace", flexShrink: 0 }}>
+                        {formatBRL(valorTotal / parcelas)}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {parcelas > 1 && (
+                <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "8px", fontFamily: "'DM Mono', monospace" }}>
+                  Altere a 1ª data para recalcular todas automaticamente
+                </div>
+              )}
+            </div>
+
+            <div className="fg" style={{ marginTop: "10px" }}>
               <label className="fl">Observações</label>
               <textarea className="fc" value={obs} onChange={e => setObs(e.target.value)} placeholder="Observações do pedido..." />
             </div>
@@ -261,6 +326,24 @@ export default function NovoPedidoPage() {
             <div className="sr"><div className="sl">Valor Total</div><div className="sv" style={{ color: "var(--acc)", fontSize: "18px" }}>{formatBRL(valorTotal)}</div></div>
             {parcelas > 1 && (
               <div className="sr"><div className="sl">Por Parcela</div><div className="sv">{formatBRL(valorTotal / parcelas)}</div></div>
+            )}
+            {datasPgto.filter(d => d).length > 0 && (
+              <div style={{ marginTop: "12px", padding: "10px 12px", background: "var(--surf2)", borderRadius: "8px", border: "1px solid var(--b2)" }}>
+                <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", marginBottom: "8px", textTransform: "uppercase" }}>Vencimentos</div>
+                {datasPgto.filter(d => d).map((d, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: "4px" }}>
+                    <span style={{ color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>
+                      {parcelas > 1 ? `${i + 1}ª` : "Pagamento"}
+                    </span>
+                    <span style={{ color: "var(--t1)", fontFamily: "'DM Mono', monospace" }}>
+                      {new Date(d + "T12:00:00").toLocaleDateString("pt-BR")}
+                      {parcelas > 1 && valorTotal > 0 && (
+                        <span style={{ color: "var(--acc)", marginLeft: "8px" }}>{formatBRL(valorTotal / parcelas)}</span>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
             )}
             {clienteId && tab && tab.min > 0 && valorTotal < tab.min && (
               <div className="al al-w" style={{ marginTop: "10px" }}>⚠ Pedido abaixo do mínimo de {formatBRL(tab.min)}</div>
@@ -301,30 +384,10 @@ export default function NovoPedidoPage() {
                   <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
                   <input className="fc" type="number" value={item.altura  || ""} onChange={e => updItem(i, "altura",  parseInt(e.target.value) || 0)} placeholder="0" />
                   <input className="fc" type="number" value={item.quantidade} onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
-                  <CurrencyInput
-                    value={item.valor_m2}
-                    onChange={v => updItem(i, "valor_m2", v)}
-                    placeholder="R$/m²"
-                    title="Valor por m²"
-                  />
-                  <CurrencyInput
-                    value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(unitVal.toFixed(2)) : 0}
-                    onChange={v => updUnitItem(i, v)}
-                    placeholder="por peça"
-                    title="Valor por peça"
-                  />
-                  <CurrencyInput
-                    value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : 0}
-                    onChange={v => updTotalItem(i, v)}
-                    placeholder="total"
-                    title="Total do item"
-                  />
-                  <CurrencyInput
-                    value={item.lapidacao}
-                    onChange={v => updItem(i, "lapidacao", v)}
-                    placeholder="0"
-                    title="Lapidação por m²"
-                  />
+                  <CurrencyInput value={item.valor_m2} onChange={v => updItem(i, "valor_m2", v)} placeholder="R$/m²" title="Valor por m²" />
+                  <CurrencyInput value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(unitVal.toFixed(2)) : 0} onChange={v => updUnitItem(i, v)} placeholder="por peça" title="Valor por peça" />
+                  <CurrencyInput value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : 0} onChange={v => updTotalItem(i, v)} placeholder="total" title="Total do item" />
+                  <CurrencyInput value={item.lapidacao} onChange={v => updItem(i, "lapidacao", v)} placeholder="0" title="Lapidação por m²" />
                   <button className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1}>✕</button>
                 </div>
                 {m2 > 0 && (
@@ -340,7 +403,6 @@ export default function NovoPedidoPage() {
             );
           })}
 
-          {/* ── Total geral do pedido ── */}
           <div style={{ marginTop: "14px", padding: "12px 14px", background: "var(--surf2)", borderRadius: "8px", border: "1px solid var(--b2)", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             <span style={{ fontSize: "11px", color: "var(--t2)", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>
               Distribuir total do pedido:
