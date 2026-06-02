@@ -1,373 +1,411 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
-import { getNotas, criarRascunho, deletarNota, emitirNFe, consultarStatusNFe } from "../../services/notas.service";
-import { getPedidos } from "../../services/pedidos.service";
-import { formatBRL, formatDate } from "@/lib/formatters";
+import { supabase } from "@/lib/supabase/client";
+import { getPedidos } from "@/services/pedidos.service";
+import { salvarNotaCompleta, emitirNFeCompleta } from "@/services/notas.service";
+import { formatBRL } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
-import type { NotaFiscal, Pedido } from "@/types";
+import type { Pedido, Cliente } from "@/types";
 
-const STATUS_CHIP: Record<string, string> = {
-  rascunho:   "chip cgr",
-  enviando:   "chip cy",
-  autorizada: "chip cg",
-  cancelada:  "chip cr",
-  rejeitada:  "chip cr",
+const FORMAS_PGTO = [
+  { cod: "01", label: "Dinheiro" },
+  { cod: "02", label: "Cheque" },
+  { cod: "03", label: "Cartão de Crédito" },
+  { cod: "04", label: "Cartão de Débito" },
+  { cod: "15", label: "Boleto Bancário" },
+  { cod: "17", label: "PIX" },
+  { cod: "90", label: "Sem Pagamento" },
+  { cod: "99", label: "Outros" },
+];
+
+function pgtoFromStr(s: string): string {
+  const m: Record<string, string> = {
+    "Dinheiro":"01","Cheque":"02","Cartão":"03","Cartão de Crédito":"03",
+    "Cartão de Débito":"04","Boleto":"15","PIX":"17","A Prazo":"99",
+  };
+  return m[s] ?? "99";
+}
+
+interface ItemNota {
+  produto_nome: string; ncm: string; cfop: string; unidade: string;
+  quantidade: number; valor_unitario: number; valor_bruto: number;
+  ipi_pct: number; icms_pct: number; valor_ipi: number;
+  valor_icms: number; valor_pis: number; valor_cofins: number; lapidacao: number;
+}
+
+interface FormNota {
+  pedido_id: string; cliente_id: number | null;
+  natureza_op: string; finalidade: string; tipo: string;
+  serie: string; cfop_padrao: string;
+  itens: ItemNota[];
+  valor_desconto: number; valor_frete: number; valor_seguro: number; valor_outros: number;
+  forma_pgto: string; parcelas: number;
+  modalidade_frete: number;
+  transportadora: string; placa_veiculo: string; uf_veiculo: string; rntc: string;
+  peso_bruto: string; peso_liquido: string; volumes: string; especie_volume: string;
+  dt_saida: string; hora_saida: string;
+  obs_contribuinte: string; obs_internas: string;
+}
+
+const FORM_VAZIO: FormNota = {
+  pedido_id:"", cliente_id:null,
+  natureza_op:"Venda de mercadoria", finalidade:"1", tipo:"saida",
+  serie:"1", cfop_padrao:"5.101", itens:[],
+  valor_desconto:0, valor_frete:0, valor_seguro:0, valor_outros:0,
+  forma_pgto:"01", parcelas:1, modalidade_frete:9,
+  transportadora:"", placa_veiculo:"", uf_veiculo:"", rntc:"",
+  peso_bruto:"", peso_liquido:"", volumes:"", especie_volume:"",
+  dt_saida: new Date().toISOString().split("T")[0],
+  hora_saida: new Date().toTimeString().slice(0,5),
+  obs_contribuinte:"", obs_internas:"",
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  rascunho:   "Rascunho",
-  enviando:   "Processando",
-  autorizada: "Autorizada",
-  cancelada:  "Cancelada",
-  rejeitada:  "Rejeitada",
-};
+function calcItem(item: ItemNota, cfop: string): ItemNota {
+  const aliqIcms = cfop.startsWith("5") ? 18 : 12;
+  const vIpi    = item.valor_bruto * (item.ipi_pct / 100);
+  const vIcms   = item.valor_bruto * (aliqIcms / 100);
+  const vPis    = item.valor_bruto * 0.0165;
+  const vCofins = item.valor_bruto * 0.076;
+  return { ...item, icms_pct:aliqIcms, valor_ipi:vIpi, valor_icms:vIcms, valor_pis:vPis, valor_cofins:vCofins };
+}
 
-export default function NotasPage() {
-  const { toast } = useToast();
+export default function NovaNFePage() {
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const { toast }    = useToast();
 
-  const [notas, setNotas]           = useState<NotaFiscal[]>([]);
-  const [pedidos, setPedidos]       = useState<Pedido[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [salvando, setSalvando]     = useState(false);
-  const [modalNova, setModalNova]   = useState(false);
-  const [pedidoSel, setPedidoSel]   = useState<string>("");
-  const [cfopSel, setCfopSel]       = useState<string>("5.101");
-  const [filtroStatus, setFiltroStatus] = useState<string>("todos");
+  const [form, setForm]         = useState<FormNota>({ ...FORM_VAZIO });
+  const [aba, setAba]           = useState<"cabecalho"|"itens"|"totais"|"pgto"|"transporte"|"detalhes">("cabecalho");
+  const [pedidos, setPedidos]   = useState<Pedido[]>([]);
+  const [cliente, setCliente]   = useState<Cliente | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [emitindo, setEmitindo] = useState(false);
+  const [loading, setLoading]   = useState(true);
 
-  useEffect(() => { load(); }, []);
-
-  async function load() {
-    setLoading(true);
-    const [ns, peds] = await Promise.all([getNotas(), getPedidos()]);
-    setNotas(ns);
-    // Só pedidos que ainda não têm nota autorizada
-    const pedidosComNota = ns
-      .filter(n => n.status === "autorizada" && n.pedido_id)
-      .map(n => n.pedido_id!);
-    setPedidos(peds.filter(p => !pedidosComNota.includes(p.id)));
-    setLoading(false);
-  }
-
-  async function handleCriarRascunho() {
-    const pedido = pedidos.find(p => p.id === pedidoSel);
-    if (!pedido) { toast("Selecione um pedido", "warn"); return; }
-    if (!pedido.clientes?.cnpj) {
-      toast(`Cliente ${pedido.clientes?.nome ?? ""} sem CNPJ cadastrado`, "warn");
-      return;
+  useEffect(() => {
+    async function init() {
+      const peds = await getPedidos();
+      setPedidos(peds);
+      const pp = searchParams.get("pedido");
+      if (pp) { const p = peds.find(x => x.id === pp); if (p) await preencherDoPedido(p); }
+      setLoading(false);
     }
-    setSalvando(true);
-    const nota = await criarRascunho(pedido, cfopSel);
-    setSalvando(false);
-    if (!nota) { toast("Erro ao criar rascunho", "err"); return; }
-    toast(`Rascunho criado para ${pedido.id}`);
-    setModalNova(false);
-    setPedidoSel("");
-    await load();
+    init();
+  }, []);
+
+  async function preencherDoPedido(p: Pedido) {
+    const { data: cliData } = await supabase.from("clientes").select("*").eq("id", p.cliente_id).single();
+    const cli = cliData as Cliente | null;
+    setCliente(cli);
+    const cfop = cli?.uf && cli.uf.toUpperCase() !== "MG" ? "6.101" : "5.101";
+    const itens: ItemNota[] = (p.itens_pedido ?? []).map(item => {
+      const qtd    = Number(item.m2) * item.quantidade;
+      const vBruto = Number(item.subtotal);
+      return calcItem({
+        produto_nome: item.produto_nome, ncm:"70031200", cfop:cfop.replace(".",""),
+        unidade:"M2", quantidade:Number(qtd.toFixed(4)),
+        valor_unitario: qtd > 0 ? vBruto / qtd : Number(item.valor_m2),
+        valor_bruto:vBruto, ipi_pct:0, icms_pct:0,
+        valor_ipi:0, valor_icms:0, valor_pis:0, valor_cofins:0,
+        lapidacao:Number(item.lapidacao),
+      }, cfop);
+    });
+    setForm(f => ({
+      ...f, pedido_id:p.id, cliente_id:p.cliente_id, cfop_padrao:cfop,
+      forma_pgto:pgtoFromStr(p.forma_pgto ?? ""), parcelas:p.parcelas ?? 1,
+      obs_contribuinte:cli?.obs_nfe ?? "", itens,
+    }));
   }
 
-  async function handleEmitir(nota: NotaFiscal) {
-    const pedido = pedidos.find(p => p.id === nota.pedido_id)
-      ?? (await getPedidos()).find(p => p.id === nota.pedido_id);
-    if (!pedido) { toast("Pedido não encontrado", "err"); return; }
-    if (!confirm(`Emitir NF-e para ${pedido.id}?\nAmbiente: HOMOLOGAÇÃO`)) return;
+  async function handlePedidoChange(pedidoId: string) {
+    const p = pedidos.find(x => x.id === pedidoId);
+    if (p) await preencherDoPedido(p);
+    else { setForm(f => ({ ...f, pedido_id:pedidoId, cliente_id:null, itens:[] })); setCliente(null); }
+  }
+
+  function setF<K extends keyof FormNota>(k: K, v: FormNota[K]) { setForm(f => ({ ...f, [k]:v })); }
+
+  function atualizarItem(idx: number, campo: keyof ItemNota, valor: number | string) {
+    setForm(f => {
+      const itens = [...f.itens];
+      const item  = { ...itens[idx], [campo]:valor };
+      itens[idx]  = (campo === "valor_bruto" || campo === "ipi_pct") ? calcItem(item, f.cfop_padrao) : item;
+      return { ...f, itens };
+    });
+  }
+
+  const valorProdutos = form.itens.reduce((a,i) => a + i.valor_bruto, 0);
+  const valorIcms     = form.itens.reduce((a,i) => a + i.valor_icms, 0);
+  const valorPis      = form.itens.reduce((a,i) => a + i.valor_pis, 0);
+  const valorCofins   = form.itens.reduce((a,i) => a + i.valor_cofins, 0);
+  const valorIpi      = form.itens.reduce((a,i) => a + i.valor_ipi, 0);
+  const valorNota     = valorProdutos + valorIpi + form.valor_frete + form.valor_seguro + form.valor_outros - form.valor_desconto;
+
+  async function handleSalvar() {
+    if (!form.pedido_id || !form.cliente_id) { toast("Selecione um pedido","warn"); return; }
     setSalvando(true);
-    const result = await emitirNFe(nota.id, pedido);
+    const ok = await salvarNotaCompleta({ form, valorProdutos, valorIcms, valorPis, valorCofins, valorIpi, valorNota });
     setSalvando(false);
+    if (!ok) { toast("Erro ao salvar rascunho","err"); return; }
+    toast("Rascunho salvo"); router.push("/notas");
+  }
+
+  async function handleSalvarEmitir() {
+    if (!form.pedido_id || !form.cliente_id) { toast("Selecione um pedido","warn"); return; }
+    if (!confirm("Salvar e enviar NF-e para a SEFAZ?\nAmbiente: HOMOLOGAÇÃO")) return;
+    setEmitindo(true);
+    const result = await emitirNFeCompleta({ form, valorProdutos, valorIcms, valorPis, valorCofins, valorIpi, valorNota });
+    setEmitindo(false);
     toast(result.mensagem, result.ok ? "ok" : "err");
-    await load();
+    if (result.ok) router.push("/notas");
   }
 
-  async function handleConsultar(nota: NotaFiscal) {
-    setSalvando(true);
-    await consultarStatusNFe(nota.id);
-    setSalvando(false);
-    toast("Status atualizado");
-    await load();
-  }
+  const ABAS = [
+    { id:"cabecalho",  label:"Cabeçalho" },
+    { id:"itens",      label:`Produtos (${form.itens.length})` },
+    { id:"totais",     label:"Totais" },
+    { id:"pgto",       label:"Pagamento" },
+    { id:"transporte", label:"Transporte" },
+    { id:"detalhes",   label:"Detalhes" },
+  ] as const;
 
-  async function handleDeletar(nota: NotaFiscal) {
-    if (!confirm(`Remover rascunho ${nota.id}?`)) return;
-    const ok = await deletarNota(nota.id);
-    if (!ok) { toast("Erro ao remover", "err"); return; }
-    toast("Rascunho removido");
-    await load();
-  }
-
-  const notasFiltradas = filtroStatus === "todos"
-    ? notas
-    : notas.filter(n => n.status === filtroStatus);
-
-  const totais = notas.reduce((acc, n) => ({
-    autorizadas: acc.autorizadas + (n.status === "autorizada" ? 1 : 0),
-    valor:       acc.valor       + (n.status === "autorizada" ? Number(n.valor_total) : 0),
-    pendentes:   acc.pendentes   + (["rascunho","enviando"].includes(n.status) ? 1 : 0),
-    rejeitadas:  acc.rejeitadas  + (n.status === "rejeitada" ? 1 : 0),
-  }), { autorizadas: 0, valor: 0, pendentes: 0, rejeitadas: 0 });
+  if (loading) return <AppLayout><div className="con"><div className="loading">Carregando...</div></div></AppLayout>;
 
   return (
     <AppLayout>
       <div className="tb">
-        <div className="tb-title">Notas Fiscais</div>
+        <button className="btn bg sm" onClick={() => router.push("/notas")}>← Voltar</button>
+        <div className="tb-title" style={{ flex:1 }}>Nova NF-e</div>
         <div style={{ fontSize:"11px", color:"var(--warn)", fontFamily:"'DM Mono', monospace",
           background:"rgba(245,158,11,.1)", border:"1px solid rgba(245,158,11,.3)",
-          borderRadius:"6px", padding:"4px 10px" }}>
-          ⚠ Ambiente: HOMOLOGAÇÃO
-        </div>
-        <button className="btn bp sm" onClick={() => setModalNova(true)}>+ Nova NF-e</button>
+          borderRadius:"6px", padding:"4px 10px" }}>⚠ HOMOLOGAÇÃO</div>
+        <button className="btn bg sm" onClick={handleSalvar} disabled={salvando}>{salvando ? "Salvando..." : "Salvar Rascunho"}</button>
+        <button className="btn bp sm" onClick={handleSalvarEmitir} disabled={emitindo || salvando}>{emitindo ? "Enviando..." : "Salvar e Emitir →"}</button>
       </div>
 
       <div className="con">
-        {/* CARDS */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"12px", marginBottom:"20px" }}>
-          {[
-            { label:"NF-e Autorizadas",  value: totais.autorizadas.toString(), color:"var(--ok)",   sub:"no período" },
-            { label:"Valor Emitido",     value: formatBRL(totais.valor),        color:"var(--acc)",  sub:"notas autorizadas" },
-            { label:"Pendentes",         value: totais.pendentes.toString(),     color:"var(--warn)", sub:"rascunhos + processando" },
-            { label:"Rejeitadas",        value: totais.rejeitadas.toString(),    color:"var(--err)",  sub:"verificar motivo" },
-          ].map(card => (
-            <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px" }}>
-              <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600, marginBottom:"4px" }}>{card.label}</div>
-              <div style={{ fontSize:"22px", fontWeight:700, color:card.color, fontFamily:"'DM Mono', monospace", lineHeight:1.2 }}>{card.value}</div>
-              <div style={{ fontSize:"11px", color:"var(--t3)", marginTop:"4px" }}>{card.sub}</div>
-            </div>
+        <div style={{ display:"flex", gap:"2px", borderBottom:"1px solid var(--b1)", marginBottom:"20px" }}>
+          {ABAS.map(a => (
+            <button key={a.id} onClick={() => setAba(a.id)} style={{
+              padding:"10px 18px", fontSize:"12px", fontWeight:600, cursor:"pointer",
+              background:"transparent", border:"none",
+              borderBottom:`2px solid ${aba === a.id ? "var(--acc)" : "transparent"}`,
+              color: aba === a.id ? "var(--acc)" : "var(--t3)", transition:"all .15s",
+            }}>{a.label}</button>
           ))}
         </div>
 
-        {/* AVISO HOMOLOGAÇÃO */}
-        <div style={{ background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)",
-          borderRadius:"10px", padding:"14px 18px", marginBottom:"20px",
-          display:"flex", gap:"12px", alignItems:"flex-start" }}>
-          <div style={{ fontSize:"20px" }}>⚠️</div>
-          <div>
-            <div style={{ fontSize:"13px", fontWeight:700, color:"var(--warn)", marginBottom:"4px" }}>
-              Sistema em modo de homologação
-            </div>
-            <div style={{ fontSize:"12px", color:"var(--t3)", lineHeight:1.6 }}>
-              As NF-e emitidas agora são apenas para teste junto à SEFAZ. Nenhuma nota tem validade fiscal até você trocar para ambiente de produção.<br />
-              <strong style={{ color:"var(--t2)" }}>Antes de ir para produção:</strong> validar alíquotas com o contador, configurar certificado A1 na Nuvem Fiscal, e testar ao menos 5 notas em homologação.
-            </div>
-          </div>
-        </div>
-
-        {/* FILTROS */}
-        <div style={{ display:"flex", gap:"8px", marginBottom:"16px" }}>
-          {["todos","rascunho","enviando","autorizada","rejeitada"].map(s => (
-            <button
-              key={s}
-              onClick={() => setFiltroStatus(s)}
-              style={{
-                padding:"5px 12px", borderRadius:"6px", fontSize:"12px", fontWeight:600, cursor:"pointer",
-                background: filtroStatus === s ? "var(--acc)" : "transparent",
-                border: `1px solid ${filtroStatus === s ? "var(--acc)" : "var(--b2)"}`,
-                color: filtroStatus === s ? "#000" : "var(--t3)",
-                transition:"all .15s",
-              }}
-            >
-              {s === "todos" ? "Todos" : STATUS_LABEL[s]}
-            </button>
-          ))}
-        </div>
-
-        {loading ? (
-          <div className="loading">Carregando notas...</div>
-        ) : notasFiltradas.length === 0 ? (
-          <div className="card" style={{ padding:"40px", textAlign:"center", color:"var(--t3)" }}>
-            Nenhuma nota encontrada.{" "}
-            <button className="btn bp sm" style={{ marginLeft:"12px" }} onClick={() => setModalNova(true)}>
-              + Criar primeira NF-e
-            </button>
-          </div>
-        ) : (
-          <div className="tw">
-            <table>
-              <thead>
-                <tr>
-                  <th>Nº / Chave</th>
-                  <th>Pedido</th>
-                  <th>Cliente</th>
-                  <th>CFOP</th>
-                  <th>Valor</th>
-                  <th>ICMS</th>
-                  <th>Emissão</th>
-                  <th>Status</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {notasFiltradas.map(nota => (
-                  <tr key={nota.id}>
-                    <td className="mono" style={{ fontSize:"11px" }}>
-                      {nota.numero
-                        ? <><strong>{nota.numero}</strong><br /><span style={{ color:"var(--t3)", fontSize:"10px" }}>{nota.chave?.slice(-8)}</span></>
-                        : <span style={{ color:"var(--t3)" }}>—</span>
-                      }
-                    </td>
-                    <td className="mono">
-                      {nota.pedido_id
-                        ? <a href={`/pedidos/${nota.pedido_id}`} style={{ color:"var(--acc)", textDecoration:"none" }}>{nota.pedido_id}</a>
-                        : "—"
-                      }
-                    </td>
-                    <td><strong>{nota.clientes?.nome ?? "—"}</strong><br /><span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono', monospace" }}>{nota.clientes?.cnpj ?? "sem CNPJ"}</span></td>
-                    <td className="mono">{nota.cfop}</td>
-                    <td className="mono" style={{ color:"var(--acc)", fontWeight:600 }}>{formatBRL(nota.valor_total)}</td>
-                    <td className="mono" style={{ color:"var(--t2)" }}>{formatBRL(nota.valor_icms)}</td>
-                    <td className="mono" style={{ fontSize:"11px" }}>{formatDate(nota.dt_emissao)}</td>
-                    <td>
-                      <span className={STATUS_CHIP[nota.status] ?? "chip cgr"}>
-                        {STATUS_LABEL[nota.status]}
-                      </span>
-                      {nota.status === "rejeitada" && nota.motivo_rejeicao && (
-                        <div style={{ fontSize:"10px", color:"var(--err)", marginTop:"3px", maxWidth:"140px" }}>
-                          {nota.motivo_rejeicao.slice(0, 60)}...
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      <div style={{ display:"flex", gap:"5px", flexWrap:"wrap" }}>
-                        {nota.status === "rascunho" && (
-                          <>
-                            <button
-                              className="btn bp xs"
-                              onClick={() => handleEmitir(nota)}
-                              disabled={salvando}
-                            >
-                              Emitir
-                            </button>
-                            <button
-                              className="btn bg xs"
-                              onClick={() => handleDeletar(nota)}
-                              disabled={salvando}
-                              style={{ color:"var(--err)", borderColor:"var(--err)" }}
-                            >
-                              🗑
-                            </button>
-                          </>
-                        )}
-                        {nota.status === "enviando" && (
-                          <button
-                            className="btn bg xs"
-                            onClick={() => handleConsultar(nota)}
-                            disabled={salvando}
-                          >
-                            ↻ Consultar
-                          </button>
-                        )}
-                        {nota.status === "autorizada" && (
-                          <div style={{ display:"flex", gap:"5px" }}>
-                            {nota.danfe_url && (
-                              <a href={nota.danfe_url} target="_blank" className="btn bg xs"
-                                style={{ textDecoration:"none" }}>
-                                DANFE
-                              </a>
-                            )}
-                            {nota.xml_url && (
-                              <a href={nota.xml_url} target="_blank" className="btn bg xs"
-                                style={{ textDecoration:"none" }}>
-                                XML
-                              </a>
-                            )}
-                          </div>
-                        )}
-                        {nota.status === "rejeitada" && (
-                          <button
-                            className="btn bg xs"
-                            onClick={() => handleDeletar(nota)}
-                            disabled={salvando}
-                          >
-                            Remover
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* MODAL NOVA NF-e */}
-      {modalNova && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && setModalNova(false)}>
-          <div className="mod" style={{ width:"480px" }}>
-            <div className="mhd">
-              <div className="mtit">Nova NF-e</div>
-              <button className="mcl" onClick={() => setModalNova(false)}>✕</button>
+        {aba === "cabecalho" && (
+          <div className="card" style={{ padding:"24px", display:"flex", flexDirection:"column", gap:"18px" }}>
+            <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em" }}>IDENTIFICAÇÃO</div>
+            <div className="fr">
+              <div className="fg" style={{ flex:2 }}>
+                <label className="fl">Pedido *</label>
+                <select className="fc" value={form.pedido_id} onChange={e => handlePedidoChange(e.target.value)}>
+                  <option value="">Selecione um pedido...</option>
+                  {pedidos.map(p => <option key={p.id} value={p.id}>{p.id} — {p.clientes?.nome ?? "?"} — {formatBRL(p.valor_total)}</option>)}
+                </select>
+              </div>
+              <div className="fg"><label className="fl">Série</label><input className="fc" value={form.serie} onChange={e => setF("serie", e.target.value)} maxLength={3} /></div>
             </div>
 
-            <div style={{ background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)",
-              borderRadius:"8px", padding:"10px 14px", marginBottom:"16px",
-              fontSize:"12px", color:"var(--warn)" }}>
-              ⚠ Verifique se o cliente tem CNPJ cadastrado antes de emitir.
-            </div>
-
-            <div className="fg" style={{ marginBottom:"14px" }}>
-              <label className="fl">Pedido *</label>
-              <select className="fc" value={pedidoSel} onChange={e => setPedidoSel(e.target.value)}>
-                <option value="">Selecione um pedido...</option>
-                {pedidos.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.id} — {p.clientes?.nome ?? "?"} — {formatBRL(p.valor_total)}
-                    {!p.clientes?.cnpj ? " ⚠ sem CNPJ" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="fg" style={{ marginBottom:"14px" }}>
-              <label className="fl">CFOP *</label>
-              <select className="fc" value={cfopSel} onChange={e => setCfopSel(e.target.value)}>
-                <option value="5.101">5.101 — Venda dentro de MG (ICMS 18%)</option>
-                <option value="6.101">6.101 — Venda fora de MG (ICMS 12%)</option>
-              </select>
-            </div>
-
-            {pedidoSel && (
-              <div style={{ background:"var(--surf2)", border:"1px solid var(--b1)",
-                borderRadius:"8px", padding:"12px", marginBottom:"16px",
-                fontSize:"12px", color:"var(--t3)" }}>
-                <div style={{ marginBottom:"6px", fontWeight:700, color:"var(--t2)" }}>Impostos calculados (rascunho)</div>
-                {(() => {
-                  const p = pedidos.find(x => x.id === pedidoSel);
-                  if (!p) return null;
-                  const v = Number(p.valor_total);
-                  const aliq = cfopSel.startsWith("5") ? 0.18 : 0.12;
-                  return (
-                    <div style={{ display:"flex", flexDirection:"column", gap:"4px", fontFamily:"'DM Mono', monospace" }}>
-                      <div style={{ display:"flex", justifyContent:"space-between" }}><span>Valor produtos</span><strong style={{ color:"var(--t1)" }}>{formatBRL(v)}</strong></div>
-                      <div style={{ display:"flex", justifyContent:"space-between" }}><span>ICMS ({cfopSel.startsWith("5") ? "18" : "12"}%)</span><span>{formatBRL(v * aliq)}</span></div>
-                      <div style={{ display:"flex", justifyContent:"space-between" }}><span>PIS (1,65%)</span><span>{formatBRL(v * 0.0165)}</span></div>
-                      <div style={{ display:"flex", justifyContent:"space-between" }}><span>COFINS (7,6%)</span><span>{formatBRL(v * 0.076)}</span></div>
-                      <div style={{ display:"flex", justifyContent:"space-between", borderTop:"1px solid var(--b1)", paddingTop:"6px", marginTop:"2px" }}>
-                        <strong style={{ color:"var(--t2)" }}>Total NF-e</strong>
-                        <strong style={{ color:"var(--acc)" }}>{formatBRL(v)}</strong>
-                      </div>
-                    </div>
-                  );
-                })()}
-                <div style={{ marginTop:"8px", fontSize:"11px", color:"var(--t3)", fontStyle:"italic" }}>
-                  * Alíquotas padrão. Confirme com seu contador antes de emitir em produção.
-                </div>
+            {cliente && (
+              <div style={{ background:"var(--surf2)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"14px 16px", display:"flex", gap:"24px", flexWrap:"wrap" }}>
+                <div><div style={{ fontSize:"10px", color:"var(--t3)", marginBottom:"2px" }}>CLIENTE</div><div style={{ fontWeight:700, color:"var(--t1)" }}>{cliente.nome}</div></div>
+                <div><div style={{ fontSize:"10px", color:"var(--t3)", marginBottom:"2px" }}>{cliente.tipo_pessoa === "PF" ? "CPF" : "CNPJ"}</div><div style={{ fontFamily:"'DM Mono', monospace", color:"var(--t2)" }}>{cliente.tipo_pessoa === "PF" ? cliente.cpf : cliente.cnpj}</div></div>
+                <div><div style={{ fontSize:"10px", color:"var(--t3)", marginBottom:"2px" }}>CIDADE / UF</div><div style={{ color:"var(--t2)" }}>{[cliente.cidade, cliente.uf].filter(Boolean).join(" / ")}</div></div>
+                <div><div style={{ fontSize:"10px", color:"var(--t3)", marginBottom:"2px" }}>INDICADOR IE</div><div style={{ color:"var(--t2)" }}>{{ "1":"Contribuinte", "2":"Isento", "9":"Não Contrib." }[cliente.ind_ie ?? "9"]}</div></div>
               </div>
             )}
 
-            <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end" }}>
-              <button className="btn bg" onClick={() => setModalNova(false)}>Cancelar</button>
-              <button
-                className="btn bp"
-                onClick={handleCriarRascunho}
-                disabled={salvando || !pedidoSel}
-              >
-                {salvando ? "Criando..." : "Criar Rascunho"}
-              </button>
+            <div className="fr">
+              <div className="fg" style={{ flex:2 }}><label className="fl">Natureza da Operação *</label><input className="fc" value={form.natureza_op} onChange={e => setF("natureza_op", e.target.value)} /></div>
+              <div className="fg">
+                <label className="fl">Finalidade</label>
+                <select className="fc" value={form.finalidade} onChange={e => setF("finalidade", e.target.value)}>
+                  <option value="1">1 — NF-e Normal</option>
+                  <option value="2">2 — Complementar</option>
+                  <option value="3">3 — Ajuste</option>
+                  <option value="4">4 — Devolução</option>
+                </select>
+              </div>
+              <div className="fg">
+                <label className="fl">Tipo</label>
+                <select className="fc" value={form.tipo} onChange={e => setF("tipo", e.target.value)}>
+                  <option value="saida">Saída</option>
+                  <option value="entrada">Entrada</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="fr">
+              <div className="fg">
+                <label className="fl">CFOP Padrão</label>
+                <select className="fc" value={form.cfop_padrao} onChange={e => setF("cfop_padrao", e.target.value)}>
+                  <option value="5.101">5.101 — Venda dentro de MG (18%)</option>
+                  <option value="6.101">6.101 — Venda fora de MG (12%)</option>
+                  <option value="5.102">5.102 — Prod. própria MG</option>
+                  <option value="6.102">6.102 — Prod. própria fora MG</option>
+                </select>
+              </div>
             </div>
           </div>
+        )}
+
+        {aba === "itens" && (
+          <div className="card" style={{ padding:"24px" }}>
+            <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em", marginBottom:"16px" }}>PRODUTOS / ITENS DA NOTA</div>
+            {form.itens.length === 0 ? (
+              <div style={{ color:"var(--t3)", padding:"32px 0", textAlign:"center" }}>Selecione um pedido na aba Cabeçalho para carregar os itens automaticamente.</div>
+            ) : (
+              <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
+                {form.itens.map((item, i) => (
+                  <div key={i} style={{ background:"var(--surf2)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"12px" }}>
+                      <div style={{ width:"24px", height:"24px", borderRadius:"6px", background:"var(--surf3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"11px", fontWeight:700, color:"var(--t3)", flexShrink:0 }}>{i+1}</div>
+                      <input className="fc" value={item.produto_nome} onChange={e => atualizarItem(i,"produto_nome",e.target.value)} style={{ flex:1, fontSize:"14px", fontWeight:600 }} />
+                    </div>
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:"8px" }}>
+                      <div className="fg"><label className="fl">NCM</label><input className="fc" value={item.ncm} onChange={e => atualizarItem(i,"ncm",e.target.value)} maxLength={8} /></div>
+                      <div className="fg"><label className="fl">CFOP</label><input className="fc" value={item.cfop} onChange={e => atualizarItem(i,"cfop",e.target.value)} maxLength={5} /></div>
+                      <div className="fg"><label className="fl">Unidade</label><input className="fc" value={item.unidade} onChange={e => atualizarItem(i,"unidade",e.target.value)} maxLength={6} /></div>
+                      <div className="fg"><label className="fl">Qtd (m²)</label><input className="fc" type="number" value={item.quantidade} onChange={e => atualizarItem(i,"quantidade",Number(e.target.value))} /></div>
+                      <div className="fg"><label className="fl">Vl. Unit.</label><input className="fc" type="number" value={item.valor_unitario.toFixed(4)} onChange={e => atualizarItem(i,"valor_unitario",Number(e.target.value))} /></div>
+                      <div className="fg"><label className="fl">Vl. Bruto</label><input className="fc" type="number" value={item.valor_bruto} onChange={e => atualizarItem(i,"valor_bruto",Number(e.target.value))} /></div>
+                      <div className="fg"><label className="fl">IPI %</label><input className="fc" type="number" value={item.ipi_pct} onChange={e => atualizarItem(i,"ipi_pct",Number(e.target.value))} /></div>
+                      <div className="fg"><label className="fl">ICMS %</label><input className="fc" value={item.icms_pct} readOnly style={{ opacity:0.6 }} /></div>
+                      <div className="fg"><label className="fl">Vl. ICMS</label><input className="fc" value={formatBRL(item.valor_icms)} readOnly style={{ opacity:0.6 }} /></div>
+                      <div className="fg"><label className="fl">Vl. PIS</label><input className="fc" value={formatBRL(item.valor_pis)} readOnly style={{ opacity:0.6 }} /></div>
+                      <div className="fg"><label className="fl">Vl. COFINS</label><input className="fc" value={formatBRL(item.valor_cofins)} readOnly style={{ opacity:0.6 }} /></div>
+                      <div className="fg"><label className="fl">Vl. Total</label><input className="fc" value={formatBRL(item.valor_bruto + item.valor_ipi)} readOnly style={{ color:"var(--acc)", fontWeight:700 }} /></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {aba === "totais" && (
+          <div className="card" style={{ padding:"24px", display:"flex", flexDirection:"column", gap:"18px" }}>
+            <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em" }}>TOTAIS DA NOTA FISCAL</div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:"12px" }}>
+              {[
+                { label:"BC ICMS",        value:formatBRL(valorProdutos), color:"var(--t2)" },
+                { label:"Valor ICMS",     value:formatBRL(valorIcms),     color:"var(--warn)" },
+                { label:"Valor IPI",      value:formatBRL(valorIpi),      color:"var(--t2)" },
+                { label:"Valor PIS",      value:formatBRL(valorPis),      color:"var(--t2)" },
+                { label:"Valor COFINS",   value:formatBRL(valorCofins),   color:"var(--t2)" },
+                { label:"Valor Produtos", value:formatBRL(valorProdutos), color:"var(--acc)" },
+              ].map(c => (
+                <div key={c.label} style={{ background:"var(--surf2)", borderRadius:"8px", padding:"12px 14px" }}>
+                  <div style={{ fontSize:"10px", color:"var(--t3)", marginBottom:"4px" }}>{c.label}</div>
+                  <div style={{ fontSize:"16px", fontWeight:700, color:c.color, fontFamily:"'DM Mono', monospace" }}>{c.value}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"12px" }}>
+              {([["valor_desconto","Desconto (R$)"],["valor_frete","Valor Frete"],["valor_seguro","Valor Seguro"],["valor_outros","Outras Desp."]] as const).map(([k,l]) => (
+                <div key={k} className="fg">
+                  <label className="fl">{l}</label>
+                  <input className="fc" type="number" min="0" step="0.01" value={form[k]} onChange={e => setF(k, Number(e.target.value))} />
+                </div>
+              ))}
+            </div>
+            <div style={{ background:"rgba(16,185,129,.08)", border:"1px solid rgba(16,185,129,.3)", borderRadius:"10px", padding:"16px 20px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <span style={{ fontSize:"14px", fontWeight:700, color:"var(--t2)" }}>VALOR TOTAL DA NOTA</span>
+              <span style={{ fontSize:"24px", fontWeight:800, color:"var(--ok)", fontFamily:"'DM Mono', monospace" }}>{formatBRL(valorNota)}</span>
+            </div>
+          </div>
+        )}
+
+        {aba === "pgto" && (
+          <div className="card" style={{ padding:"24px", display:"flex", flexDirection:"column", gap:"18px" }}>
+            <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em" }}>CONDIÇÕES DE PAGAMENTO</div>
+            <div className="fr">
+              <div className="fg" style={{ flex:2 }}>
+                <label className="fl">Forma de Pagamento *</label>
+                <select className="fc" value={form.forma_pgto} onChange={e => setF("forma_pgto", e.target.value)}>
+                  {FORMAS_PGTO.map(f => <option key={f.cod} value={f.cod}>{f.cod} — {f.label}</option>)}
+                </select>
+              </div>
+              <div className="fg">
+                <label className="fl">Parcelas</label>
+                <input className="fc" type="number" min="1" max="99" value={form.parcelas} onChange={e => setF("parcelas", Number(e.target.value))} />
+              </div>
+            </div>
+            <div style={{ fontSize:"12px", color:"var(--t3)", background:"var(--surf2)", borderRadius:"8px", padding:"10px 14px" }}>
+              💡 Para pagamentos parcelados (boleto/prazo), o contador pode ajustar as datas de vencimento diretamente na Nuvem Fiscal após a emissão.
+            </div>
+          </div>
+        )}
+
+        {aba === "transporte" && (
+          <div className="card" style={{ padding:"24px", display:"flex", flexDirection:"column", gap:"18px" }}>
+            <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em" }}>TRANSPORTE</div>
+            <div className="fg">
+              <label className="fl">Modalidade de Frete</label>
+              <select className="fc" value={form.modalidade_frete} onChange={e => setF("modalidade_frete", Number(e.target.value))}>
+                <option value={9}>9 — Sem Frete</option>
+                <option value={0}>0 — Por conta do Emitente (CIF)</option>
+                <option value={1}>1 — Por conta do Destinatário (FOB)</option>
+                <option value={2}>2 — Por conta de Terceiros</option>
+                <option value={3}>3 — Próprio por conta do Remetente</option>
+                <option value={4}>4 — Próprio por conta do Destinatário</option>
+              </select>
+            </div>
+            {form.modalidade_frete !== 9 && (
+              <>
+                <div className="fr">
+                  <div className="fg" style={{ flex:2 }}><label className="fl">Transportadora</label><input className="fc" value={form.transportadora} onChange={e => setF("transportadora", e.target.value)} placeholder="Nome da transportadora" /></div>
+                  <div className="fg"><label className="fl">Placa</label><input className="fc" value={form.placa_veiculo} onChange={e => setF("placa_veiculo", e.target.value.toUpperCase())} placeholder="ABC-1234" maxLength={8} /></div>
+                  <div className="fg" style={{ maxWidth:"80px" }}><label className="fl">UF</label><input className="fc" value={form.uf_veiculo} onChange={e => setF("uf_veiculo", e.target.value.toUpperCase().slice(0,2))} placeholder="MG" maxLength={2} /></div>
+                  <div className="fg"><label className="fl">RNTC (ANTT)</label><input className="fc" value={form.rntc} onChange={e => setF("rntc", e.target.value)} /></div>
+                </div>
+                <div className="fr">
+                  <div className="fg"><label className="fl">Peso Bruto (kg)</label><input className="fc" type="number" value={form.peso_bruto} onChange={e => setF("peso_bruto", e.target.value)} /></div>
+                  <div className="fg"><label className="fl">Peso Líquido (kg)</label><input className="fc" type="number" value={form.peso_liquido} onChange={e => setF("peso_liquido", e.target.value)} /></div>
+                  <div className="fg"><label className="fl">Volumes</label><input className="fc" type="number" value={form.volumes} onChange={e => setF("volumes", e.target.value)} /></div>
+                  <div className="fg"><label className="fl">Espécie</label><input className="fc" value={form.especie_volume} onChange={e => setF("especie_volume", e.target.value)} placeholder="Caixa, Fardo..." /></div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {aba === "detalhes" && (
+          <div className="card" style={{ padding:"24px", display:"flex", flexDirection:"column", gap:"18px" }}>
+            <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em" }}>DETALHES DA NOTA FISCAL</div>
+            <div className="fr">
+              <div className="fg"><label className="fl">Data de Saída</label><input className="fc" type="date" value={form.dt_saida} onChange={e => setF("dt_saida", e.target.value)} /></div>
+              <div className="fg"><label className="fl">Hora de Saída</label><input className="fc" type="time" value={form.hora_saida} onChange={e => setF("hora_saida", e.target.value)} /></div>
+            </div>
+            <div className="fg">
+              <label className="fl">Observações (impressas na nota)</label>
+              <textarea className="fc" value={form.obs_contribuinte} onChange={e => setF("obs_contribuinte", e.target.value)} placeholder="Esta informação será impressa nas observações da nota." rows={4} style={{ resize:"vertical" }} />
+            </div>
+            <div className="fg">
+              <label className="fl">Observações Internas (não impressas)</label>
+              <textarea className="fc" value={form.obs_internas} onChange={e => setF("obs_internas", e.target.value)} placeholder="Esta informação é de uso interno e não será impressa na nota." rows={3} style={{ resize:"vertical" }} />
+            </div>
+          </div>
+        )}
+
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:"20px", padding:"16px 20px", background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px" }}>
+          <div style={{ fontFamily:"'DM Mono', monospace", fontSize:"13px", color:"var(--t3)" }}>
+            {form.itens.length} item(ns) · Total:{" "}
+            <strong style={{ color:"var(--acc)", fontSize:"16px" }}>{formatBRL(valorNota)}</strong>
+          </div>
+          <div style={{ display:"flex", gap:"10px" }}>
+            <button className="btn bg sm" onClick={() => router.push("/notas")}>Cancelar</button>
+            <button className="btn bg sm" onClick={handleSalvar} disabled={salvando}>{salvando ? "Salvando..." : "Salvar Rascunho"}</button>
+            <button className="btn bp sm" onClick={handleSalvarEmitir} disabled={emitindo || salvando}>{emitindo ? "Enviando..." : "Salvar e Emitir →"}</button>
+          </div>
         </div>
-      )}
+      </div>
     </AppLayout>
   );
 }
