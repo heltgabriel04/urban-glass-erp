@@ -21,14 +21,11 @@ function guilhotina(W: number, H: number, pecas: Peca[], kerf: number): { placed
   let free: EspacoLivre[] = [{ x: 0, y: 0, l: W, a: H }];
   const placed: PecaPlacada[] = [];
 
-  // Tenta encaixar uma peça (com ou sem rotação) num espaço livre
-  // Retorna o melhor encaixe ou null
   function melhorEncaixe(peca: Peca, freeList: EspacoLivre[]): { fi: number; rot: boolean; score: number } | null {
     let best: { fi: number; rot: boolean; score: number } | null = null;
     freeList.forEach((fr, fi) => {
       // Orientação normal
       if (peca.l <= fr.l && peca.a <= fr.a) {
-        // Score: menor sobra — preferimos espaços que ficam mais "cheios"
         const score = (fr.l - peca.l) * (fr.a - peca.a);
         if (!best || score < best.score) best = { fi, rot: false, score };
       }
@@ -47,17 +44,17 @@ function guilhotina(W: number, H: number, pecas: Peca[], kerf: number): { placed
     const pa = rot ? peca.l : peca.a;
     placed.push({ x: fr.x, y: fr.y, l: pl, a: pa, idx, prod: peca.prod, rot, pedidoId: peca.pedidoId });
 
-    // Divisão guilhotina: dois novos espaços
+    // ─── FIX: espaço à direita usa fr.a (altura total do espaço), não pa ───
     const nr: EspacoLivre[] = [];
     const remX = fr.l - pl - kerf;
     const remY = fr.a - pa - kerf;
 
-    if (remX >= 100) nr.push({ x: fr.x + pl + kerf, y: fr.y,        l: remX,  a: pa });
+    if (remX >= 100) nr.push({ x: fr.x + pl + kerf, y: fr.y,           l: remX,  a: fr.a }); // CORRIGIDO: era a: pa
     if (remY >= 100) nr.push({ x: fr.x,              y: fr.y + pa + kerf, l: fr.l, a: remY });
 
     free.splice(fi, 1, ...nr);
 
-    // Mesclar espaços redundantes (remove espaços totalmente cobertos por outros)
+    // Mesclar espaços redundantes
     free = free.filter((a, ai) =>
       !free.some((b, bi) => bi !== ai && b.x <= a.x && b.y <= a.y && b.x + b.l >= a.x + a.l && b.y + b.a >= a.y + a.a)
     );
@@ -68,7 +65,7 @@ function guilhotina(W: number, H: number, pecas: Peca[], kerf: number): { placed
 
   pecas.forEach((peca, idx) => {
     const enc = melhorEncaixe(peca, free);
-    if (!enc) return; // não cabe — será tratado no loop externo
+    if (!enc) return;
     colocar(peca, idx, enc.fi, enc.rot);
   });
 
@@ -102,7 +99,6 @@ const PRODUTO_CHAPA: Record<string, number> = {
   "Vidro Monolítico 4mm":     10,
 };
 
-// Cores por pedido — para distinguir visualmente no canvas
 const PEDIDO_COLORS: Record<string, { fill: string; stroke: string }> = {};
 const FILL_POOL   = ["#1e2d45","#2d1e3f","#1e2d28","#2d2a1e","#1e2535","#2a1e2d","#1e3035","#2d1e25"];
 const STROKE_POOL = ["#4a7fa5","#7a5fa5","#4aa580","#a5954a","#4a70a5","#a54a7a","#4aa5b0","#a54a55"];
@@ -138,7 +134,6 @@ function OtimizadorContent() {
   const [retalhosGerados, setRetalhosGerados] = useState<RetalhoGerado[]>([]);
   const [salvando, setSalvando]             = useState(false);
 
-  // Agrupamento
   const [pedidosSugeridos, setPedidosSugeridos] = useState<PedidoSugerido[]>([]);
   const [pedidosSelecionados, setPedidosSelecionados] = useState<Set<string>>(new Set());
   const [carregandoSugestoes, setCarregandoSugestoes] = useState(false);
@@ -149,7 +144,6 @@ function OtimizadorContent() {
     supabase.from("produtos").select("*").eq("ativo", true).then(({ data }) => {
       const prods = (data as Produto[]) || [];
       setProdutos(prods);
-      // Não pré-seleciona produto — usuário escolhe manualmente
     });
   }, []);
 
@@ -171,7 +165,6 @@ function OtimizadorContent() {
       setPedidoRef(pedidoParam);
       if (carregadas.length > 0) autoSetChapa(carregadas[0].prod);
 
-      // Buscar sugestões de agrupamento
       const produtosNoPedido = [...new Set(carregadas.map(p => p.prod))];
       buscarSugestoes(pedidoParam, produtosNoPedido);
     });
@@ -184,7 +177,6 @@ function OtimizadorContent() {
   async function buscarSugestoes(pedidoPrincipal: string, produtosNoPedido: string[]) {
     setCarregandoSugestoes(true);
 
-    // Buscar todos os pedidos aguardando otimização, exceto o principal
     const { data: pedidosAguardando } = await supabase
       .from("pedidos")
       .select("id, clientes(nome)")
@@ -196,7 +188,6 @@ function OtimizadorContent() {
       return;
     }
 
-    // Para cada pedido, buscar seus itens e filtrar os que têm produto em comum
     const sugestoes: PedidoSugerido[] = [];
     for (const ped of pedidosAguardando) {
       const { data: itens } = await supabase
@@ -211,7 +202,6 @@ function OtimizadorContent() {
 
       if (!temProdutoEmComum) continue;
 
-      const pecasDoSugerido: Peca[] = [];
       const map = new Map<string, Peca>();
       itens.forEach((item: any) => {
         const key = `${item.largura}x${item.altura}x${item.produto_nome}`;
@@ -239,7 +229,6 @@ function OtimizadorContent() {
       else next.add(id);
       return next;
     });
-    // Limpa resultado anterior ao mudar seleção
     setResultado(null);
   }
 
@@ -289,7 +278,7 @@ function OtimizadorContent() {
     ctx.font = "bold 9px 'DM Mono', monospace";
     ctx.fillText("CHAPA " + (idx + 1) + "  ·  " + r.W + " × " + r.H + " mm  ·  " + r.prod, ox + 4, oy - 4);
 
-    r.placed.forEach((p, i) => {
+    r.placed.forEach((p) => {
       const pid = p.pedidoId ?? pedidoRef ?? "?";
       const { fill, stroke } = getColorForPedido(pid);
       const px = ox + (p.x + bordMm) * scale;
@@ -300,7 +289,6 @@ function OtimizadorContent() {
       ctx.fillStyle = fill;
       ctx.fillRect(px, py, pw, ph);
 
-      // Gradiente sutil
       const grad = ctx.createLinearGradient(px, py, px, py + ph * 0.4);
       grad.addColorStop(0, "rgba(255,255,255,0.10)");
       grad.addColorStop(1, "rgba(255,255,255,0)");
@@ -350,10 +338,8 @@ function OtimizadorContent() {
   }
 
   function rodar() {
-    // Montar lista de peças: principal + agrupados selecionados
     const todasAsPecas: Peca[] = [];
 
-    // Peças do pedido principal (com pedidoId)
     pecas.forEach(p => {
       if (p.l > 0 && p.a > 0) {
         for (let q = 0; q < (p.qtd || 1); q++) {
@@ -362,7 +348,6 @@ function OtimizadorContent() {
       }
     });
 
-    // Peças dos pedidos agrupados selecionados
     pedidosSugeridos
       .filter(ps => pedidosSelecionados.has(ps.id))
       .forEach(ps => {
@@ -377,7 +362,6 @@ function OtimizadorContent() {
 
     if (todasAsPecas.length === 0) return;
 
-    // Separar por produto
     const grupos = new Map<string, Peca[]>();
     todasAsPecas.forEach(p => {
       const grupo = grupos.get(p.prod) || [];
@@ -395,12 +379,13 @@ function OtimizadorContent() {
       const H = (chapa ? chapa.h : chapaH) - bord * 2;
       const CW = chapa ? chapa.w : chapaW;
       const CH = chapa ? chapa.h : chapaH;
-      // Ordenação: maior área primeiro, desempate por maior dimensão
+
       expandidas.sort((a, b) => {
         const diff = b.l * b.a - a.l * a.a;
         if (diff !== 0) return diff;
         return Math.max(b.l, b.a) - Math.max(a.l, a.a);
       });
+
       let rem = [...expandidas], ci = 0;
       while (rem.length && ci < 15) {
         const r = guilhotina(W, H, rem, kerf);
@@ -447,19 +432,15 @@ function OtimizadorContent() {
     const hoje = new Date().toISOString().split("T")[0];
     const todosPedidos = [pedidoRef, ...Array.from(pedidosSelecionados)];
 
-    // chapas_json compartilhado (layout completo de todas as chapas)
     const chapasJson = resultado.map(r => ({
       W: r.W, H: r.H, prod: r.prod, placed: r.placed, free: r.free,
     }));
 
-    // 1. Salvar otimização para cada pedido — pecas_json filtradas por pedido
     for (const pid of todosPedidos) {
-      // peças que pertencem a este pedido específico
       const pecasDoPedido = pid === pedidoRef
         ? pecas.filter(p => !p.pedidoId || p.pedidoId === pedidoRef)
         : (pedidosSugeridos.find(s => s.id === pid)?.itens ?? []);
 
-      // peças colocadas nas chapas que pertencem a este pedido
       const chapasComPecasDoPedido = chapasJson.map(chapa => ({
         ...chapa,
         placed: chapa.placed.filter((p: any) => (p.pedidoId ?? pedidoRef) === pid),
@@ -483,12 +464,10 @@ function OtimizadorContent() {
       });
     }
 
-    // 2. Avançar todos os pedidos para "Em Produção – Corte"
     for (const pid of todosPedidos) {
       await updatePedido(pid, { status: "Em Produção – Corte" });
     }
 
-    // 3. Salvar retalhos automaticamente
     if (retalhosGerados.length > 0) {
       const rows = retalhosGerados.map(fr => ({
         produto_nome:  fr.prod,
@@ -503,7 +482,6 @@ function OtimizadorContent() {
       await supabase.from("retalhos").insert(rows);
     }
 
-    // 4. Baixar estoque — consumo por produto
     const consumoPorProd = new Map<string, { chapas: number; m2: number }>();
     resultado.forEach(r => {
       const prev = consumoPorProd.get(r.prod) ?? { chapas: 0, m2: 0 };
@@ -515,7 +493,6 @@ function OtimizadorContent() {
     });
 
     for (const [prodNome, consumo] of consumoPorProd.entries()) {
-      // Buscar item do estoque via join com produtos(nome)
       const { data: estoqueItems } = await supabase
         .from("estoque")
         .select("id, chapas_saldo, m2_saldo, m2_consumido, produtos!inner(nome)")
@@ -552,11 +529,6 @@ function OtimizadorContent() {
       return { ...pc, [field]: value };
     }));
   }
-  function aplicarChapaPadrao(e: React.ChangeEvent<HTMLSelectElement>) {
-    const v = parseInt(e.target.value);
-    if (isNaN(v) || v < 0 || v >= CHAPAS_PADRAO.length) return;
-    setChapaW(CHAPAS_PADRAO[v].w); setChapaH(CHAPAS_PADRAO[v].h);
-  }
 
   const stats = [
     { label: "Aproveitamento", value: resultado ? aprovNum.toFixed(2) + "%" : "—", color: "#3dffa0", bg: "rgba(61,255,160,.08)",  border: "rgba(61,255,160,.2)",  icon: "◈" },
@@ -565,7 +537,6 @@ function OtimizadorContent() {
     { label: "Retalhos",       value: resultado ? String(retalhosGerados.length) : "—", color: "#f59e0b", bg: "rgba(245,158,11,.08)", border: "rgba(245,158,11,.2)", icon: "↺" },
   ];
 
-  // Legenda de pedidos no canvas (só quando agrupado)
   const pedidosNoCanvas = pedidoRef
     ? [pedidoRef, ...Array.from(pedidosSelecionados)]
     : [];
@@ -595,7 +566,6 @@ function OtimizadorContent() {
             <div className="card mb14">
               <div className="ct">Configuração da Chapa</div>
 
-              {/* Atalhos rápidos */}
               <div style={{ marginBottom: "12px" }}>
                 <label className="fl" style={{ marginBottom: "6px", display: "block" }}>Tamanho Padrão</label>
                 <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
@@ -684,7 +654,6 @@ function OtimizadorContent() {
                               transition: "all 0.15s",
                             }}
                           >
-                            {/* Checkbox */}
                             <div style={{
                               width: "16px", height: "16px", borderRadius: "4px", flexShrink: 0,
                               border: `2px solid ${selecionado ? stroke : "var(--b3)"}`,
@@ -786,7 +755,6 @@ function OtimizadorContent() {
             <div className="card mb14">
               <div className="ct">Resultado da Otimização</div>
 
-              {/* Stats */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "8px", marginBottom: "14px" }}>
                 {stats.map((s) => (
                   <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: "10px", padding: "12px 10px", textAlign: "center" }}>
@@ -803,7 +771,6 @@ function OtimizadorContent() {
                 </div>
               )}
 
-              {/* Seletor de chapas */}
               {resultado && resultado.length > 1 && (
                 <div style={{ display: "flex", gap: "5px", flexWrap: "wrap", marginBottom: "9px" }}>
                   {resultado.map((r, i) => (
@@ -816,7 +783,6 @@ function OtimizadorContent() {
                 </div>
               )}
 
-              {/* Canvas */}
               <div style={{ background: "#0d1117", border: "1px solid #2d3550", borderRadius: "10px", padding: "8px", position: "relative" }}>
                 <div style={{ position: "absolute", top: "10px", left: "10px", fontSize: "10px", fontFamily: "'DM Mono', monospace", color: "#4a5568", pointerEvents: "none", zIndex: 1 }}>
                   {!resultado ? "Configure as peças e clique em Calcular" : "Chapa " + (chapaIdx + 1) + " · " + (resultado[chapaIdx]?.placed.length || 0) + " peças"}
@@ -824,7 +790,6 @@ function OtimizadorContent() {
                 <canvas ref={canvasRef} width={554} height={370} style={{ display: "block", width: "100%", height: "370px" }} />
               </div>
 
-              {/* Legenda — pedidos no canvas */}
               {resultado && pedidosNoCanvas.length > 1 && (
                 <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "8px", padding: "8px 10px", background: "var(--surf2)", borderRadius: "7px" }}>
                   {pedidosNoCanvas.map(pid => {
@@ -841,7 +806,6 @@ function OtimizadorContent() {
                 </div>
               )}
 
-              {/* Legenda padrão quando não agrupado */}
               {(!resultado || pedidosNoCanvas.length <= 1) && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginTop: "10px", padding: "8px 10px", background: "var(--surf2)", borderRadius: "7px" }}>
                   {[
@@ -858,7 +822,6 @@ function OtimizadorContent() {
                 </div>
               )}
 
-              {/* Retalhos */}
               {resultado && retalhosGerados.length > 0 && (
                 <div style={{ marginTop: "14px" }}>
                   <div style={{ fontSize: "11px", fontWeight: 700, color: "#f59e0b", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px", fontFamily: "'DM Mono', monospace" }}>
@@ -882,7 +845,6 @@ function OtimizadorContent() {
                 </div>
               )}
 
-              {/* Botão salvar */}
               {resultado && pedidoRef && (
                 <div style={{ marginTop: "16px" }}>
                   <button
