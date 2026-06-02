@@ -16,7 +16,48 @@ const VAZIO: ClienteInsert = {
   pgto: "", tabela: "p", ativo: true,
 };
 
-// Busca endereço pelo CEP via ViaCEP
+// ─── MÁSCARAS ──────────────────────────────────────────────
+
+function maskCNPJ(v: string) {
+  const d = v.replace(/\D/g, "").slice(0, 14);
+  return d
+    .replace(/^(\d{2})(\d)/, "$1.$2")
+    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/\.(\d{3})(\d)/, ".$1/$2")
+    .replace(/(\d{4})(\d)/, "$1-$2");
+}
+
+function maskCPF(v: string) {
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  return d
+    .replace(/^(\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/\.(\d{3})(\d)/, ".$1-$2");
+}
+
+function maskTel(v: string) {
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 10)
+    return d.replace(/^(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3").replace(/-$/, "");
+  return d.replace(/^(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3").replace(/-$/, "");
+}
+
+function maskCEP(v: string) {
+  const d = v.replace(/\D/g, "").slice(0, 8);
+  return d.replace(/^(\d{5})(\d)/, "$1-$2");
+}
+
+function maskIE(v: string) {
+  // IE de MG: 000.000.000/0000 — 12 dígitos
+  const d = v.replace(/\D/g, "").slice(0, 12);
+  return d
+    .replace(/^(\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/\.(\d{3})(\d)/, ".$1/$2");
+}
+
+// ─── CEP VIA VIACEP ────────────────────────────────────────
+
 async function buscarCep(cep: string) {
   const raw = cep.replace(/\D/g, "");
   if (raw.length !== 8) return null;
@@ -29,15 +70,15 @@ async function buscarCep(cep: string) {
 }
 
 export default function ClientesPage() {
-  const [clientes, setClientes]     = useState<Cliente[]>([]);
-  const [financeiro, setFinanceiro] = useState<FinanceiroCliente[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [filtro, setFiltro]         = useState("");
-  const [modal, setModal]           = useState(false);
-  const [aba, setAba]               = useState<"geral" | "endereco" | "fiscal">("geral");
-  const [form, setForm]             = useState<ClienteInsert>(VAZIO);
-  const [editId, setEditId]         = useState<number | null>(null);
-  const [salvando, setSalvando]     = useState(false);
+  const [clientes, setClientes]       = useState<Cliente[]>([]);
+  const [financeiro, setFinanceiro]   = useState<FinanceiroCliente[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [filtro, setFiltro]           = useState("");
+  const [modal, setModal]             = useState(false);
+  const [aba, setAba]                 = useState<"geral" | "endereco" | "fiscal">("geral");
+  const [form, setForm]               = useState<ClienteInsert>(VAZIO);
+  const [editId, setEditId]           = useState<number | null>(null);
+  const [salvando, setSalvando]       = useState(false);
   const [buscandoCep, setBuscandoCep] = useState(false);
 
   useEffect(() => { load(); }, []);
@@ -114,8 +155,8 @@ export default function ClientesPage() {
   const riscoChip = (fin: FinanceiroCliente | null) => {
     if (!fin || fin.faturado === 0) return <span className="chip cgr">—</span>;
     const pct = Number(fin.a_receber) / Number(fin.faturado);
-    if (pct === 0)   return <span className="chip cg">Zero</span>;
-    if (pct < 0.5)   return <span className="chip cy">Médio</span>;
+    if (pct === 0)  return <span className="chip cg">Zero</span>;
+    if (pct < 0.5)  return <span className="chip cy">Médio</span>;
     return <span className="chip cr">Alto</span>;
   };
 
@@ -164,7 +205,7 @@ export default function ClientesPage() {
                   <tr><td colSpan={11} style={{ textAlign:"center", color:"var(--t3)", padding:"32px" }}>Nenhum cliente encontrado</td></tr>
                 )}
                 {filtrados.map(c => {
-                  const fin = finDe(c.id);
+                  const fin    = finDe(c.id);
                   const docNum = c.tipo_pessoa === "PF" ? c.cpf : c.cnpj;
                   const cidade = [c.cidade, c.uf].filter(Boolean).join(" / ");
                   return (
@@ -185,7 +226,7 @@ export default function ClientesPage() {
                           <span className={`chip ${c.consumidor_final ? "cy" : "cgr"}`} style={{ fontSize:"9px" }}>
                             {c.consumidor_final ? "Cons. Final" : "Revenda"}
                           </span>
-                          {c.ind_ie === "1" && <span className="chip cb" style={{ fontSize:"9px" }}>Contrib. ICMS</span>}
+                          {c.ind_ie === "1" && <span className="chip cb"  style={{ fontSize:"9px" }}>Contrib. ICMS</span>}
                           {c.ind_ie === "2" && <span className="chip cgr" style={{ fontSize:"9px" }}>Isento IE</span>}
                           {c.ind_ie === "9" && <span className="chip cgr" style={{ fontSize:"9px" }}>Não Contrib.</span>}
                         </div>
@@ -263,31 +304,56 @@ export default function ClientesPage() {
                       </select>
                     </div>
                   </div>
+
                   <div className="fg">
                     <label className="fl">Nome / Razão Social *</label>
                     <input className="fc" value={form.nome} onChange={e => F("nome", e.target.value)} placeholder="Nome ou razão social" />
                   </div>
+
                   <div className="fr">
                     {form.tipo_pessoa === "PJ" ? (
                       <div className="fg">
                         <label className="fl">CNPJ</label>
-                        <input className="fc" value={form.cnpj} onChange={e => F("cnpj", e.target.value)} placeholder="00.000.000/0001-00" />
+                        <input
+                          className="fc"
+                          value={form.cnpj}
+                          onChange={e => F("cnpj", maskCNPJ(e.target.value))}
+                          placeholder="00.000.000/0001-00"
+                          maxLength={18}
+                          inputMode="numeric"
+                        />
                       </div>
                     ) : (
                       <div className="fg">
                         <label className="fl">CPF</label>
-                        <input className="fc" value={form.cpf} onChange={e => F("cpf", e.target.value)} placeholder="000.000.000-00" />
+                        <input
+                          className="fc"
+                          value={form.cpf}
+                          onChange={e => F("cpf", maskCPF(e.target.value))}
+                          placeholder="000.000.000-00"
+                          maxLength={14}
+                          inputMode="numeric"
+                        />
                       </div>
                     )}
                     <div className="fg">
                       <label className="fl">Telefone</label>
-                      <input className="fc" value={form.tel} onChange={e => F("tel", e.target.value)} placeholder="(00) 00000-0000" />
+                      <input
+                        className="fc"
+                        value={form.tel}
+                        onChange={e => F("tel", maskTel(e.target.value))}
+                        placeholder="(00) 00000-0000"
+                        maxLength={15}
+                        inputMode="numeric"
+                      />
                     </div>
                   </div>
+
                   <div className="fg">
                     <label className="fl">E-mail</label>
-                    <input className="fc" value={form.email} onChange={e => F("email", e.target.value)} placeholder="email@empresa.com" />
+                    <input className="fc" value={form.email} onChange={e => F("email", e.target.value)} placeholder="email@empresa.com" inputMode="email" />
                   </div>
+
                   <div className="fr">
                     <div className="fg">
                       <label className="fl">Forma de Pagamento</label>
@@ -313,8 +379,18 @@ export default function ClientesPage() {
                 <div style={{ display:"flex", flexDirection:"column", gap:"14px" }}>
                   <div className="fr">
                     <div className="fg" style={{ maxWidth:"160px" }}>
-                      <label className="fl">CEP {buscandoCep && <span style={{ color:"var(--acc)", fontSize:"10px" }}>buscando...</span>}</label>
-                      <input className="fc" value={form.cep} onChange={e => F("cep", e.target.value)} onBlur={handleCepBlur} placeholder="00000-000" />
+                      <label className="fl">
+                        CEP {buscandoCep && <span style={{ color:"var(--acc)", fontSize:"10px" }}>buscando...</span>}
+                      </label>
+                      <input
+                        className="fc"
+                        value={form.cep}
+                        onChange={e => F("cep", maskCEP(e.target.value))}
+                        onBlur={handleCepBlur}
+                        placeholder="00000-000"
+                        maxLength={9}
+                        inputMode="numeric"
+                      />
                     </div>
                     <div className="fg">
                       <label className="fl">Logradouro</label>
@@ -346,7 +422,7 @@ export default function ClientesPage() {
                     </div>
                     <div className="fg">
                       <label className="fl">Cód. IBGE</label>
-                      <input className="fc" value={form.cod_ibge} onChange={e => F("cod_ibge", e.target.value)} placeholder="Preenchido auto via CEP" />
+                      <input className="fc" value={form.cod_ibge} onChange={e => F("cod_ibge", e.target.value)} placeholder="Preenchido auto via CEP" inputMode="numeric" />
                     </div>
                   </div>
                   <div style={{ fontSize:"11px", color:"var(--t3)", background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px" }}>
@@ -361,7 +437,14 @@ export default function ClientesPage() {
                   <div className="fr">
                     <div className="fg">
                       <label className="fl">Inscrição Estadual (IE)</label>
-                      <input className="fc" value={form.ie} onChange={e => F("ie", e.target.value)} placeholder="000.000.000/0000" />
+                      <input
+                        className="fc"
+                        value={form.ie}
+                        onChange={e => F("ie", maskIE(e.target.value))}
+                        placeholder="000.000.000/0000"
+                        maxLength={16}
+                        inputMode="numeric"
+                      />
                     </div>
                     <div className="fg">
                       <label className="fl">Indicador IE *</label>
@@ -377,13 +460,11 @@ export default function ClientesPage() {
                     <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em", marginBottom:"12px" }}>FINALIDADE DA OPERAÇÃO</div>
                     <div style={{ display:"flex", gap:"24px" }}>
                       <label style={{ display:"flex", alignItems:"center", gap:"8px", cursor:"pointer", fontSize:"13px", color:"var(--t1)" }}>
-                        <input type="radio" name="consumidor" checked={form.consumidor_final === false} onChange={() => F("consumidor_final", false)}
-                          style={{ accentColor:"var(--acc)" }} />
+                        <input type="radio" name="consumidor" checked={form.consumidor_final === false} onChange={() => F("consumidor_final", false)} style={{ accentColor:"var(--acc)" }} />
                         Revenda / Indústria
                       </label>
                       <label style={{ display:"flex", alignItems:"center", gap:"8px", cursor:"pointer", fontSize:"13px", color:"var(--t1)" }}>
-                        <input type="radio" name="consumidor" checked={form.consumidor_final === true} onChange={() => F("consumidor_final", true)}
-                          style={{ accentColor:"var(--acc)" }} />
+                        <input type="radio" name="consumidor" checked={form.consumidor_final === true} onChange={() => F("consumidor_final", true)} style={{ accentColor:"var(--acc)" }} />
                         Consumidor Final
                       </label>
                     </div>
@@ -408,7 +489,7 @@ export default function ClientesPage() {
 
             <div style={{ display:"flex", gap:"8px", justifyContent:"space-between", padding:"16px 20px", borderTop:"1px solid var(--b1)", flexShrink:0 }}>
               <div style={{ display:"flex", gap:"6px" }}>
-                {(["geral","endereco","fiscal"] as const).map((a, i) => (
+                {(["geral","endereco","fiscal"] as const).map((a) => (
                   <button key={a} onClick={() => setAba(a)} style={{
                     width:"8px", height:"8px", borderRadius:"50%", border:"none", cursor:"pointer",
                     background: aba === a ? "var(--acc)" : "var(--surf3)",
