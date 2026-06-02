@@ -24,7 +24,7 @@ function guillotineInserirMelhor(
   espacos: Retangulo[],
   peca: { l: number; a: number },
 ): { espacoIdx: number; rotacionado: boolean } | null {
-  let melhor: { espacoIdx: number; rotacionado: boolean; sobra: number } | null = null;
+  let melhor: { espacoIdx: number; rotacionado: boolean; shortSide: number; longSide: number } | null = null;
 
   for (let i = 0; i < espacos.length; i++) {
     const e = espacos[i];
@@ -33,24 +33,29 @@ function guillotineInserirMelhor(
 
     if (!normal && !rotac) continue;
 
-    const candidatos: { rotacionado: boolean; sobra: number }[] = [];
+    const candidatos: { rotacionado: boolean; shortSide: number; longSide: number }[] = [];
 
     if (normal) {
       candidatos.push({
         rotacionado: false,
-        sobra: (e.w - peca.l) * e.h + (e.h - peca.a) * peca.l,
+        shortSide: Math.min(e.w - peca.l, e.h - peca.a), // menor sobra lateral
+        longSide:  Math.max(e.w - peca.l, e.h - peca.a),
       });
     }
     if (rotac) {
       candidatos.push({
         rotacionado: true,
-        sobra: (e.w - peca.a) * e.h + (e.h - peca.l) * peca.a,
+        shortSide: Math.min(e.w - peca.a, e.h - peca.l),
+        longSide:  Math.max(e.w - peca.a, e.h - peca.l),
       });
     }
 
     for (const c of candidatos) {
-      if (melhor === null || c.sobra < melhor.sobra) {
-        melhor = { espacoIdx: i, rotacionado: c.rotacionado, sobra: c.sobra };
+      const melhorQue = melhor === null
+        || c.shortSide < melhor.shortSide
+        || (c.shortSide === melhor.shortSide && c.longSide < melhor.longSide);
+      if (melhorQue) {
+        melhor = { espacoIdx: i, rotacionado: c.rotacionado, shortSide: c.shortSide, longSide: c.longSide };
       }
     }
   }
