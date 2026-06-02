@@ -34,15 +34,25 @@ function guillotineInserirMelhor(
 
     if (!normal && !rotac) continue;
 
+    const candidatos: { rotacionado: boolean; sobra: number }[] = [];
+
     if (normal) {
-      const sobra = (e.w - peca.l) * e.h + (e.h - peca.a) * peca.l;
-      if (melhor === null || sobra < melhor.sobra)
-        melhor = { espacoIdx: i, rotacionado: false, sobra };
+      candidatos.push({
+        rotacionado: false,
+        sobra: (e.w - peca.l) * e.h + (e.h - peca.a) * peca.l,
+      });
     }
     if (rotac) {
-      const sobra = (e.w - peca.a) * e.h + (e.h - peca.l) * peca.a;
-      if (melhor === null || sobra < melhor.sobra)
-        melhor = { espacoIdx: i, rotacionado: true, sobra };
+      candidatos.push({
+        rotacionado: true,
+        sobra: (e.w - peca.a) * e.h + (e.h - peca.l) * peca.a,
+      });
+    }
+
+    for (const c of candidatos) {
+      if (melhor === null || c.sobra < melhor.sobra) {
+        melhor = { espacoIdx: i, rotacionado: c.rotacionado, sobra: c.sobra };
+      }
     }
   }
 
