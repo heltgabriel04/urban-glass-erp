@@ -1,19 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-// Rotas que o usuário de produção pode acessar
-const ROTAS_PRODUCAO = ["/pedidos"];
-
-// Rotas públicas (sem login)
-const ROTAS_PUBLICAS = ["/auth"];
-
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Deixa rotas públicas passarem
-  if (ROTAS_PUBLICAS.some((r) => pathname.startsWith(r))) {
-    return NextResponse.next();
-  }
+  if (pathname.startsWith("/auth")) return NextResponse.next();
 
   const response = NextResponse.next({
     request: { headers: request.headers },
@@ -28,7 +19,7 @@ export async function middleware(request: NextRequest) {
         setAll(cookiesToSet: Array<{ name: string; value: string; options?: Record<string, unknown> }>) {
           cookiesToSet.forEach(({ name, value, options }) => {
             request.cookies.set(name, value);
-            response.cookies.set(name, value, options as any);
+            response.cookies.set(name, value, options);
           });
         },
       },
@@ -37,7 +28,6 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Sem login → redireciona para /auth/login
   if (!user) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/auth/login";
@@ -45,22 +35,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Busca o role do usuário
-  const { data: perfil } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
+  // Lê o role direto do JWT (injetado pelo hook do Supabase)
+  const { data: { session } } = await supabase.auth.getSession();
+  const jwt = session?.access_token;
+  let role = "admin";
 
-  const role = perfil?.role ?? "admin";
+  if (jwt) {
+    try {
+      const payload = JSON.parse(atob(jwt.split(".")[1]));
+      role = payload.user_role ?? "admin";
+    } catch {}
+  }
 
-  // Usuário de produção: só pode acessar /pedidos/*/producao
   if (role === "producao") {
-    const podeAcessar =
-      /^\/pedidos\/[^/]+\/producao(\/.*)?$/.test(pathname);
-
+    const podeAcessar = /^\/pedidos\/[^/]+\/producao(\/.*)?$/.test(pathname);
     if (!podeAcessar) {
-      // Redireciona para uma página de acesso negado simples
       const url = request.nextUrl.clone();
       url.pathname = "/auth/acesso-negado";
       return NextResponse.redirect(url);
@@ -85,7 +74,6 @@ export const config = {
     "/produtos/:path*",
     "/tabelas/:path*",
     "/fluxo/:path*",
-    "/relatorios/:path*",
     "/dashboard/:path*",
   ],
 };
