@@ -26,7 +26,6 @@ const ITEM_VAZIO: ItemForm = {
   valor_m2: 0, lapidacao: 0,
 };
 
-// Arredonda para o próximo múltiplo de 50 (se já é múltiplo, mantém)
 function arredondarParaMultiplo50(v: number): number {
   if (v % 50 === 0) return v;
   return Math.ceil(v / 50) * 50;
@@ -35,23 +34,23 @@ function arredondarParaMultiplo50(v: number): number {
 export default function NovoOrcamentoPage() {
   const router = useRouter();
 
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [produtos, setProdutos] = useState<Produto[]>([]);
-  const [tabelas, setTabelas] = useState<TabelaPreco[]>([]);
+  const [clientes, setClientes]   = useState<Cliente[]>([]);
+  const [produtos, setProdutos]   = useState<Produto[]>([]);
+  const [tabelas, setTabelas]     = useState<TabelaPreco[]>([]);
   const [proximoId, setProximoId] = useState("");
 
-  const [clienteId, setClienteId] = useState<number | "">("");
+  const [clienteId, setClienteId]   = useState<number | "">("");
   const [dtOrcamento, setDtOrcamento] = useState(new Date().toISOString().split("T")[0]);
-  const [dtValidade, setDtValidade] = useState("");
-  const [dtEntrega, setDtEntrega] = useState("");
-  const [formaPgto, setFormaPgto] = useState("");
-  const [conta, setConta] = useState("");
-  const [parcelas, setParcelas] = useState(1);
-  const [frete, setFrete] = useState("Retirada");
-  const [obs, setObs] = useState("");
-  const [desconto, setDesconto] = useState(0);
-  const [itens, setItens] = useState<ItemForm[]>([{ ...ITEM_VAZIO }]);
-  const [salvando, setSalvando] = useState(false);
+  const [dtValidade, setDtValidade]   = useState("");
+  const [dtEntrega, setDtEntrega]     = useState("");
+  const [formaPgto, setFormaPgto]     = useState("");
+  const [conta, setConta]             = useState("");
+  const [parcelas, setParcelas]       = useState(1);
+  const [frete, setFrete]             = useState("Retirada");
+  const [obs, setObs]                 = useState("");
+  const [desconto, setDesconto]       = useState(0);
+  const [itens, setItens]             = useState<ItemForm[]>([{ ...ITEM_VAZIO }]);
+  const [salvando, setSalvando]       = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -82,12 +81,17 @@ export default function NovoOrcamentoPage() {
     return tabelas.find(t => cli.tabela === "g" ? t.tipo === "Grandes Clientes" : t.tipo === "Padrão") || tabelas[0] || null;
   }
 
-  function addItem() {
-    setItens(i => [...i, { ...ITEM_VAZIO }]);
+  function addItem() { setItens(i => [...i, { ...ITEM_VAZIO }]); }
+  function remItem(i: number) { setItens(items => items.filter((_, idx) => idx !== i)); }
+
+  function calcM2Item(item: ItemForm): number {
+    const l = arredondarParaMultiplo50(item.largura);
+    const a = arredondarParaMultiplo50(item.altura);
+    return (l / 1000) * (a / 1000) * item.quantidade;
   }
 
-  function remItem(i: number) {
-    setItens(items => items.filter((_, idx) => idx !== i));
+  function calcSubtotal(item: ItemForm): number {
+    return calcM2Item(item) * item.valor_m2;
   }
 
   function updItem(i: number, field: keyof ItemForm, value: string | number) {
@@ -96,39 +100,45 @@ export default function NovoOrcamentoPage() {
       const novo = { ...item, [field]: value };
       if (field === "produto_id") {
         const prod = produtos.find(p => p.id === Number(value));
-        if (prod) {
-          novo.produto_nome = prod.nome;
-          novo.valor_m2 = prod.valor;
-        }
+        if (prod) { novo.produto_nome = prod.nome; novo.valor_m2 = prod.valor; }
       }
       return novo;
     }));
   }
 
-  // Usa dimensões arredondadas para o cálculo, mas exibe as originais
-  function calcM2Item(item: ItemForm): number {
-    const l = arredondarParaMultiplo50(item.largura);
-    const a = arredondarParaMultiplo50(item.altura);
-    return (l / 1000) * (a / 1000) * item.quantidade;
+  // Entrada pelo total do item → deriva valor/m²
+  function updTotalItem(i: number, totalStr: string) {
+    const total = parseFloat(totalStr) || 0;
+    setItens(items => items.map((item, idx) => {
+      if (idx !== i) return item;
+      const m2 = calcM2Item(item);
+      const valor_m2 = m2 > 0 ? total / m2 : 0;
+      return { ...item, valor_m2: parseFloat(valor_m2.toFixed(4)) };
+    }));
   }
 
-  function calcSubtotal(item: ItemForm): number {
-    const m2 = calcM2Item(item);
-    return m2 * item.valor_m2;
+  // Entrada pelo valor unitário (por peça) → deriva valor/m²
+  function updUnitItem(i: number, unitStr: string) {
+    const unit = parseFloat(unitStr) || 0;
+    setItens(items => items.map((item, idx) => {
+      if (idx !== i) return item;
+      const l = arredondarParaMultiplo50(item.largura);
+      const a = arredondarParaMultiplo50(item.altura);
+      const m2unit = (l / 1000) * (a / 1000);
+      const valor_m2 = m2unit > 0 ? unit / m2unit : 0;
+      return { ...item, valor_m2: parseFloat(valor_m2.toFixed(4)) };
+    }));
   }
 
-  const m2Total = itens.reduce((a, i) => a + calcM2Item(i), 0);
+  const m2Total       = itens.reduce((a, i) => a + calcM2Item(i), 0);
   const subtotalBruto = itens.reduce((a, i) => a + calcSubtotal(i), 0);
   const valorDesconto = subtotalBruto * (desconto / 100);
-  const valorTotal = subtotalBruto - valorDesconto;
+  const valorTotal    = subtotalBruto - valorDesconto;
 
   async function salvar() {
     if (!clienteId) { alert("Selecione um cliente"); return; }
     if (itens.some(i => !i.produto_id)) { alert("Selecione o produto em todos os itens"); return; }
-    if (itens.some(i => i.largura === 0 || i.altura === 0)) {
-      alert("Preencha as dimensões de todos os itens");
-      return;
-    }
+    if (itens.some(i => i.largura === 0 || i.altura === 0)) { alert("Preencha as dimensões de todos os itens"); return; }
 
     setSalvando(true);
 
@@ -189,9 +199,7 @@ export default function NovoOrcamentoPage() {
               <label className="fl">Cliente *</label>
               <select className="fc" value={clienteId} onChange={e => setClienteId(Number(e.target.value) || "")}>
                 <option value="">Selecione o cliente...</option>
-                {clientes.map(c => (
-                  <option key={c.id} value={c.id}>{c.nome}</option>
-                ))}
+                {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
               </select>
             </div>
 
@@ -202,21 +210,11 @@ export default function NovoOrcamentoPage() {
             )}
 
             <div className="fr">
-              <div className="fg">
-                <label className="fl">Data do Orçamento</label>
-                <DateInput value={dtOrcamento} onChange={setDtOrcamento} />
-              </div>
-              <div className="fg">
-                <label className="fl">Validade do Orçamento</label>
-                <DateInput value={dtValidade} onChange={setDtValidade} />
-              </div>
+              <div className="fg"><label className="fl">Data do Orçamento</label><DateInput value={dtOrcamento} onChange={setDtOrcamento} /></div>
+              <div className="fg"><label className="fl">Validade do Orçamento</label><DateInput value={dtValidade} onChange={setDtValidade} /></div>
             </div>
-
             <div className="fr">
-              <div className="fg">
-                <label className="fl">Previsão de Entrega</label>
-                <DateInput value={dtEntrega} onChange={setDtEntrega} />
-              </div>
+              <div className="fg"><label className="fl">Previsão de Entrega</label><DateInput value={dtEntrega} onChange={setDtEntrega} /></div>
               <div className="fg">
                 <label className="fl">Frete</label>
                 <select className="fc" value={frete} onChange={e => setFrete(e.target.value)}>
@@ -224,28 +222,22 @@ export default function NovoOrcamentoPage() {
                 </select>
               </div>
             </div>
-
             <div className="fr">
               <div className="fg">
                 <label className="fl">Forma de Pagamento</label>
                 <select className="fc" value={formaPgto} onChange={e => setFormaPgto(e.target.value)}>
                   <option value="">Selecione...</option>
-                  {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => (
-                    <option key={f}>{f}</option>
-                  ))}
+                  {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
                 </select>
               </div>
               <div className="fg">
                 <label className="fl">Conta</label>
                 <select className="fc" value={conta} onChange={e => setConta(e.target.value)}>
                   <option value="">Selecione...</option>
-                  {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => (
-                    <option key={c}>{c}</option>
-                  ))}
+                  {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => <option key={c}>{c}</option>)}
                 </select>
               </div>
             </div>
-
             <div className="fr">
               <div className="fg">
                 <label className="fl">Parcelas</label>
@@ -255,15 +247,9 @@ export default function NovoOrcamentoPage() {
               </div>
               <div className="fg">
                 <label className="fl">Desconto Global (%)</label>
-                <input
-                  className="fc" type="number" min="0" max="100" step="0.5"
-                  value={desconto || ""}
-                  onChange={e => setDesconto(parseFloat(e.target.value) || 0)}
-                  placeholder="0"
-                />
+                <input className="fc" type="number" min="0" max="100" step="0.5" value={desconto || ""} onChange={e => setDesconto(parseFloat(e.target.value) || 0)} placeholder="0" />
               </div>
             </div>
-
             <div className="fg">
               <label className="fl">Observações</label>
               <textarea className="fc" value={obs} onChange={e => setObs(e.target.value)} placeholder="Observações do orçamento..." />
@@ -272,37 +258,19 @@ export default function NovoOrcamentoPage() {
 
           <div className="card">
             <div className="ct">Resumo do Orçamento</div>
-            <div className="sr">
-              <div className="sl">ID do Orçamento</div>
-              <div className="sv mono" style={{ color: "var(--acc)" }}>{proximoId}</div>
-            </div>
-            <div className="sr">
-              <div className="sl">Total de Itens</div>
-              <div className="sv">{itens.length}</div>
-            </div>
-            <div className="sr">
-              <div className="sl">m² Total</div>
-              <div className="sv" style={{ color: "var(--acc2)" }}>{formatM2(m2Total)}</div>
-            </div>
-            <div className="sr">
-              <div className="sl">Subtotal</div>
-              <div className="sv">{formatBRL(subtotalBruto)}</div>
-            </div>
+            <div className="sr"><div className="sl">ID do Orçamento</div><div className="sv mono" style={{ color: "var(--acc)" }}>{proximoId}</div></div>
+            <div className="sr"><div className="sl">Total de Itens</div><div className="sv">{itens.length}</div></div>
+            <div className="sr"><div className="sl">m² Total</div><div className="sv" style={{ color: "var(--acc2)" }}>{formatM2(m2Total)}</div></div>
+            <div className="sr"><div className="sl">Subtotal</div><div className="sv">{formatBRL(subtotalBruto)}</div></div>
             {desconto > 0 && (
               <div className="sr">
                 <div className="sl">Desconto ({desconto}%)</div>
                 <div className="sv" style={{ color: "var(--err)" }}>− {formatBRL(valorDesconto)}</div>
               </div>
             )}
-            <div className="sr">
-              <div className="sl">Valor Total</div>
-              <div className="sv" style={{ color: "var(--acc)", fontSize: "18px" }}>{formatBRL(valorTotal)}</div>
-            </div>
+            <div className="sr"><div className="sl">Valor Total</div><div className="sv" style={{ color: "var(--acc)", fontSize: "18px" }}>{formatBRL(valorTotal)}</div></div>
             {parcelas > 1 && (
-              <div className="sr">
-                <div className="sl">Por Parcela</div>
-                <div className="sv">{formatBRL(valorTotal / parcelas)}</div>
-              </div>
+              <div className="sr"><div className="sl">Por Parcela</div><div className="sv">{formatBRL(valorTotal / parcelas)}</div></div>
             )}
           </div>
         </div>
@@ -313,55 +281,64 @@ export default function NovoOrcamentoPage() {
             <button className="btn bp sm" onClick={addItem}>+ Item</button>
           </div>
 
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "2fr 80px 80px 60px 100px 40px",
-            gap: "8px", padding: "6px 0",
-            borderBottom: "1px solid var(--b1)", marginBottom: "8px",
-          }}>
-            {["Produto","Larg. (mm)","Alt. (mm)","Qtd","Valor/m²",""].map((h, i) => (
-              <div key={i} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>
-                {h}
-              </div>
+          {/* Cabeçalho */}
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 70px 70px 50px 90px 90px 90px 36px", gap: "6px", padding: "6px 0", borderBottom: "1px solid var(--b1)", marginBottom: "8px" }}>
+            {["Produto","Larg.","Alt.","Qtd","R$/m²","Unit.(R$)","Total(R$)",""].map((h, i) => (
+              <div key={i} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>{h}</div>
             ))}
           </div>
 
           {itens.map((item, i) => {
-            const m2 = calcM2Item(item);
-            const sub = calcSubtotal(item);
-            const lArred = arredondarParaMultiplo50(item.largura);
-            const aArred = arredondarParaMultiplo50(item.altura);
-            const mostrarArred = item.largura > 0 && item.altura > 0 &&
-              (lArred !== item.largura || aArred !== item.altura);
+            const m2      = calcM2Item(item);
+            const sub     = calcSubtotal(item);
+            const m2unit  = (() => { const l = arredondarParaMultiplo50(item.largura); const a = arredondarParaMultiplo50(item.altura); return (l/1000)*(a/1000); })();
+            const unitVal = m2unit > 0 ? item.valor_m2 * m2unit : 0;
+            const lArred  = arredondarParaMultiplo50(item.largura);
+            const aArred  = arredondarParaMultiplo50(item.altura);
+            const mostrarArred = item.largura > 0 && item.altura > 0 && (lArred !== item.largura || aArred !== item.altura);
+
             return (
               <div key={i} style={{ marginBottom: "10px" }}>
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "2fr 80px 80px 60px 100px 40px",
-                  gap: "8px", alignItems: "center",
-                }}>
-                  <select
-                    className="fc"
-                    value={item.produto_id || ""}
-                    onChange={e => updItem(i, "produto_id", Number(e.target.value))}
-                  >
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 70px 70px 50px 90px 90px 90px 36px", gap: "6px", alignItems: "center" }}>
+                  <select className="fc" value={item.produto_id || ""} onChange={e => updItem(i, "produto_id", Number(e.target.value))}>
                     <option value="">Selecione o produto...</option>
                     {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
                   </select>
                   <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
-                  <input className="fc" type="number" value={item.altura || ""} onChange={e => updItem(i, "altura", parseInt(e.target.value) || 0)} placeholder="0" />
-                  <input className="fc" type="number" value={item.quantidade} onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
-                  <input className="fc" type="number" step="0.01" value={item.valor_m2 || ""} onChange={e => updItem(i, "valor_m2", parseFloat(e.target.value) || 0)} placeholder="0" />
+                  <input className="fc" type="number" value={item.altura || ""}  onChange={e => updItem(i, "altura",  parseInt(e.target.value) || 0)} placeholder="0" />
+                  <input className="fc" type="number" value={item.quantidade}    onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
+                  {/* Modo 1 — Valor/m² */}
+                  <input
+                    className="fc" type="number" step="0.01"
+                    value={item.valor_m2 || ""}
+                    onChange={e => updItem(i, "valor_m2", parseFloat(e.target.value) || 0)}
+                    placeholder="R$/m²"
+                    title="Valor por m²"
+                  />
+                  {/* Modo 3 — Valor unitário por peça */}
+                  <input
+                    className="fc" type="number" step="0.01"
+                    value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(unitVal.toFixed(2)) : ""}
+                    onChange={e => updUnitItem(i, e.target.value)}
+                    placeholder="por peça"
+                    title="Valor por peça — calcula R$/m² automaticamente"
+                  />
+                  {/* Modo 2 — Total do item */}
+                  <input
+                    className="fc" type="number" step="0.01"
+                    value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : ""}
+                    onChange={e => updTotalItem(i, e.target.value)}
+                    placeholder="total"
+                    title="Total do item — calcula R$/m² automaticamente"
+                  />
                   <button className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1}>✕</button>
                 </div>
                 {m2 > 0 && (
-                  <div style={{ display: "flex", gap: "16px", padding: "4px 0 0 4px", alignItems: "center" }}>
-                    <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>{formatM2(m2)} ·</span>
+                  <div style={{ display: "flex", gap: "14px", padding: "4px 0 0 4px", alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>{formatM2(m2)}</span>
                     <span style={{ fontSize: "11px", color: "var(--acc)", fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>{formatBRL(sub)}</span>
                     {mostrarArred && (
-                      <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", opacity: 0.7 }}>
-                        cobrado: {lArred}×{aArred}
-                      </span>
+                      <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", opacity: 0.7 }}>cobrado: {lArred}×{aArred}</span>
                     )}
                   </div>
                 )}

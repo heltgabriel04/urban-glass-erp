@@ -26,23 +26,28 @@ const ITEM_VAZIO: ItemForm = {
   valor_m2: 0, lapidacao: 0,
 };
 
+function arredondarParaMultiplo50(v: number): number {
+  if (v % 50 === 0) return v;
+  return Math.ceil(v / 50) * 50;
+}
+
 export default function NovoPedidoPage() {
   const router = useRouter();
 
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [produtos, setProdutos] = useState<Produto[]>([]);
-  const [tabelas, setTabelas] = useState<TabelaPreco[]>([]);
+  const [clientes, setClientes]   = useState<Cliente[]>([]);
+  const [produtos, setProdutos]   = useState<Produto[]>([]);
+  const [tabelas, setTabelas]     = useState<TabelaPreco[]>([]);
   const [proximoId, setProximoId] = useState("");
 
-  const [clienteId, setClienteId] = useState<number | "">("");
-  const [dtPedido, setDtPedido] = useState(new Date().toISOString().split("T")[0]);
+  const [clienteId, setClienteId]   = useState<number | "">("");
+  const [dtPedido, setDtPedido]     = useState(new Date().toISOString().split("T")[0]);
   const [dtRetirada, setDtRetirada] = useState("");
-  const [formaPgto, setFormaPgto] = useState("");
-  const [conta, setConta] = useState("");
-  const [parcelas, setParcelas] = useState(1);
-  const [obs, setObs] = useState("");
-  const [itens, setItens] = useState<ItemForm[]>([{ ...ITEM_VAZIO }]);
-  const [salvando, setSalvando] = useState(false);
+  const [formaPgto, setFormaPgto]   = useState("");
+  const [conta, setConta]           = useState("");
+  const [parcelas, setParcelas]     = useState(1);
+  const [obs, setObs]               = useState("");
+  const [itens, setItens]           = useState<ItemForm[]>([{ ...ITEM_VAZIO }]);
+  const [salvando, setSalvando]     = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -76,13 +81,12 @@ export default function NovoPedidoPage() {
   }
 
   function addItem() {
-    const tab = getTabela();
     const prod = produtos[0];
     setItens(i => [...i, {
       ...ITEM_VAZIO,
       produto_id: prod?.id || null,
       produto_nome: prod?.nome || "",
-      valor_m2: prod?.valor || tab?.lam || 0,
+      valor_m2: prod?.valor || 0,
     }]);
   }
 
@@ -90,38 +94,60 @@ export default function NovoPedidoPage() {
     setItens(items => items.filter((_, idx) => idx !== i));
   }
 
+  function calcM2Item(item: ItemForm): number {
+    const l = arredondarParaMultiplo50(item.largura);
+    const a = arredondarParaMultiplo50(item.altura);
+    return (l / 1000) * (a / 1000) * item.quantidade;
+  }
+
+  function calcSubtotal(item: ItemForm): number {
+    return calcM2Item(item) * item.valor_m2 + item.lapidacao * calcM2Item(item);
+  }
+
   function updItem(i: number, field: keyof ItemForm, value: string | number) {
     setItens(items => items.map((item, idx) => {
       if (idx !== i) return item;
       const novo = { ...item, [field]: value };
+
       if (field === "produto_id") {
         const prod = produtos.find(p => p.id === Number(value));
-        if (prod) {
-          novo.produto_nome = prod.nome;
-          novo.valor_m2 = prod.valor;
-        }
+        if (prod) { novo.produto_nome = prod.nome; novo.valor_m2 = prod.valor; }
       }
       return novo;
     }));
   }
 
-  function calcM2Item(item: ItemForm): number {
-    return (item.largura / 1000) * (item.altura / 1000) * item.quantidade;
+  // Entrada pelo total do item → deriva valor/m²
+  function updTotalItem(i: number, totalStr: string) {
+    const total = parseFloat(totalStr) || 0;
+    setItens(items => items.map((item, idx) => {
+      if (idx !== i) return item;
+      const m2 = calcM2Item(item);
+      const valor_m2 = m2 > 0 ? total / m2 : 0;
+      return { ...item, valor_m2: parseFloat(valor_m2.toFixed(4)) };
+    }));
   }
 
-  function calcSubtotal(item: ItemForm): number {
-    const m2 = calcM2Item(item);
-    return m2 * item.valor_m2 + item.lapidacao * m2;
+  // Entrada pelo valor unitário (por peça) → deriva valor/m²
+  function updUnitItem(i: number, unitStr: string) {
+    const unit = parseFloat(unitStr) || 0;
+    setItens(items => items.map((item, idx) => {
+      if (idx !== i) return item;
+      const l = arredondarParaMultiplo50(item.largura);
+      const a = arredondarParaMultiplo50(item.altura);
+      const m2unit = (l / 1000) * (a / 1000); // m² por peça (sem qtd)
+      const valor_m2 = m2unit > 0 ? unit / m2unit : 0;
+      return { ...item, valor_m2: parseFloat(valor_m2.toFixed(4)) };
+    }));
   }
 
-  const m2Total = itens.reduce((a, i) => a + calcM2Item(i), 0);
+  const m2Total    = itens.reduce((a, i) => a + calcM2Item(i), 0);
   const valorTotal = itens.reduce((a, i) => a + calcSubtotal(i), 0);
 
   async function salvar() {
     if (!clienteId) { alert("Selecione um cliente"); return; }
     if (itens.some(i => i.largura === 0 || i.altura === 0)) {
-      alert("Preencha as dimensões de todos os itens");
-      return;
+      alert("Preencha as dimensões de todos os itens"); return;
     }
 
     setSalvando(true);
@@ -156,7 +182,6 @@ export default function NovoPedidoPage() {
 
     const result = await createPedido(pedido, itensInsert);
     setSalvando(false);
-
     if (result) router.push("/pedidos");
   }
 
@@ -183,9 +208,7 @@ export default function NovoPedidoPage() {
               <label className="fl">Cliente *</label>
               <select className="fc" value={clienteId} onChange={e => setClienteId(Number(e.target.value) || "")}>
                 <option value="">Selecione o cliente...</option>
-                {clientes.map(c => (
-                  <option key={c.id} value={c.id}>{c.nome}</option>
-                ))}
+                {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
               </select>
             </div>
 
@@ -196,37 +219,25 @@ export default function NovoPedidoPage() {
             )}
 
             <div className="fr">
-              <div className="fg">
-                <label className="fl">Data do Pedido</label>
-                <DateInput value={dtPedido} onChange={setDtPedido} />
-              </div>
-              <div className="fg">
-                <label className="fl">Previsão Retirada</label>
-                <DateInput value={dtRetirada} onChange={setDtRetirada} />
-              </div>
+              <div className="fg"><label className="fl">Data do Pedido</label><DateInput value={dtPedido} onChange={setDtPedido} /></div>
+              <div className="fg"><label className="fl">Previsão Retirada</label><DateInput value={dtRetirada} onChange={setDtRetirada} /></div>
             </div>
-
             <div className="fr">
               <div className="fg">
                 <label className="fl">Forma de Pagamento</label>
                 <select className="fc" value={formaPgto} onChange={e => setFormaPgto(e.target.value)}>
                   <option value="">Selecione...</option>
-                  {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => (
-                    <option key={f}>{f}</option>
-                  ))}
+                  {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
                 </select>
               </div>
               <div className="fg">
                 <label className="fl">Conta</label>
                 <select className="fc" value={conta} onChange={e => setConta(e.target.value)}>
                   <option value="">Selecione...</option>
-                  {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => (
-                    <option key={c}>{c}</option>
-                  ))}
+                  {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => <option key={c}>{c}</option>)}
                 </select>
               </div>
             </div>
-
             <div className="fr">
               <div className="fg">
                 <label className="fl">Parcelas</label>
@@ -235,7 +246,6 @@ export default function NovoPedidoPage() {
                 </select>
               </div>
             </div>
-
             <div className="fg">
               <label className="fl">Observações</label>
               <textarea className="fc" value={obs} onChange={e => setObs(e.target.value)} placeholder="Observações do pedido..." />
@@ -244,39 +254,17 @@ export default function NovoPedidoPage() {
 
           <div className="card">
             <div className="ct">Resumo do Pedido</div>
-            <div className="sr">
-              <div className="sl">ID do Pedido</div>
-              <div className="sv mono" style={{ color: "var(--acc)" }}>{proximoId}</div>
-            </div>
-            <div className="sr">
-              <div className="sl">Total de Itens</div>
-              <div className="sv">{itens.length}</div>
-            </div>
-            <div className="sr">
-              <div className="sl">m² Total</div>
-              <div className="sv" style={{ color: "var(--acc2)" }}>{formatM2(m2Total)}</div>
-            </div>
-            <div className="sr">
-              <div className="sl">Valor Total</div>
-              <div className="sv" style={{ color: "var(--acc)", fontSize: "18px" }}>{formatBRL(valorTotal)}</div>
-            </div>
+            <div className="sr"><div className="sl">ID do Pedido</div><div className="sv mono" style={{ color: "var(--acc)" }}>{proximoId}</div></div>
+            <div className="sr"><div className="sl">Total de Itens</div><div className="sv">{itens.length}</div></div>
+            <div className="sr"><div className="sl">m² Total</div><div className="sv" style={{ color: "var(--acc2)" }}>{formatM2(m2Total)}</div></div>
+            <div className="sr"><div className="sl">Valor Total</div><div className="sv" style={{ color: "var(--acc)", fontSize: "18px" }}>{formatBRL(valorTotal)}</div></div>
             {parcelas > 1 && (
-              <div className="sr">
-                <div className="sl">Por Parcela</div>
-                <div className="sv">{formatBRL(valorTotal / parcelas)}</div>
-              </div>
+              <div className="sr"><div className="sl">Por Parcela</div><div className="sv">{formatBRL(valorTotal / parcelas)}</div></div>
             )}
             {clienteId && tab && tab.min > 0 && valorTotal < tab.min && (
-              <div className="al al-w" style={{ marginTop: "10px" }}>
-                ⚠ Pedido abaixo do mínimo de {formatBRL(tab.min)}
-              </div>
+              <div className="al al-w" style={{ marginTop: "10px" }}>⚠ Pedido abaixo do mínimo de {formatBRL(tab.min)}</div>
             )}
-            <button
-              className="btn bp"
-              style={{ width: "100%", marginTop: "16px", padding: "12px" }}
-              onClick={salvar}
-              disabled={salvando}
-            >
+            <button className="btn bp" style={{ width: "100%", marginTop: "16px", padding: "12px" }} onClick={salvar} disabled={salvando}>
               {salvando ? "Salvando..." : `✓ Salvar Pedido · ${formatBRL(valorTotal)}`}
             </button>
           </div>
@@ -288,43 +276,65 @@ export default function NovoPedidoPage() {
             <button className="btn bp xs" onClick={addItem}>+ Item</button>
           </div>
 
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "2fr 80px 80px 60px 100px 100px 80px",
-            gap: "8px", padding: "6px 0",
-            borderBottom: "1px solid var(--b1)", marginBottom: "8px",
-          }}>
-            {["Produto","Larg. (mm)","Alt. (mm)","Qtd","Valor/m²","Lap./m²",""].map((h, i) => (
-              <div key={i} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>
-                {h}
-              </div>
+          {/* Cabeçalho */}
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 70px 70px 50px 90px 90px 90px 90px 36px", gap: "6px", padding: "6px 0", borderBottom: "1px solid var(--b1)", marginBottom: "8px" }}>
+            {["Produto","Larg.","Alt.","Qtd","R$/m²","Unit.(R$)","Total(R$)","Lap./m²",""].map((h, i) => (
+              <div key={i} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>{h}</div>
             ))}
           </div>
 
           {itens.map((item, i) => {
-            const m2 = calcM2Item(item);
-            const sub = calcSubtotal(item);
+            const m2      = calcM2Item(item);
+            const sub     = calcSubtotal(item);
+            const m2unit  = (() => { const l = arredondarParaMultiplo50(item.largura); const a = arredondarParaMultiplo50(item.altura); return (l/1000)*(a/1000); })();
+            const unitVal = m2unit > 0 ? item.valor_m2 * m2unit : 0;
+            const lArred  = arredondarParaMultiplo50(item.largura);
+            const aArred  = arredondarParaMultiplo50(item.altura);
+            const mostrarArred = item.largura > 0 && item.altura > 0 && (lArred !== item.largura || aArred !== item.altura);
+
             return (
               <div key={i} style={{ marginBottom: "10px" }}>
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "2fr 80px 80px 60px 100px 100px 80px",
-                  gap: "8px", alignItems: "center",
-                }}>
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 70px 70px 50px 90px 90px 90px 90px 36px", gap: "6px", alignItems: "center" }}>
                   <select className="fc" value={item.produto_id || ""} onChange={e => updItem(i, "produto_id", Number(e.target.value))}>
                     {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
                   </select>
                   <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
-                  <input className="fc" type="number" value={item.altura || ""} onChange={e => updItem(i, "altura", parseInt(e.target.value) || 0)} placeholder="0" />
-                  <input className="fc" type="number" value={item.quantidade} onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
-                  <input className="fc" type="number" step="0.01" value={item.valor_m2} onChange={e => updItem(i, "valor_m2", parseFloat(e.target.value) || 0)} />
-                  <input className="fc" type="number" step="0.01" value={item.lapidacao || ""} onChange={e => updItem(i, "lapidacao", parseFloat(e.target.value) || 0)} placeholder="0" />
+                  <input className="fc" type="number" value={item.altura || ""}  onChange={e => updItem(i, "altura",  parseInt(e.target.value) || 0)} placeholder="0" />
+                  <input className="fc" type="number" value={item.quantidade}    onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
+                  {/* Valor/m² — modo 1 */}
+                  <input
+                    className="fc" type="number" step="0.01"
+                    value={item.valor_m2 || ""}
+                    onChange={e => updItem(i, "valor_m2", parseFloat(e.target.value) || 0)}
+                    placeholder="R$/m²"
+                    title="Valor por m²"
+                  />
+                  {/* Valor unitário — modo 3 */}
+                  <input
+                    className="fc" type="number" step="0.01"
+                    value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(unitVal.toFixed(2)) : ""}
+                    onChange={e => updUnitItem(i, e.target.value)}
+                    placeholder="por peça"
+                    title="Valor por peça — calcula R$/m² automaticamente"
+                  />
+                  {/* Total do item — modo 2 */}
+                  <input
+                    className="fc" type="number" step="0.01"
+                    value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : ""}
+                    onChange={e => updTotalItem(i, e.target.value)}
+                    placeholder="total"
+                    title="Total do item — calcula R$/m² automaticamente"
+                  />
+                  <input className="fc" type="number" step="0.01" value={item.lapidacao || ""} onChange={e => updItem(i, "lapidacao", parseFloat(e.target.value) || 0)} placeholder="0" title="Lapidação por m²" />
                   <button className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1}>✕</button>
                 </div>
                 {m2 > 0 && (
-                  <div style={{ display: "flex", gap: "16px", padding: "4px 0 0 4px" }}>
-                    <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>{formatM2(m2)} ·</span>
+                  <div style={{ display: "flex", gap: "14px", padding: "4px 0 0 4px", alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>{formatM2(m2)}</span>
                     <span style={{ fontSize: "11px", color: "var(--acc)", fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>{formatBRL(sub)}</span>
+                    {mostrarArred && (
+                      <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", opacity: 0.7 }}>cobrado: {lArred}×{aArred}</span>
+                    )}
                   </div>
                 )}
               </div>
