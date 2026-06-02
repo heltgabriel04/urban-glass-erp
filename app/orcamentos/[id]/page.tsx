@@ -34,27 +34,26 @@ export default function OrcamentoDetalhe() {
     setLoading(false);
   }
 
-  // Auto-print com nome de arquivo customizado
+  // Auto-print quando ?print=1
   useEffect(() => {
     if (autoPrint && !loading && orc) {
-      const timer = setTimeout(() => {
-        window.print();
-      }, 800);
+      const timer = setTimeout(() => { handlePrint(); }, 800);
       return () => clearTimeout(timer);
     }
   }, [autoPrint, loading, orc]);
 
-  // Define o título da página (usado como nome padrão do PDF ao salvar)
-  useEffect(() => {
-    if (orc) {
-      const cliente = orc.clientes?.nome ?? "Cliente";
-      const data = orc.dt_orcamento
-        ? new Date(orc.dt_orcamento + "T00:00:00").toLocaleDateString("pt-BR").replace(/\//g, "-")
-        : "";
-      document.title = `Orçamento - ${cliente} - ${data}`;
-    }
-    return () => { document.title = "Urban Glass ERP"; };
-  }, [orc]);
+  // Abre o diálogo de impressão com o título correto para nome do arquivo
+  function handlePrint() {
+    if (!orc) return;
+    const cliente = orc.clientes?.nome ?? "Cliente";
+    const data = orc.dt_orcamento
+      ? new Date(orc.dt_orcamento + "T00:00:00").toLocaleDateString("pt-BR").replace(/\//g, "-")
+      : "";
+    const tituloOriginal = document.title;
+    document.title = `Orçamento - ${cliente} - ${data}`;
+    window.print();
+    setTimeout(() => { document.title = tituloOriginal; }, 2000);
+  }
 
   async function handleEnviar() {
     setSalvando(true);
@@ -126,7 +125,7 @@ export default function OrcamentoDetalhe() {
             <a href={`/pedidos/${orc.pedido_id}`} className="btn bs sm">→ Pedido {orc.pedido_id}</a>
           )}
 
-          <button className="btn bg sm" onClick={() => window.print()}>⎙ PDF</button>
+          <button className="btn bg sm" onClick={handlePrint}>⎙ PDF</button>
 
           {orc.status === "Rascunho" && (
             <>
