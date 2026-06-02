@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { getFaturamentoMensal, getLancamentos, createLancamento } from "@/services/financeiro.service";
 import { formatBRL, formatPercent, formatDate, MESES } from "@/lib/formatters";
+import CurrencyInput from "@/components/ui/CurrencyInput";
 import type { FaturamentoMensal, Lancamento, LancamentoInsert } from "@/types";
 
 const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -177,7 +178,11 @@ export default function FluxoPage() {
             <div className="fr" style={{ marginBottom:"14px" }}>
               <div className="fg">
                 <label className="fl">Valor *</label>
-                <input className="fc" type="number" step="0.01" value={form.valor || ""} onChange={e => setForm(f => ({ ...f, valor: parseFloat(e.target.value) || 0 }))} placeholder="0,00" />
+                <CurrencyInput
+                  value={form.valor}
+                  onChange={v => setForm(f => ({ ...f, valor: v }))}
+                  placeholder="R$ 0,00"
+                />
               </div>
               <div className="fg">
                 <label className="fl">Vencimento</label>

@@ -8,6 +8,7 @@ import { getClientes } from "@/services/clientes.service";
 import { createOrcamento, getProximoIdOrcamento } from "@/services/orcamentos.service";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
+import CurrencyInput from "@/components/ui/CurrencyInput";
 import type { Cliente, Produto, TabelaPreco } from "@/types";
 
 interface ItemForm {
@@ -51,7 +52,7 @@ export default function NovoOrcamentoPage() {
   const [desconto, setDesconto]         = useState(0);
   const [itens, setItens]               = useState<ItemForm[]>([{ ...ITEM_VAZIO }]);
   const [salvando, setSalvando]         = useState(false);
-  const [totalPedidoInput, setTotalPedidoInput] = useState("");
+  const [totalPedidoInput, setTotalPedidoInput] = useState(0);
 
   useEffect(() => { load(); }, []);
 
@@ -107,9 +108,7 @@ export default function NovoOrcamentoPage() {
     }));
   }
 
-  // Modo 2 — Total do item → deriva valor/m²
-  function updTotalItem(i: number, totalStr: string) {
-    const total = parseFloat(totalStr) || 0;
+  function updTotalItem(i: number, total: number) {
     setItens(items => items.map((item, idx) => {
       if (idx !== i) return item;
       const m2 = calcM2Item(item);
@@ -117,9 +116,7 @@ export default function NovoOrcamentoPage() {
     }));
   }
 
-  // Modo 3 — Valor unitário por peça → deriva valor/m²
-  function updUnitItem(i: number, unitStr: string) {
-    const unit = parseFloat(unitStr) || 0;
+  function updUnitItem(i: number, unit: number) {
     setItens(items => items.map((item, idx) => {
       if (idx !== i) return item;
       const l = arredondarParaMultiplo50(item.largura);
@@ -129,9 +126,7 @@ export default function NovoOrcamentoPage() {
     }));
   }
 
-  // Modo 4 — Total geral do pedido → distribui proporcionalmente por m² de cada item
-  function aplicarTotalPedido(totalStr: string) {
-    const total = parseFloat(totalStr) || 0;
+  function aplicarTotalPedido(total: number) {
     if (total <= 0) return;
     const m2Tot = itens.reduce((a, i) => a + calcM2Item(i), 0);
     if (m2Tot <= 0) return;
@@ -140,7 +135,7 @@ export default function NovoOrcamentoPage() {
       ...item,
       valor_m2: parseFloat(valorM2Geral.toFixed(4)),
     })));
-    setTotalPedidoInput("");
+    setTotalPedidoInput(0);
   }
 
   const m2Total       = itens.reduce((a, i) => a + calcM2Item(i), 0);
@@ -316,9 +311,24 @@ export default function NovoOrcamentoPage() {
                   <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
                   <input className="fc" type="number" value={item.altura  || ""} onChange={e => updItem(i, "altura",  parseInt(e.target.value) || 0)} placeholder="0" />
                   <input className="fc" type="number" value={item.quantidade} onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
-                  <input className="fc" type="number" step="0.01" value={item.valor_m2 || ""} onChange={e => updItem(i, "valor_m2", parseFloat(e.target.value) || 0)} placeholder="R$/m²" title="Valor por m²" />
-                  <input className="fc" type="number" step="0.01" value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(unitVal.toFixed(2)) : ""} onChange={e => updUnitItem(i, e.target.value)} placeholder="por peça" title="Valor por peça" />
-                  <input className="fc" type="number" step="0.01" value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : ""} onChange={e => updTotalItem(i, e.target.value)} placeholder="total" title="Total do item" />
+                  <CurrencyInput
+                    value={item.valor_m2}
+                    onChange={v => updItem(i, "valor_m2", v)}
+                    placeholder="R$/m²"
+                    title="Valor por m²"
+                  />
+                  <CurrencyInput
+                    value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(unitVal.toFixed(2)) : 0}
+                    onChange={v => updUnitItem(i, v)}
+                    placeholder="por peça"
+                    title="Valor por peça"
+                  />
+                  <CurrencyInput
+                    value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : 0}
+                    onChange={v => updTotalItem(i, v)}
+                    placeholder="total"
+                    title="Total do item"
+                  />
                   <button className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1}>✕</button>
                 </div>
                 {m2 > 0 && (
@@ -339,21 +349,17 @@ export default function NovoOrcamentoPage() {
             <span style={{ fontSize: "11px", color: "var(--t2)", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>
               Distribuir total do pedido:
             </span>
-            <input
-              className="fc"
-              type="number"
-              step="0.01"
+            <CurrencyInput
               value={totalPedidoInput}
-              onChange={e => setTotalPedidoInput(e.target.value)}
-              placeholder="Ex: 850,00"
+              onChange={setTotalPedidoInput}
+              placeholder="Ex: R$ 850,00"
               style={{ width: "140px", margin: 0 }}
-              title="Digite o valor total e pressione Enter para distribuir proporcionalmente entre os itens"
-              onKeyDown={e => { if (e.key === "Enter") aplicarTotalPedido(totalPedidoInput); }}
+              title="Digite o valor total e pressione Aplicar para distribuir proporcionalmente entre os itens"
             />
             <button
               className="btn bp sm"
               onClick={() => aplicarTotalPedido(totalPedidoInput)}
-              disabled={!totalPedidoInput || m2Total === 0}
+              disabled={totalPedidoInput <= 0 || m2Total === 0}
             >
               ↵ Aplicar
             </button>

@@ -6,6 +6,7 @@ import { getFinanceiroClientes } from "@/services/financeiro.service";
 import { getPedidos, registrarRecebimento } from "@/services/pedidos.service";
 import { formatBRL, formatPercent, formatDate, diffDias, labelDiff } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
+import CurrencyInput from "@/components/ui/CurrencyInput";
 import type { FinanceiroCliente, Pedido } from "@/types";
 
 export default function FinanceiroPage() {
@@ -16,7 +17,7 @@ export default function FinanceiroPage() {
   const [modal, setModal] = useState(false);
   const [clienteSel, setClienteSel] = useState<FinanceiroCliente | null>(null);
   const [pedidoSel, setPedidoSel] = useState<Pedido | null>(null);
-  const [valorRec, setValorRec] = useState("");
+  const [valorRec, setValorRec] = useState(0);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -31,39 +32,37 @@ export default function FinanceiroPage() {
   }
 
   function abrirReceber(f: FinanceiroCliente) {
-    setClienteSel(f); setPedidoSel(null); setValorRec(""); setErro(""); setModal(true);
+    setClienteSel(f); setPedidoSel(null); setValorRec(0); setErro(""); setModal(true);
   }
 
   function selecionarPedido(pedidoId: string) {
     const p = pedidos.find(p => p.id === pedidoId) ?? null;
-    setPedidoSel(p); setValorRec(""); setErro("");
+    setPedidoSel(p); setValorRec(0); setErro("");
   }
 
-  function handleValor(v: string) {
+  function handleValor(v: number) {
     setValorRec(v); setErro("");
     if (!pedidoSel) return;
-    const val = parseFloat(v);
     const saldo = Number(pedidoSel.valor_total) - Number(pedidoSel.valor_recebido);
-    if (val > saldo) setErro(`Valor máximo: ${formatBRL(saldo)}`);
+    if (v > saldo) setErro(`Valor máximo: ${formatBRL(saldo)}`);
   }
 
   function preencherTotal() {
     if (!pedidoSel) return;
     const saldo = Number(pedidoSel.valor_total) - Number(pedidoSel.valor_recebido);
-    setValorRec(saldo.toFixed(2)); setErro("");
+    setValorRec(saldo); setErro("");
   }
 
   async function salvarRecebimento() {
     if (!pedidoSel) { setErro("Selecione um pedido."); return; }
-    const val = parseFloat(valorRec);
-    if (!val || val <= 0) { setErro("Informe um valor válido."); return; }
+    if (!valorRec || valorRec <= 0) { setErro("Informe um valor válido."); return; }
     const saldo = Number(pedidoSel.valor_total) - Number(pedidoSel.valor_recebido);
-    if (val > saldo) { setErro(`Valor máximo: ${formatBRL(saldo)}`); return; }
+    if (valorRec > saldo) { setErro(`Valor máximo: ${formatBRL(saldo)}`); return; }
     setSalvando(true);
-    const result = await registrarRecebimento(pedidoSel.id, val);
+    const result = await registrarRecebimento(pedidoSel.id, valorRec);
     setSalvando(false);
     if (!result) { toast("Erro ao registrar recebimento", "err"); return; }
-    toast(val >= saldo ? `✓ Pedido ${pedidoSel.id} quitado!` : `Recebimento de ${formatBRL(val)} registrado — ${pedidoSel.id}`);
+    toast(valorRec >= saldo ? `✓ Pedido ${pedidoSel.id} quitado!` : `Recebimento de ${formatBRL(valorRec)} registrado — ${pedidoSel.id}`);
     setModal(false); load();
   }
 
@@ -73,8 +72,7 @@ export default function FinanceiroPage() {
   const inad = financeiro.filter(f => Number(f.recebido) === 0 && Number(f.faturado) > 0);
   const pedidosCliente = clienteSel ? pedidos.filter(p => p.cliente_id === clienteSel.cliente_id && Number(p.valor_total) - Number(p.valor_recebido) > 0).sort((a, b) => (a.dt_retirada ?? "") > (b.dt_retirada ?? "") ? 1 : -1) : [];
   const saldoPedido = pedidoSel ? Number(pedidoSel.valor_total) - Number(pedidoSel.valor_recebido) : 0;
-  const valorNum = parseFloat(valorRec) || 0;
-  const pctPreenchido = saldoPedido > 0 ? Math.min(100, (valorNum / saldoPedido) * 100) : 0;
+  const pctPreenchido = saldoPedido > 0 ? Math.min(100, (valorRec / saldoPedido) * 100) : 0;
 
   return (
     <AppLayout>
@@ -212,22 +210,27 @@ export default function FinanceiroPage() {
                 <label className="fl">Valor Recebido *</label>
                 {pedidoSel && <button className="btn bg xs" onClick={preencherTotal} style={{ fontSize:"10px", padding:"2px 8px" }}>Preencher total</button>}
               </div>
-              <input className="fc" type="number" placeholder="0,00" value={valorRec} onChange={e => handleValor(e.target.value)} disabled={!pedidoSel} autoFocus={!!pedidoSel} />
+              <CurrencyInput
+                value={valorRec}
+                onChange={handleValor}
+                placeholder="R$ 0,00"
+                disabled={!pedidoSel}
+              />
             </div>
-            {pedidoSel && valorNum > 0 && !erro && (
+            {pedidoSel && valorRec > 0 && !erro && (
               <div style={{ marginBottom:"14px" }}>
                 <div style={{ height:"4px", borderRadius:"2px", background:"var(--surf3)", overflow:"hidden" }}>
-                  <div style={{ height:"100%", borderRadius:"2px", width:`${Math.min(100, ((Number(pedidoSel.valor_recebido) + valorNum) / Number(pedidoSel.valor_total)) * 100)}%`, background: pctPreenchido >= 100 ? "var(--ok)" : "var(--acc)", transition:"width .2s" }} />
+                  <div style={{ height:"100%", borderRadius:"2px", width:`${Math.min(100, ((Number(pedidoSel.valor_recebido) + valorRec) / Number(pedidoSel.valor_total)) * 100)}%`, background: pctPreenchido >= 100 ? "var(--ok)" : "var(--acc)", transition:"width .2s" }} />
                 </div>
                 <div style={{ fontSize:"11px", color:"var(--t3)", marginTop:"4px", textAlign:"right" }}>
-                  {pctPreenchido >= 100 ? "✓ Pedido quitado" : `${((Number(pedidoSel.valor_recebido) + valorNum) / Number(pedidoSel.valor_total) * 100).toFixed(0)}% pago após este recebimento`}
+                  {pctPreenchido >= 100 ? "✓ Pedido quitado" : `${((Number(pedidoSel.valor_recebido) + valorRec) / Number(pedidoSel.valor_total) * 100).toFixed(0)}% pago após este recebimento`}
                 </div>
               </div>
             )}
             {erro && <div className="al al-e" style={{ marginBottom:"12px" }}>{erro}</div>}
             <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end" }}>
               <button className="btn bg" onClick={() => setModal(false)}>Cancelar</button>
-              <button className="btn bp" onClick={salvarRecebimento} disabled={salvando || !valorRec || !pedidoSel || !!erro}>
+              <button className="btn bp" onClick={salvarRecebimento} disabled={salvando || valorRec <= 0 || !pedidoSel || !!erro}>
                 {salvando ? "Salvando..." : "✓ Confirmar Recebimento"}
               </button>
             </div>

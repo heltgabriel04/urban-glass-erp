@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
+import CurrencyInput from "@/components/ui/CurrencyInput";
 import type { Produto, ProdutoInsert } from "@/types";
 
 const VAZIO: ProdutoInsert = {
@@ -79,7 +80,6 @@ export default function ProdutosPage() {
       </div>
 
       <div className="con">
-        {/* CARDS */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:"12px", marginBottom:"20px" }}>
           {[
             { label:"Total Produtos", value: String(produtos.length), color:"var(--t1)",   sub: ativos + " ativos" },
@@ -126,7 +126,6 @@ export default function ProdutosPage() {
                         <button className="btn bg xs" onClick={() => duplicar(p)}>Duplicar</button>
                       </div>
                     </td>
-                    {/* Lixeira — padrão do sistema */}
                     <td style={{ width:"40px", textAlign:"center" }}>
                       <button
                         title="Excluir produto"
@@ -169,7 +168,14 @@ export default function ProdutosPage() {
               <div className="fg"><label className="fl">Cor</label><input className="fc" value={form.cor} onChange={e => setForm(f => ({ ...f, cor: e.target.value }))} placeholder="Incolor" /></div>
             </div>
             <div className="fr">
-              <div className="fg"><label className="fl">Valor (R$/m²) *</label><input className="fc" type="number" value={form.valor} onChange={e => setForm(f => ({ ...f, valor: parseFloat(e.target.value) || 0 }))} placeholder="0.00" /></div>
+              <div className="fg">
+                <label className="fl">Valor (R$/m²) *</label>
+                <CurrencyInput
+                  value={form.valor}
+                  onChange={v => setForm(f => ({ ...f, valor: v }))}
+                  placeholder="R$ 0,00"
+                />
+              </div>
               <div className="fg">
                 <label className="fl">Unidade</label>
                 <select className="fc" value={form.unidade} onChange={e => setForm(f => ({ ...f, unidade: e.target.value }))}>
