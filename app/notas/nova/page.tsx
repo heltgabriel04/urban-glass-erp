@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { useRouter } from "next/navigation";
-import { getNotas, deletarNota, emitirNFe, consultarStatusNFe } from "../../../services/notas.service";
-import { getPedidos } from "../../../services/pedidos.service";
+import { getNotas, deletarNota, emitirNFe, consultarStatusNFe } from "@/services/notas.service";
+import { getPedidos } from "@/services/pedidos.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import type { NotaFiscal, Pedido } from "@/types";
@@ -13,20 +13,18 @@ const STATUS_CHIP: Record<string, string> = {
   rascunho:"chip cgr", enviando:"chip cy", autorizada:"chip cg",
   cancelada:"chip cr", rejeitada:"chip cr",
 };
-
 const STATUS_LABEL: Record<string, string> = {
   rascunho:"Rascunho", enviando:"Processando", autorizada:"Autorizada",
   cancelada:"Cancelada", rejeitada:"Rejeitada",
 };
 
 export default function NotasPage() {
-  const { toast }  = useToast();
-  const router     = useRouter();
-
-  const [notas, setNotas]             = useState<NotaFiscal[]>([]);
-  const [pedidos, setPedidos]         = useState<Pedido[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [salvando, setSalvando]       = useState(false);
+  const { toast } = useToast();
+  const router    = useRouter();
+  const [notas, setNotas]               = useState<NotaFiscal[]>([]);
+  const [pedidos, setPedidos]           = useState<Pedido[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [salvando, setSalvando]         = useState(false);
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
 
   useEffect(() => { load(); }, []);
@@ -34,14 +32,11 @@ export default function NotasPage() {
   async function load() {
     setLoading(true);
     const [ns, peds] = await Promise.all([getNotas(), getPedidos()]);
-    setNotas(ns);
-    setPedidos(peds);
-    setLoading(false);
+    setNotas(ns); setPedidos(peds); setLoading(false);
   }
 
   async function handleEmitir(nota: NotaFiscal) {
-    const pedido = pedidos.find(p => p.id === nota.pedido_id)
-      ?? (await getPedidos()).find(p => p.id === nota.pedido_id);
+    const pedido = pedidos.find(p => p.id === nota.pedido_id) ?? (await getPedidos()).find(p => p.id === nota.pedido_id);
     if (!pedido) { toast("Pedido não encontrado","err"); return; }
     if (!confirm(`Emitir NF-e para ${pedido.id}?\nAmbiente: HOMOLOGAÇÃO`)) return;
     setSalvando(true);
@@ -52,24 +47,18 @@ export default function NotasPage() {
   }
 
   async function handleConsultar(nota: NotaFiscal) {
-    setSalvando(true);
-    await consultarStatusNFe(nota.id);
-    setSalvando(false);
-    toast("Status atualizado");
-    await load();
+    setSalvando(true); await consultarStatusNFe(nota.id); setSalvando(false);
+    toast("Status atualizado"); await load();
   }
 
   async function handleDeletar(nota: NotaFiscal) {
     if (!confirm(`Remover nota ${nota.id}?`)) return;
     const ok = await deletarNota(nota.id);
     if (!ok) { toast("Erro ao remover","err"); return; }
-    toast("Nota removida");
-    await load();
+    toast("Nota removida"); await load();
   }
 
-  const notasFiltradas = filtroStatus === "todos"
-    ? notas : notas.filter(n => n.status === filtroStatus);
-
+  const notasFiltradas = filtroStatus === "todos" ? notas : notas.filter(n => n.status === filtroStatus);
   const totais = notas.reduce((acc, n) => ({
     autorizadas: acc.autorizadas + (n.status === "autorizada" ? 1 : 0),
     valor:       acc.valor       + (n.status === "autorizada" ? Number(n.valor_total) : 0),
@@ -104,8 +93,7 @@ export default function NotasPage() {
         </div>
 
         <div style={{ background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)",
-          borderRadius:"10px", padding:"14px 18px", marginBottom:"20px",
-          display:"flex", gap:"12px", alignItems:"flex-start" }}>
+          borderRadius:"10px", padding:"14px 18px", marginBottom:"20px", display:"flex", gap:"12px", alignItems:"flex-start" }}>
           <div style={{ fontSize:"20px" }}>⚠️</div>
           <div>
             <div style={{ fontSize:"13px", fontWeight:700, color:"var(--warn)", marginBottom:"4px" }}>Sistema em modo de homologação</div>
@@ -145,9 +133,7 @@ export default function NotasPage() {
                     <td className="mono" style={{ fontSize:"11px" }}>
                       {nota.numero ? <><strong>{nota.numero}</strong><br /><span style={{ color:"var(--t3)", fontSize:"10px" }}>{nota.chave?.slice(-8)}</span></> : <span style={{ color:"var(--t3)" }}>—</span>}
                     </td>
-                    <td className="mono">
-                      {nota.pedido_id ? <a href={`/pedidos/${nota.pedido_id}`} style={{ color:"var(--acc)", textDecoration:"none" }}>{nota.pedido_id}</a> : "—"}
-                    </td>
+                    <td className="mono">{nota.pedido_id ? <a href={`/pedidos/${nota.pedido_id}`} style={{ color:"var(--acc)", textDecoration:"none" }}>{nota.pedido_id}</a> : "—"}</td>
                     <td><strong>{nota.clientes?.nome ?? "—"}</strong><br /><span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono', monospace" }}>{nota.clientes?.cnpj ?? "sem CNPJ"}</span></td>
                     <td className="mono">{nota.cfop}</td>
                     <td className="mono" style={{ color:"var(--acc)", fontWeight:600 }}>{formatBRL(nota.valor_total)}</td>
@@ -161,19 +147,15 @@ export default function NotasPage() {
                     </td>
                     <td>
                       <div style={{ display:"flex", gap:"5px", flexWrap:"wrap" }}>
-                        {nota.status === "rascunho" && (
-                          <>
-                            <button className="btn bp xs" onClick={() => handleEmitir(nota)} disabled={salvando}>Emitir</button>
-                            <button className="btn bg xs" onClick={() => handleDeletar(nota)} disabled={salvando} style={{ color:"var(--err)", borderColor:"var(--err)" }}>🗑</button>
-                          </>
-                        )}
+                        {nota.status === "rascunho" && (<>
+                          <button className="btn bp xs" onClick={() => handleEmitir(nota)} disabled={salvando}>Emitir</button>
+                          <button className="btn bg xs" onClick={() => handleDeletar(nota)} disabled={salvando} style={{ color:"var(--err)", borderColor:"var(--err)" }}>🗑</button>
+                        </>)}
                         {nota.status === "enviando" && <button className="btn bg xs" onClick={() => handleConsultar(nota)} disabled={salvando}>↻ Consultar</button>}
-                        {nota.status === "autorizada" && (
-                          <div style={{ display:"flex", gap:"5px" }}>
-                            {nota.danfe_url && <a href={nota.danfe_url} target="_blank" className="btn bg xs" style={{ textDecoration:"none" }}>DANFE</a>}
-                            {nota.xml_url   && <a href={nota.xml_url}   target="_blank" className="btn bg xs" style={{ textDecoration:"none" }}>XML</a>}
-                          </div>
-                        )}
+                        {nota.status === "autorizada" && (<div style={{ display:"flex", gap:"5px" }}>
+                          {nota.danfe_url && <a href={nota.danfe_url} target="_blank" className="btn bg xs" style={{ textDecoration:"none" }}>DANFE</a>}
+                          {nota.xml_url   && <a href={nota.xml_url}   target="_blank" className="btn bg xs" style={{ textDecoration:"none" }}>XML</a>}
+                        </div>)}
                         {nota.status === "rejeitada" && <button className="btn bg xs" onClick={() => handleDeletar(nota)} disabled={salvando}>Remover</button>}
                       </div>
                     </td>
