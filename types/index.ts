@@ -16,7 +16,14 @@ export type StatusOrcamento = 'Pendente' | 'Aprovado' | 'Recusado';
 export type StatusRetalho = 'Disponível' | 'Reservado' | 'Em uso' | 'Descartado';
 export type StatusLancamento = 'Pago' | 'Pendente' | 'A Receber';
 export type TipoLancamento = 'Entrada' | 'Saída';
-export type TabelaCliente = 'p' | 'g'; // padrão | grandes clientes
+export type TabelaCliente = 'p' | 'g';
+
+export type StatusNota =
+  | 'rascunho'
+  | 'enviando'
+  | 'autorizada'
+  | 'cancelada'
+  | 'rejeitada';
 
 // ─── CLIENTE ───────────────────────────────────────────────
 export interface Cliente {
@@ -41,13 +48,13 @@ export interface TabelaPreco {
   id: number;
   nome: string;
   tipo: string;
-  lam: number;   // laminado m²
-  ref: number;   // reflecta m²
-  ver: number;   // verde m²
-  lap: number;   // lapidação m²
-  fur: number;   // furo unid
-  min: number;   // mínimo pedido
-  desc: number;  // desconto %
+  lam: number;
+  ref: number;
+  ver: number;
+  lap: number;
+  fur: number;
+  min: number;
+  desc: number;
   ativo: boolean;
   created_at: string;
 }
@@ -84,13 +91,12 @@ export interface EstoqueItem {
   m2_por_chapa: number;
   custo_m2: number;
   updated_at: string;
-  // join
   produtos?: Produto;
 }
 
 // ─── PEDIDO ────────────────────────────────────────────────
 export interface Pedido {
-  id: string;          // 'P-001'
+  id: string;
   cliente_id: number;
   dt_pedido: string;
   dt_retirada: string | null;
@@ -104,7 +110,6 @@ export interface Pedido {
   obs: string;
   created_at: string;
   updated_at: string;
-  // joins
   clientes?: Cliente;
   itens_pedido?: ItemPedido[];
 }
@@ -118,15 +123,14 @@ export interface ItemPedido {
   pedido_id: string;
   produto_id: number | null;
   produto_nome: string;
-  largura: number;   // mm
-  altura: number;    // mm
+  largura: number;
+  altura: number;
   m2: number;
   valor_m2: number;
   lapidacao: number;
   quantidade: number;
   subtotal: number;
   created_at: string;
-  // join
   produtos?: Produto;
 }
 
@@ -134,7 +138,7 @@ export type ItemPedidoInsert = Omit<ItemPedido, 'id' | 'created_at' | 'produtos'
 
 // ─── ORÇAMENTO ─────────────────────────────────────────────
 export interface Orcamento {
-  id: string;         // 'ORC-001'
+  id: string;
   cliente_id: number;
   dt_criacao: string;
   validade: number;
@@ -143,7 +147,6 @@ export interface Orcamento {
   obs: string;
   envio: string;
   created_at: string;
-  // join
   clientes?: Cliente;
 }
 
@@ -151,7 +154,7 @@ export type OrcamentoInsert = Omit<Orcamento, 'created_at' | 'clientes'>;
 
 // ─── RETALHO ───────────────────────────────────────────────
 export interface Retalho {
-  id: string;        // 'R-001'
+  id: string;
   produto_id: number | null;
   produto_nome: string;
   largura: number;
@@ -162,7 +165,6 @@ export interface Retalho {
   dt_gerado: string;
   status: StatusRetalho;
   created_at: string;
-  // joins
   produtos?: Produto;
   retalhos_uso?: RetalhoUso[];
 }
@@ -198,7 +200,6 @@ export interface Lancamento {
   pedido_id: string | null;
   cliente_id: number | null;
   created_at: string;
-  // joins
   pedidos?: Pick<Pedido, 'id'>;
   clientes?: Pick<Cliente, 'id' | 'nome'>;
 }
@@ -217,6 +218,59 @@ export interface HistoricoOtimizador {
   created_at: string;
 }
 
+// ─── NOTA FISCAL ───────────────────────────────────────────
+export interface NotaFiscal {
+  id: number;
+  pedido_id: string | null;
+  cliente_id: number | null;
+
+  numero: string | null;
+  serie: string;
+  chave: string | null;
+  protocolo: string | null;
+
+  status: StatusNota;
+
+  valor_produtos: number;
+  valor_icms: number;
+  valor_pis: number;
+  valor_cofins: number;
+  valor_total: number;
+
+  cfop: string;
+  natureza_op: string;
+
+  nuvem_fiscal_id: string | null;
+  xml_url: string | null;
+  danfe_url: string | null;
+  motivo_rejeicao: string | null;
+
+  dt_emissao: string;
+  dt_autorizacao: string | null;
+  created_at: string;
+  updated_at: string;
+
+  // joins
+  pedidos?: Pick<Pedido, 'id'>;
+  clientes?: Pick<Cliente, 'id' | 'nome' | 'cnpj' | 'cidade'>;
+}
+
+export type NotaFiscalInsert = Omit<NotaFiscal,
+  'id' | 'created_at' | 'updated_at' | 'pedidos' | 'clientes'>;
+
+export interface ConfigFiscalProduto {
+  produto_id: number;
+  ncm: string;
+  cfop_dentro: string;
+  cfop_fora: string;
+  cst_icms: string;
+  aliq_icms: number;
+  aliq_pis: number;
+  aliq_cofins: number;
+  aliq_ipi: number;
+  updated_at: string;
+}
+
 // ─── FATURAMENTO MENSAL (view) ─────────────────────────────
 export interface FaturamentoMensal {
   ano: number;
@@ -228,8 +282,8 @@ export interface FaturamentoMensal {
 
 // ─── OTIMIZADOR (client-side) ──────────────────────────────
 export interface PecaOtimizador {
-  l: number;   // largura mm
-  a: number;   // altura mm
+  l: number;
+  a: number;
   qtd: number;
   prod: string;
 }
@@ -268,17 +322,19 @@ export interface DashboardKPIs {
 export type Database = {
   public: {
     Tables: {
-      clientes:             { Row: Cliente; Insert: ClienteInsert; Update: ClienteUpdate };
-      produtos:             { Row: Produto; Insert: ProdutoInsert; Update: ProdutoUpdate };
-      pedidos:              { Row: Pedido;  Insert: PedidoInsert;  Update: PedidoUpdate  };
-      itens_pedido:         { Row: ItemPedido;  Insert: ItemPedidoInsert };
-      estoque:              { Row: EstoqueItem };
-      retalhos:             { Row: Retalho };
-      retalhos_uso:         { Row: RetalhoUso };
-      orcamentos:           { Row: Orcamento; Insert: OrcamentoInsert };
-      lancamentos:          { Row: Lancamento; Insert: LancamentoInsert };
-      historico_otimizador: { Row: HistoricoOtimizador };
-      tabelas_preco:        { Row: TabelaPreco };
+      clientes:                { Row: Cliente;             Insert: ClienteInsert;      Update: ClienteUpdate  };
+      produtos:                { Row: Produto;             Insert: ProdutoInsert;      Update: ProdutoUpdate  };
+      pedidos:                 { Row: Pedido;              Insert: PedidoInsert;       Update: PedidoUpdate   };
+      itens_pedido:            { Row: ItemPedido;          Insert: ItemPedidoInsert                           };
+      estoque:                 { Row: EstoqueItem                                                             };
+      retalhos:                { Row: Retalho                                                                 };
+      retalhos_uso:            { Row: RetalhoUso                                                              };
+      orcamentos:              { Row: Orcamento;           Insert: OrcamentoInsert                            };
+      lancamentos:             { Row: Lancamento;          Insert: LancamentoInsert                           };
+      historico_otimizador:    { Row: HistoricoOtimizador                                                     };
+      tabelas_preco:           { Row: TabelaPreco                                                             };
+      notas_fiscais:           { Row: NotaFiscal;          Insert: NotaFiscalInsert                           };
+      config_fiscal_produtos:  { Row: ConfigFiscalProduto                                                     };
     };
     Views: {
       financeiro_clientes: { Row: FinanceiroCliente };

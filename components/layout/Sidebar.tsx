@@ -33,6 +33,7 @@ const NAV = [
     items: [
       { href: "/financeiro", label: "Contas a Receber",    icon: "◉" },
       { href: "/fluxo",      label: "Fluxo de Caixa",      icon: "◈" },
+      { href: "/notas",      label: "Notas Fiscais",        icon: "◧" },
     ],
   },
   {
@@ -167,7 +168,6 @@ export default function Sidebar() {
         .ni { position: relative; }
         .ni-ic { flex-shrink: 0; width: 18px; text-align: center; }
 
-        /* Tooltip quando colapsado */
         .sb:not(:hover) .ni[data-label]::after {
           content: attr(data-label);
           position: absolute;
@@ -192,7 +192,6 @@ export default function Sidebar() {
 
       <aside className="sb">
 
-        {/* Logo — botão para o dashboard */}
         <Link href="/dashboard" className="sb-logo-wrap">
           <div style={{ flexShrink: 0 }}>
             <LogoIcon size={32} />
@@ -203,7 +202,6 @@ export default function Sidebar() {
           </div>
         </Link>
 
-        {/* Nav */}
         {NAV.map((grupo) => (
           <div key={grupo.grupo}>
             <div className="ns">{grupo.grupo}</div>
@@ -224,7 +222,6 @@ export default function Sidebar() {
           </div>
         ))}
 
-        {/* Footer */}
         <div className="sb-ft">
           <span className="sb-ft-ver">v3.0.0 · 2026</span>
           <button
