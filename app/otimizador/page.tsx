@@ -17,9 +17,9 @@ interface ResultadoChapa { placed: PecaPlacada[]; free: EspacoLivre[]; W: number
 interface RetalhoGerado extends EspacoLivre { chapaIdx: number; prod: string; m2: number; }
 interface PedidoSugerido { id: string; clienteNome: string; totalPecas: number; produtos: string[]; itens: Peca[]; }
 
-// ─── ALGORITMO STRIP-PACKING CORRIGIDO ───────────────────────────────────────
-// Recebe array de peças já expandidas (qtd=1 cada), retorna placed + índices usados.
-// Preenche faixas horizontais de baixo pra cima, da esquerda pra direita.
+// ─── ALGORITMO STRIP-PACKING ─────────────────────────────────────────────────
+// Para cada faixa, testa TODAS as alturas possíveis e escolhe a que encaixa
+// mais peças — resolve o problema de peças que encaixam melhor rotacionadas.
 function empacotar(
   W: number,
   H: number,
@@ -30,67 +30,67 @@ function empacotar(
   const usados = new Set<number>();
   let curY = 0;
 
+  // Simula o preenchimento de uma faixa com uma dada altura, sem confirmar
+  function simularFaixa(
+    disp: Array<{ l: number; a: number; prod: string; pedidoId?: string; origIdx: number }>,
+    altFaixa: number
+  ): Array<{ p: typeof disp[0]; pl: number; pa: number; rot: boolean; x: number }> {
+    const resultado: Array<{ p: typeof disp[0]; pl: number; pa: number; rot: boolean; x: number }> = [];
+    let cx = 0;
+    for (const p of [...disp].sort((a, b) => b.l * b.a - a.l * a.a)) {
+      const normal = p.l <= (W - cx) && p.a <= altFaixa;
+      const rotac  = p.a <= (W - cx) && p.l <= altFaixa;
+      if (!normal && !rotac) continue;
+      let pl: number, pa: number, rot: boolean;
+      if (normal && rotac) {
+        // Prefere orientação que coloca a dimensão maior na largura (mais peças por faixa)
+        if (p.l >= p.a) { pl = p.l; pa = p.a; rot = false; }
+        else             { pl = p.a; pa = p.l; rot = true;  }
+      } else if (normal) { pl = p.l; pa = p.a; rot = false; }
+      else               { pl = p.a; pa = p.l; rot = true;  }
+      if (cx + pl > W) continue;
+      resultado.push({ p, pl, pa, rot, x: cx });
+      cx += pl + kerf;
+    }
+    return resultado;
+  }
+
   while (curY < H) {
-    // Descobre quais peças ainda não foram colocadas
     const disponiveis = pecas
       .map((p, i) => ({ ...p, origIdx: i }))
       .filter(p => !usados.has(p.origIdx));
-
     if (disponiveis.length === 0) break;
 
-    // Altura da faixa = maior dimensão da maior peça que cabe verticalmente
-    let alturaFaixa = 0;
+    // Coleta todas as alturas candidatas (cada dimensão de cada peça disponível)
+    const alturasCandidatas = new Set<number>();
     for (const p of disponiveis) {
-      const alt = Math.max(
-        p.a <= (H - curY) ? p.a : 0,
-        p.l <= (H - curY) ? p.l : 0
-      );
-      if (alt > alturaFaixa) alturaFaixa = alt;
+      if (p.a <= (H - curY)) alturasCandidatas.add(p.a);
+      if (p.l <= (H - curY)) alturasCandidatas.add(p.l);
     }
-    if (alturaFaixa === 0) break;
+    if (alturasCandidatas.size === 0) break;
 
-    // Preenche a faixa da esquerda pra direita
-    let curX = 0;
-    let colocouNessaFaixa = false;
+    // Testa cada altura candidata e escolhe a que coloca mais peças
+    let melhorSimulacao: ReturnType<typeof simularFaixa> = [];
+    let melhorAltura = 0;
+    for (const alt of alturasCandidatas) {
+      const sim = simularFaixa(disponiveis, alt);
+      // Critério: mais peças; desempate por maior área total aproveitada
+      const areaAtual  = melhorSimulacao.reduce((s, r) => s + r.pl * r.pa, 0);
+      const areaSim    = sim.reduce((s, r) => s + r.pl * r.pa, 0);
+      if (sim.length > melhorSimulacao.length || (sim.length === melhorSimulacao.length && areaSim > areaAtual)) {
+        melhorSimulacao = sim;
+        melhorAltura = alt;
+      }
+    }
 
-    // Ordena candidatos por maior largura pra aproveitar melhor
-    const candidatos = disponiveis
-      .filter(p => {
-        // Aceita se cabe na faixa em alguma orientação
-        const normal = p.l <= (W - curX) && p.a <= alturaFaixa;
-        const rotac  = p.a <= (W - curX) && p.l <= alturaFaixa;
-        return normal || rotac;
-      })
-      .sort((a, b) => b.l * b.a - a.l * a.a);
+    if (melhorSimulacao.length === 0) break;
 
-    for (const p of candidatos) {
-      if (usados.has(p.origIdx)) continue;
-
-      // Escolhe orientação
-      const normal = p.l <= (W - curX) && p.a <= alturaFaixa;
-      const rotac  = p.a <= (W - curX) && p.l <= alturaFaixa;
-      if (!normal && !rotac) continue;
-
-      // Prefere a que deixa menor sobra na altura da faixa
-      let pl: number, pa: number, rot: boolean;
-      if (normal && rotac) {
-        const sobraNormal = alturaFaixa - p.a;
-        const sobraRotac  = alturaFaixa - p.l;
-        if (sobraNormal <= sobraRotac) { pl = p.l; pa = p.a; rot = false; }
-        else                            { pl = p.a; pa = p.l; rot = true;  }
-      } else if (normal) { pl = p.l; pa = p.a; rot = false; }
-      else               { pl = p.a; pa = p.l; rot = true;  }
-
-      if (curX + pl > W) continue;
-
-      placed.push({ x: curX, y: curY, l: pl, a: pa, idx: p.origIdx, prod: p.prod, rot, pedidoId: p.pedidoId });
+    // Confirma a melhor faixa
+    for (const { p, pl, pa, rot, x } of melhorSimulacao) {
+      placed.push({ x, y: curY, l: pl, a: pa, idx: p.origIdx, prod: p.prod, rot, pedidoId: p.pedidoId });
       usados.add(p.origIdx);
-      curX += pl + kerf;
-      colocouNessaFaixa = true;
     }
-
-    if (!colocouNessaFaixa) break;
-    curY += alturaFaixa + kerf;
+    curY += melhorAltura + kerf;
   }
 
   // Espaço livre abaixo do último corte
