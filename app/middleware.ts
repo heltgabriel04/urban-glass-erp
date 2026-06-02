@@ -43,7 +43,7 @@ export async function middleware(request: NextRequest) {
   if (jwt) {
     try {
       const payload = JSON.parse(atob(jwt.split(".")[1]));
-      role = payload.user_role ?? "admin";
+      role = payload.user_role ?? "visitante";
     } catch {}
   }
 
