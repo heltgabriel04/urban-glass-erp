@@ -17,60 +17,92 @@ interface ResultadoChapa { placed: PecaPlacada[]; free: EspacoLivre[]; W: number
 interface RetalhoGerado extends EspacoLivre { chapaIdx: number; prod: string; m2: number; }
 interface PedidoSugerido { id: string; clienteNome: string; totalPecas: number; produtos: string[]; itens: Peca[]; }
 
-function guilhotina(W: number, H: number, pecas: Peca[], kerf: number): { placed: PecaPlacada[]; free: EspacoLivre[] } {
-  let free: EspacoLivre[] = [{ x: 0, y: 0, l: W, a: H }];
+// ─── ALGORITMO STRIP-PACKING ──────────────────────────────────────────────────
+// Funciona como um vidraceiro real: preenche faixas (strips) horizontais.
+// Para cada faixa, empilha peças da esquerda pra direita até não caber mais,
+// então abre nova faixa acima. Testa as 2 orientações e escolhe a melhor.
+function stripPacking(
+  W: number,
+  H: number,
+  pecas: Peca[],
+  kerf: number
+): { placed: PecaPlacada[]; free: EspacoLivre[] } {
   const placed: PecaPlacada[] = [];
+  const remaining = pecas.map((p, i) => ({ ...p, origIdx: i }));
 
-  function melhorEncaixe(peca: Peca, freeList: EspacoLivre[]): { fi: number; rot: boolean; score: number } | null {
-    let best: { fi: number; rot: boolean; score: number } | null = null;
-    freeList.forEach((fr, fi) => {
-      // Orientação normal
-      if (peca.l <= fr.l && peca.a <= fr.a) {
-        const score = (fr.l - peca.l) * (fr.a - peca.a);
-        if (!best || score < best.score) best = { fi, rot: false, score };
-      }
-      // Orientação rotacionada (90°)
-      if (peca.a <= fr.l && peca.l <= fr.a) {
-        const score = (fr.l - peca.a) * (fr.a - peca.l);
-        if (!best || score < best.score) best = { fi, rot: true, score };
-      }
-    });
-    return best;
+  // Tenta as 2 orientações da peça e retorna a que gera melhor aproveitamento
+  function melhorOrientacao(p: typeof remaining[0], stripH: number): { pl: number; pa: number; rot: boolean } | null {
+    const opts: { pl: number; pa: number; rot: boolean }[] = [];
+    if (p.l <= W && p.a <= stripH) opts.push({ pl: p.l, pa: p.a, rot: false });
+    if (p.a <= W && p.l <= stripH && !(p.l === p.a)) opts.push({ pl: p.a, pa: p.l, rot: true });
+    if (opts.length === 0) return null;
+    // Prefere a orientação que deixa menor sobra na altura da faixa
+    return opts.sort((a, b) => Math.abs(a.pa - stripH) - Math.abs(b.pa - stripH))[0];
   }
 
-  function colocar(peca: Peca, idx: number, fi: number, rot: boolean) {
-    const fr = free[fi];
-    const pl = rot ? peca.a : peca.l;
-    const pa = rot ? peca.l : peca.a;
-    placed.push({ x: fr.x, y: fr.y, l: pl, a: pa, idx, prod: peca.prod, rot, pedidoId: peca.pedidoId });
+  let curY = 0;
+  const usedIdxs = new Set<number>();
 
-    // ─── FIX: espaço à direita usa fr.a (altura total do espaço), não pa ───
-    const nr: EspacoLivre[] = [];
-    const remX = fr.l - pl - kerf;
-    const remY = fr.a - pa - kerf;
+  while (curY < H && usedIdxs.size < pecas.length) {
+    // Determina a altura da faixa: a maior peça que ainda cabe verticalmente
+    const disponiveis = remaining.filter(p => !usedIdxs.has(p.origIdx));
+    if (disponiveis.length === 0) break;
 
-    if (remX >= 100) nr.push({ x: fr.x + pl + kerf, y: fr.y,           l: remX,  a: fr.a }); // CORRIGIDO: era a: pa
-    if (remY >= 100) nr.push({ x: fr.x,              y: fr.y + pa + kerf, l: fr.l, a: remY });
+    // Altura da faixa = menor altura que acomoda a maior peça restante
+    let stripH = 0;
+    for (const p of disponiveis) {
+      const alt1 = p.a <= (H - curY) ? p.a : 0;
+      const alt2 = p.l <= (H - curY) ? p.l : 0;
+      const melhor = Math.max(alt1, alt2);
+      if (melhor > stripH) stripH = melhor;
+    }
+    if (stripH === 0) break;
 
-    free.splice(fi, 1, ...nr);
+    // Preenche a faixa da esquerda pra direita
+    let curX = 0;
+    let algumColocado = false;
 
-    // Mesclar espaços redundantes
-    free = free.filter((a, ai) =>
-      !free.some((b, bi) => bi !== ai && b.x <= a.x && b.y <= a.y && b.x + b.l >= a.x + a.l && b.y + b.a >= a.y + a.a)
-    );
+    // Ordena por maior área dentro da faixa
+    const candidatos = disponiveis
+      .filter(p => {
+        const enc = melhorOrientacao(p, stripH);
+        return enc !== null && enc.pl <= (W - curX);
+      })
+      .sort((a, b) => b.l * b.a - a.l * a.a);
 
-    // Ordenar por y,x para favorecer preenchimento top-left
-    free.sort((a, b) => a.y !== b.y ? a.y - b.y : a.x - b.x);
+    for (const p of disponiveis.sort((a, b) => b.l * b.a - a.l * a.a)) {
+      if (usedIdxs.has(p.origIdx)) continue;
+      const enc = melhorOrientacao(p, H - curY);
+      if (!enc) continue;
+      if (enc.pl + curX > W) continue;
+      if (enc.pa + curY > H) continue;
+
+      placed.push({
+        x: curX, y: curY,
+        l: enc.pl, a: enc.pa,
+        idx: p.origIdx,
+        prod: p.prod,
+        rot: enc.rot,
+        pedidoId: p.pedidoId,
+      });
+      usedIdxs.add(p.origIdx);
+      curX += enc.pl + kerf;
+      algumColocado = true;
+    }
+
+    if (!algumColocado) break;
+    curY += stripH + kerf;
   }
 
-  pecas.forEach((peca, idx) => {
-    const enc = melhorEncaixe(peca, free);
-    if (!enc) return;
-    colocar(peca, idx, enc.fi, enc.rot);
-  });
+  // Calcula espaços livres (simplificado: área restante abaixo do último Y)
+  const free: EspacoLivre[] = [];
+  if (curY < H && H - curY >= 100) {
+    free.push({ x: 0, y: curY, l: W, a: H - curY });
+  }
 
   return { placed, free };
 }
+// ─────────────────────────────────────────────────────────────────────────────
 
 const CHAPAS_PADRAO = [
   { label: "Chapa 4+4 Incolor — 3300 × 2250 mm",         w: 3300, h: 2250 },
@@ -176,7 +208,6 @@ function OtimizadorContent() {
 
   async function buscarSugestoes(pedidoPrincipal: string, produtosNoPedido: string[]) {
     setCarregandoSugestoes(true);
-
     const { data: pedidosAguardando } = await supabase
       .from("pedidos")
       .select("id, clientes(nome)")
@@ -196,10 +227,8 @@ function OtimizadorContent() {
         .eq("pedido_id", ped.id);
 
       if (!itens || itens.length === 0) continue;
-
       const produtosDoPedido = [...new Set(itens.map((i: any) => i.produto_nome as string))];
       const temProdutoEmComum = produtosDoPedido.some(p => produtosNoPedido.includes(p));
-
       if (!temProdutoEmComum) continue;
 
       const map = new Map<string, Peca>();
@@ -370,7 +399,8 @@ function OtimizadorContent() {
     });
 
     const results: ResultadoChapa[] = [];
-    let totalPlaced = 0, totalPecas = todasAsPecas.length;
+    let totalPlaced = 0;
+    const totalPecas = todasAsPecas.length;
 
     grupos.forEach((expandidas, prodNome) => {
       const ci2 = PRODUTO_CHAPA[prodNome];
@@ -380,21 +410,20 @@ function OtimizadorContent() {
       const CW = chapa ? chapa.w : chapaW;
       const CH = chapa ? chapa.h : chapaH;
 
-      expandidas.sort((a, b) => {
-        const diff = b.l * b.a - a.l * a.a;
-        if (diff !== 0) return diff;
-        return Math.max(b.l, b.a) - Math.max(a.l, a.a);
-      });
+      // Ordena por maior área primeiro
+      expandidas.sort((a, b) => b.l * b.a - a.l * a.a);
 
-      let rem = [...expandidas], ci = 0;
-      while (rem.length && ci < 15) {
-        const r = guilhotina(W, H, rem, kerf);
-        results.push({ W: CW, H: CH, prod: prodNome, ...r });
-        const used = new Set(r.placed.map(p => p.idx));
-        rem = rem.filter((_, i) => !used.has(i));
+      let rem = [...expandidas];
+      let ci = 0;
+      while (rem.length > 0 && ci < 50) {
+        const r = stripPacking(W, H, rem, kerf);
+        if (r.placed.length === 0) break;
+
+        results.push({ W: CW, H: CH, prod: prodNome, placed: r.placed, free: r.free });
+        const usedIdxs = new Set(r.placed.map(p => p.idx));
+        rem = rem.filter((_, i) => !usedIdxs.has(i));
         totalPlaced += r.placed.length;
         ci++;
-        if (!r.placed.length) break;
       }
     });
 
@@ -402,7 +431,10 @@ function OtimizadorContent() {
     setChapaIdx(0);
 
     let totA = 0, usedA = 0;
-    results.forEach(r => { totA += r.W * r.H; r.placed.forEach(p => (usedA += p.l * p.a)); });
+    results.forEach(r => {
+      totA += r.W * r.H;
+      r.placed.forEach(p => (usedA += p.l * p.a));
+    });
     const aprov = totA > 0 ? (usedA / totA) * 100 : 0;
     const perda = 100 - aprov;
     setAprovNum(aprov);
@@ -411,9 +443,11 @@ function OtimizadorContent() {
     setStatChapas(results.length);
 
     const retPend: RetalhoGerado[] = [];
-    results.forEach((r, ri) => r.free.filter(fr => fr.l >= 200 && fr.a >= 200).forEach(fr => {
-      retPend.push({ ...fr, chapaIdx: ri, prod: r.prod, m2: parseFloat(((fr.l * fr.a) / 1e6).toFixed(4)) });
-    }));
+    results.forEach((r, ri) =>
+      r.free.filter(fr => fr.l >= 200 && fr.a >= 200).forEach(fr => {
+        retPend.push({ ...fr, chapaIdx: ri, prod: r.prod, m2: parseFloat(((fr.l * fr.a) / 1e6).toFixed(4)) });
+      })
+    );
     setRetalhosGerados(retPend);
 
     const agrupados = pedidosSelecionados.size;
@@ -537,9 +571,7 @@ function OtimizadorContent() {
     { label: "Retalhos",       value: resultado ? String(retalhosGerados.length) : "—", color: "#f59e0b", bg: "rgba(245,158,11,.08)", border: "rgba(245,158,11,.2)", icon: "↺" },
   ];
 
-  const pedidosNoCanvas = pedidoRef
-    ? [pedidoRef, ...Array.from(pedidosSelecionados)]
-    : [];
+  const pedidosNoCanvas = pedidoRef ? [pedidoRef, ...Array.from(pedidosSelecionados)] : [];
 
   return (
     <AppLayout>
@@ -565,7 +597,6 @@ function OtimizadorContent() {
           <div>
             <div className="card mb14">
               <div className="ct">Configuração da Chapa</div>
-
               <div style={{ marginBottom: "12px" }}>
                 <label className="fl" style={{ marginBottom: "6px", display: "block" }}>Tamanho Padrão</label>
                 <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
@@ -576,25 +607,20 @@ function OtimizadorContent() {
                   ].map(c => {
                     const ativo = chapaW === c.w && chapaH === c.h;
                     return (
-                      <button
-                        key={c.label}
-                        onClick={() => { setChapaW(c.w); setChapaH(c.h); }}
+                      <button key={c.label} onClick={() => { setChapaW(c.w); setChapaH(c.h); }}
                         style={{
                           padding: "5px 12px", borderRadius: "6px", cursor: "pointer",
                           fontSize: "11px", fontFamily: "'DM Mono', monospace", fontWeight: 600,
                           border: `1px solid ${ativo ? "var(--acc)" : "var(--b2)"}`,
                           background: ativo ? "rgba(61,255,160,.1)" : "transparent",
-                          color: ativo ? "var(--acc)" : "var(--t2)",
-                          transition: "all 0.15s",
-                        }}
-                      >
+                          color: ativo ? "var(--acc)" : "var(--t2)", transition: "all 0.15s",
+                        }}>
                         {c.label} mm
                       </button>
                     );
                   })}
                 </div>
               </div>
-
               <div className="fr">
                 <div className="fg">
                   <label className="fl">Largura Chapa (mm)</label>
@@ -626,13 +652,11 @@ function OtimizadorContent() {
                     <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>buscando...</span>
                   )}
                 </div>
-
                 {!carregandoSugestoes && pedidosSugeridos.length === 0 && (
                   <div style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", padding: "8px 0", textAlign: "center" }}>
                     Nenhum outro pedido aguardando otimização com o mesmo produto.
                   </div>
                 )}
-
                 {pedidosSugeridos.length > 0 && (
                   <>
                     <div style={{ fontSize: "11px", color: "var(--t2)", marginBottom: "10px", lineHeight: 1.5 }}>
@@ -643,17 +667,14 @@ function OtimizadorContent() {
                         const selecionado = pedidosSelecionados.has(ps.id);
                         const { stroke } = getColorForPedido(ps.id);
                         return (
-                          <div
-                            key={ps.id}
-                            onClick={() => toggleSugerido(ps.id)}
+                          <div key={ps.id} onClick={() => toggleSugerido(ps.id)}
                             style={{
                               display: "flex", alignItems: "center", gap: "10px",
                               padding: "10px 12px", borderRadius: "8px", cursor: "pointer",
                               border: `1px solid ${selecionado ? stroke : "var(--b2)"}`,
                               background: selecionado ? `${stroke}14` : "var(--surf2)",
                               transition: "all 0.15s",
-                            }}
-                          >
+                            }}>
                             <div style={{
                               width: "16px", height: "16px", borderRadius: "4px", flexShrink: 0,
                               border: `2px solid ${selecionado ? stroke : "var(--b3)"}`,
@@ -662,26 +683,19 @@ function OtimizadorContent() {
                             }}>
                               {selecionado && <span style={{ fontSize: "10px", color: "#000", fontWeight: 900 }}>✓</span>}
                             </div>
-
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                <span style={{ fontSize: "13px", fontWeight: 700, color: selecionado ? "var(--t1)" : "var(--t2)", fontFamily: "'DM Mono', monospace" }}>
-                                  {ps.id}
-                                </span>
-                                <span style={{ fontSize: "11px", color: "var(--t3)" }}>
-                                  {ps.clienteNome}
-                                </span>
+                                <span style={{ fontSize: "13px", fontWeight: 700, color: selecionado ? "var(--t1)" : "var(--t2)", fontFamily: "'DM Mono', monospace" }}>{ps.id}</span>
+                                <span style={{ fontSize: "11px", color: "var(--t3)" }}>{ps.clienteNome}</span>
                               </div>
                               <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "2px", fontFamily: "'DM Mono', monospace" }}>
                                 {ps.totalPecas} peça(s) · {ps.produtos.join(", ")}
                               </div>
                             </div>
-
                             <div style={{
                               fontSize: "10px", fontWeight: 700, padding: "2px 8px",
                               borderRadius: "99px", border: `1px solid ${stroke}`,
-                              color: stroke, background: `${stroke}14`,
-                              fontFamily: "'DM Mono', monospace",
+                              color: stroke, background: `${stroke}14`, fontFamily: "'DM Mono', monospace",
                             }}>
                               {selecionado ? "incluído" : "incluir"}
                             </div>
@@ -689,7 +703,6 @@ function OtimizadorContent() {
                         );
                       })}
                     </div>
-
                     {pedidosSelecionados.size > 0 && (
                       <div style={{ marginTop: "10px", fontSize: "11px", color: "var(--acc2)", fontFamily: "'DM Mono', monospace", padding: "7px 10px", background: "rgba(0,200,255,.06)", border: "1px solid rgba(0,200,255,.2)", borderRadius: "7px" }}>
                         ◈ {pedidosSelecionados.size + 1} pedidos serão otimizados juntos e avançarão para "Em Produção – Corte" ao salvar.
@@ -716,9 +729,7 @@ function OtimizadorContent() {
                     <span>
                       PEÇA {i + 1}
                       {p.pedidoId && p.pedidoId !== pedidoRef && (
-                        <span style={{ marginLeft: "6px", fontSize: "9px", color: "var(--acc2)", opacity: 0.7 }}>
-                          ({p.pedidoId})
-                        </span>
+                        <span style={{ marginLeft: "6px", fontSize: "9px", color: "var(--acc2)", opacity: 0.7 }}>({p.pedidoId})</span>
                       )}
                     </span>
                     <button className="btn bw xs" onClick={() => remPeca(i)}>✕</button>
@@ -754,7 +765,6 @@ function OtimizadorContent() {
           <div>
             <div className="card mb14">
               <div className="ct">Resultado da Otimização</div>
-
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "8px", marginBottom: "14px" }}>
                 {stats.map((s) => (
                   <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: "10px", padding: "12px 10px", textAlign: "center" }}>
