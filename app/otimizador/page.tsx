@@ -18,7 +18,6 @@ interface RetalhoGerado extends EspacoLivre { chapaIdx: number; prod: string; m2
 interface PedidoSugerido { id: string; clienteNome: string; totalPecas: number; produtos: string[]; itens: Peca[]; }
 
 // ─── ALGORITMO GUILLOTINE RECURSIVO ──────────────────────────────────────────
-// Adequado para corte de vidro: todos os cortes são retos de lado a lado.
 interface Retangulo { x: number; y: number; w: number; h: number; }
 
 function guillotineInserirMelhor(
@@ -70,7 +69,6 @@ function empacotar(
 
   let espacos: Retangulo[] = [{ x: 0, y: 0, w: W, h: H }];
 
-  // Ordena por maior área (Best Area Fit)
   const ordem = pecas
     .map((p, i) => ({ ...p, origIdx: i }))
     .sort((a, b) => b.l * b.a - a.l * a.a);
@@ -92,15 +90,31 @@ function empacotar(
     });
     usados.add(peca.origIdx);
 
-    // Divide o espaço em dois retângulos (Shorter Axis Split)
-    const sobraDir   = { x: e.x + pl + kerf, y: e.y,            w: e.w - pl - kerf, h: pa              };
-    const sobraBaixo = { x: e.x,             y: e.y + pa + kerf, w: e.w,             h: e.h - pa - kerf };
+    // Testa as duas estratégias de corte e escolhe a que gera o maior espaço livre
+    const corteHorizontal = {
+      dir:   { x: e.x + pl + kerf, y: e.y,            w: e.w - pl - kerf, h: pa              },
+      baixo: { x: e.x,             y: e.y + pa + kerf, w: e.w,             h: e.h - pa - kerf },
+    };
+    const corteVertical = {
+      dir:   { x: e.x + pl + kerf, y: e.y,            w: e.w - pl - kerf, h: e.h             },
+      baixo: { x: e.x,             y: e.y + pa + kerf, w: pl,              h: e.h - pa - kerf },
+    };
+
+    const areaH = Math.max(
+      corteHorizontal.dir.w   * corteHorizontal.dir.h,
+      corteHorizontal.baixo.w * corteHorizontal.baixo.h
+    );
+    const areaV = Math.max(
+      corteVertical.dir.w   * corteVertical.dir.h,
+      corteVertical.baixo.w * corteVertical.baixo.h
+    );
+
+    const corte = areaV >= areaH ? corteVertical : corteHorizontal;
 
     espacos.splice(espacoIdx, 1);
-    if (sobraDir.w > 0   && sobraDir.h > 0)   espacos.push(sobraDir);
-    if (sobraBaixo.w > 0 && sobraBaixo.h > 0) espacos.push(sobraBaixo);
+    if (corte.dir.w   > 0 && corte.dir.h   > 0) espacos.push(corte.dir);
+    if (corte.baixo.w > 0 && corte.baixo.h > 0) espacos.push(corte.baixo);
 
-    // Ordena espaços por menor área (melhor fit primeiro)
     espacos.sort((a, b) => a.w * a.h - b.w * b.h);
   }
 
@@ -274,8 +288,6 @@ function OtimizadorContent() {
     ctx.fillStyle = "#4a5568"; ctx.font = "bold 9px 'DM Mono', monospace";
     ctx.fillText("CHAPA " + (idx + 1) + "  ·  " + r.W + " × " + r.H + " mm  ·  " + r.prod, ox + 4, oy - 4);
 
-    // ─── CORREÇÃO: placed.x/y já são relativas à área interna (sem borda).
-    // Aplicamos a borda apenas como offset visual no canvas, não somamos de novo às coordenadas.
     const bordOffset = bordMm * scale;
 
     r.placed.forEach((p) => {
@@ -342,11 +354,9 @@ function OtimizadorContent() {
       const chapa = ci2 !== undefined ? CHAPAS_PADRAO[ci2] : null;
       const CW = chapa ? chapa.w : chapaW;
       const CH = chapa ? chapa.h : chapaH;
-      // Área útil descontando borda dos 4 lados
       const W = CW - bord * 2;
       const H = CH - bord * 2;
 
-      // Ordena por maior área antes de passar ao algoritmo
       grupo.sort((a, b) => b.l * b.a - a.l * a.a);
 
       let rem = [...grupo];
@@ -368,7 +378,6 @@ function OtimizadorContent() {
 
     let totA = 0, usedA = 0;
     results.forEach(r => {
-      // Área útil (sem bordas) para cálculo de aproveitamento real
       const W = r.W - bord * 2;
       const H = r.H - bord * 2;
       totA += W * H;
