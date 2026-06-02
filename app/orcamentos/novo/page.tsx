@@ -26,6 +26,12 @@ const ITEM_VAZIO: ItemForm = {
   valor_m2: 0, lapidacao: 0,
 };
 
+// Arredonda para o próximo múltiplo de 50 (se já é múltiplo, mantém)
+function arredondarParaMultiplo50(v: number): number {
+  if (v % 50 === 0) return v;
+  return Math.ceil(v / 50) * 50;
+}
+
 export default function NovoOrcamentoPage() {
   const router = useRouter();
 
@@ -60,7 +66,6 @@ export default function NovoOrcamentoPage() {
     setProdutos(prods || []);
     setTabelas(tabs || []);
     setProximoId(pid);
-    // Começa com item vazio — sem produto pré-selecionado
     setItens([{ ...ITEM_VAZIO }]);
   }
 
@@ -100,8 +105,11 @@ export default function NovoOrcamentoPage() {
     }));
   }
 
+  // Usa dimensões arredondadas para o cálculo, mas exibe as originais
   function calcM2Item(item: ItemForm): number {
-    return (item.largura / 1000) * (item.altura / 1000) * item.quantidade;
+    const l = arredondarParaMultiplo50(item.largura);
+    const a = arredondarParaMultiplo50(item.altura);
+    return (l / 1000) * (a / 1000) * item.quantidade;
   }
 
   function calcSubtotal(item: ItemForm): number {
@@ -321,6 +329,10 @@ export default function NovoOrcamentoPage() {
           {itens.map((item, i) => {
             const m2 = calcM2Item(item);
             const sub = calcSubtotal(item);
+            const lArred = arredondarParaMultiplo50(item.largura);
+            const aArred = arredondarParaMultiplo50(item.altura);
+            const mostrarArred = item.largura > 0 && item.altura > 0 &&
+              (lArred !== item.largura || aArred !== item.altura);
             return (
               <div key={i} style={{ marginBottom: "10px" }}>
                 <div style={{
@@ -343,9 +355,14 @@ export default function NovoOrcamentoPage() {
                   <button className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1}>✕</button>
                 </div>
                 {m2 > 0 && (
-                  <div style={{ display: "flex", gap: "16px", padding: "4px 0 0 4px" }}>
+                  <div style={{ display: "flex", gap: "16px", padding: "4px 0 0 4px", alignItems: "center" }}>
                     <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>{formatM2(m2)} ·</span>
                     <span style={{ fontSize: "11px", color: "var(--acc)", fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>{formatBRL(sub)}</span>
+                    {mostrarArred && (
+                      <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", opacity: 0.7 }}>
+                        cobrado: {lArred}×{aArred}
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
