@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
-import type { NotaFiscal, NotaFiscalInsert, Pedido } from "@/types";
+import type { NotaFiscal, NotaFiscalInsert, Pedido, Cliente } from "@/types";
 
 // ─── CRUD ──────────────────────────────────────────────────
 
@@ -87,6 +87,62 @@ export async function deletarNota(id: number): Promise<boolean> {
   return true;
 }
 
+// ─── HELPERS ───────────────────────────────────────────────
+
+async function getClienteCompleto(clienteId: number): Promise<Cliente | null> {
+  const { data, error } = await supabase
+    .from("clientes")
+    .select("*")
+    .eq("id", clienteId)
+    .single();
+  if (error) { console.error("getClienteCompleto:", error); return null; }
+  return data as Cliente;
+}
+
+function validarCliente(c: Cliente): string | null {
+  const doc = c.tipo_pessoa === "PF" ? c.cpf : c.cnpj;
+  if (!doc || doc.replace(/\D/g, "").length < 11)
+    return `Cliente sem ${c.tipo_pessoa === "PF" ? "CPF" : "CNPJ"} válido.`;
+  if (!c.logradouro && !c.endereco)
+    return "Cliente sem endereço cadastrado.";
+  if (!c.cidade)
+    return "Cliente sem cidade cadastrada.";
+  if (!c.uf)
+    return "Cliente sem UF cadastrada.";
+  if (!c.cep || c.cep.replace(/\D/g, "").length !== 8)
+    return "Cliente sem CEP válido (necessário para NF-e).";
+  if (!c.cod_ibge)
+    return "Cliente sem código IBGE do município. Preencha o CEP novamente para auto-completar.";
+  return null;
+}
+
+function montarDestinatario(c: Cliente) {
+  const docRaw = (c.tipo_pessoa === "PF" ? c.cpf : c.cnpj).replace(/\D/g, "");
+  const dest: Record<string, unknown> = {
+    cpf_cnpj:        docRaw,
+    nome:            c.nome,
+    indicador_ie:    Number(c.ind_ie ?? "9"),
+    consumidor_final: c.consumidor_final ? 1 : 0,
+    endereco: {
+      logradouro:    c.logradouro || c.endereco,
+      numero:        c.numero     || "S/N",
+      complemento:   c.complemento || undefined,
+      bairro:        c.bairro     || "Centro",
+      nome_municipio: c.cidade,
+      codigo_municipio: c.cod_ibge,
+      uf:            c.uf.toUpperCase(),
+      cep:           c.cep.replace(/\D/g, ""),
+      codigo_pais:   "1058",
+      nome_pais:     "Brasil",
+    },
+  };
+
+  if (c.ie && c.ind_ie === "1") dest.ie = c.ie.replace(/\D/g, "");
+  if (c.email) dest.email = c.email;
+
+  return dest;
+}
+
 // ─── NUVEM FISCAL ──────────────────────────────────────────
 
 const NF_API = "https://api.nuvemfiscal.com.br";
@@ -95,65 +151,108 @@ export async function emitirNFe(notaId: number, pedido: Pedido): Promise<{
   ok: boolean;
   mensagem: string;
 }> {
-  if (!pedido.clientes?.cnpj) {
-    return { ok: false, mensagem: "Cliente sem CNPJ cadastrado." };
+  // Busca nota e cliente completo
+  const [nota, cliente] = await Promise.all([
+    getNotaById(notaId),
+    getClienteCompleto(pedido.cliente_id),
+  ]);
+
+  if (!nota)    return { ok: false, mensagem: "Nota não encontrada." };
+  if (!cliente) return { ok: false, mensagem: "Cliente não encontrado." };
+
+  // Valida campos obrigatórios para NF-e
+  const erroValidacao = validarCliente(cliente);
+  if (erroValidacao) return { ok: false, mensagem: erroValidacao };
+
+  // Busca pedido completo com itens se não tiver
+  let pedidoCompleto = pedido;
+  if (!pedido.itens_pedido?.length) {
+    const { data } = await supabase
+      .from("pedidos")
+      .select("*, itens_pedido(*)")
+      .eq("id", pedido.id)
+      .single();
+    if (data) pedidoCompleto = data as Pedido;
   }
 
-  const nota = await getNotaById(notaId);
-  if (!nota) return { ok: false, mensagem: "Nota não encontrada." };
+  const aliqIcms = nota.cfop.startsWith("5") ? 0.18 : 0.12;
+  const cfopNum  = nota.cfop.replace(".", "");
 
   const payload = {
-    ambiente:   "homologacao",
+    ambiente:   "homologacao", // trocar para "producao" após homologação
     referencia: `UG-${pedido.id}-${notaId}`,
+
     emitente: {
-      cpf_cnpj: "65668970000105",
+      cpf_cnpj: "65668970000105", // CNPJ Urban Glass
     },
-    destinatario: {
-      cpf_cnpj: pedido.clientes.cnpj.replace(/\D/g, ""),
-      nome:     pedido.clientes.nome,
-    },
-    itens: (pedido.itens_pedido ?? []).map((item, i) => ({
-      numero_item:              i + 1,
-      codigo_produto:           item.produto_id?.toString() ?? `ITEM-${i + 1}`,
-      descricao:                item.produto_nome,
-      ncm:                      "70031200",
-      cfop:                     nota.cfop.replace(".", ""),
-      unidade_comercial:        "M2",
-      quantidade_comercial:     Number(item.m2) * item.quantidade,
-      valor_unitario_comercial: Number(item.valor_m2),
-      valor_bruto:              Number(item.subtotal),
-      icms: {
-        origem:                 0,
-        cst:                    "00",
-        modalidade_base_calculo: 3,
-        valor_base_calculo:     Number(item.subtotal),
-        aliquota:               nota.cfop.startsWith("5") ? 18 : 12,
-        valor:                  Number(item.subtotal) * (nota.cfop.startsWith("5") ? 0.18 : 0.12),
-      },
-      pis: {
-        cst:                    "01",
-        valor_base_calculo:     Number(item.subtotal),
-        aliquota_porcentual:    1.65,
-        valor:                  Number(item.subtotal) * 0.0165,
-      },
-      cofins: {
-        cst:                    "01",
-        valor_base_calculo:     Number(item.subtotal),
-        aliquota_porcentual:    7.6,
-        valor:                  Number(item.subtotal) * 0.076,
-      },
-    })),
+
+    destinatario: montarDestinatario(cliente),
+
+    itens: (pedidoCompleto.itens_pedido ?? []).map((item, i) => {
+      const vItem    = Number(item.subtotal);
+      const vIcms    = vItem * aliqIcms;
+      const vPis     = vItem * 0.0165;
+      const vCofins  = vItem * 0.076;
+      const qtd      = Number(item.m2) * item.quantidade;
+      const vUnit    = qtd > 0 ? vItem / qtd : Number(item.valor_m2);
+
+      return {
+        numero_item:               i + 1,
+        codigo_produto:            item.produto_id?.toString() ?? `ITEM-${String(i + 1).padStart(3,"0")}`,
+        descricao:                 item.produto_nome,
+        ncm:                       "70031200",
+        cfop:                      cfopNum,
+        unidade_comercial:         "M2",
+        quantidade_comercial:      Number(qtd.toFixed(4)),
+        valor_unitario_comercial:  Number(vUnit.toFixed(4)),
+        valor_bruto:               Number(vItem.toFixed(2)),
+        // Lapidação como despesa acessória se houver
+        ...(item.lapidacao > 0 ? { valor_outras_despesas: Number(item.lapidacao.toFixed(2)) } : {}),
+        icms: {
+          origem:                  0,
+          cst:                     "00",
+          modalidade_base_calculo: 3,
+          valor_base_calculo:      Number(vItem.toFixed(2)),
+          aliquota:                nota.cfop.startsWith("5") ? 18 : 12,
+          valor:                   Number(vIcms.toFixed(2)),
+        },
+        pis: {
+          cst:                     "01",
+          valor_base_calculo:      Number(vItem.toFixed(2)),
+          aliquota_porcentual:     1.65,
+          valor:                   Number(vPis.toFixed(2)),
+        },
+        cofins: {
+          cst:                     "01",
+          valor_base_calculo:      Number(vItem.toFixed(2)),
+          aliquota_porcentual:     7.6,
+          valor:                   Number(vCofins.toFixed(2)),
+        },
+      };
+    }),
+
     total: {
       icms_total: {
-        valor_bc_icms:  nota.valor_produtos,
-        valor_icms:     nota.valor_icms,
-        valor_pis:      nota.valor_pis,
-        valor_cofins:   nota.valor_cofins,
-        valor_produtos: nota.valor_produtos,
-        valor_nota:     nota.valor_total,
+        valor_bc_icms:  Number(nota.valor_produtos.toFixed(2)),
+        valor_icms:     Number(nota.valor_icms.toFixed(2)),
+        valor_pis:      Number(nota.valor_pis.toFixed(2)),
+        valor_cofins:   Number(nota.valor_cofins.toFixed(2)),
+        valor_produtos: Number(nota.valor_produtos.toFixed(2)),
+        valor_nota:     Number(nota.valor_total.toFixed(2)),
       },
     },
-    pagamentos: [{ forma_pagamento: "01", valor: nota.valor_total }],
+
+    transportador: {
+      modalidade_frete: 9, // sem frete
+    },
+
+    pagamentos: [{
+      forma_pagamento: "01", // dinheiro — ajustar conforme pedido
+      valor:           Number(nota.valor_total.toFixed(2)),
+    }],
+
+    // Observações do cliente na NF-e
+    ...(cliente.obs_nfe ? { informacoes_adicionais_contribuinte: cliente.obs_nfe } : {}),
   };
 
   try {
@@ -169,7 +268,7 @@ export async function emitirNFe(notaId: number, pedido: Pedido): Promise<{
     if (!res.ok) {
       await supabase
         .from("notas_fiscais")
-        .update({ status: "rejeitada", motivo_rejeicao: json.message ?? "Erro desconhecido" } as never)
+        .update({ status: "rejeitada", motivo_rejeicao: json.message ?? JSON.stringify(json.errors ?? json) } as never)
         .eq("id", notaId);
       return { ok: false, mensagem: json.message ?? "Erro na Nuvem Fiscal" };
     }
