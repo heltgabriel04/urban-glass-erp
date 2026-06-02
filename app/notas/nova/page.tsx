@@ -89,12 +89,16 @@ function NovaNFeInner() {
     init();
   }, []);
 
-  async function preencherDoPedido(p: Pedido) {
-    const { data: cliData } = await supabase.from("clientes").select("*").eq("id", p.cliente_id).single();
+ async function preencherDoPedido(p: Pedido) {
+    const [{ data: cliData }, { data: pedData }] = await Promise.all([
+      supabase.from("clientes").select("*").eq("id", p.cliente_id).single(),
+      supabase.from("pedidos").select("*, itens_pedido(*)").eq("id", p.id).single(),
+    ]);
     const cli = cliData as Cliente|null;
+    const pedCompleto = (pedData as Pedido|null) ?? p;
     setCliente(cli);
     const cfop = cli?.uf && cli.uf.toUpperCase() !== "MG" ? "6.101" : "5.101";
-    const itens: ItemNota[] = (p.itens_pedido ?? []).map(item => {
+    const itens: ItemNota[] = (pedCompleto.itens_pedido ?? []).map(item => {
       const qtd    = Number(item.m2) * item.quantidade;
       const vBruto = Number(item.subtotal);
       return calcItem({
