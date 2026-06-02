@@ -17,9 +17,38 @@ interface ResultadoChapa { placed: PecaPlacada[]; free: EspacoLivre[]; W: number
 interface RetalhoGerado extends EspacoLivre { chapaIdx: number; prod: string; m2: number; }
 interface PedidoSugerido { id: string; clienteNome: string; totalPecas: number; produtos: string[]; itens: Peca[]; }
 
-// ─── ALGORITMO STRIP-PACKING ─────────────────────────────────────────────────
-// Para cada faixa, testa TODAS as alturas possíveis e escolhe a que encaixa
-// mais peças — resolve o problema de peças que encaixam melhor rotacionadas.
+// ─── ALGORITMO GUILLOTINE RECURSIVO ──────────────────────────────────────────
+// Adequado para corte de vidro: todos os cortes são retos de lado a lado.
+interface Retangulo { x: number; y: number; w: number; h: number; }
+
+function guillotineInserirMelhor(
+  espacos: Retangulo[],
+  peca: { l: number; a: number },
+): { espacoIdx: number; rotacionado: boolean } | null {
+  let melhor: { espacoIdx: number; rotacionado: boolean; sobra: number } | null = null;
+
+  for (let i = 0; i < espacos.length; i++) {
+    const e = espacos[i];
+    const normal = peca.l <= e.w && peca.a <= e.h;
+    const rotac  = peca.a <= e.w && peca.l <= e.h;
+
+    if (!normal && !rotac) continue;
+
+    if (normal) {
+      const sobra = (e.w - peca.l) * e.h + (e.h - peca.a) * peca.l;
+      if (melhor === null || sobra < melhor.sobra)
+        melhor = { espacoIdx: i, rotacionado: false, sobra };
+    }
+    if (rotac) {
+      const sobra = (e.w - peca.a) * e.h + (e.h - peca.l) * peca.a;
+      if (melhor === null || sobra < melhor.sobra)
+        melhor = { espacoIdx: i, rotacionado: true, sobra };
+    }
+  }
+
+  return melhor ? { espacoIdx: melhor.espacoIdx, rotacionado: melhor.rotacionado } : null;
+}
+
 function empacotar(
   W: number,
   H: number,
@@ -28,76 +57,46 @@ function empacotar(
 ): { placed: PecaPlacada[]; usados: Set<number>; free: EspacoLivre[] } {
   const placed: PecaPlacada[] = [];
   const usados = new Set<number>();
-  let curY = 0;
 
-  // Simula o preenchimento de uma faixa com uma dada altura, sem confirmar
-  function simularFaixa(
-    disp: Array<{ l: number; a: number; prod: string; pedidoId?: string; origIdx: number }>,
-    altFaixa: number
-  ): Array<{ p: typeof disp[0]; pl: number; pa: number; rot: boolean; x: number }> {
-    const resultado: Array<{ p: typeof disp[0]; pl: number; pa: number; rot: boolean; x: number }> = [];
-    let cx = 0;
-    for (const p of [...disp].sort((a, b) => b.l * b.a - a.l * a.a)) {
-      const normal = p.l <= (W - cx) && p.a <= altFaixa;
-      const rotac  = p.a <= (W - cx) && p.l <= altFaixa;
-      if (!normal && !rotac) continue;
-      let pl: number, pa: number, rot: boolean;
-      if (normal && rotac) {
-        // Prefere orientação que coloca a dimensão maior na largura (mais peças por faixa)
-        if (p.l >= p.a) { pl = p.l; pa = p.a; rot = false; }
-        else             { pl = p.a; pa = p.l; rot = true;  }
-      } else if (normal) { pl = p.l; pa = p.a; rot = false; }
-      else               { pl = p.a; pa = p.l; rot = true;  }
-      if (cx + pl > W) continue;
-      resultado.push({ p, pl, pa, rot, x: cx });
-      cx += pl + kerf;
-    }
-    return resultado;
+  let espacos: Retangulo[] = [{ x: 0, y: 0, w: W, h: H }];
+
+  // Ordena por maior área (Best Area Fit)
+  const ordem = pecas
+    .map((p, i) => ({ ...p, origIdx: i }))
+    .sort((a, b) => b.l * b.a - a.l * a.a);
+
+  for (const peca of ordem) {
+    if (usados.has(peca.origIdx)) continue;
+
+    const resultado = guillotineInserirMelhor(espacos, peca);
+    if (!resultado) continue;
+
+    const { espacoIdx, rotacionado } = resultado;
+    const e = espacos[espacoIdx];
+    const pl = rotacionado ? peca.a : peca.l;
+    const pa = rotacionado ? peca.l : peca.a;
+
+    placed.push({
+      x: e.x, y: e.y, l: pl, a: pa,
+      idx: peca.origIdx, prod: peca.prod, rot: rotacionado, pedidoId: peca.pedidoId
+    });
+    usados.add(peca.origIdx);
+
+    // Divide o espaço em dois retângulos (Shorter Axis Split)
+    const sobraDir   = { x: e.x + pl + kerf, y: e.y,            w: e.w - pl - kerf, h: pa              };
+    const sobraBaixo = { x: e.x,             y: e.y + pa + kerf, w: e.w,             h: e.h - pa - kerf };
+
+    espacos.splice(espacoIdx, 1);
+    if (sobraDir.w > 0   && sobraDir.h > 0)   espacos.push(sobraDir);
+    if (sobraBaixo.w > 0 && sobraBaixo.h > 0) espacos.push(sobraBaixo);
+
+    // Ordena espaços por menor área (melhor fit primeiro)
+    espacos.sort((a, b) => a.w * a.h - b.w * b.h);
   }
 
-  while (curY < H) {
-    const disponiveis = pecas
-      .map((p, i) => ({ ...p, origIdx: i }))
-      .filter(p => !usados.has(p.origIdx));
-    if (disponiveis.length === 0) break;
-
-    // Coleta todas as alturas candidatas (cada dimensão de cada peça disponível)
-    const alturasCandidatas = new Set<number>();
-    for (const p of disponiveis) {
-      if (p.a <= (H - curY)) alturasCandidatas.add(p.a);
-      if (p.l <= (H - curY)) alturasCandidatas.add(p.l);
-    }
-    if (alturasCandidatas.size === 0) break;
-
-    // Testa cada altura candidata e escolhe a que coloca mais peças
-    let melhorSimulacao: ReturnType<typeof simularFaixa> = [];
-    let melhorAltura = 0;
-    for (const alt of alturasCandidatas) {
-      const sim = simularFaixa(disponiveis, alt);
-      // Critério: mais peças; desempate por maior área total aproveitada
-      const areaAtual  = melhorSimulacao.reduce((s, r) => s + r.pl * r.pa, 0);
-      const areaSim    = sim.reduce((s, r) => s + r.pl * r.pa, 0);
-      if (sim.length > melhorSimulacao.length || (sim.length === melhorSimulacao.length && areaSim > areaAtual)) {
-        melhorSimulacao = sim;
-        melhorAltura = alt;
-      }
-    }
-
-    if (melhorSimulacao.length === 0) break;
-
-    // Confirma a melhor faixa
-    for (const { p, pl, pa, rot, x } of melhorSimulacao) {
-      placed.push({ x, y: curY, l: pl, a: pa, idx: p.origIdx, prod: p.prod, rot, pedidoId: p.pedidoId });
-      usados.add(p.origIdx);
-    }
-    curY += melhorAltura + kerf;
-  }
-
-  // Espaço livre abaixo do último corte
-  const free: EspacoLivre[] = [];
-  if (curY < H && (H - curY) >= 100) {
-    free.push({ x: 0, y: curY, l: W, a: H - curY });
-  }
+  const free: EspacoLivre[] = espacos
+    .filter(e => e.w >= 200 && e.h >= 200)
+    .map(e => ({ x: e.x, y: e.y, l: e.w, a: e.h }));
 
   return { placed, usados, free };
 }
@@ -265,11 +264,17 @@ function OtimizadorContent() {
     ctx.fillStyle = "#4a5568"; ctx.font = "bold 9px 'DM Mono', monospace";
     ctx.fillText("CHAPA " + (idx + 1) + "  ·  " + r.W + " × " + r.H + " mm  ·  " + r.prod, ox + 4, oy - 4);
 
+    // ─── CORREÇÃO: placed.x/y já são relativas à área interna (sem borda).
+    // Aplicamos a borda apenas como offset visual no canvas, não somamos de novo às coordenadas.
+    const bordOffset = bordMm * scale;
+
     r.placed.forEach((p) => {
       const pid = p.pedidoId ?? pedidoRef ?? "?";
       const { fill, stroke } = getColorForPedido(pid);
-      const px = ox + (p.x + bordMm) * scale, py = oy + (p.y + bordMm) * scale;
-      const pw = p.l * scale, ph = p.a * scale;
+      const px = ox + bordOffset + p.x * scale;
+      const py = oy + bordOffset + p.y * scale;
+      const pw = p.l * scale;
+      const ph = p.a * scale;
       ctx.fillStyle = fill; ctx.fillRect(px, py, pw, ph);
       const grad = ctx.createLinearGradient(px, py, px, py + ph * 0.4);
       grad.addColorStop(0, "rgba(255,255,255,0.10)"); grad.addColorStop(1, "rgba(255,255,255,0)");
@@ -286,8 +291,10 @@ function OtimizadorContent() {
 
     r.free.forEach((fr) => {
       if (fr.l < 200 || fr.a < 200) return;
-      const fx = ox + (fr.x + bordMm) * scale, fy = oy + (fr.y + bordMm) * scale;
-      const fw = fr.l * scale, fh = fr.a * scale;
+      const fx = ox + bordOffset + fr.x * scale;
+      const fy = oy + bordOffset + fr.y * scale;
+      const fw = fr.l * scale;
+      const fh = fr.a * scale;
       ctx.fillStyle = "rgba(0,200,255,0.07)"; ctx.fillRect(fx, fy, fw, fh);
       ctx.strokeStyle = "rgba(0,200,255,0.35)"; ctx.setLineDash([3, 3]); ctx.lineWidth = 0.7;
       ctx.strokeRect(fx, fy, fw, fh); ctx.setLineDash([]);
@@ -298,7 +305,6 @@ function OtimizadorContent() {
   }
 
   function rodar() {
-    // 1. Monta lista flat de peças (qtd=1 cada), preservando pedidoId
     const flat: Array<{ l: number; a: number; prod: string; pedidoId?: string }> = [];
     pecas.forEach(p => {
       if (p.l > 0 && p.a > 0)
@@ -314,7 +320,6 @@ function OtimizadorContent() {
     );
     if (flat.length === 0) return;
 
-    // 2. Agrupa por produto
     const grupos = new Map<string, typeof flat>();
     flat.forEach(p => { const g = grupos.get(p.prod) ?? []; g.push(p); grupos.set(p.prod, g); });
 
@@ -327,24 +332,22 @@ function OtimizadorContent() {
       const chapa = ci2 !== undefined ? CHAPAS_PADRAO[ci2] : null;
       const CW = chapa ? chapa.w : chapaW;
       const CH = chapa ? chapa.h : chapaH;
-      const W  = CW - bord * 2;
-      const H  = CH - bord * 2;
+      // Área útil descontando borda dos 4 lados
+      const W = CW - bord * 2;
+      const H = CH - bord * 2;
 
-      // Ordena por maior área
+      // Ordena por maior área antes de passar ao algoritmo
       grupo.sort((a, b) => b.l * b.a - a.l * a.a);
 
-      // 3. Loop: a cada iteração empacota tudo numa chapa e remove os colocados
       let rem = [...grupo];
       let ci = 0;
       while (rem.length > 0 && ci < 100) {
         const { placed, usados, free } = empacotar(W, H, rem, kerf);
         if (placed.length === 0) break;
 
-        // Reconstrói placed com coordenadas corretas (idx relativo ao rem atual)
         results.push({ W: CW, H: CH, prod: prodNome, placed, free });
         totalPlaced += placed.length;
 
-        // Remove do rem os que foram colocados (pelos índices usados, que são índices do rem atual)
         rem = rem.filter((_, i) => !usados.has(i));
         ci++;
       }
@@ -354,7 +357,13 @@ function OtimizadorContent() {
     setChapaIdx(0);
 
     let totA = 0, usedA = 0;
-    results.forEach(r => { totA += r.W * r.H; r.placed.forEach(p => (usedA += p.l * p.a)); });
+    results.forEach(r => {
+      // Área útil (sem bordas) para cálculo de aproveitamento real
+      const W = r.W - bord * 2;
+      const H = r.H - bord * 2;
+      totA += W * H;
+      r.placed.forEach(p => (usedA += p.l * p.a));
+    });
     const aprov = totA > 0 ? (usedA / totA) * 100 : 0;
     setAprovNum(aprov); setPerdaNum(100 - aprov);
     setTotalPecasNum(totalPecas); setStatChapas(results.length);
