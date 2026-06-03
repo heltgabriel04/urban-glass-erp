@@ -10,6 +10,7 @@ import { criarLancamentosParcelados } from "@/services/financeiro.service";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
+import AutocompleteInput from "@/components/ui/AutocompleteInput";
 import type { Cliente, Produto, TabelaPreco, ItemPedidoInsert, PedidoInsert } from "@/types";
 
 type ModoPedido = "m2" | "ml";
@@ -55,11 +56,7 @@ function addMeses(dateStr: string, meses: number): string {
   return d.toISOString().split("T")[0];
 }
 
-function redistribuirParcelas(
-  parcelas: ParcelaForm[],
-  valorTotal: number,
-  idxEditado?: number
-): ParcelaForm[] {
+function redistribuirParcelas(parcelas: ParcelaForm[], valorTotal: number, idxEditado?: number): ParcelaForm[] {
   if (parcelas.length === 0) return parcelas;
   const fixadas = parcelas.filter((p, i) => p.editado && i !== idxEditado);
   const somaFixadas = fixadas.reduce((a, p) => a + p.valor, 0);
@@ -81,7 +78,7 @@ export default function NovoPedidoPage() {
   const [tabelas, setTabelas]     = useState<TabelaPreco[]>([]);
   const [proximoId, setProximoId] = useState("");
 
-  const [clienteId, setClienteId]   = useState<number | "">("");
+  const [clienteId, setClienteId]   = useState<number | null>(null);
   const [dtPedido, setDtPedido]     = useState(new Date().toISOString().split("T")[0]);
   const [dtRetirada, setDtRetirada] = useState("");
   const [formaPgto, setFormaPgto]   = useState("");
@@ -107,7 +104,6 @@ export default function NovoPedidoPage() {
     setProdutos(prods || []);
     setTabelas(tabs || []);
     setProximoId(pid);
-    // Inicia com item vazio — produto não pré-selecionado
     setItens([{ ...ITEM_VAZIO }]);
   }
 
@@ -116,6 +112,21 @@ export default function NovoPedidoPage() {
     const cli = clientes.find(c => c.id === clienteId);
     if (cli) setFormaPgto(cli.pgto || "");
   }, [clienteId, clientes]);
+
+  // ── Opções para autocomplete ──────────────────────────────
+  const clienteOpts = clientes.map(c => ({
+    id: c.id,
+    label: c.nome,
+    sub: c.cidade ?? undefined,
+  }));
+
+  const produtoOpts = produtos.map(p => ({
+    id: p.id,
+    label: p.nome,
+    sub: formatBRL(p.valor) + "/m²",
+  }));
+
+  // ── Cálculos ─────────────────────────────────────────────
 
   function calcM2Item(item: ItemForm): number {
     const l = arredondarParaMultiplo50(item.largura);
@@ -138,6 +149,8 @@ export default function NovoPedidoPage() {
   const valorTotal = itens.reduce((a, i) => a + calcSubtotal(i), 0);
   const todosVidroCliente = itens.length > 0 && itens.every(i => i.vidro_cliente);
   const algumVidroCliente = itens.some(i => i.vidro_cliente);
+
+  // ── Parcelas ─────────────────────────────────────────────
 
   useEffect(() => {
     setParcelasForm(prev => {
@@ -171,6 +184,8 @@ export default function NovoPedidoPage() {
     });
   }
 
+  // ── Itens ─────────────────────────────────────────────────
+
   function getTabela(): TabelaPreco | null {
     if (!clienteId) return tabelas[0] || null;
     const cli = clientes.find(c => c.id === clienteId);
@@ -196,6 +211,14 @@ export default function NovoPedidoPage() {
         else { novo.produto_nome = ""; novo.valor_m2 = 0; }
       }
       return novo;
+    }));
+  }
+
+  function setProdutoItem(i: number, id: number, label: string) {
+    const prod = produtos.find(p => p.id === id);
+    setItens(items => items.map((item, idx) => {
+      if (idx !== i) return item;
+      return { ...item, produto_id: id, produto_nome: label, valor_m2: prod?.valor ?? item.valor_m2 };
     }));
   }
 
@@ -256,7 +279,7 @@ export default function NovoPedidoPage() {
 
     const pedido: PedidoInsert = {
       id: proximoId,
-      cliente_id: clienteId as number,
+      cliente_id: clienteId,
       dt_pedido: dtPedido,
       dt_retirada: dtRetirada || null,
       datas_pgto: parcelasForm.map(p => p.data).filter(d => d),
@@ -284,30 +307,19 @@ export default function NovoPedidoPage() {
     }));
 
     const result = await createPedido(pedido, itensInsert);
-
     if (result) {
-      await criarLancamentosParcelados({
-        pedidoId: proximoId,
-        clienteId: clienteId as number,
-        parcelas: parcelasForm,
-      });
+      await criarLancamentosParcelados({ pedidoId: proximoId, clienteId, parcelas: parcelasForm });
       router.push("/pedidos");
     }
-
     setSalvando(false);
   }
 
   const tab  = getTabela();
   const isMl = modoPedido === "ml";
 
-  const toggleBase: React.CSSProperties = {
-    padding: "5px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: 600,
-    cursor: "pointer", border: "1px solid var(--b2)", transition: "all 0.15s",
-    fontFamily: "'DM Mono', monospace",
-  };
+  const toggleBase: React.CSSProperties = { padding: "5px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer", border: "1px solid var(--b2)", transition: "all 0.15s", fontFamily: "'DM Mono', monospace" };
   const toggleAtivo: React.CSSProperties   = { ...toggleBase, background: "var(--acc)", color: "#000", borderColor: "var(--acc)" };
   const toggleInativo: React.CSSProperties = { ...toggleBase, background: "transparent", color: "var(--t3)" };
-
   const colsM2 = "2fr 70px 70px 50px 90px 90px 90px 90px 90px 36px";
   const colsMl = "2fr 90px 90px 50px 90px 90px 90px 36px";
 
@@ -317,9 +329,7 @@ export default function NovoPedidoPage() {
         <div className="tb-title">Novo Pedido · {proximoId}</div>
         <div style={{ display: "flex", gap: "8px" }}>
           <button className="btn bg sm" onClick={() => router.push("/pedidos")}>Cancelar</button>
-          <button className="btn bp sm" onClick={salvar} disabled={salvando}>
-            {salvando ? "Salvando..." : "✓ Salvar Pedido"}
-          </button>
+          <button className="btn bp sm" onClick={salvar} disabled={salvando}>{salvando ? "Salvando..." : "✓ Salvar Pedido"}</button>
         </div>
       </div>
 
@@ -328,12 +338,15 @@ export default function NovoPedidoPage() {
           <div className="card">
             <div className="ct">Dados do Pedido</div>
 
+            {/* Cliente com autocomplete */}
             <div className="fg" style={{ marginBottom: "10px" }}>
               <label className="fl">Cliente *</label>
-              <select className="fc" value={clienteId} onChange={e => setClienteId(Number(e.target.value) || "")}>
-                <option value="">Selecione o cliente...</option>
-                {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-              </select>
+              <AutocompleteInput
+                options={clienteOpts}
+                value={clienteId}
+                onChange={(id) => setClienteId(id)}
+                placeholder="Buscar cliente..."
+              />
             </div>
 
             {clienteId && tab && (
@@ -376,11 +389,6 @@ export default function NovoPedidoPage() {
               <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", marginBottom: "10px", textTransform: "uppercase" }}>
                 {parcelas === 1 ? "Pagamento" : `Parcelas (${parcelas}x)`}
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "60px 1fr 120px", gap: "8px", marginBottom: "6px", paddingBottom: "6px", borderBottom: "1px solid var(--b1)" }}>
-                {parcelas > 1 && <span />}
-                <span style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", gridColumn: parcelas === 1 ? "1 / span 2" : "2" }}>Data</span>
-                <span style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", textAlign: "right" }}>Valor (R$)</span>
-              </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 {parcelasForm.map((p, idx) => (
                   <div key={idx} style={{ display: "grid", gridTemplateColumns: parcelas > 1 ? "60px 1fr 120px" : "1fr 120px", gap: "8px", alignItems: "center" }}>
@@ -393,11 +401,6 @@ export default function NovoPedidoPage() {
               {valorTotal > 0 && !parcelasOk && (
                 <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--warn, #f59e0b)", fontFamily: "'DM Mono', monospace" }}>
                   ⚠ Soma das parcelas ({formatBRL(somaParcelas)}) difere do total ({formatBRL(valorTotal)})
-                </div>
-              )}
-              {parcelas > 1 && (
-                <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "8px", fontFamily: "'DM Mono', monospace" }}>
-                  Altere a 1ª data para recalcular todas · edite um valor para fixá-lo
                 </div>
               )}
             </div>
@@ -428,24 +431,7 @@ export default function NovoPedidoPage() {
               </div>
             )}
             <div className="sr"><div className="sl">Valor Total</div><div className="sv" style={{ color: "var(--acc)", fontSize: "18px" }}>{formatBRL(valorTotal)}</div></div>
-            {parcelas > 1 && (
-              <div className="sr"><div className="sl">Por Parcela</div><div className="sv">{formatBRL(valorTotal / parcelas)}</div></div>
-            )}
-            {parcelasForm.filter(p => p.data).length > 0 && (
-              <div style={{ marginTop: "12px", padding: "10px 12px", background: "var(--surf2)", borderRadius: "8px", border: "1px solid var(--b2)" }}>
-                <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", marginBottom: "8px", textTransform: "uppercase" }}>Vencimentos</div>
-                {parcelasForm.filter(p => p.data).map((p, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: "4px", gap: "8px" }}>
-                    <span style={{ color: "var(--t3)", fontFamily: "'DM Mono', monospace", flexShrink: 0 }}>{parcelas > 1 ? `${i + 1}ª` : "Pgto"}</span>
-                    <span style={{ color: "var(--t1)", fontFamily: "'DM Mono', monospace" }}>{new Date(p.data + "T12:00:00").toLocaleDateString("pt-BR")}</span>
-                    <span style={{ color: "var(--acc)", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{formatBRL(p.valor)}</span>
-                  </div>
-                ))}
-                {valorTotal > 0 && !parcelasOk && (
-                  <div style={{ marginTop: "6px", fontSize: "10px", color: "var(--warn, #f59e0b)", fontFamily: "'DM Mono', monospace" }}>⚠ Soma difere {formatBRL(difParcelas)}</div>
-                )}
-              </div>
-            )}
+            {parcelas > 1 && <div className="sr"><div className="sl">Por Parcela</div><div className="sv">{formatBRL(valorTotal / parcelas)}</div></div>}
             {clienteId && tab && tab.min > 0 && valorTotal < tab.min && (
               <div className="al al-w" style={{ marginTop: "10px" }}>⚠ Pedido abaixo do mínimo de {formatBRL(tab.min)}</div>
             )}
@@ -471,15 +457,14 @@ export default function NovoPedidoPage() {
             </div>
           )}
 
+          {/* Cabeçalho colunas */}
           <div style={{ display: "grid", gridTemplateColumns: isMl ? colsMl : colsM2, gap: "6px", padding: "6px 0", borderBottom: "1px solid var(--b1)", marginBottom: "8px", alignItems: "center" }}>
-            {isMl
-              ? ["Produto","Larg. (mm)","Alt. (mm)","Qtd","R$/ml","Total(R$)",""].map((h, i) => (
-                  <div key={i} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>{h}</div>
-                ))
-              : ["Produto","Larg.","Alt.","Qtd","R$/m²","Unit.(R$)","Total(R$)","Lap./m²",""].map((h, i) => (
-                  <div key={i} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>{h}</div>
-                ))
-            }
+            {(isMl
+              ? ["Produto","Larg. (mm)","Alt. (mm)","Qtd","R$/ml","Total(R$)",""]
+              : ["Produto","Larg.","Alt.","Qtd","R$/m²","Unit.(R$)","Total(R$)","Lap./m²",""]
+            ).map((h, i) => (
+              <div key={i} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>{h}</div>
+            ))}
             <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
               <input
                 type="checkbox"
@@ -494,24 +479,19 @@ export default function NovoPedidoPage() {
           </div>
 
           {itens.map((item, i) => {
-            const m2      = calcM2Item(item);
-            const ml      = calcMLItem(item);
-            const sub     = calcSubtotal(item);
-            const m2unit  = (() => { const l = arredondarParaMultiplo50(item.largura); const a = arredondarParaMultiplo50(item.altura); return (l/1000)*(a/1000); })();
+            const m2     = calcM2Item(item);
+            const ml     = calcMLItem(item);
+            const sub    = calcSubtotal(item);
+            const m2unit = (() => { const l = arredondarParaMultiplo50(item.largura); const a = arredondarParaMultiplo50(item.altura); return (l/1000)*(a/1000); })();
             const unitVal = m2unit > 0 ? item.valor_m2 * m2unit : 0;
-            const lArred  = arredondarParaMultiplo50(item.largura);
-            const aArred  = arredondarParaMultiplo50(item.altura);
+            const lArred = arredondarParaMultiplo50(item.largura);
+            const aArred = arredondarParaMultiplo50(item.altura);
             const mostrarArred = item.largura > 0 && item.altura > 0 && (lArred !== item.largura || aArred !== item.altura);
 
             const checkboxVC = (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <input
-                  type="checkbox"
-                  checked={item.vidro_cliente}
-                  onChange={e => updItem(i, "vidro_cliente", e.target.checked)}
-                  style={{ width: "14px", height: "14px", accentColor: "var(--warn)", cursor: "pointer" }}
-                  title="Vidro fornecido pelo cliente"
-                />
+                <input type="checkbox" checked={item.vidro_cliente} onChange={e => updItem(i, "vidro_cliente", e.target.checked)}
+                  style={{ width: "14px", height: "14px", accentColor: "var(--warn)", cursor: "pointer" }} />
               </div>
             );
 
@@ -522,24 +502,21 @@ export default function NovoPedidoPage() {
                     📦 Vidro do cliente — não desconta estoque
                   </div>
                 )}
-
                 {isMl ? (
                   <div>
                     <div style={{ display: "grid", gridTemplateColumns: colsMl, gap: "6px", alignItems: "center" }}>
-                      <select className="fc" value={item.produto_id ?? ""} onChange={e => updItem(i, "produto_id", Number(e.target.value))}>
-                        <option value="">Selecionar produto...</option>
-                        {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                      </select>
+                      {/* Autocomplete produto */}
+                      <AutocompleteInput options={produtoOpts} value={item.produto_id} onChange={(id, label) => setProdutoItem(i, id, label)} placeholder="Buscar produto..." />
                       <div style={{ position: "relative" }}>
                         <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" style={{ paddingRight: "24px" }} />
                         <label style={{ position: "absolute", right: "6px", top: "50%", transform: "translateY(-50%)", cursor: "pointer" }}>
-                          <input type="checkbox" checked={item.ml_larg} onChange={e => updItem(i, "ml_larg", e.target.checked)} style={{ width: "12px", height: "12px", accentColor: "#6366f1", cursor: "pointer" }} />
+                          <input type="checkbox" checked={item.ml_larg} onChange={e => updItem(i, "ml_larg", e.target.checked)} style={{ width: "12px", height: "12px", accentColor: "#6366f1" }} />
                         </label>
                       </div>
                       <div style={{ position: "relative" }}>
                         <input className="fc" type="number" value={item.altura || ""} onChange={e => updItem(i, "altura", parseInt(e.target.value) || 0)} placeholder="0" style={{ paddingRight: "24px" }} />
                         <label style={{ position: "absolute", right: "6px", top: "50%", transform: "translateY(-50%)", cursor: "pointer" }}>
-                          <input type="checkbox" checked={item.ml_alt} onChange={e => updItem(i, "ml_alt", e.target.checked)} style={{ width: "12px", height: "12px", accentColor: "#6366f1", cursor: "pointer" }} />
+                          <input type="checkbox" checked={item.ml_alt} onChange={e => updItem(i, "ml_alt", e.target.checked)} style={{ width: "12px", height: "12px", accentColor: "#6366f1" }} />
                         </label>
                       </div>
                       <input className="fc" type="number" value={item.quantidade} onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
@@ -549,10 +526,8 @@ export default function NovoPedidoPage() {
                       {checkboxVC}
                     </div>
                     {(item.largura > 0 || item.altura > 0) && (
-                      <div style={{ display: "flex", gap: "14px", padding: "4px 0 0 4px", alignItems: "center", flexWrap: "wrap" }}>
-                        <span style={{ fontSize: "11px", color: "#818cf8", fontFamily: "'DM Mono',monospace" }}>
-                          {ml.toFixed(3)} ml{item.ml_larg && item.ml_alt ? "" : item.ml_larg ? " (só larg.)" : item.ml_alt ? " (só alt.)" : " ⚠ nenhum lado"}
-                        </span>
+                      <div style={{ display: "flex", gap: "14px", padding: "4px 0 0 4px", flexWrap: "wrap" }}>
+                        <span style={{ fontSize: "11px", color: "#818cf8", fontFamily: "'DM Mono',monospace" }}>{ml.toFixed(3)} ml</span>
                         {sub > 0 && <span style={{ fontSize: "11px", color: "var(--acc)", fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>{formatBRL(sub)}</span>}
                       </div>
                     )}
@@ -560,10 +535,8 @@ export default function NovoPedidoPage() {
                 ) : (
                   <div>
                     <div style={{ display: "grid", gridTemplateColumns: colsM2, gap: "6px", alignItems: "center" }}>
-                      <select className="fc" value={item.produto_id ?? ""} onChange={e => updItem(i, "produto_id", Number(e.target.value))}>
-                        <option value="">Selecionar produto...</option>
-                        {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                      </select>
+                      {/* Autocomplete produto */}
+                      <AutocompleteInput options={produtoOpts} value={item.produto_id} onChange={(id, label) => setProdutoItem(i, id, label)} placeholder="Buscar produto..." />
                       <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
                       <input className="fc" type="number" value={item.altura  || ""} onChange={e => updItem(i, "altura",  parseInt(e.target.value) || 0)} placeholder="0" />
                       <input className="fc" type="number" value={item.quantidade} onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
@@ -575,7 +548,7 @@ export default function NovoPedidoPage() {
                       {checkboxVC}
                     </div>
                     {m2 > 0 && (
-                      <div style={{ display: "flex", gap: "14px", padding: "4px 0 0 4px", alignItems: "center", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", gap: "14px", padding: "4px 0 0 4px", flexWrap: "wrap" }}>
                         <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>{formatM2(m2)}</span>
                         <span style={{ fontSize: "11px", color: "var(--acc)", fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>{formatBRL(sub)}</span>
                         {mostrarArred && <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", opacity: 0.7 }}>cobrado: {lArred}×{aArred}</span>}
