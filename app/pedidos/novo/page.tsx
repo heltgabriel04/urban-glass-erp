@@ -47,8 +47,11 @@ function arredondarParaMultiplo50(v: number): number {
 }
 
 function addMeses(dateStr: string, meses: number): string {
+  if (!dateStr || dateStr.length < 10) return "";
   const d = new Date(dateStr + "T12:00:00");
+  if (isNaN(d.getTime())) return "";
   d.setMonth(d.getMonth() + meses);
+  if (isNaN(d.getTime())) return "";
   return d.toISOString().split("T")[0];
 }
 
