@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
-import { getPedidoById, avancarStatusPedido, registrarRecebimento, recalcularRecebido, updatePedido } from "@/services/pedidos.service";
+import { getPedidoById, avancarStatusPedido, registrarRecebimento, recalcularRecebido, updatePedido, getCreditoCliente, utilizarCreditoEmPedido } from "@/services/pedidos.service";
 import { getLancamentosPorPedido, deletarLancamento, createLancamento } from "@/services/financeiro.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
@@ -58,7 +58,7 @@ function addMeses(dateStr: string, meses: number): string {
 interface ParcelaEdit {
   data: string;
   valor: number;
-  lancamento_id?: number; // id do lançamento existente no banco
+  lancamento_id?: number;
 }
 
 export default function PedidoDetalhe() {
@@ -68,19 +68,19 @@ export default function PedidoDetalhe() {
   const autoPrint = searchParams.get("print") === "1";
   const { toast } = useToast();
 
-  const [pedido, setPedido]           = useState<Pedido | null>(null);
-  const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
-  const [otimizacoes, setOtimizacoes] = useState<HistoricoOtimizador[]>([]);
-  const [clientes, setClientes]       = useState<{ id: number; nome: string }[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [recebendo, setRecebendo]     = useState(false);
-  const [valorRec, setValorRec]       = useState("");
-  const [dataRec, setDataRec]         = useState(hoje());
-  const [salvando, setSalvando]       = useState(false);
+  const [pedido, setPedido]             = useState<Pedido | null>(null);
+  const [lancamentos, setLancamentos]   = useState<Lancamento[]>([]);
+  const [otimizacoes, setOtimizacoes]   = useState<HistoricoOtimizador[]>([]);
+  const [clientes, setClientes]         = useState<{ id: number; nome: string }[]>([]);
+  const [creditoCliente, setCreditoCliente] = useState(0);
+  const [loading, setLoading]           = useState(true);
+  const [recebendo, setRecebendo]       = useState(false);
+  const [valorRec, setValorRec]         = useState("");
+  const [dataRec, setDataRec]           = useState(hoje());
+  const [salvando, setSalvando]         = useState(false);
 
-  // ── Modal de edição ──────────────────────────────────────
-  const [editando, setEditando]       = useState(false);
-  const [editForm, setEditForm]       = useState({
+  const [editando, setEditando]         = useState(false);
+  const [editForm, setEditForm]         = useState({
     cliente_id: 0,
     dt_pedido: "",
     dt_retirada: "",
@@ -112,6 +112,12 @@ export default function PedidoDetalhe() {
     setLancamentos(lancs);
     setOtimizacoes(otims);
     setClientes(clis as { id: number; nome: string }[]);
+
+    if (data?.cliente_id) {
+      const cred = await getCreditoCliente(data.cliente_id);
+      setCreditoCliente(cred);
+    }
+
     setLoading(false);
   }
 
@@ -126,7 +132,6 @@ export default function PedidoDetalhe() {
       parcelas:    pedido.parcelas ?? 1,
       obs:         pedido.obs ?? "",
     });
-    // Monta parcelas a partir dos lançamentos "A Receber" existentes
     const aReceber = lancamentos.filter(l => l.status === "A Receber").sort((a, b) =>
       (a.vencimento ?? "").localeCompare(b.vencimento ?? "")
     );
@@ -137,7 +142,6 @@ export default function PedidoDetalhe() {
         lancamento_id: l.id,
       })));
     } else {
-      // Se não tem lançamentos, distribui igualmente
       const n = pedido.parcelas ?? 1;
       const valorParcela = parseFloat((pedido.valor_total / n).toFixed(2));
       const datas = pedido.datas_pgto ?? [];
@@ -169,26 +173,22 @@ export default function PedidoDetalhe() {
     if (!pedido) return;
     setSalvando(true);
 
-    // Atualiza pedido
     const result = await updatePedido(pedido.id, {
-      cliente_id:  editForm.cliente_id,
-      dt_pedido:   editForm.dt_pedido,
-      dt_retirada: editForm.dt_retirada || null,
-      forma_pgto:  editForm.forma_pgto,
-      conta:       editForm.conta,
-      parcelas:    editForm.parcelas,
-      obs:         editForm.obs,
-      datas_pgto:  editParcelas.map(p => p.data).filter(d => d),
+      cliente_id:   editForm.cliente_id,
+      dt_pedido:    editForm.dt_pedido,
+      dt_retirada:  editForm.dt_retirada || null,
+      forma_pgto:   editForm.forma_pgto,
+      conta:        editForm.conta,
+      parcelas:     editForm.parcelas,
+      obs:          editForm.obs,
+      datas_pgto:   editParcelas.map(p => p.data).filter(d => d),
       valores_pgto: editParcelas.map(p => p.valor),
     });
 
     if (!result) { toast("Erro ao salvar pedido", "err"); setSalvando(false); return; }
 
-    // Atualiza lançamentos A Receber: remove os antigos e recria
     const aReceber = lancamentos.filter(l => l.status === "A Receber");
-    for (const l of aReceber) {
-      await deletarLancamento(l.id);
-    }
+    for (const l of aReceber) await deletarLancamento(l.id);
     for (let i = 0; i < editParcelas.length; i++) {
       const p = editParcelas[i];
       if (!p.data || p.valor <= 0) continue;
@@ -234,14 +234,29 @@ export default function PedidoDetalhe() {
     if (!pedido) return;
     const valor = parsearValor(valorRec);
     if (!valor || valor <= 0) { toast("Informe um valor válido", "warn"); return; }
-    const aberto = Number(pedido.valor_total) - Number(pedido.valor_recebido);
-    if (valor > aberto + 0.01) { toast(`Valor máximo: ${formatBRL(aberto)}`, "warn"); return; }
     setSalvando(true);
     const result = await registrarRecebimento(pedido.id, valor, dataRec);
     setSalvando(false);
     if (!result) { toast("Erro ao registrar recebimento", "err"); return; }
-    toast(valor >= aberto - 0.01 ? `✓ Pedido ${pedido.id} quitado!` : `${formatBRL(valor)} registrado`);
+
+    const { excedente } = result as any;
+    if (excedente > 0.005) {
+      toast(`✓ Pedido quitado! ${formatBRL(excedente)} ficaram como crédito do cliente.`);
+    } else {
+      const aberto = Number(pedido.valor_total) - Number(pedido.valor_recebido);
+      toast(valor >= aberto - 0.01 ? `✓ Pedido ${pedido.id} quitado!` : `${formatBRL(valor)} registrado`);
+    }
     setValorRec(""); setDataRec(hoje()); setRecebendo(false);
+    await load();
+  }
+
+  async function handleUsarCredito() {
+    if (!pedido) return;
+    setSalvando(true);
+    const result = await utilizarCreditoEmPedido(pedido.id, creditoCliente, hoje());
+    setSalvando(false);
+    if (!result) { toast("Erro ao aplicar crédito", "err"); return; }
+    toast(`✓ ${formatBRL(creditoCliente - result.creditoRestante)} de crédito aplicado`);
     await load();
   }
 
@@ -303,7 +318,6 @@ export default function PedidoDetalhe() {
           </div>
           <span className={CHIP[pedido.status] ?? "chip cgr"}>{pedido.status}</span>
 
-          {/* Botão Editar */}
           <button className="btn bg sm" onClick={abrirEdicao}>✏ Editar</button>
 
           {temItens && !todosVidroCliente && (
@@ -333,7 +347,7 @@ export default function PedidoDetalhe() {
             <button
               className="btn bp sm"
               onClick={handleAvancar}
-              disabled={salvando}
+              disabled={salvando || bloqueadoSemOtim}
               style={bloqueadoSemOtim ? { opacity:0.45, cursor:"not-allowed" } : {}}
             >
               {salvando ? "Salvando..." : bloqueadoSemOtim ? "⚠ Otimização pendente" : "Avançar Status →"}
@@ -462,6 +476,20 @@ export default function PedidoDetalhe() {
                   </div>
                 </div>
               )}
+
+              {/* Crédito disponível */}
+              {creditoCliente > 0.005 && !quitado && (
+                <div style={{ marginBottom:"10px", padding:"10px 12px", background:"rgba(0,200,255,.07)", border:"1px solid rgba(0,200,255,.25)", borderRadius:"8px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"10px" }}>
+                  <div>
+                    <div style={{ fontSize:"11px", fontWeight:700, color:"var(--acc2)" }}>Crédito disponível do cliente</div>
+                    <div style={{ fontSize:"13px", fontWeight:700, color:"var(--t1)", fontFamily:"'DM Mono', monospace" }}>{formatBRL(creditoCliente)}</div>
+                  </div>
+                  <button className="btn bg sm" onClick={handleUsarCredito} disabled={salvando}>
+                    Aplicar crédito
+                  </button>
+                </div>
+              )}
+
               {!quitado && (
                 <div>
                   {!recebendo ? (
@@ -481,7 +509,9 @@ export default function PedidoDetalhe() {
                         <button className="btn bp sm" onClick={handleReceber} disabled={salvando}>{salvando ? "..." : "Salvar"}</button>
                         <button className="btn bg sm" onClick={() => { setRecebendo(false); setValorRec(""); }}>✕</button>
                       </div>
-                      <div style={{ fontSize:"11px", color:"var(--t3)", textAlign:"right" }}>Máximo: {formatBRL(aberto)}</div>
+                      <div style={{ fontSize:"11px", color:"var(--t3)", textAlign:"right" }}>
+                        Pode ser maior que o saldo — excedente vira crédito do cliente
+                      </div>
                     </div>
                   )}
                 </div>
@@ -543,8 +573,6 @@ export default function PedidoDetalhe() {
               </div>
 
               <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
-
-                {/* Cliente */}
                 <div className="fg">
                   <label className="fl">Cliente</label>
                   <select style={fc} value={editForm.cliente_id} onChange={e => setEditForm(f => ({ ...f, cliente_id: Number(e.target.value) }))}>
@@ -552,13 +580,11 @@ export default function PedidoDetalhe() {
                   </select>
                 </div>
 
-                {/* Datas */}
                 <div className="fr">
                   <div className="fg"><label className="fl">Data do Pedido</label><DateInput value={editForm.dt_pedido} onChange={v => setEditForm(f => ({ ...f, dt_pedido: v }))} /></div>
                   <div className="fg"><label className="fl">Previsão Retirada</label><DateInput value={editForm.dt_retirada} onChange={v => setEditForm(f => ({ ...f, dt_retirada: v }))} /></div>
                 </div>
 
-                {/* Pagamento */}
                 <div className="fr">
                   <div className="fg">
                     <label className="fl">Forma de Pagamento</label>
@@ -576,7 +602,6 @@ export default function PedidoDetalhe() {
                   </div>
                 </div>
 
-                {/* Parcelas */}
                 <div className="fg">
                   <label className="fl">Parcelas</label>
                   <select style={fc} value={editForm.parcelas} onChange={e => handleEditParcelas(Number(e.target.value))}>
@@ -584,7 +609,6 @@ export default function PedidoDetalhe() {
                   </select>
                 </div>
 
-                {/* Datas e valores das parcelas */}
                 <div style={{ padding:"12px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)" }}>
                   <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"10px", textTransform:"uppercase" }}>
                     {editForm.parcelas === 1 ? "Pagamento" : `Parcelas (${editForm.parcelas}x)`}
@@ -615,12 +639,11 @@ export default function PedidoDetalhe() {
                     </div>
                   ))}
                   <div style={{ fontSize:"10px", color:"var(--t3)", marginTop:"4px", fontFamily:"'DM Mono',monospace" }}>
-                    Total das parcelas: <strong style={{ color: "var(--acc)" }}>{formatBRL(editParcelas.reduce((a, p) => a + p.valor, 0))}</strong>
+                    Total das parcelas: <strong style={{ color:"var(--acc)" }}>{formatBRL(editParcelas.reduce((a, p) => a + p.valor, 0))}</strong>
                     {" · "}Valor do pedido: <strong>{formatBRL(pedido.valor_total)}</strong>
                   </div>
                 </div>
 
-                {/* Observações */}
                 <div className="fg">
                   <label className="fl">Observações</label>
                   <textarea style={{ ...fc, minHeight:"80px", resize:"vertical", fontFamily:"'Inter',sans-serif" }}

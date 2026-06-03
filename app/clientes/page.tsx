@@ -7,8 +7,12 @@ import { getFinanceiroClientes } from "@/services/financeiro.service";
 import { formatBRL } from "@/lib/formatters";
 import type { Cliente, FinanceiroCliente, ClienteInsert, TipoPessoa, IndIE } from "@/types";
 
-const VAZIO: ClienteInsert = {
+type ClienteForm = ClienteInsert & { responsavel?: string; tel_responsavel?: string };
+
+const VAZIO: ClienteForm = {
   nome: "", cnpj: "", cpf: "", tipo_pessoa: "PJ",
+  responsavel: "",
+  tel_responsavel: "",
   tel: "", email: "",
   endereco: "", cidade: "",
   cep: "", logradouro: "", numero: "", complemento: "", bairro: "", uf: "", cod_ibge: "",
@@ -16,29 +20,19 @@ const VAZIO: ClienteInsert = {
   pgto: "", tabela: "p", ativo: true,
 };
 
-// ─── MÁSCARAS ──────────────────────────────────────────────
-
 function maskCNPJ(v: string) {
   const d = v.replace(/\D/g, "").slice(0, 14);
-  return d
-    .replace(/^(\d{2})(\d)/, "$1.$2")
-    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
-    .replace(/\.(\d{3})(\d)/, ".$1/$2")
-    .replace(/(\d{4})(\d)/, "$1-$2");
+  return d.replace(/^(\d{2})(\d)/, "$1.$2").replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1/$2").replace(/(\d{4})(\d)/, "$1-$2");
 }
 
 function maskCPF(v: string) {
   const d = v.replace(/\D/g, "").slice(0, 11);
-  return d
-    .replace(/^(\d{3})(\d)/, "$1.$2")
-    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
-    .replace(/\.(\d{3})(\d)/, ".$1-$2");
+  return d.replace(/^(\d{3})(\d)/, "$1.$2").replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1-$2");
 }
 
 function maskTel(v: string) {
   const d = v.replace(/\D/g, "").slice(0, 11);
-  if (d.length <= 10)
-    return d.replace(/^(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3").replace(/-$/, "");
+  if (d.length <= 10) return d.replace(/^(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3").replace(/-$/, "");
   return d.replace(/^(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3").replace(/-$/, "");
 }
 
@@ -48,15 +42,9 @@ function maskCEP(v: string) {
 }
 
 function maskIE(v: string) {
-  // IE de MG: 000.000.000/0000 — 12 dígitos
   const d = v.replace(/\D/g, "").slice(0, 12);
-  return d
-    .replace(/^(\d{3})(\d)/, "$1.$2")
-    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
-    .replace(/\.(\d{3})(\d)/, ".$1/$2");
+  return d.replace(/^(\d{3})(\d)/, "$1.$2").replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1/$2");
 }
-
-// ─── CEP VIA VIACEP ────────────────────────────────────────
 
 async function buscarCep(cep: string) {
   const raw = cep.replace(/\D/g, "");
@@ -76,7 +64,7 @@ export default function ClientesPage() {
   const [filtro, setFiltro]           = useState("");
   const [modal, setModal]             = useState(false);
   const [aba, setAba]                 = useState<"geral" | "endereco" | "fiscal">("geral");
-  const [form, setForm]               = useState<ClienteInsert>(VAZIO);
+  const [form, setForm]               = useState<any>(VAZIO);
   const [editId, setEditId]           = useState<number | null>(null);
   const [salvando, setSalvando]       = useState(false);
   const [buscandoCep, setBuscandoCep] = useState(false);
@@ -98,6 +86,8 @@ export default function ClientesPage() {
   function abrirEdit(c: Cliente) {
     setForm({
       nome: c.nome, cnpj: c.cnpj, cpf: c.cpf ?? "", tipo_pessoa: c.tipo_pessoa ?? "PJ",
+      responsavel: (c as any).responsavel ?? "",
+      tel_responsavel: (c as any).tel_responsavel ?? "",
       tel: c.tel, email: c.email,
       endereco: c.endereco, cidade: c.cidade,
       cep: c.cep ?? "", logradouro: c.logradouro ?? "", numero: c.numero ?? "",
@@ -117,7 +107,7 @@ export default function ClientesPage() {
     const data = await buscarCep(form.cep);
     setBuscandoCep(false);
     if (!data) return;
-    setForm(f => ({
+    setForm((f: any) => ({
       ...f,
       logradouro: data.logradouro ?? f.logradouro,
       bairro:     data.bairro     ?? f.bairro,
@@ -160,8 +150,7 @@ export default function ClientesPage() {
     return <span className="chip cr">Alto</span>;
   };
 
-  const F = (k: keyof ClienteInsert, v: string | boolean) =>
-    setForm(f => ({ ...f, [k]: v }));
+  const F = (k: string, v: string | boolean) => setForm((f: any) => ({ ...f, [k]: v }));
 
   return (
     <AppLayout>
@@ -195,14 +184,14 @@ export default function ClientesPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Cliente</th><th>CPF / CNPJ</th><th>Telefone</th><th>Cidade / UF</th>
+                  <th>Cliente</th><th>CPF / CNPJ</th><th>Responsável</th><th>Telefone</th><th>Cidade / UF</th>
                   <th>Fiscal</th><th>Tabela</th><th>Faturado</th><th>A Receber</th><th>Risco</th>
                   <th>Ações</th><th style={{ width:"40px" }}></th>
                 </tr>
               </thead>
               <tbody>
                 {filtrados.length === 0 && (
-                  <tr><td colSpan={11} style={{ textAlign:"center", color:"var(--t3)", padding:"32px" }}>Nenhum cliente encontrado</td></tr>
+                  <tr><td colSpan={12} style={{ textAlign:"center", color:"var(--t3)", padding:"32px" }}>Nenhum cliente encontrado</td></tr>
                 )}
                 {filtrados.map(c => {
                   const fin    = finDe(c.id);
@@ -218,6 +207,14 @@ export default function ClientesPage() {
                       <td className="mono">
                         <div style={{ fontSize:"10px", color:"var(--t3)" }}>{c.tipo_pessoa === "PF" ? "CPF" : "CNPJ"}</div>
                         {docNum || "—"}
+                      </td>
+                      <td>
+                        {(c as any).responsavel ? (
+                          <div>
+                            <div style={{ fontSize:"12px" }}>{(c as any).responsavel}</div>
+                            {(c as any).tel_responsavel && <div className="tdim">{(c as any).tel_responsavel}</div>}
+                          </div>
+                        ) : <span style={{ color:"var(--t3)" }}>—</span>}
                       </td>
                       <td className="mono">{c.tel || "—"}</td>
                       <td>{cidade || c.cidade || "—"}</td>
@@ -261,7 +258,6 @@ export default function ClientesPage() {
         )}
       </div>
 
-      {/* ── MODAL ── */}
       {modal && (
         <div className="mov open" onClick={e => e.target === e.currentTarget && setModal(false)}>
           <div className="mod" style={{ width:"600px", maxHeight:"90vh", display:"flex", flexDirection:"column" }}>
@@ -270,7 +266,6 @@ export default function ClientesPage() {
               <button className="mcl" onClick={() => setModal(false)}>✕</button>
             </div>
 
-            {/* Abas */}
             <div style={{ display:"flex", gap:"2px", padding:"0 20px", borderBottom:"1px solid var(--b1)", flexShrink:0 }}>
               {(["geral","endereco","fiscal"] as const).map(a => (
                 <button key={a} onClick={() => setAba(a)} style={{
@@ -285,13 +280,12 @@ export default function ClientesPage() {
 
             <div style={{ overflowY:"auto", padding:"20px", flex:1 }}>
 
-              {/* ABA GERAL */}
               {aba === "geral" && (
                 <div style={{ display:"flex", flexDirection:"column", gap:"14px" }}>
                   <div className="fr">
                     <div className="fg">
                       <label className="fl">Tipo de Pessoa *</label>
-                      <select className="fc" value={form.tipo_pessoa} onChange={e => F("tipo_pessoa", e.target.value as TipoPessoa)}>
+                      <select className="fc" value={form.tipo_pessoa} onChange={e => F("tipo_pessoa", e.target.value)}>
                         <option value="PJ">Pessoa Jurídica (CNPJ)</option>
                         <option value="PF">Pessoa Física (CPF)</option>
                       </select>
@@ -310,42 +304,33 @@ export default function ClientesPage() {
                     <input className="fc" value={form.nome} onChange={e => F("nome", e.target.value)} placeholder="Nome ou razão social" />
                   </div>
 
+                  {/* Responsável — acima do telefone da empresa */}
+                  <div className="fr">
+                    <div className="fg">
+                      <label className="fl">Nome do Responsável</label>
+                      <input className="fc" value={form.responsavel ?? ""} onChange={e => F("responsavel", e.target.value)} placeholder="Nome do contato / responsável" />
+                    </div>
+                    <div className="fg">
+                      <label className="fl">Telefone do Responsável</label>
+                      <input className="fc" value={form.tel_responsavel ?? ""} onChange={e => F("tel_responsavel", maskTel(e.target.value))} placeholder="(00) 00000-0000" maxLength={15} inputMode="numeric" />
+                    </div>
+                  </div>
+
                   <div className="fr">
                     {form.tipo_pessoa === "PJ" ? (
                       <div className="fg">
                         <label className="fl">CNPJ</label>
-                        <input
-                          className="fc"
-                          value={form.cnpj}
-                          onChange={e => F("cnpj", maskCNPJ(e.target.value))}
-                          placeholder="00.000.000/0001-00"
-                          maxLength={18}
-                          inputMode="numeric"
-                        />
+                        <input className="fc" value={form.cnpj} onChange={e => F("cnpj", maskCNPJ(e.target.value))} placeholder="00.000.000/0001-00" maxLength={18} inputMode="numeric" />
                       </div>
                     ) : (
                       <div className="fg">
                         <label className="fl">CPF</label>
-                        <input
-                          className="fc"
-                          value={form.cpf}
-                          onChange={e => F("cpf", maskCPF(e.target.value))}
-                          placeholder="000.000.000-00"
-                          maxLength={14}
-                          inputMode="numeric"
-                        />
+                        <input className="fc" value={form.cpf} onChange={e => F("cpf", maskCPF(e.target.value))} placeholder="000.000.000-00" maxLength={14} inputMode="numeric" />
                       </div>
                     )}
                     <div className="fg">
-                      <label className="fl">Telefone</label>
-                      <input
-                        className="fc"
-                        value={form.tel}
-                        onChange={e => F("tel", maskTel(e.target.value))}
-                        placeholder="(00) 00000-0000"
-                        maxLength={15}
-                        inputMode="numeric"
-                      />
+                      <label className="fl">Telefone da Empresa</label>
+                      <input className="fc" value={form.tel} onChange={e => F("tel", maskTel(e.target.value))} placeholder="(00) 00000-0000" maxLength={15} inputMode="numeric" />
                     </div>
                   </div>
 
@@ -365,7 +350,7 @@ export default function ClientesPage() {
                     </div>
                     <div className="fg">
                       <label className="fl">Tabela de Preço</label>
-                      <select className="fc" value={form.tabela} onChange={e => F("tabela", e.target.value as "p" | "g")}>
+                      <select className="fc" value={form.tabela} onChange={e => F("tabela", e.target.value)}>
                         <option value="p">Padrão</option>
                         <option value="g">Grandes Clientes</option>
                       </select>
@@ -374,23 +359,12 @@ export default function ClientesPage() {
                 </div>
               )}
 
-              {/* ABA ENDEREÇO */}
               {aba === "endereco" && (
                 <div style={{ display:"flex", flexDirection:"column", gap:"14px" }}>
                   <div className="fr">
                     <div className="fg" style={{ maxWidth:"160px" }}>
-                      <label className="fl">
-                        CEP {buscandoCep && <span style={{ color:"var(--acc)", fontSize:"10px" }}>buscando...</span>}
-                      </label>
-                      <input
-                        className="fc"
-                        value={form.cep}
-                        onChange={e => F("cep", maskCEP(e.target.value))}
-                        onBlur={handleCepBlur}
-                        placeholder="00000-000"
-                        maxLength={9}
-                        inputMode="numeric"
-                      />
+                      <label className="fl">CEP {buscandoCep && <span style={{ color:"var(--acc)", fontSize:"10px" }}>buscando...</span>}</label>
+                      <input className="fc" value={form.cep} onChange={e => F("cep", maskCEP(e.target.value))} onBlur={handleCepBlur} placeholder="00000-000" maxLength={9} inputMode="numeric" />
                     </div>
                     <div className="fg">
                       <label className="fl">Logradouro</label>
@@ -431,24 +405,16 @@ export default function ClientesPage() {
                 </div>
               )}
 
-              {/* ABA FISCAL */}
               {aba === "fiscal" && (
                 <div style={{ display:"flex", flexDirection:"column", gap:"16px" }}>
                   <div className="fr">
                     <div className="fg">
                       <label className="fl">Inscrição Estadual (IE)</label>
-                      <input
-                        className="fc"
-                        value={form.ie}
-                        onChange={e => F("ie", maskIE(e.target.value))}
-                        placeholder="000.000.000/0000"
-                        maxLength={16}
-                        inputMode="numeric"
-                      />
+                      <input className="fc" value={form.ie} onChange={e => F("ie", maskIE(e.target.value))} placeholder="000.000.000/0000" maxLength={16} inputMode="numeric" />
                     </div>
                     <div className="fg">
                       <label className="fl">Indicador IE *</label>
-                      <select className="fc" value={form.ind_ie} onChange={e => F("ind_ie", e.target.value as IndIE)}>
+                      <select className="fc" value={form.ind_ie} onChange={e => F("ind_ie", e.target.value)}>
                         <option value="1">1 — Contribuinte ICMS</option>
                         <option value="2">2 — Contribuinte Isento</option>
                         <option value="9">9 — Não Contribuinte</option>
@@ -469,19 +435,17 @@ export default function ClientesPage() {
                       </label>
                     </div>
                     <div style={{ fontSize:"11px", color:"var(--t3)", marginTop:"8px" }}>
-                      Consumidor final = pessoa física ou empresa que não revende o produto. Afeta o cálculo de ICMS Difal em operações interestaduais.
+                      Consumidor final = pessoa física ou empresa que não revende o produto.
                     </div>
                   </div>
 
                   <div className="fg">
                     <label className="fl">Observações padrão na NF-e</label>
-                    <textarea className="fc" value={form.obs_nfe} onChange={e => F("obs_nfe", e.target.value)}
-                      placeholder="Texto que aparece no campo de observações de todas as NF-e deste cliente"
-                      rows={3} style={{ resize:"vertical" }} />
+                    <textarea className="fc" value={form.obs_nfe} onChange={e => F("obs_nfe", e.target.value)} placeholder="Texto que aparece no campo de observações de todas as NF-e deste cliente" rows={3} style={{ resize:"vertical" }} />
                   </div>
 
                   <div style={{ background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)", borderRadius:"8px", padding:"10px 14px", fontSize:"12px", color:"var(--warn)" }}>
-                    ⚠ Indicador IE e Consumidor Final impactam diretamente o XML da NF-e. Em caso de dúvida, consulte seu contador.
+                    ⚠ Indicador IE e Consumidor Final impactam diretamente o XML da NF-e.
                   </div>
                 </div>
               )}
@@ -490,10 +454,7 @@ export default function ClientesPage() {
             <div style={{ display:"flex", gap:"8px", justifyContent:"space-between", padding:"16px 20px", borderTop:"1px solid var(--b1)", flexShrink:0 }}>
               <div style={{ display:"flex", gap:"6px" }}>
                 {(["geral","endereco","fiscal"] as const).map((a) => (
-                  <button key={a} onClick={() => setAba(a)} style={{
-                    width:"8px", height:"8px", borderRadius:"50%", border:"none", cursor:"pointer",
-                    background: aba === a ? "var(--acc)" : "var(--surf3)",
-                  }} />
+                  <button key={a} onClick={() => setAba(a)} style={{ width:"8px", height:"8px", borderRadius:"50%", border:"none", cursor:"pointer", background: aba === a ? "var(--acc)" : "var(--surf3)" }} />
                 ))}
               </div>
               <div style={{ display:"flex", gap:"8px" }}>

@@ -107,9 +107,8 @@ export default function NovoPedidoPage() {
     setProdutos(prods || []);
     setTabelas(tabs || []);
     setProximoId(pid);
-    if (prods && prods.length > 0) {
-      setItens([{ ...ITEM_VAZIO, produto_id: prods[0].id, produto_nome: prods[0].nome, valor_m2: prods[0].valor }]);
-    }
+    // Inicia com item vazio — produto não pré-selecionado
+    setItens([{ ...ITEM_VAZIO }]);
   }
 
   useEffect(() => {
@@ -118,15 +117,12 @@ export default function NovoPedidoPage() {
     if (cli) setFormaPgto(cli.pgto || "");
   }, [clienteId, clientes]);
 
-  // ── Cálculos ──────────────────────────────────────────────
-
   function calcM2Item(item: ItemForm): number {
     const l = arredondarParaMultiplo50(item.largura);
     const a = arredondarParaMultiplo50(item.altura);
     return (l / 1000) * (a / 1000) * item.quantidade;
   }
 
-  // Metro linear usa dimensões brutas — sem arredondamento para múltiplo de 50
   function calcMLItem(item: ItemForm): number {
     const l = item.largura / 1000;
     const a = item.altura  / 1000;
@@ -140,12 +136,8 @@ export default function NovoPedidoPage() {
 
   const m2Total    = itens.reduce((a, i) => a + calcM2Item(i), 0);
   const valorTotal = itens.reduce((a, i) => a + calcSubtotal(i), 0);
-
-  // Todos os itens são vidro do cliente?
   const todosVidroCliente = itens.length > 0 && itens.every(i => i.vidro_cliente);
   const algumVidroCliente = itens.some(i => i.vidro_cliente);
-
-  // ── Parcelas ──────────────────────────────────────────────
 
   useEffect(() => {
     setParcelasForm(prev => {
@@ -159,7 +151,6 @@ export default function NovoPedidoPage() {
   }, [parcelas]);
 
   useEffect(() => {
-    // Redistribui apenas entre parcelas NAO fixadas — respeita valores editados manualmente
     setParcelasForm(prev => redistribuirParcelas(prev, valorTotal));
   }, [valorTotal]);
 
@@ -180,8 +171,6 @@ export default function NovoPedidoPage() {
     });
   }
 
-  // ── Itens ─────────────────────────────────────────────────
-
   function getTabela(): TabelaPreco | null {
     if (!clienteId) return tabelas[0] || null;
     const cli = clientes.find(c => c.id === clienteId);
@@ -190,8 +179,7 @@ export default function NovoPedidoPage() {
   }
 
   function addItem() {
-    const prod = produtos[0];
-    setItens(i => [...i, { ...ITEM_VAZIO, produto_id: prod?.id || null, produto_nome: prod?.nome || "", valor_m2: prod?.valor || 0 }]);
+    setItens(i => [...i, { ...ITEM_VAZIO }]);
   }
 
   function remItem(i: number) {
@@ -205,12 +193,12 @@ export default function NovoPedidoPage() {
       if (field === "produto_id") {
         const prod = produtos.find(p => p.id === Number(value));
         if (prod) { novo.produto_nome = prod.nome; novo.valor_m2 = prod.valor; }
+        else { novo.produto_nome = ""; novo.valor_m2 = 0; }
       }
       return novo;
     }));
   }
 
-  // Marcar/desmarcar todos como vidro do cliente
   function marcarTodosVidroCliente(valor: boolean) {
     setItens(items => items.map(item => ({ ...item, vidro_cliente: valor })));
   }
@@ -320,7 +308,6 @@ export default function NovoPedidoPage() {
   const toggleAtivo: React.CSSProperties   = { ...toggleBase, background: "var(--acc)", color: "#000", borderColor: "var(--acc)" };
   const toggleInativo: React.CSSProperties = { ...toggleBase, background: "transparent", color: "var(--t3)" };
 
-  // Colunas do cabeçalho por modo
   const colsM2 = "2fr 70px 70px 50px 90px 90px 90px 90px 90px 36px";
   const colsMl = "2fr 90px 90px 50px 90px 90px 90px 36px";
 
@@ -338,7 +325,6 @@ export default function NovoPedidoPage() {
 
       <div className="con">
         <div className="g2 mb14">
-          {/* ── Dados do Pedido ── */}
           <div className="card">
             <div className="ct">Dados do Pedido</div>
 
@@ -422,7 +408,6 @@ export default function NovoPedidoPage() {
             </div>
           </div>
 
-          {/* ── Resumo ── */}
           <div className="card">
             <div className="ct">Resumo do Pedido</div>
             <div className="sr"><div className="sl">ID do Pedido</div><div className="sv mono" style={{ color: "var(--acc)" }}>{proximoId}</div></div>
@@ -470,7 +455,6 @@ export default function NovoPedidoPage() {
           </div>
         </div>
 
-        {/* ── Itens do Pedido ── */}
         <div className="card">
           <div className="ct">
             Itens do Pedido
@@ -481,14 +465,12 @@ export default function NovoPedidoPage() {
             <button className="btn bp xs" onClick={addItem}>+ Item</button>
           </div>
 
-          {/* Aviso modo ML */}
           {isMl && (
             <div style={{ marginBottom: "10px", padding: "8px 12px", background: "rgba(99,102,241,.1)", borderRadius: "6px", border: "1px solid rgba(99,102,241,.3)", fontSize: "12px", color: "#818cf8", fontFamily: "'DM Mono', monospace" }}>
               Metro Linear · fórmula: (Larg_m × ☑ + Alt_m × ☑) × Qtd × R$/ml
             </div>
           )}
 
-          {/* Cabeçalho */}
           <div style={{ display: "grid", gridTemplateColumns: isMl ? colsMl : colsM2, gap: "6px", padding: "6px 0", borderBottom: "1px solid var(--b1)", marginBottom: "8px", alignItems: "center" }}>
             {isMl
               ? ["Produto","Larg. (mm)","Alt. (mm)","Qtd","R$/ml","Total(R$)",""].map((h, i) => (
@@ -498,7 +480,6 @@ export default function NovoPedidoPage() {
                   <div key={i} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>{h}</div>
                 ))
             }
-            {/* Coluna Vidro Cliente com checkbox "marcar todos" */}
             <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
               <input
                 type="checkbox"
@@ -522,7 +503,6 @@ export default function NovoPedidoPage() {
             const aArred  = arredondarParaMultiplo50(item.altura);
             const mostrarArred = item.largura > 0 && item.altura > 0 && (lArred !== item.largura || aArred !== item.altura);
 
-            // Checkbox vidro cliente inline
             const checkboxVC = (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <input
@@ -530,14 +510,13 @@ export default function NovoPedidoPage() {
                   checked={item.vidro_cliente}
                   onChange={e => updItem(i, "vidro_cliente", e.target.checked)}
                   style={{ width: "14px", height: "14px", accentColor: "var(--warn)", cursor: "pointer" }}
-                  title="Vidro fornecido pelo cliente (não desconta estoque)"
+                  title="Vidro fornecido pelo cliente"
                 />
               </div>
             );
 
             return (
               <div key={i} style={{ marginBottom: "10px" }}>
-                {/* Indicador visual se vidro do cliente */}
                 {item.vidro_cliente && (
                   <div style={{ fontSize: "10px", color: "var(--warn)", fontFamily: "'DM Mono',monospace", marginBottom: "3px", paddingLeft: "2px" }}>
                     📦 Vidro do cliente — não desconta estoque
@@ -547,24 +526,25 @@ export default function NovoPedidoPage() {
                 {isMl ? (
                   <div>
                     <div style={{ display: "grid", gridTemplateColumns: colsMl, gap: "6px", alignItems: "center" }}>
-                      <select className="fc" value={item.produto_id || ""} onChange={e => updItem(i, "produto_id", Number(e.target.value))}>
+                      <select className="fc" value={item.produto_id ?? ""} onChange={e => updItem(i, "produto_id", Number(e.target.value))}>
+                        <option value="">Selecionar produto...</option>
                         {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
                       </select>
                       <div style={{ position: "relative" }}>
                         <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" style={{ paddingRight: "24px" }} />
-                        <label style={{ position: "absolute", right: "6px", top: "50%", transform: "translateY(-50%)", cursor: "pointer" }} title="Incluir largura no ML">
+                        <label style={{ position: "absolute", right: "6px", top: "50%", transform: "translateY(-50%)", cursor: "pointer" }}>
                           <input type="checkbox" checked={item.ml_larg} onChange={e => updItem(i, "ml_larg", e.target.checked)} style={{ width: "12px", height: "12px", accentColor: "#6366f1", cursor: "pointer" }} />
                         </label>
                       </div>
                       <div style={{ position: "relative" }}>
                         <input className="fc" type="number" value={item.altura || ""} onChange={e => updItem(i, "altura", parseInt(e.target.value) || 0)} placeholder="0" style={{ paddingRight: "24px" }} />
-                        <label style={{ position: "absolute", right: "6px", top: "50%", transform: "translateY(-50%)", cursor: "pointer" }} title="Incluir altura no ML">
+                        <label style={{ position: "absolute", right: "6px", top: "50%", transform: "translateY(-50%)", cursor: "pointer" }}>
                           <input type="checkbox" checked={item.ml_alt} onChange={e => updItem(i, "ml_alt", e.target.checked)} style={{ width: "12px", height: "12px", accentColor: "#6366f1", cursor: "pointer" }} />
                         </label>
                       </div>
                       <input className="fc" type="number" value={item.quantidade} onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
-                      <CurrencyInput value={item.valor_m2} onChange={v => updItem(i, "valor_m2", v)} placeholder="R$/ml" title="Valor por metro linear" />
-                      <CurrencyInput value={ml > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : 0} onChange={v => updTotalItem(i, v)} placeholder="total" title="Total do item" />
+                      <CurrencyInput value={item.valor_m2} onChange={v => updItem(i, "valor_m2", v)} placeholder="R$/ml" />
+                      <CurrencyInput value={ml > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : 0} onChange={v => updTotalItem(i, v)} placeholder="total" />
                       <button className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1}>✕</button>
                       {checkboxVC}
                     </div>
@@ -580,16 +560,17 @@ export default function NovoPedidoPage() {
                 ) : (
                   <div>
                     <div style={{ display: "grid", gridTemplateColumns: colsM2, gap: "6px", alignItems: "center" }}>
-                      <select className="fc" value={item.produto_id || ""} onChange={e => updItem(i, "produto_id", Number(e.target.value))}>
+                      <select className="fc" value={item.produto_id ?? ""} onChange={e => updItem(i, "produto_id", Number(e.target.value))}>
+                        <option value="">Selecionar produto...</option>
                         {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
                       </select>
                       <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
                       <input className="fc" type="number" value={item.altura  || ""} onChange={e => updItem(i, "altura",  parseInt(e.target.value) || 0)} placeholder="0" />
                       <input className="fc" type="number" value={item.quantidade} onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
-                      <CurrencyInput value={item.valor_m2} onChange={v => updItem(i, "valor_m2", v)} placeholder="R$/m²" title="Valor por m²" />
-                      <CurrencyInput value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(unitVal.toFixed(2)) : 0} onChange={v => updUnitItem(i, v)} placeholder="por peça" title="Valor por peça" />
-                      <CurrencyInput value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : 0} onChange={v => updTotalItem(i, v)} placeholder="total" title="Total do item" />
-                      <CurrencyInput value={item.lapidacao} onChange={v => updItem(i, "lapidacao", v)} placeholder="0" title="Lapidação por m²" />
+                      <CurrencyInput value={item.valor_m2} onChange={v => updItem(i, "valor_m2", v)} placeholder="R$/m²" />
+                      <CurrencyInput value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(unitVal.toFixed(2)) : 0} onChange={v => updUnitItem(i, v)} placeholder="por peça" />
+                      <CurrencyInput value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : 0} onChange={v => updTotalItem(i, v)} placeholder="total" />
+                      <CurrencyInput value={item.lapidacao} onChange={v => updItem(i, "lapidacao", v)} placeholder="0" />
                       <button className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1}>✕</button>
                       {checkboxVC}
                     </div>

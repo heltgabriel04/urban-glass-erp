@@ -98,27 +98,109 @@ export async function deletarPedido(pedidoId: string): Promise<boolean> {
   return true;
 }
 
-export async function registrarRecebimento(pedidoId: string, valor: number, data?: string) {
+export async function getCreditoCliente(clienteId: number): Promise<number> {
+  const { data, error } = await supabase
+    .from('clientes')
+    .select('credito')
+    .eq('id', clienteId)
+    .single();
+  if (error) return 0;
+  return Number((data as any).credito ?? 0);
+}
+
+export async function atualizarCreditoCliente(clienteId: number, novoCredito: number): Promise<boolean> {
+  const { error } = await supabase
+    .from('clientes')
+    .update({ credito: Math.max(0, novoCredito) } as never)
+    .eq('id', clienteId);
+  if (error) { console.error('atualizarCreditoCliente:', error); return false; }
+  return true;
+}
+
+export async function registrarRecebimento(
+  pedidoId: string,
+  valor: number,
+  data?: string
+) {
   const pedido = await getPedidoById(pedidoId);
   if (!pedido) return null;
 
-  const novoRecebido = Number(pedido.valor_recebido) + valor;
+  const aberto    = Number(pedido.valor_total) - Number(pedido.valor_recebido);
+  const aplicado  = Math.min(valor, aberto);
+  const excedente = Math.max(0, valor - aberto);
+
+  const novoRecebido     = Number(pedido.valor_recebido) + aplicado;
   const pedidoAtualizado = await updatePedido(pedidoId, { valor_recebido: novoRecebido });
   if (!pedidoAtualizado) return null;
 
   const vencimento = data ?? new Date().toISOString().split('T')[0];
-  const { error: errLanc } = await supabase.from('lancamentos').insert({
+  const clienteId  = pedido.clientes?.id ?? pedido.cliente_id ?? null;
+
+  await supabase.from('lancamentos').insert({
     tipo: 'Entrada',
     descricao: `Recebimento pedido ${pedidoId}`,
-    valor,
+    valor: aplicado,
     status: 'Pago',
     vencimento,
     pedido_id: pedidoId,
-    cliente_id: pedido.clientes?.id ?? pedido.cliente_id ?? null,
+    cliente_id: clienteId,
   } as never);
 
-  if (errLanc) console.error('registrarRecebimento — lancamento:', errLanc);
-  return pedidoAtualizado;
+  if (excedente > 0.005 && clienteId) {
+    const creditoAtual = await getCreditoCliente(clienteId);
+    await atualizarCreditoCliente(clienteId, creditoAtual + excedente);
+
+    await supabase.from('lancamentos').insert({
+      tipo: 'Entrada',
+      descricao: `Crédito gerado · excedente pedido ${pedidoId}`,
+      valor: excedente,
+      status: 'Pago',
+      vencimento,
+      pedido_id: pedidoId,
+      cliente_id: clienteId,
+    } as never);
+  }
+
+  return { pedido: pedidoAtualizado, excedente };
+}
+
+export async function utilizarCreditoEmPedido(
+  pedidoId: string,
+  valorCredito: number,
+  data?: string
+): Promise<{ pedido: Pedido; creditoRestante: number } | null> {
+  const pedido = await getPedidoById(pedidoId);
+  if (!pedido) return null;
+
+  const clienteId = pedido.clientes?.id ?? pedido.cliente_id ?? null;
+  if (!clienteId) return null;
+
+  const creditoDisponivel = await getCreditoCliente(clienteId);
+  if (creditoDisponivel <= 0) return null;
+
+  const aberto        = Number(pedido.valor_total) - Number(pedido.valor_recebido);
+  const valorAplicado = Math.min(valorCredito, creditoDisponivel, aberto);
+  if (valorAplicado <= 0.005) return null;
+
+  const novoRecebido     = Number(pedido.valor_recebido) + valorAplicado;
+  const pedidoAtualizado = await updatePedido(pedidoId, { valor_recebido: novoRecebido });
+  if (!pedidoAtualizado) return null;
+
+  const creditoRestante = creditoDisponivel - valorAplicado;
+  await atualizarCreditoCliente(clienteId, creditoRestante);
+
+  const vencimento = data ?? new Date().toISOString().split('T')[0];
+  await supabase.from('lancamentos').insert({
+    tipo: 'Entrada',
+    descricao: `Crédito utilizado · pedido ${pedidoId}`,
+    valor: valorAplicado,
+    status: 'Pago',
+    vencimento,
+    pedido_id: pedidoId,
+    cliente_id: clienteId,
+  } as never);
+
+  return { pedido: pedidoAtualizado, creditoRestante };
 }
 
 export async function getProximoIdPedido(): Promise<string> {
