@@ -7,65 +7,173 @@ import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import type { Pedido } from "@/types";
 import type { HistoricoOtimizador } from "@/services/otimizador.service";
 
-interface PecaPlacada { x: number; y: number; l: number; a: number; idx: number; prod: string; rot: boolean; }
+interface PecaPlacada { x: number; y: number; l: number; a: number; idx: number; prod: string; rot: boolean; pedidoId?: string; }
 interface EspacoLivre { x: number; y: number; l: number; a: number; }
 interface ChapaData { W: number; H: number; prod: string; placed: PecaPlacada[]; free: EspacoLivre[]; }
 
-const COLS = ["#e8f0fe","#fce8e6","#e6f4ea","#fef7e0","#f3e8fd","#e8f5e9","#fff3e0","#e3f2fd","#fbe9e7","#f1f8e9"];
-const BORDER_COLS = ["#1a73e8","#d93025","#1e8e3e","#f9ab00","#9334e6","#0f9d58","#e37400","#1976d2","#bf360c","#558b2f"];
+// Paleta de cores modernas para as peças
+const FILL_COLORS = [
+  "#dbeafe","#dcfce7","#fef9c3","#fce7f3","#ede9fe","#ffedd5",
+  "#cffafe","#d1fae5","#fef3c7","#fae8ff","#e0f2fe","#ecfdf5",
+];
+const STROKE_COLORS = [
+  "#2563eb","#16a34a","#ca8a04","#db2777","#7c3aed","#ea580c",
+  "#0891b2","#059669","#d97706","#a21caf","#0284c7","#047857",
+];
 
-function ChapaSVG({ chapa, bord }: { chapa: ChapaData; bord: number }) {
-  const VW = 400;
+function ChapaSVG({ chapa, bord, escala = 1 }: { chapa: ChapaData; bord: number; escala?: number }) {
+  const VW = Math.round(520 * escala);
   const VH = Math.round(VW * chapa.H / chapa.W);
   const sx = VW / chapa.W;
   const sy = VH / chapa.H;
   const bordPx = bord * sx;
 
+  // Agrupa peças por produto para legenda de cores
+  const prodColors: Record<string, number> = {};
+  let colorCount = 0;
+  chapa.placed.forEach(p => {
+    const key = p.pedidoId ? `${p.pedidoId}:${p.prod}` : p.prod;
+    if (prodColors[key] === undefined) { prodColors[key] = colorCount % FILL_COLORS.length; colorCount++; }
+  });
+
   return (
-    <svg viewBox={"0 0 " + VW + " " + VH} width="100%" style={{ display:"block", border:"1px solid #999", background:"white" }}>
-      <rect x={0} y={0} width={VW} height={VH} fill="white" />
+    <svg
+      viewBox={`0 0 ${VW} ${VH}`}
+      width="100%"
+      style={{ display: "block", borderRadius: "4px", boxShadow: "0 1px 4px rgba(0,0,0,0.15)" }}
+    >
+      {/* Fundo da chapa */}
+      <rect x={0} y={0} width={VW} height={VH} fill="#f8fafc" stroke="#94a3b8" strokeWidth={1.5} rx={2} />
+
+      {/* Hachura de fundo — padrão de vidro */}
+      <defs>
+        <pattern id="glass" patternUnits="userSpaceOnUse" width={12} height={12}>
+          <line x1={0} y1={12} x2={12} y2={0} stroke="#e2e8f0" strokeWidth={0.5} />
+        </pattern>
+      </defs>
+      <rect x={0} y={0} width={VW} height={VH} fill="url(#glass)" />
+
+      {/* Área de borda lapidação */}
       {bord > 0 && (
-        <rect x={0} y={0} width={VW} height={VH} fill="none" stroke="red" strokeWidth={bordPx * 2} strokeDasharray="4 2" opacity={0.5} />
+        <>
+          <rect x={0} y={0} width={VW} height={VH}
+            fill="none" stroke="#f97316" strokeWidth={bordPx * 2}
+            strokeDasharray="5 3" opacity={0.6} />
+          {/* Label borda */}
+          <text x={bordPx + 2} y={bordPx - 2} fontSize={8} fill="#f97316" fontFamily="monospace" fontWeight="bold" opacity={0.8}>
+            borda {bord}mm
+          </text>
+        </>
       )}
-      {chapa.placed.map((p, i) => {
-        const x = (p.x + bord) * sx;
-        const y = (p.y + bord) * sy;
-        const w = p.l * sx;
-        const h = p.a * sy;
-        const col = COLS[i % COLS.length];
-        const border = BORDER_COLS[i % BORDER_COLS.length];
-        const fontSize = Math.max(8, Math.min(13, w / 5));
+
+      {/* Retalhos aproveitáveis */}
+      {chapa.free.filter(f => f.l >= 200 && f.a >= 200).map((fr, fi) => {
+        const fx = (fr.x + bord) * sx;
+        const fy = (fr.y + bord) * sy;
+        const fw = fr.l * sx;
+        const fh = fr.a * sy;
         return (
-          <g key={i}>
-            <rect x={x} y={y} width={w} height={h} fill={col} stroke={border} strokeWidth={1} />
-            {w > 15 && h > 12 && (
-              <text x={x + 4} y={y + fontSize + 2} fontSize={fontSize} fill={border} fontFamily="Arial" fontWeight="bold">
-                {i + 1}
-              </text>
-            )}
-            {w > 40 && h > 24 && (
-              <text x={x + 4} y={y + fontSize * 2 + 5} fontSize={Math.max(7, fontSize - 2)} fill="#000" fontFamily="Arial" fontWeight="bold">
-                {p.l}.0 x {p.a}.0
+          <g key={"ret" + fi}>
+            <rect x={fx} y={fy} width={fw} height={fh}
+              fill="#bbf7d0" stroke="#16a34a" strokeWidth={0.8}
+              strokeDasharray="3 2" opacity={0.55} />
+            {fw > 24 && fh > 14 && (
+              <text x={fx + fw / 2} y={fy + fh / 2 + 3} fontSize={Math.max(7, Math.min(10, fw / 8))}
+                fill="#15803d" fontFamily="monospace" fontWeight="bold" textAnchor="middle" opacity={0.9}>
+                ↺ ret
               </text>
             )}
           </g>
         );
       })}
-      <text x={VW / 2} y={VH - 2} fontSize={9} fill="#333" fontFamily="Arial" fontWeight="bold" textAnchor="middle">
-        {chapa.W}.0
+
+      {/* Peças */}
+      {chapa.placed.map((p, i) => {
+        const key = p.pedidoId ? `${p.pedidoId}:${p.prod}` : p.prod;
+        const colorIdx = prodColors[key];
+        const fill   = FILL_COLORS[colorIdx % FILL_COLORS.length];
+        const stroke = STROKE_COLORS[colorIdx % STROKE_COLORS.length];
+        const px = (p.x + bord) * sx;
+        const py = (p.y + bord) * sy;
+        const pw = p.l * sx;
+        const ph = p.a * sy;
+        const fontSize = Math.max(7, Math.min(12, pw / 6));
+        const numFontSize = Math.max(8, Math.min(14, Math.min(pw, ph) / 3));
+
+        return (
+          <g key={i}>
+            {/* Sombra interna */}
+            <rect x={px + 1} y={py + 1} width={pw} height={ph} fill="rgba(0,0,0,0.06)" rx={1} />
+            {/* Peça */}
+            <rect x={px} y={py} width={pw} height={ph} fill={fill} stroke={stroke} strokeWidth={1.2} rx={1} />
+            {/* Gradiente topo */}
+            <rect x={px} y={py} width={pw} height={Math.min(ph * 0.35, 12)}
+              fill="rgba(255,255,255,0.45)" rx={1} />
+            {/* Número da peça */}
+            {pw > 16 && ph > 12 && (
+              <text x={px + pw / 2} y={py + ph / 2 - (pw > 50 && ph > 28 ? fontSize / 2 + 1 : 0)}
+                fontSize={numFontSize} fill={stroke} fontFamily="Arial" fontWeight="900"
+                textAnchor="middle" dominantBaseline="middle">
+                {i + 1}
+              </text>
+            )}
+            {/* Dimensões */}
+            {pw > 50 && ph > 28 && (
+              <text x={px + pw / 2} y={py + ph / 2 + numFontSize / 2 + 3}
+                fontSize={Math.max(6, fontSize - 1)} fill={stroke} fontFamily="monospace" fontWeight="bold"
+                textAnchor="middle" opacity={0.85}>
+                {p.l}×{p.a}
+              </text>
+            )}
+            {/* Indicador rotacionado */}
+            {p.rot && pw > 20 && ph > 14 && (
+              <text x={px + pw - 4} y={py + 9} fontSize={7} fill={stroke} fontFamily="Arial" textAnchor="end" opacity={0.7}>↻</text>
+            )}
+          </g>
+        );
+      })}
+
+      {/* Dimensões da chapa */}
+      {/* Largura — embaixo */}
+      <rect x={0} y={VH - 14} width={VW} height={14} fill="rgba(30,30,30,0.75)" />
+      <text x={VW / 2} y={VH - 4} fontSize={9} fill="white" fontFamily="monospace" fontWeight="bold" textAnchor="middle">
+        ← {chapa.W} mm →
       </text>
-      <rect x={0} y={0} width={VW} height={VH} fill="none" stroke="#333" strokeWidth={1.5} />
+      {/* Altura — direita */}
+      <rect x={VW - 14} y={0} width={14} height={VH} fill="rgba(30,30,30,0.75)" />
+      <text
+        x={VW - 4} y={VH / 2}
+        fontSize={9} fill="white" fontFamily="monospace" fontWeight="bold"
+        textAnchor="middle" dominantBaseline="middle"
+        transform={`rotate(-90, ${VW - 7}, ${VH / 2})`}
+      >
+        ↑ {chapa.H} mm ↓
+      </text>
+
+      {/* Borda final */}
+      <rect x={0} y={0} width={VW} height={VH} fill="none" stroke="#475569" strokeWidth={1.5} rx={2} />
     </svg>
+  );
+}
+
+function StatBox({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
+  return (
+    <div style={{ padding: "10px 14px", borderRadius: "8px", border: `1px solid ${color}22`, background: `${color}11`, minWidth: "80px" }}>
+      <div style={{ fontSize: "9px", color: color, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "2px" }}>{label}</div>
+      <div style={{ fontSize: "18px", fontWeight: 900, color: color, fontFamily: "monospace", lineHeight: 1.1 }}>{value}</div>
+      {sub && <div style={{ fontSize: "9px", color: "#64748b", marginTop: "2px" }}>{sub}</div>}
+    </div>
   );
 }
 
 export default function PlanoCorte() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [pedido, setPedido]   = useState<Pedido | null>(null);
-  const [otim, setOtim]       = useState<HistoricoOtimizador | null>(null);
-  const [chapas, setChapas]   = useState<ChapaData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [pedido, setPedido]         = useState<Pedido | null>(null);
+  const [otim, setOtim]             = useState<HistoricoOtimizador | null>(null);
+  const [chapas, setChapas]         = useState<ChapaData[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [chapaAtiva, setChapaAtiva] = useState(0);
 
   useEffect(() => {
     async function load() {
@@ -82,240 +190,376 @@ export default function PlanoCorte() {
   }, [id]);
 
   if (loading) return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", fontFamily:"Arial", color:"#333" }}>
-      Carregando plano de corte...
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: "Arial", background: "#0d1117", color: "#aaa", flexDirection: "column", gap: "12px" }}>
+      <div style={{ fontSize: "24px" }}>◈</div>
+      <div>Carregando plano de corte...</div>
     </div>
   );
 
   if (!pedido || !otim) return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100vh", gap:"12px" }}>
-      <div style={{ color:"#c00", fontWeight:700 }}>Nenhum plano de corte encontrado.</div>
-      <button onClick={() => router.back()} style={{ padding:"8px 16px", borderRadius:"6px", border:"1px solid #ccc", cursor:"pointer" }}>← Voltar</button>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", gap: "12px", background: "#0d1117" }}>
+      <div style={{ color: "#f43f5e", fontWeight: 700 }}>Nenhum plano de corte encontrado.</div>
+      <button onClick={() => router.back()} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid #333", background: "transparent", color: "#aaa", cursor: "pointer" }}>← Voltar</button>
     </div>
   );
 
   const bord = otim.borda ?? 3;
   const totalPecas = chapas.reduce((s, c) => s + c.placed.length, 0);
+  const totalRetalhos = chapas.reduce((s, c) => s + c.free.filter(f => f.l >= 200 && f.a >= 200).length, 0);
   const agora = new Date();
+
+  // Stats globais
+  const areaTotal  = chapas.reduce((s, c) => s + (c.W - bord * 2) * (c.H - bord * 2), 0);
+  const areaUsada  = chapas.reduce((s, c) => s + c.placed.reduce((a, p) => a + p.l * p.a, 0), 0);
+  const aprovGlobal = areaTotal > 0 ? ((areaUsada / areaTotal) * 100).toFixed(1) : "0";
+
+  const chapa = chapas[chapaAtiva];
+  const usedArea  = chapa?.placed.reduce((s, p) => s + p.l * p.a, 0) ?? 0;
+  const chapaM2   = chapa ? (chapa.W * chapa.H) / 1e6 : 0;
+  const usedM2    = usedArea / 1e6;
+  const retalhos  = chapa?.free.filter(f => f.l >= 200 && f.a >= 200) ?? [];
+  const retM2     = retalhos.reduce((s, f) => s + (f.l * f.a) / 1e6, 0);
+  const aprovPct  = chapaM2 > 0 ? ((usedM2 / chapaM2) * 100).toFixed(1) : "0";
+  const perdaPct  = chapaM2 > 0 ? (((chapaM2 - usedM2) / chapaM2) * 100).toFixed(1) : "0";
 
   return (
     <>
       <style>{`
-        * { box-sizing: border-box; }
-        html, body { margin: 0; padding: 0; font-family: Arial, sans-serif; font-size: 11px; color: #000; background: #888; }
-        .pagina-wrapper {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { font-family: 'Arial', sans-serif; background: #0d1117; color: #e2e8f0; }
+
+        .toolbar {
+          position: sticky; top: 0; z-index: 100;
+          background: #111827; border-bottom: 1px solid #1f2937;
+          padding: 10px 24px; display: flex; align-items: center; gap: 12px;
+        }
+        .btn-tb {
+          padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600;
+          cursor: pointer; border: 1px solid #374151; background: transparent;
+          color: #9ca3af; transition: all 0.15s;
+        }
+        .btn-tb:hover { background: #1f2937; color: #f9fafb; }
+        .btn-print {
+          padding: 7px 18px; border-radius: 6px; font-size: 12px; font-weight: 700;
+          cursor: pointer; border: none; background: #3dffa0; color: #000;
+        }
+
+        .layout {
+          display: grid;
+          grid-template-columns: 1fr 320px;
+          gap: 0;
+          height: calc(100vh - 53px);
+        }
+        .col-main {
+          overflow-y: auto;
+          padding: 20px 24px;
+          display: flex; flex-direction: column; gap: 16px;
+        }
+        .col-side {
+          overflow-y: auto;
+          background: #111827;
+          border-left: 1px solid #1f2937;
           padding: 16px;
-          gap: 16px;
+          display: flex; flex-direction: column; gap: 14px;
         }
-        .chapa-page {
-          background: white;
-          padding: 12mm;
-          width: 210mm;
-          min-height: 297mm;
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-          box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+
+        .card {
+          background: #161b25; border: 1px solid #1f2937; border-radius: 10px; padding: 16px;
         }
-        @media screen and (max-width: 900px) {
-          .chapa-page {
-            width: 100%;
-            min-height: auto;
-            padding: 4vw;
-          }
+        .card-title {
+          font-size: 10px; font-weight: 700; color: #6b7280;
+          text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px;
         }
+
+        .chapa-tab {
+          padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
+          cursor: pointer; border: 1px solid #1f2937; background: transparent;
+          color: #6b7280; transition: all 0.15s; font-family: monospace;
+        }
+        .chapa-tab.ativa {
+          background: rgba(61,255,160,0.1); border-color: #3dffa0; color: #3dffa0;
+        }
+
+        .peca-row {
+          display: grid; grid-template-columns: 28px 1fr 90px 90px 28px;
+          gap: 6px; align-items: center;
+          padding: 5px 8px; border-radius: 6px; font-size: 11px;
+          border: 1px solid transparent;
+        }
+        .peca-row:nth-child(even) { background: rgba(255,255,255,0.03); }
+
+        .ret-row {
+          display: grid; grid-template-columns: 1fr 80px 50px;
+          gap: 6px; align-items: center;
+          padding: 5px 8px; border-radius: 6px; font-size: 11px;
+          border: 1px solid rgba(22,163,74,0.2); background: rgba(22,163,74,0.05);
+          margin-bottom: 4px;
+        }
+
         @media print {
           .no-print { display: none !important; }
-          html, body { background: white; margin: 0; padding: 0; }
-          .pagina-wrapper { padding: 0; gap: 0; background: white; }
-          .chapa-page {
-            width: 100%;
-            min-height: auto;
-            padding: 8mm;
-            box-shadow: none;
-            page-break-after: always;
-          }
-          .chapa-page:last-child { page-break-after: avoid; }
-          @page { margin: 0; size: A4 portrait; }
+          html, body { background: white; color: #000; }
+          .layout { display: block; height: auto; }
+          .col-main { padding: 0; overflow: visible; }
+          .col-side { display: none; }
+          .card { background: white; border: 1px solid #ccc; page-break-inside: avoid; }
+          .card-title { color: #374151; }
+          .print-page { page-break-after: always; }
+          .print-page:last-child { page-break-after: avoid; }
+          @page { margin: 12mm; size: A4; }
         }
-        table { border-collapse: collapse; width: 100%; }
       `}</style>
 
-      {/* TOOLBAR */}
-      <div className="no-print" style={{ position:"sticky", top:0, zIndex:100, background:"#111", padding:"8px 20px", display:"flex", alignItems:"center", gap:"10px" }}>
-        <button onClick={() => router.back()} style={{ padding:"6px 12px", borderRadius:"4px", border:"1px solid #555", background:"transparent", color:"#ccc", cursor:"pointer", fontSize:"12px" }}>← Voltar</button>
-        <div style={{ flex:1, color:"white", fontSize:"13px", fontWeight:700 }}>
-          Plano de Corte — <span style={{ color:"#3dffa0" }}>{pedido.id}</span>
-          <span style={{ fontSize:"11px", color:"#aaa", marginLeft:"12px" }}>
-            {otim.aproveitamento}% · {chapas.length} chapas · {totalPecas} peças
+      {/* ── TOOLBAR ── */}
+      <div className="toolbar no-print">
+        <button className="btn-tb" onClick={() => router.back()}>← Voltar</button>
+        <div style={{ flex: 1 }}>
+          <span style={{ color: "#f9fafb", fontWeight: 700, fontSize: "14px" }}>Plano de Corte</span>
+          <span style={{ color: "#3dffa0", fontWeight: 700, fontSize: "14px", marginLeft: "8px" }}>{pedido.id}</span>
+          <span style={{ color: "#6b7280", fontSize: "11px", marginLeft: "16px", fontFamily: "monospace" }}>
+            {aprovGlobal}% aproveitamento · {chapas.length} chapa(s) · {totalPecas} peça(s)
           </span>
         </div>
-        <button onClick={() => window.print()} style={{ padding:"7px 16px", borderRadius:"4px", border:"none", background:"#3dffa0", color:"#000", fontWeight:700, cursor:"pointer", fontSize:"12px" }}>
-          🖨 Imprimir
-        </button>
+        <button className="btn-print" onClick={() => window.print()}>🖨 Imprimir PDF</button>
       </div>
 
-      <div className="pagina-wrapper">
-        {chapas.map((chapa, ci) => {
-          const usedArea = chapa.placed.reduce((s, p) => s + p.l * p.a, 0);
-          const chapaM2  = chapa.W * chapa.H / 1e6;
-          const usedM2   = usedArea / 1e6;
-          const retalhos = chapa.free.filter(f => f.l >= 200 && f.a >= 200);
-          const retM2    = retalhos.reduce((s, f) => s + f.l * f.a, 0) / 1e6;
-          const aprovPct = chapaM2 > 0 ? ((usedM2 / chapaM2) * 100).toFixed(2) : "0";
-          const perdaPct = chapaM2 > 0 ? (((chapaM2 - usedM2) / chapaM2) * 100).toFixed(2) : "0";
-          const pequenas = chapa.placed.filter(p => (p.l / chapa.W) < 0.15 || (p.a / chapa.H) < 0.15);
+      <div className="layout">
+        {/* ── COL PRINCIPAL ── */}
+        <div className="col-main">
 
-          const TH = ({ children, right }: { children: React.ReactNode; right?: boolean }) => (
-            <th style={{ padding:"3px 6px", fontWeight:700, color:"white", fontSize:"9px", textAlign: right ? "right" : "left", background:"#222" }}>{children}</th>
-          );
-          const TD = ({ children, right, green }: { children: React.ReactNode; right?: boolean; green?: boolean }) => (
-            <td style={{ padding:"3px 6px", fontWeight:700, color: green ? "#1e5c30" : "#000", fontSize:"9px", textAlign: right ? "right" : "left", fontFamily: right ? "monospace" : "Arial" }}>{children}</td>
-          );
+          {/* Seletor de chapas */}
+          {chapas.length > 1 && (
+            <div className="no-print" style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+              {chapas.map((c, i) => (
+                <button key={i} className={`chapa-tab${chapaAtiva === i ? " ativa" : ""}`}
+                  onClick={() => setChapaAtiva(i)}>
+                  Chapa {i + 1}
+                  <span style={{ fontSize: "9px", opacity: 0.6, marginLeft: "5px" }}>
+                    {c.prod.split(" ").slice(0, 2).join(" ")}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
 
-          return (
-            <div key={ci} className="chapa-page">
+          {/* Renderiza chapa ativa na tela, todas no print */}
+          {chapas.map((c, ci) => {
+            const cUsedArea  = c.placed.reduce((s, p) => s + p.l * p.a, 0);
+            const cChapaM2   = (c.W * c.H) / 1e6;
+            const cUsedM2    = cUsedArea / 1e6;
+            const cRetalhos  = c.free.filter(f => f.l >= 200 && f.a >= 200);
+            const cRetM2     = cRetalhos.reduce((s, f) => s + (f.l * f.a) / 1e6, 0);
+            const cAprov     = cChapaM2 > 0 ? ((cUsedM2 / cChapaM2) * 100).toFixed(1) : "0";
+            const cPerda     = cChapaM2 > 0 ? (((cChapaM2 - cUsedM2) / cChapaM2) * 100).toFixed(1) : "0";
 
-              {/* CABEÇALHO */}
-              <table>
-                <tbody>
-                  <tr>
-                    <td style={{ verticalAlign:"top", width:"55%" }}>
-                      <div style={{ fontSize:"16px", fontWeight:900 }}>urbanglass</div>
-                      <div style={{ fontSize:"8px", textTransform:"uppercase", letterSpacing:"1px", fontWeight:700 }}>Urban Glass Comércio Ltda</div>
-                      <div style={{ fontSize:"8px", color:"#444" }}>Av. Vereador Raymundo Hargreaves, 1250 – Fontesville – JF/MG</div>
-                    </td>
-                    <td style={{ verticalAlign:"top", textAlign:"right" }}>
-                      <div style={{ fontWeight:900, fontSize:"13px" }}>PLANO DE CORTE</div>
-                      <div style={{ fontWeight:700, fontSize:"9px" }}>{agora.toLocaleTimeString("pt-BR")} &nbsp; {agora.toLocaleDateString("pt-BR")}</div>
-                      <div style={{ fontWeight:700, fontSize:"9px" }}>Pedido: {pedido.id} &nbsp;·&nbsp; Chapa {ci + 1} de {chapas.length}</div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+            return (
+              <div key={ci} className={`print-page${ci !== chapaAtiva ? " no-print" : ""}`}
+                style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
 
-              {/* INFO */}
-              <div style={{ border:"1px solid #555", padding:"5px 8px", fontSize:"9px", background:"#f5f5f5" }}>
-                <div style={{ fontWeight:700 }}>Projeto: {pedido.id} &nbsp;·&nbsp; Montagem {ci + 1} – Quantidade: 1</div>
-                <div style={{ fontWeight:700 }}>Chapa utilizada: {chapa.W}.0 x {chapa.H}.0 mm</div>
-                <div style={{ fontWeight:700 }}>Material: {chapa.prod}</div>
-                <div style={{ fontWeight:700 }}>Cliente: {pedido.clientes?.nome ?? "—"}</div>
-              </div>
-
-              {/* TOTAIS */}
-              <table style={{ border:"1px solid #555", fontSize:"9px" }}>
-                <thead>
-                  <tr><TH>  </TH><TH right>QTD:</TH><TH right>ÁREA (M²):</TH><TH right>%:</TH></tr>
-                </thead>
-                <tbody>
-                  {[
-                    { label:"Totais",   qtd: chapa.placed.length, m2: usedM2, pct: aprovPct, pctColor:"#155724" },
-                    { label:"Peças",    qtd: chapa.placed.length, m2: usedM2, pct: aprovPct, pctColor:"#000" },
-                    { label:"Retalhos", qtd: retalhos.length,     m2: retM2,  pct: (retM2 / chapaM2 * 100).toFixed(2), pctColor:"#1e5c30" },
-                    { label:"Sobras",   qtd: 0,                   m2: 0,      pct: perdaPct, pctColor:"#721c24" },
-                  ].map((row, ri) => (
-                    <tr key={ri} style={{ borderBottom:"1px solid #ccc", background: ri % 2 === 0 ? "#f9f9f9" : "white" }}>
-                      <td style={{ padding:"3px 6px", fontWeight:700, fontSize:"9px" }}>{row.label}</td>
-                      <td style={{ padding:"3px 6px", fontWeight:700, fontSize:"9px", textAlign:"right" }}>{row.qtd}</td>
-                      <td style={{ padding:"3px 6px", fontWeight:700, fontSize:"9px", textAlign:"right", fontFamily:"monospace" }}>{row.m2.toFixed(3)}</td>
-                      <td style={{ padding:"3px 6px", fontWeight:700, fontSize:"9px", textAlign:"right", color: row.pctColor }}>{row.pct}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {/* DIAGRAMA */}
-              <ChapaSVG chapa={chapa} bord={bord} />
-
-              {/* LEGENDA */}
-              {pequenas.length > 0 && (
-                <div>
-                  <div style={{ fontSize:"9px", fontWeight:700, marginBottom:"3px" }}>Legenda para as peças pequenas:</div>
-                  <table style={{ border:"1px solid #ccc", fontSize:"9px" }}>
-                    <thead>
-                      <tr style={{ background:"#ddd" }}>
-                        <th style={{ padding:"2px 5px", textAlign:"left", fontWeight:700 }}>Peça</th>
-                        <th style={{ padding:"2px 5px", textAlign:"right", fontWeight:700 }}>Larg</th>
-                        <th style={{ padding:"2px 5px", textAlign:"right", fontWeight:700 }}>Alt</th>
-                        <th style={{ padding:"2px 5px", textAlign:"left", fontWeight:700 }}>Descrição</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pequenas.map((p, pi) => (
-                        <tr key={pi} style={{ borderBottom:"1px solid #eee" }}>
-                          <td style={{ padding:"2px 5px", fontWeight:700 }}>{String.fromCharCode(65 + pi)}</td>
-                          <td style={{ padding:"2px 5px", textAlign:"right", fontFamily:"monospace", fontWeight:700 }}>{p.l}.0</td>
-                          <td style={{ padding:"2px 5px", textAlign:"right", fontFamily:"monospace", fontWeight:700 }}>{p.a}.0</td>
-                          <td style={{ padding:"2px 5px", fontWeight:700 }}>Ret {ci + 1} {p.l}.0 x {p.a}.0</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* LISTA + RETALHOS */}
-              <div style={{ display:"grid", gridTemplateColumns: retalhos.length > 0 ? "1fr 1fr" : "1fr", gap:"8px" }}>
-                <div>
-                  <div style={{ fontSize:"9px", fontWeight:700, marginBottom:"3px" }}>Lista total das peças desta montagem:</div>
-                  <table style={{ border:"1px solid #555", fontSize:"9px" }}>
-                    <thead>
-                      <tr style={{ background:"#222" }}>
-                        <th style={{ padding:"2px 5px", textAlign:"left", fontWeight:700, color:"white", fontSize:"8px" }}>PEÇA</th>
-                        <th style={{ padding:"2px 5px", textAlign:"right", fontWeight:700, color:"white", fontSize:"8px" }}>LARG X</th>
-                        <th style={{ padding:"2px 5px", textAlign:"right", fontWeight:700, color:"white", fontSize:"8px" }}>ALT</th>
-                        <th style={{ padding:"2px 5px", textAlign:"right", fontWeight:700, color:"white", fontSize:"8px" }}>QTD</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {chapa.placed.map((p, pi) => (
-                        <tr key={pi} style={{ borderBottom:"1px solid #ddd", background: pi % 2 === 0 ? "#f9f9f9" : "white" }}>
-                          <td style={{ padding:"2px 5px", fontWeight:700 }}>{pi + 1}</td>
-                          <td style={{ padding:"2px 5px", textAlign:"right", fontFamily:"monospace", fontWeight:700 }}>{p.l}.0 x</td>
-                          <td style={{ padding:"2px 5px", textAlign:"right", fontFamily:"monospace", fontWeight:700 }}>{p.a}.0</td>
-                          <td style={{ padding:"2px 5px", textAlign:"right", fontWeight:700 }}>1 —</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {retalhos.length > 0 && (
-                  <div>
-                    <div style={{ fontSize:"9px", fontWeight:700, color:"#1e5c30", marginBottom:"3px" }}>Retalhos aproveitáveis:</div>
-                    <table style={{ border:"1px solid #555", fontSize:"9px" }}>
-                      <thead>
-                        <tr style={{ background:"#1e5c30" }}>
-                          <th style={{ padding:"2px 5px", textAlign:"right", fontWeight:700, color:"white", fontSize:"8px" }}>LARG</th>
-                          <th style={{ padding:"2px 5px", textAlign:"right", fontWeight:700, color:"white", fontSize:"8px" }}>ALT</th>
-                          <th style={{ padding:"2px 5px", textAlign:"right", fontWeight:700, color:"white", fontSize:"8px" }}>M²</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {retalhos.map((f, fi) => (
-                          <tr key={fi} style={{ borderBottom:"1px solid #ccc", background: fi % 2 === 0 ? "#f0f9f4" : "white" }}>
-                            <td style={{ padding:"2px 5px", textAlign:"right", fontFamily:"monospace", fontWeight:700 }}>{f.l}.0</td>
-                            <td style={{ padding:"2px 5px", textAlign:"right", fontFamily:"monospace", fontWeight:700 }}>{f.a}.0</td>
-                            <td style={{ padding:"2px 5px", textAlign:"right", fontFamily:"monospace", fontWeight:700, color:"#1e5c30" }}>{((f.l * f.a) / 1e6).toFixed(4)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                {/* Cabeçalho da chapa */}
+                <div className="card" style={{ padding: "14px 18px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontSize: "11px", color: "#6b7280", fontWeight: 600, letterSpacing: "0.06em", marginBottom: "4px" }}>
+                        CHAPA {ci + 1} DE {chapas.length}
+                      </div>
+                      <div style={{ fontSize: "20px", fontWeight: 900, color: "#f9fafb", lineHeight: 1.1 }}>
+                        {c.prod}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#9ca3af", fontFamily: "monospace", marginTop: "4px" }}>
+                        {c.W} × {c.H} mm · {cChapaM2.toFixed(3)} m²
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#6b7280", marginTop: "2px" }}>
+                        Cliente: <strong style={{ color: "#e2e8f0" }}>{pedido.clientes?.nome ?? "—"}</strong>
+                        {" · "}Pedido: <strong style={{ color: "#3dffa0" }}>{pedido.id}</strong>
+                        {" · "}Borda: <strong style={{ color: "#f97316" }}>{bord}mm</strong>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      <StatBox label="Aproveitamento" value={cAprov + "%"} sub={cUsedM2.toFixed(3) + " m²"} color="#3dffa0" />
+                      <StatBox label="Perda"          value={cPerda + "%"} sub={((cChapaM2 - cUsedM2)).toFixed(3) + " m²"} color="#f43f5e" />
+                      <StatBox label="Peças"          value={String(c.placed.length)} color="#60a5fa" />
+                      <StatBox label="Retalhos"       value={String(cRetalhos.length)} sub={cRetM2.toFixed(3) + " m²"} color="#f59e0b" />
+                    </div>
                   </div>
-                )}
-              </div>
+                </div>
 
-              {/* RODAPÉ */}
-              <div style={{ marginTop:"auto", paddingTop:"6px", borderTop:"1px solid #999", fontSize:"8px", color:"#333", display:"flex", justifyContent:"space-between", fontWeight:700 }}>
-                <span>Urban Glass · CNPJ 65.668.970/0001-05 · Juiz de Fora/MG</span>
-                <span>Pedido {pedido.id} · Chapa {ci + 1}/{chapas.length} · {agora.toLocaleString("pt-BR")}</span>
+                {/* Diagrama */}
+                <div className="card" style={{ padding: "12px" }}>
+                  <div style={{ fontSize: "10px", color: "#6b7280", fontWeight: 600, marginBottom: "10px", display: "flex", alignItems: "center", gap: "16px" }}>
+                    <span style={{ textTransform: "uppercase", letterSpacing: "0.06em" }}>Diagrama de Corte</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ width: "10px", height: "10px", background: "#bbf7d0", border: "1px dashed #16a34a", display: "inline-block", borderRadius: "2px" }} />
+                      <span style={{ color: "#16a34a" }}>Retalho aproveitável</span>
+                    </span>
+                    <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ width: "10px", height: "10px", background: "rgba(249,115,22,0.3)", border: "1px dashed #f97316", display: "inline-block", borderRadius: "2px" }} />
+                      <span style={{ color: "#f97316" }}>Borda lapidação</span>
+                    </span>
+                  </div>
+                  <ChapaSVG chapa={c} bord={bord} />
+                </div>
+
+                {/* Lista de peças + retalhos */}
+                <div style={{ display: "grid", gridTemplateColumns: cRetalhos.length > 0 ? "1fr 1fr" : "1fr", gap: "14px" }}>
+
+                  {/* Peças */}
+                  <div className="card">
+                    <div className="card-title">Peças desta chapa ({c.placed.length})</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 90px 90px", gap: "4px", padding: "4px 8px", marginBottom: "4px", borderBottom: "1px solid #1f2937" }}>
+                      {["#","Produto","Dim. (mm)","m²"].map(h => (
+                        <div key={h} style={{ fontSize: "9px", color: "#6b7280", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</div>
+                      ))}
+                    </div>
+                    <div style={{ maxHeight: "260px", overflowY: "auto" }}>
+                      {c.placed.map((p, pi) => {
+                        const key = p.pedidoId ? `${p.pedidoId}:${p.prod}` : p.prod;
+                        const colorIdx = pi % STROKE_COLORS.length;
+                        const stroke = STROKE_COLORS[colorIdx];
+                        const fill   = FILL_COLORS[colorIdx];
+                        return (
+                          <div key={pi} className="peca-row">
+                            <div style={{ width: "22px", height: "22px", borderRadius: "4px", background: fill, border: `1.5px solid ${stroke}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 900, color: stroke, flexShrink: 0 }}>
+                              {pi + 1}
+                            </div>
+                            <div style={{ fontSize: "11px", color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {p.prod}
+                              {p.pedidoId && p.pedidoId !== pedido.id && (
+                                <span style={{ marginLeft: "4px", fontSize: "9px", color: "#6b7280" }}>({p.pedidoId})</span>
+                              )}
+                              {p.rot && <span style={{ marginLeft: "4px", fontSize: "9px", color: "#f59e0b" }}>↻</span>}
+                            </div>
+                            <div style={{ fontSize: "11px", color: "#9ca3af", fontFamily: "monospace" }}>{p.l}×{p.a}</div>
+                            <div style={{ fontSize: "11px", color: "#60a5fa", fontFamily: "monospace" }}>{((p.l * p.a) / 1e6).toFixed(4)}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{ marginTop: "10px", paddingTop: "8px", borderTop: "1px solid #1f2937", display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#6b7280", fontFamily: "monospace" }}>
+                      <span>Total peças: <strong style={{ color: "#60a5fa" }}>{c.placed.length}</strong></span>
+                      <span>Área usada: <strong style={{ color: "#3dffa0" }}>{cUsedM2.toFixed(3)} m²</strong></span>
+                    </div>
+                  </div>
+
+                  {/* Retalhos */}
+                  {cRetalhos.length > 0 && (
+                    <div className="card">
+                      <div className="card-title" style={{ color: "#16a34a" }}>↺ Retalhos aproveitáveis ({cRetalhos.length})</div>
+                      {cRetalhos.map((f, fi) => (
+                        <div key={fi} className="ret-row">
+                          <div style={{ color: "#e2e8f0", fontFamily: "monospace", fontSize: "12px", fontWeight: 700 }}>
+                            {f.l} × {f.a} mm
+                          </div>
+                          <div style={{ color: "#16a34a", fontFamily: "monospace", fontWeight: 700 }}>
+                            {((f.l * f.a) / 1e6).toFixed(4)} m²
+                          </div>
+                          <div style={{ width: "10px", height: "10px", background: "#bbf7d0", border: "1px solid #16a34a", borderRadius: "2px" }} />
+                        </div>
+                      ))}
+                      <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: "1px solid rgba(22,163,74,0.2)", display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#6b7280", fontFamily: "monospace" }}>
+                        <span>Total retalhos: <strong style={{ color: "#f59e0b" }}>{cRetalhos.length}</strong></span>
+                        <span>Área: <strong style={{ color: "#16a34a" }}>{cRetM2.toFixed(3)} m²</strong></span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Rodapé da chapa */}
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#4b5563", padding: "4px 0", fontFamily: "monospace" }}>
+                  <span>Urban Glass Comércio Ltda · CNPJ 65.668.970/0001-05 · Juiz de Fora/MG</span>
+                  <span>Pedido {pedido.id} · Chapa {ci + 1}/{chapas.length} · {agora.toLocaleString("pt-BR")}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── COL LATERAL ── */}
+        <div className="col-side no-print">
+
+          {/* Resumo geral */}
+          <div>
+            <div className="card-title">Resumo Geral</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {[
+                { label: "Pedido",         value: pedido.id,          color: "#3dffa0" },
+                { label: "Cliente",        value: pedido.clientes?.nome ?? "—", color: "#e2e8f0" },
+                { label: "Chapas",         value: chapas.length + " chapa(s)", color: "#60a5fa" },
+                { label: "Peças total",    value: totalPecas + " peça(s)", color: "#60a5fa" },
+                { label: "Aproveitamento", value: aprovGlobal + "%",   color: "#3dffa0" },
+                { label: "Retalhos",       value: totalRetalhos + " retalho(s)", color: "#f59e0b" },
+                { label: "Data otimização",value: new Date(otim.dt_otim + "T12:00:00").toLocaleDateString("pt-BR"), color: "#9ca3af" },
+              ].map(item => (
+                <div key={item.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "12px" }}>
+                  <span style={{ color: "#6b7280" }}>{item.label}</span>
+                  <span style={{ color: item.color, fontWeight: 600, fontFamily: "monospace", fontSize: "12px" }}>{item.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ borderTop: "1px solid #1f2937" }} />
+
+          {/* Chapa ativa — detalhes */}
+          {chapa && (
+            <div>
+              <div className="card-title">Chapa {chapaAtiva + 1} — Detalhes</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                {[
+                  { label: "Material",      value: chapa.prod },
+                  { label: "Dimensão",      value: `${chapa.W} × ${chapa.H} mm` },
+                  { label: "Área total",    value: chapaM2.toFixed(3) + " m²" },
+                  { label: "Área usada",    value: usedM2.toFixed(3) + " m²" },
+                  { label: "Aproveitamento",value: aprovPct + "%",   color: "#3dffa0" },
+                  { label: "Perda",         value: perdaPct + "%",   color: "#f43f5e" },
+                  { label: "Retalhos",      value: retalhos.length + " (" + retM2.toFixed(3) + " m²)", color: "#f59e0b" },
+                  { label: "Kerf/diamante", value: (otim.kerf ?? 4) + " mm" },
+                  { label: "Borda",         value: bord + " mm",     color: "#f97316" },
+                ].map(item => (
+                  <div key={item.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "11px" }}>
+                    <span style={{ color: "#6b7280" }}>{item.label}</span>
+                    <span style={{ color: (item as any).color ?? "#e2e8f0", fontWeight: 600, fontFamily: "monospace" }}>{item.value}</span>
+                  </div>
+                ))}
               </div>
             </div>
-          );
-        })}
+          )}
+
+          <div style={{ borderTop: "1px solid #1f2937" }} />
+
+          {/* Legenda de cores */}
+          {chapa && chapa.placed.length > 0 && (
+            <div>
+              <div className="card-title">Legenda</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                {chapa.placed.slice(0, 12).map((p, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
+                    <div style={{ width: "18px", height: "18px", borderRadius: "3px", background: FILL_COLORS[i % FILL_COLORS.length], border: `1.5px solid ${STROKE_COLORS[i % STROKE_COLORS.length]}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 900, color: STROKE_COLORS[i % STROKE_COLORS.length] }}>
+                      {i + 1}
+                    </div>
+                    <span style={{ color: "#9ca3af", fontFamily: "monospace", fontSize: "10px" }}>{p.l}×{p.a}</span>
+                    {p.rot && <span style={{ color: "#f59e0b", fontSize: "9px" }}>↻</span>}
+                  </div>
+                ))}
+                {chapa.placed.length > 12 && (
+                  <div style={{ fontSize: "10px", color: "#4b5563" }}>+ {chapa.placed.length - 12} peças</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div style={{ borderTop: "1px solid #1f2937" }} />
+
+          {/* Ações */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <button className="btn-print" onClick={() => window.print()} style={{ padding: "10px", width: "100%", borderRadius: "8px" }}>
+              🖨 Imprimir PDF
+            </button>
+            <button className="btn-tb" onClick={() => router.back()} style={{ width: "100%", padding: "9px", borderRadius: "8px", textAlign: "center" }}>
+              ← Voltar ao Pedido
+            </button>
+          </div>
+        </div>
       </div>
     </>
   );
