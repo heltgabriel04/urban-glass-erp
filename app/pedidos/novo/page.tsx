@@ -126,9 +126,10 @@ export default function NovoPedidoPage() {
     return (l / 1000) * (a / 1000) * item.quantidade;
   }
 
+  // Metro linear usa dimensões brutas — sem arredondamento para múltiplo de 50
   function calcMLItem(item: ItemForm): number {
-    const l = arredondarParaMultiplo50(item.largura) / 1000;
-    const a = arredondarParaMultiplo50(item.altura)  / 1000;
+    const l = item.largura / 1000;
+    const a = item.altura  / 1000;
     return ((item.ml_larg ? l : 0) + (item.ml_alt ? a : 0)) * item.quantidade;
   }
 
@@ -574,7 +575,6 @@ export default function NovoPedidoPage() {
                           {ml.toFixed(3)} ml{item.ml_larg && item.ml_alt ? "" : item.ml_larg ? " (só larg.)" : item.ml_alt ? " (só alt.)" : " ⚠ nenhum lado"}
                         </span>
                         {sub > 0 && <span style={{ fontSize: "11px", color: "var(--acc)", fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>{formatBRL(sub)}</span>}
-                        {mostrarArred && <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", opacity: 0.7 }}>cobrado: {lArred}×{aArred}</span>}
                       </div>
                     )}
                   </div>
