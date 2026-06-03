@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidos, avancarStatusPedido } from "@/services/pedidos.service";
-import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { formatBRL, formatDate, formatM2 } from "@/lib/formatters";
 import type { Pedido, StatusPedido } from "@/types";
 import { useToast } from "@/components/ui/toast";
@@ -26,33 +25,55 @@ const COR_COL: Record<string, string> = {
 
 export default function ProducaoPage() {
   const { toast } = useToast();
-  const [pedidos, setPedidos]           = useState<Pedido[]>([]);
-  const [loading, setLoading]           = useState(true);
+  const [pedidos, setPedidos]             = useState<Pedido[]>([]);
+  const [loading, setLoading]             = useState(true);
   const [comOtimizacao, setComOtimizacao] = useState<Set<string>>(new Set());
-  const [avancando, setAvancando]       = useState<string | null>(null);
+  const [vidroCliente, setVidroCliente]   = useState<Set<string>>(new Set()); // pedidos 100% vidro do cliente
+  const [avancando, setAvancando]         = useState<string | null>(null);
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     setLoading(true);
     const { supabase } = await import("@/lib/supabase/client");
-    const [data, otimRows] = await Promise.all([
+
+    const [data, otimRows, itensRows] = await Promise.all([
       getPedidos(),
       supabase.from("historico_otimizador").select("pedido_id"),
+      // Busca todos os itens dos pedidos ativos para checar vidro_cliente
+      supabase.from("itens_pedido").select("pedido_id, vidro_cliente"),
     ]);
+
     const filtrados = data.filter(p => COLUNAS.includes(p.status as StatusPedido));
     setPedidos(filtrados);
-    const ids = new Set<string>((otimRows.data ?? []).map((r: any) => r.pedido_id as string));
-    setComOtimizacao(ids);
+
+    const otimIds = new Set<string>((otimRows.data ?? []).map((r: any) => r.pedido_id as string));
+    setComOtimizacao(otimIds);
+
+    // Monta set de pedidos onde TODOS os itens são vidro_cliente = true
+    const itensPorPedido = new Map<string, boolean[]>();
+    for (const row of (itensRows.data ?? []) as { pedido_id: string; vidro_cliente: boolean }[]) {
+      if (!itensPorPedido.has(row.pedido_id)) itensPorPedido.set(row.pedido_id, []);
+      itensPorPedido.get(row.pedido_id)!.push(row.vidro_cliente);
+    }
+    const vcIds = new Set<string>();
+    for (const [pid, flags] of itensPorPedido.entries()) {
+      if (flags.length > 0 && flags.every(f => f === true)) vcIds.add(pid);
+    }
+    setVidroCliente(vcIds);
+
     setLoading(false);
   }
 
   async function handleAvancar(p: Pedido) {
-    // Bloquear avanço de "Aguardando otimização" sem plano salvo
-    if (p.status === "Aguardando otimização" && !comOtimizacao.has(p.id)) {
+    const eVidroCliente = vidroCliente.has(p.id);
+
+    // Bloquear somente se NÃO tem otimização E NÃO é 100% vidro do cliente
+    if (p.status === "Aguardando otimização" && !comOtimizacao.has(p.id) && !eVidroCliente) {
       toast("Gere a otimização de corte antes de avançar para produção.", "warn");
       return;
     }
+
     setAvancando(p.id);
     await avancarStatusPedido(p.id, p.status as StatusPedido);
     setAvancando(null);
@@ -62,9 +83,7 @@ export default function ProducaoPage() {
   const porCol   = (col: StatusPedido) => pedidos.filter(p => p.status === col);
   const totalM2  = pedidos.reduce((a, p) => a + Number(p.m2_total), 0);
   const totalVal = pedidos.reduce((a, p) => a + Number(p.valor_total), 0);
-  const finalizados = porCol("Finalizado").length;
 
-  // Pedidos com retirada nos próximos 3 dias
   const hoje = new Date();
   const em3dias = new Date(hoje); em3dias.setDate(hoje.getDate() + 3);
   const retiradaProxima = pedidos.filter(p => {
@@ -141,13 +160,12 @@ export default function ProducaoPage() {
                     </div>
 
                     {items.length === 0 && (
-                      <div style={{ fontSize:"11px", color:"var(--t3)", padding:"8px 0", textAlign:"center" }}>
-                        Nenhum pedido
-                      </div>
+                      <div style={{ fontSize:"11px", color:"var(--t3)", padding:"8px 0", textAlign:"center" }}>Nenhum pedido</div>
                     )}
 
                     {items.map(p => {
-                      const semOtim = p.status === "Aguardando otimização" && !comOtimizacao.has(p.id);
+                      const eVidroCliente = vidroCliente.has(p.id);
+                      const semOtim = p.status === "Aguardando otimização" && !comOtimizacao.has(p.id) && !eVidroCliente;
                       const diasRet = p.dt_retirada
                         ? Math.ceil((new Date(p.dt_retirada).getTime() - hoje.getTime()) / 86400000)
                         : null;
@@ -157,11 +175,16 @@ export default function ProducaoPage() {
                         <div key={p.id} className="kbcard" style={{ borderLeft: retUrgente ? "3px solid var(--warn)" : undefined }}>
                           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                             <span className="kbcid">{p.id}</span>
-                            {retUrgente && (
-                              <span style={{ fontSize:"9px", color:"var(--warn)", fontFamily:"'DM Mono', monospace", fontWeight:700 }}>
-                                {diasRet === 0 ? "HOJE" : diasRet === 1 ? "AMANHÃ" : `${diasRet}d`}
-                              </span>
-                            )}
+                            <div style={{ display:"flex", gap:"4px", alignItems:"center" }}>
+                              {eVidroCliente && (
+                                <span style={{ fontSize:"9px", color:"var(--warn)", fontFamily:"'DM Mono',monospace", fontWeight:700 }} title="Vidro do cliente">📦</span>
+                              )}
+                              {retUrgente && (
+                                <span style={{ fontSize:"9px", color:"var(--warn)", fontFamily:"'DM Mono', monospace", fontWeight:700 }}>
+                                  {diasRet === 0 ? "HOJE" : diasRet === 1 ? "AMANHÃ" : `${diasRet}d`}
+                                </span>
+                              )}
+                            </div>
                           </div>
                           <div className="kbcn">{p.clientes?.nome ?? "—"}</div>
                           <div className="kbcm">
@@ -173,6 +196,8 @@ export default function ProducaoPage() {
                               Ret: {formatDate(p.dt_retirada)}
                             </div>
                           )}
+
+                          {/* Ação: precisa otimizar */}
                           {semOtim && (
                             <a
                               href={`/otimizador?pedido=${p.id}`}
@@ -181,6 +206,14 @@ export default function ProducaoPage() {
                               ◈ Otimizar primeiro
                             </a>
                           )}
+
+                          {/* Ação: vidro do cliente — pode avançar sem otimização */}
+                          {!ultimo && !semOtim && p.status === "Aguardando otimização" && eVidroCliente && !comOtimizacao.has(p.id) && (
+                            <div style={{ marginTop:"6px", fontSize:"10px", color:"var(--warn)", fontFamily:"'DM Mono',monospace", textAlign:"center" }}>
+                              📦 vidro do cliente
+                            </div>
+                          )}
+
                           {!ultimo && !semOtim && (
                             <button
                               className="btn bp xs"
@@ -215,12 +248,18 @@ export default function ProducaoPage() {
                       <tr><td colSpan={7} style={{ textAlign:"center", color:"var(--t3)", padding:"24px" }}>Nenhum pedido em produção</td></tr>
                     )}
                     {pedidos.map(p => {
-                      const semOtim  = p.status === "Aguardando otimização" && !comOtimizacao.has(p.id);
+                      const eVidroCliente = vidroCliente.has(p.id);
+                      const semOtim  = p.status === "Aguardando otimização" && !comOtimizacao.has(p.id) && !eVidroCliente;
                       const diasRet  = p.dt_retirada ? Math.ceil((new Date(p.dt_retirada).getTime() - hoje.getTime()) / 86400000) : null;
                       const urgente  = diasRet !== null && diasRet <= 3;
                       return (
                         <tr key={p.id}>
-                          <td><span className="mono" style={{ color:"var(--acc)" }}>{p.id}</span></td>
+                          <td>
+                            <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
+                              <span className="mono" style={{ color:"var(--acc)" }}>{p.id}</span>
+                              {eVidroCliente && <span title="Vidro do cliente" style={{ fontSize:"11px" }}>📦</span>}
+                            </div>
+                          </td>
                           <td><strong>{p.clientes?.nome ?? "—"}</strong></td>
                           <td>
                             <span className="chip" style={{ background: COR_COL[p.status] + "22", color: COR_COL[p.status], border:`1px solid ${COR_COL[p.status]}44` }}>

@@ -147,6 +147,7 @@ export interface ItemPedido {
   lapidacao: number;
   quantidade: number;
   subtotal: number;
+  vidro_cliente: boolean;   // true = cliente trouxe o vidro (não desconta estoque)
   created_at: string;
   produtos?: Produto;
 }
