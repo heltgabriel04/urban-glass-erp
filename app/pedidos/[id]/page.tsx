@@ -88,7 +88,7 @@ export default function PedidoDetalhe() {
 
   async function handleAvancar() {
     if (!pedido) return;
-    if (pedido.status === "Aguardando otimização" && otimizacoes.length === 0) {
+    if (pedido.status === "Aguardando otimização" && otimizacoes.length === 0 && !todosVidroCliente) {
       toast("Realize a otimização de corte antes de avançar para produção.", "warn");
       return;
     }
@@ -130,16 +130,21 @@ export default function PedidoDetalhe() {
   if (loading) return <AppLayout><div className="con"><div className="loading">Carregando pedido...</div></div></AppLayout>;
   if (!pedido) return <AppLayout><div className="con"><div style={{ color:"var(--err)", padding:"32px" }}>Pedido não encontrado.</div></div></AppLayout>;
 
-  const aberto          = Number(pedido.valor_total) - Number(pedido.valor_recebido);
-  const quitado         = aberto <= 0;
-  const pctRec          = pedido.valor_total > 0 ? Math.min(100, (Number(pedido.valor_recebido) / Number(pedido.valor_total)) * 100) : 0;
-  const statusIdx       = FLUXO.indexOf(pedido.status);
-  const podeAvancar     = !["Entregue","Cancelado"].includes(pedido.status);
-  const temItens        = (pedido.itens_pedido?.length ?? 0) > 0;
-  const podeRomaneio    = ["Finalizado","Entregue"].includes(pedido.status);
-  const temOtimizacao   = otimizacoes.length > 0;
-  const bloqueadoSemOtim = pedido.status === "Aguardando otimização" && !temOtimizacao;
-  const ultimaOtim      = otimizacoes[0] ?? null;
+  const aberto       = Number(pedido.valor_total) - Number(pedido.valor_recebido);
+  const quitado      = aberto <= 0;
+  const pctRec       = pedido.valor_total > 0 ? Math.min(100, (Number(pedido.valor_recebido) / Number(pedido.valor_total)) * 100) : 0;
+  const statusIdx    = FLUXO.indexOf(pedido.status);
+  const podeAvancar  = !["Entregue","Cancelado"].includes(pedido.status);
+  const temItens     = (pedido.itens_pedido?.length ?? 0) > 0;
+  const podeRomaneio = ["Finalizado","Entregue"].includes(pedido.status);
+  const temOtimizacao = otimizacoes.length > 0;
+  const ultimaOtim   = otimizacoes[0] ?? null;
+
+  // Verifica se todos os itens são vidro do cliente
+  const todosVidroCliente = temItens && (pedido.itens_pedido ?? []).every(i => (i as any).vidro_cliente === true);
+
+  // Bloqueia somente se status é "Aguardando otimização" E não tem otimização E não é 100% vidro do cliente
+  const bloqueadoSemOtim = pedido.status === "Aguardando otimização" && !temOtimizacao && !todosVidroCliente;
 
   return (
     <>
@@ -166,17 +171,12 @@ export default function PedidoDetalhe() {
           </div>
           <span className={CHIP[pedido.status] ?? "chip cgr"}>{pedido.status}</span>
 
-          {temItens && (
+          {temItens && !todosVidroCliente && (
             <a href={"/otimizador?pedido=" + pedido.id} className="btn bg sm">◈ Otimizar Corte</a>
           )}
 
-          {/* BOTÃO ETIQUETAS — aparece só quando há otimização salva */}
           {temOtimizacao && (
-            <a
-              href={"/pedidos/" + pedido.id + "/etiquetas"}
-              className="btn bg sm"
-              style={{ textDecoration: "none" }}
-            >
+            <a href={"/pedidos/" + pedido.id + "/etiquetas"} className="btn bg sm" style={{ textDecoration:"none" }}>
               🏷 Etiquetas
             </a>
           )}
@@ -189,8 +189,8 @@ export default function PedidoDetalhe() {
               background: podeRomaneio ? "rgba(16,185,129,.15)" : "transparent",
               border: "1px solid " + (podeRomaneio ? "var(--ok)" : "var(--b2)"),
               color: podeRomaneio ? "var(--ok)" : "var(--t3)",
-              fontWeight: 700, cursor: podeRomaneio ? "pointer" : "default",
-              opacity: podeRomaneio ? 1 : 0.35, transition: "all 0.2s",
+              fontWeight:700, cursor: podeRomaneio ? "pointer" : "default",
+              opacity: podeRomaneio ? 1 : 0.35, transition:"all 0.2s",
             }}
           >
             R
@@ -202,7 +202,7 @@ export default function PedidoDetalhe() {
               onClick={handleAvancar}
               disabled={salvando}
               title={bloqueadoSemOtim ? "Realize a otimização de corte antes de avançar" : ""}
-              style={bloqueadoSemOtim ? { opacity: 0.45, cursor: "not-allowed" } : {}}
+              style={bloqueadoSemOtim ? { opacity:0.45, cursor:"not-allowed" } : {}}
             >
               {salvando ? "Salvando..." : bloqueadoSemOtim ? "⚠ Otimização pendente" : "Avançar Status →"}
             </button>
@@ -224,6 +224,17 @@ export default function PedidoDetalhe() {
             </div>
           )}
 
+          {/* Badge vidro do cliente */}
+          {todosVidroCliente && pedido.status === "Aguardando otimização" && (
+            <div style={{ background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.3)", borderRadius:"10px", padding:"12px 18px", display:"flex", alignItems:"center", gap:"10px" }}>
+              <span style={{ fontSize:"16px" }}>📦</span>
+              <div>
+                <div style={{ fontSize:"13px", fontWeight:700, color:"var(--warn)" }}>Vidro fornecido pelo cliente</div>
+                <div style={{ fontSize:"12px", color:"var(--t3)" }}>Todos os itens são vidro do cliente — otimização não é necessária para avançar.</div>
+              </div>
+            </div>
+          )}
+
           {/* Card otimização salva */}
           {temOtimizacao && ultimaOtim && (
             <div style={{ background:"rgba(16,185,129,.06)", border:"1px solid rgba(16,185,129,.3)", borderRadius:"10px", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px" }}>
@@ -238,22 +249,9 @@ export default function PedidoDetalhe() {
                   <span>Data: <strong style={{ color:"var(--t1)" }}>{formatDate(ultimaOtim.dt_otim)}</strong></span>
                 </div>
               </div>
-              {/* BOTÕES: Ver Plano + Etiquetas lado a lado */}
               <div style={{ display:"flex", gap:"8px" }}>
-                <a
-                  href={"/pedidos/" + pedido.id + "/plano"}
-                  className="btn bg sm"
-                  style={{ whiteSpace:"nowrap", textDecoration:"none" }}
-                >
-                  ◈ Ver Plano
-                </a>
-                <a
-                  href={"/pedidos/" + pedido.id + "/etiquetas"}
-                  className="btn bg sm"
-                  style={{ whiteSpace:"nowrap", textDecoration:"none" }}
-                >
-                  🏷 Etiquetas
-                </a>
+                <a href={"/pedidos/" + pedido.id + "/plano"} className="btn bg sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>◈ Ver Plano</a>
+                <a href={"/pedidos/" + pedido.id + "/etiquetas"} className="btn bg sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>🏷 Etiquetas</a>
               </div>
             </div>
           )}
@@ -372,7 +370,9 @@ export default function PedidoDetalhe() {
           <div className="card" style={{ padding:"20px 24px" }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px" }}>
               <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>ITENS DO PEDIDO ({pedido.itens_pedido?.length ?? 0})</div>
-              {temItens && <a href={"/otimizador?pedido=" + pedido.id} className="btn bg xs">◈ Otimizar Corte</a>}
+              {temItens && !todosVidroCliente && (
+                <a href={"/otimizador?pedido=" + pedido.id} className="btn bg xs">◈ Otimizar Corte</a>
+              )}
             </div>
             {!temItens ? (
               <div style={{ color:"var(--t3)", padding:"24px 0", textAlign:"center" }}>Nenhum item registrado neste pedido.</div>
@@ -380,7 +380,7 @@ export default function PedidoDetalhe() {
               <div className="tw">
                 <table>
                   <thead>
-                    <tr><th>#</th><th>Produto</th><th>Dimensão</th><th>m²</th><th>Qtd</th><th>R$/m²</th><th>Lapidação</th><th>Subtotal</th></tr>
+                    <tr><th>#</th><th>Produto</th><th>Dimensão</th><th>m²</th><th>Qtd</th><th>R$/m²</th><th>Lapidação</th><th>V.Cliente</th><th>Subtotal</th></tr>
                   </thead>
                   <tbody>
                     {pedido.itens_pedido!.map((item, i) => (
@@ -392,6 +392,12 @@ export default function PedidoDetalhe() {
                         <td className="mono">{item.quantidade}</td>
                         <td className="mono">{formatBRL(item.valor_m2)}</td>
                         <td className="mono">{item.lapidacao > 0 ? formatBRL(item.lapidacao) : <span style={{ color:"var(--t3)" }}>—</span>}</td>
+                        <td style={{ textAlign:"center" }}>
+                          {(item as any).vidro_cliente
+                            ? <span style={{ color:"var(--warn)", fontSize:"13px" }} title="Vidro do cliente">📦</span>
+                            : <span style={{ color:"var(--t3)" }}>—</span>
+                          }
+                        </td>
                         <td className="mono" style={{ color:"var(--acc)", fontWeight:600 }}>{formatBRL(item.subtotal)}</td>
                       </tr>
                     ))}
