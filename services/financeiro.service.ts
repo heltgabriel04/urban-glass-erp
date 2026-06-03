@@ -1,4 +1,3 @@
-// services/financeiro.service.ts
 import { supabase } from '@/lib/supabase/client';
 import type { FinanceiroCliente, FaturamentoMensal, Lancamento, LancamentoInsert } from '@/types';
 
@@ -7,19 +6,13 @@ export async function getFinanceiroClientes() {
     .from('financeiro_clientes')
     .select('*')
     .order('faturado', { ascending: false });
-
   if (error) { console.error('getFinanceiroClientes:', error); return []; }
   return data as FinanceiroCliente[];
 }
 
 export async function getFaturamentoMensal(ano?: number) {
-  let query = supabase
-    .from('faturamento_mensal')
-    .select('*')
-    .order('mes');
-
+  let query = supabase.from('faturamento_mensal').select('*').order('mes');
   if (ano) query = query.eq('ano', ano);
-
   const { data, error } = await query;
   if (error) { console.error('getFaturamentoMensal:', error); return []; }
   return data as FaturamentoMensal[];
@@ -30,7 +23,6 @@ export async function getLancamentos() {
     .from('lancamentos')
     .select(`*, clientes ( id, nome )`)
     .order('vencimento', { ascending: true });
-
   if (error) { console.error('getLancamentos:', error); return []; }
   return data as Lancamento[];
 }
@@ -41,8 +33,17 @@ export async function getLancamentosPorPedido(pedidoId: string) {
     .select('*')
     .eq('pedido_id', pedidoId)
     .order('created_at', { ascending: true });
-
   if (error) { console.error('getLancamentosPorPedido:', error); return []; }
+  return data as Lancamento[];
+}
+
+export async function getLancamentosPorTipo(tipo: 'Entrada' | 'Saída') {
+  const { data, error } = await supabase
+    .from('lancamentos')
+    .select(`*, clientes ( id, nome )`)
+    .eq('tipo', tipo)
+    .order('vencimento', { ascending: true });
+  if (error) { console.error('getLancamentosPorTipo:', error); return []; }
   return data as Lancamento[];
 }
 
@@ -58,12 +59,81 @@ export async function createLancamento(lancamento: LancamentoInsert) {
     .insert([lancamento as never])
     .select()
     .single();
-
   if (error) { console.error('createLancamento:', error); return null; }
   return data as Lancamento;
 }
 
-// ─── Cria lançamentos parcelados ao salvar pedido ───────────
+export async function updateLancamento(id: number, updates: Partial<LancamentoInsert>) {
+  const { data, error } = await supabase
+    .from('lancamentos')
+    .update(updates as never)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) { console.error('updateLancamento:', error); return null; }
+  return data as Lancamento;
+}
+
+// ── Contas a pagar ────────────────────────────────────────────────────────────
+
+export async function getContasAPagar() {
+  const { data, error } = await supabase
+    .from('lancamentos')
+    .select('*')
+    .eq('tipo', 'Saída')
+    .order('vencimento', { ascending: true });
+  if (error) { console.error('getContasAPagar:', error); return []; }
+  return data as Lancamento[];
+}
+
+export async function criarContaPagar(conta: {
+  descricao: string;
+  fornecedor?: string;
+  categoria?: string;
+  valor: number;
+  vencimento: string;
+  dt_pagamento?: string;
+  status: 'Pendente' | 'Pago' | 'Vencido';
+  obs?: string;
+}) {
+  // keep insert untyped to avoid strict mismatch with StatusLancamento
+  const insert = {
+    tipo: 'Saída',
+    descricao: conta.descricao,
+    valor: conta.valor,
+    status: conta.status,
+    vencimento: conta.vencimento,
+    pedido_id: null,
+    cliente_id: null,
+  };
+  const { data, error } = await supabase
+    .from('lancamentos')
+    .insert([{
+      ...insert,
+      fornecedor:    conta.fornecedor ?? '',
+      categoria:     conta.categoria ?? '',
+      dt_pagamento:  conta.dt_pagamento ?? null,
+      obs:           conta.obs ?? '',
+    } as never])
+    .select()
+    .single();
+  if (error) { console.error('criarContaPagar:', error); return null; }
+  return data as Lancamento;
+}
+
+export async function pagarConta(id: number, dtPagamento: string) {
+  const { data, error } = await supabase
+    .from('lancamentos')
+    .update({ status: 'Pago', dt_pagamento: dtPagamento } as never)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) { console.error('pagarConta:', error); return null; }
+  return data as Lancamento;
+}
+
+// ── Lançamentos parcelados ────────────────────────────────────────────────────
+
 export async function criarLancamentosParcelados({
   pedidoId,
   clienteId,
@@ -73,11 +143,8 @@ export async function criarLancamentosParcelados({
   clienteId: number;
   parcelas: { data: string; valor: number }[];
 }) {
-  // Remove lançamentos anteriores do mesmo pedido (evita duplicatas em re-save)
   await supabase.from('lancamentos').delete().eq('pedido_id', pedidoId);
-
   const total = parcelas.length;
-
   const inserts: LancamentoInsert[] = parcelas
     .filter(p => p.data && p.valor > 0)
     .map((p, i) => ({
@@ -91,9 +158,7 @@ export async function criarLancamentosParcelados({
       pedido_id: pedidoId,
       cliente_id: clienteId,
     }));
-
   if (inserts.length === 0) return true;
-
   const { error } = await supabase.from('lancamentos').insert(inserts as never[]);
   if (error) { console.error('criarLancamentosParcelados:', error); return false; }
   return true;
