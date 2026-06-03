@@ -7,6 +7,14 @@ import { formatBRL } from "@/lib/formatters";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import type { Produto, ProdutoInsert } from "@/types";
 
+const PREFIXOS: Record<string, string> = {
+  "Laminado": "VL",
+  "Chapa":    "CH",
+  "Reflecta": "VR",
+};
+
+const TIPOS = ["Laminado", "Chapa", "Reflecta", "Monolítico"];
+
 const VAZIO: ProdutoInsert = {
   cod: "", nome: "", tipo: "", espessura: "", cor: "",
   categoria: "Chapas", valor: 0, unidade: "m²", ativo: true, obs: "",
@@ -30,26 +38,75 @@ export default function ProdutosPage() {
     setLoading(false);
   }
 
-  function abrirNovo() { setForm(VAZIO); setEditId(null); setModal(true); }
+  // Gera próximo código para o tipo selecionado
+  async function gerarCodigo(tipo: string): Promise<string> {
+    const prefixo = PREFIXOS[tipo];
+    if (!prefixo) return "";
+
+    // Busca todos os códigos que começam com esse prefixo
+    const { data } = await supabase
+      .from("produtos")
+      .select("cod")
+      .ilike("cod", `${prefixo}-%`);
+
+    const numeros = (data || [])
+      .map(p => {
+        const partes = p.cod.split("-");
+        return parseInt(partes[1] || "0", 10);
+      })
+      .filter(n => !isNaN(n));
+
+    const proximo = numeros.length > 0 ? Math.max(...numeros) + 1 : 1;
+    return `${prefixo}-${String(proximo).padStart(3, "0")}`;
+  }
+
+  async function abrirNovo() {
+    setForm(VAZIO);
+    setEditId(null);
+    setModal(true);
+  }
 
   function abrirEdit(p: Produto) {
-    setForm({ cod:p.cod, nome:p.nome, tipo:p.tipo, espessura:p.espessura, cor:p.cor, categoria:p.categoria, valor:p.valor, unidade:p.unidade, ativo:p.ativo, obs:p.obs });
-    setEditId(p.id); setModal(true);
+    setForm({
+      cod: p.cod, nome: p.nome, tipo: p.tipo, espessura: p.espessura,
+      cor: p.cor, categoria: p.categoria, valor: p.valor,
+      unidade: p.unidade, ativo: p.ativo, obs: p.obs,
+    });
+    setEditId(p.id);
+    setModal(true);
+  }
+
+  // Ao mudar o tipo no modal (apenas para novo produto), gera código automaticamente
+  async function handleTipo(tipo: string) {
+    if (editId) {
+      setForm(f => ({ ...f, tipo }));
+      return;
+    }
+    const cod = await gerarCodigo(tipo);
+    setForm(f => ({ ...f, tipo, cod }));
   }
 
   async function salvar() {
     if (!form.cod || !form.nome) return;
     setSalvando(true);
-    if (editId) { await supabase.from("produtos").update(form as never).eq("id", editId); }
-    else { await supabase.from("produtos").insert([form as never]); }
-    setSalvando(false); setModal(false); load();
+    if (editId) {
+      await supabase.from("produtos").update(form as never).eq("id", editId);
+    } else {
+      await supabase.from("produtos").insert([form as never]);
+    }
+    setSalvando(false);
+    setModal(false);
+    load();
   }
 
   async function duplicar(p: Produto) {
+    const cod = await gerarCodigo(p.tipo);
     await supabase.from("produtos").insert([{
-      cod: p.cod + "-C", nome: p.nome + " (cópia)", tipo: p.tipo,
-      espessura: p.espessura, cor: p.cor, categoria: p.categoria,
-      valor: p.valor, unidade: p.unidade, ativo: true, obs: p.obs,
+      cod: cod || p.cod + "-C",
+      nome: p.nome + " (cópia)",
+      tipo: p.tipo, espessura: p.espessura, cor: p.cor,
+      categoria: p.categoria, valor: p.valor,
+      unidade: p.unidade, ativo: true, obs: p.obs,
     } as never]);
     load();
   }
@@ -152,21 +209,55 @@ export default function ProdutosPage() {
               <div className="mtit">{editId ? "Editar Produto" : "Novo Produto"}</div>
               <button className="mcl" onClick={() => setModal(false)}>✕</button>
             </div>
+
             <div className="fr">
-              <div className="fg"><label className="fl">Código *</label><input className="fc" value={form.cod} onChange={e => setForm(f => ({ ...f, cod: e.target.value }))} placeholder="VL-001" /></div>
-              <div className="fg"><label className="fl">Nome *</label><input className="fc" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Vidro Laminado 4+4" /></div>
+              {/* Código — gerado automaticamente, bloqueado em novo; editável em edição */}
+              <div className="fg">
+                <label className="fl">Código</label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    className="fc"
+                    value={form.cod || (editId ? "" : "Selecione o tipo...")}
+                    readOnly
+                    style={{
+                      opacity: form.cod ? 1 : 0.45,
+                      cursor: "default",
+                      background: "var(--surf2)",
+                      color: form.cod ? "var(--acc)" : "var(--t3)",
+                      fontFamily: "'DM Mono', monospace",
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="fg">
+                <label className="fl">Nome *</label>
+                <input
+                  className="fc"
+                  value={form.nome}
+                  onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+                  placeholder="Ex: Vidro Laminado 4+4 Incolor"
+                />
+              </div>
             </div>
+
             <div className="fr3">
               <div className="fg">
                 <label className="fl">Tipo</label>
-                <select className="fc" value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}>
+                <select className="fc" value={form.tipo} onChange={e => handleTipo(e.target.value)}>
                   <option value="">Selecione...</option>
-                  <option>Laminado</option><option>Reflecta</option><option>Monolítico</option>
+                  {TIPOS.map(t => <option key={t}>{t}</option>)}
                 </select>
               </div>
-              <div className="fg"><label className="fl">Espessura</label><input className="fc" value={form.espessura} onChange={e => setForm(f => ({ ...f, espessura: e.target.value }))} placeholder="4+4" /></div>
-              <div className="fg"><label className="fl">Cor</label><input className="fc" value={form.cor} onChange={e => setForm(f => ({ ...f, cor: e.target.value }))} placeholder="Incolor" /></div>
+              <div className="fg">
+                <label className="fl">Espessura</label>
+                <input className="fc" value={form.espessura} onChange={e => setForm(f => ({ ...f, espessura: e.target.value }))} placeholder="4+4" />
+              </div>
+              <div className="fg">
+                <label className="fl">Cor</label>
+                <input className="fc" value={form.cor} onChange={e => setForm(f => ({ ...f, cor: e.target.value }))} placeholder="Incolor" />
+              </div>
             </div>
+
             <div className="fr">
               <div className="fg">
                 <label className="fl">Valor (R$/m²) *</label>
@@ -183,13 +274,28 @@ export default function ProdutosPage() {
                 </select>
               </div>
             </div>
+
             <div className="fg" style={{ marginBottom:"14px" }}>
               <label className="fl">Observação</label>
               <input className="fc" value={form.obs} onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} placeholder="Observações opcionais" />
             </div>
+
+            {/* Aviso se tipo não selecionado em novo produto */}
+            {!editId && !form.cod && (
+              <div className="al al-i" style={{ marginBottom: "12px", fontSize: "12px" }}>
+                Selecione o tipo para gerar o código automaticamente
+              </div>
+            )}
+
             <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end" }}>
               <button className="btn bg" onClick={() => setModal(false)}>Cancelar</button>
-              <button className="btn bp" onClick={salvar} disabled={salvando}>{salvando ? "Salvando..." : "Salvar Produto"}</button>
+              <button
+                className="btn bp"
+                onClick={salvar}
+                disabled={salvando || !form.cod || !form.nome}
+              >
+                {salvando ? "Salvando..." : "Salvar Produto"}
+              </button>
             </div>
           </div>
         </div>
