@@ -18,7 +18,7 @@ export type StatusLancamento = 'Pago' | 'Pendente' | 'A Receber';
 export type TipoLancamento   = 'Entrada' | 'Saída';
 export type TabelaCliente    = 'p' | 'g';
 export type TipoPessoa       = 'PF' | 'PJ';
-export type IndIE            = '1' | '2' | '9'; // 1=contribuinte, 2=isento, 9=não contribuinte
+export type IndIE            = '1' | '2' | '9';
 
 export type StatusNota =
   | 'rascunho'
@@ -36,10 +36,8 @@ export interface Cliente {
   tipo_pessoa: TipoPessoa;
   tel: string;
   email: string;
-  // Endereço legado (campo texto único)
   endereco: string;
   cidade: string;
-  // Endereço estruturado para NF-e
   cep: string;
   logradouro: string;
   numero: string;
@@ -47,12 +45,10 @@ export interface Cliente {
   bairro: string;
   uf: string;
   cod_ibge: string;
-  // Fiscal
   ie: string;
   ind_ie: IndIE;
   consumidor_final: boolean;
   obs_nfe: string;
-  // Comercial
   pgto: string;
   tabela: TabelaCliente;
   ativo: boolean;
@@ -119,7 +115,8 @@ export interface Pedido {
   cliente_id: number;
   dt_pedido: string;
   dt_retirada: string | null;
-  datas_pgto: string[]; 
+  datas_pgto: string[];
+  valores_pgto: number[];
   m2_total: number;
   valor_total: number;
   valor_recebido: number;
@@ -329,7 +326,6 @@ export interface DashboardKPIs {
   ticketMedio: number;
   aproveitamentoMedio: number;
 }
-
 
 // ─── DATABASE TYPES (Supabase) ─────────────────────────────
 export type Database = {

@@ -1,3 +1,4 @@
+// services/financeiro.service.ts
 import { supabase } from '@/lib/supabase/client';
 import type { FinanceiroCliente, FaturamentoMensal, Lancamento, LancamentoInsert } from '@/types';
 
@@ -60,4 +61,40 @@ export async function createLancamento(lancamento: LancamentoInsert) {
 
   if (error) { console.error('createLancamento:', error); return null; }
   return data as Lancamento;
+}
+
+// ─── Cria lançamentos parcelados ao salvar pedido ───────────
+export async function criarLancamentosParcelados({
+  pedidoId,
+  clienteId,
+  parcelas,
+}: {
+  pedidoId: string;
+  clienteId: number;
+  parcelas: { data: string; valor: number }[];
+}) {
+  // Remove lançamentos anteriores do mesmo pedido (evita duplicatas em re-save)
+  await supabase.from('lancamentos').delete().eq('pedido_id', pedidoId);
+
+  const total = parcelas.length;
+
+  const inserts: LancamentoInsert[] = parcelas
+    .filter(p => p.data && p.valor > 0)
+    .map((p, i) => ({
+      tipo: 'Entrada' as const,
+      descricao: total === 1
+        ? `Recebimento · ${pedidoId}`
+        : `Parcela ${i + 1}/${total} · ${pedidoId}`,
+      valor: p.valor,
+      status: 'A Receber' as const,
+      vencimento: p.data,
+      pedido_id: pedidoId,
+      cliente_id: clienteId,
+    }));
+
+  if (inserts.length === 0) return true;
+
+  const { error } = await supabase.from('lancamentos').insert(inserts as never[]);
+  if (error) { console.error('criarLancamentosParcelados:', error); return false; }
+  return true;
 }

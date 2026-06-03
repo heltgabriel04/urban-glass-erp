@@ -6,6 +6,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { getClientes } from "@/services/clientes.service";
 import { createPedido, getProximoIdPedido } from "@/services/pedidos.service";
+import { criarLancamentosParcelados } from "@/services/financeiro.service";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
@@ -19,6 +20,12 @@ interface ItemForm {
   quantidade: number;
   valor_m2: number;
   lapidacao: number;
+}
+
+interface ParcelaForm {
+  data: string;
+  valor: number;
+  editado: boolean; // se o usuário editou manualmente o valor
 }
 
 const ITEM_VAZIO: ItemForm = {
@@ -36,6 +43,31 @@ function addMeses(dateStr: string, meses: number): string {
   const d = new Date(dateStr + "T12:00:00");
   d.setMonth(d.getMonth() + meses);
   return d.toISOString().split("T")[0];
+}
+
+// Redistribui o valor total entre as parcelas que não foram manualmente editadas
+function redistribuirParcelas(
+  parcelas: ParcelaForm[],
+  valorTotal: number,
+  idxEditado?: number
+): ParcelaForm[] {
+  if (parcelas.length === 0) return parcelas;
+
+  // Parcelas fixadas (editadas manualmente, exceto a que acabou de ser editada — essa já tem o novo valor)
+  const fixadas = parcelas.filter((p, i) => p.editado && i !== idxEditado);
+  const somaFixadas = fixadas.reduce((a, p) => a + p.valor, 0);
+  const restante = valorTotal - somaFixadas;
+  const livres = parcelas.filter((p, i) => !p.editado || i === idxEditado);
+  const qtdLivres = livres.length;
+
+  if (qtdLivres === 0) return parcelas;
+
+  const valorPorLivre = Math.max(0, restante / qtdLivres);
+
+  return parcelas.map((p, i) => {
+    if (p.editado && i !== idxEditado) return p; // fixada, não muda
+    return { ...p, valor: parseFloat(valorPorLivre.toFixed(2)) };
+  });
 }
 
 export default function NovoPedidoPage() {
@@ -57,8 +89,7 @@ export default function NovoPedidoPage() {
   const [salvando, setSalvando]     = useState(false);
   const [totalPedidoInput, setTotalPedidoInput] = useState(0);
 
-  // Datas de pagamento
-  const [datasPgto, setDatasPgto] = useState<string[]>([""]);
+  const [parcelasForm, setParcelasForm] = useState<ParcelaForm[]>([{ data: "", valor: 0, editado: false }]);
 
   useEffect(() => { load(); }, []);
 
@@ -84,29 +115,54 @@ export default function NovoPedidoPage() {
     if (cli) setFormaPgto(cli.pgto || "");
   }, [clienteId, clientes]);
 
-  // Ao mudar parcelas ou primeira data, recalcula todas as datas
+  // Recalcula valores das parcelas quando valorTotal ou número de parcelas muda
+  const m2Total    = itens.reduce((a, i) => a + calcM2Item(i), 0);
+  const valorTotal = itens.reduce((a, i) => a + calcSubtotal(i), 0);
+
   useEffect(() => {
-    const primeira = datasPgto[0] || "";
-    if (!primeira) {
-      setDatasPgto(Array(parcelas).fill(""));
-      return;
-    }
-    const novas = Array.from({ length: parcelas }, (_, i) =>
-      i === 0 ? primeira : addMeses(primeira, i)
-    );
-    setDatasPgto(novas);
+    setParcelasForm(prev => {
+      const novaPrimeira = prev[0]?.data || "";
+      const novas: ParcelaForm[] = Array.from({ length: parcelas }, (_, i) => {
+        const data = novaPrimeira ? (i === 0 ? novaPrimeira : addMeses(novaPrimeira, i)) : "";
+        return { data, valor: 0, editado: false };
+      });
+      return redistribuirParcelas(novas, valorTotal);
+    });
   }, [parcelas]);
 
-  function handlePrimeiraDtPgto(data: string) {
-    if (!data) { setDatasPgto(Array(parcelas).fill("")); return; }
-    const novas = Array.from({ length: parcelas }, (_, i) =>
-      i === 0 ? data : addMeses(data, i)
+  // Quando o valorTotal muda, redistribui apenas as parcelas não fixadas
+  useEffect(() => {
+    setParcelasForm(prev =>
+      redistribuirParcelas(prev.map(p => ({ ...p, editado: false })), valorTotal)
     );
-    setDatasPgto(novas);
+  }, [valorTotal]);
+
+  // ── Handlers de data ──────────────────────────────────────
+  function handlePrimeiraDtPgto(data: string) {
+    setParcelasForm(prev => prev.map((p, i) => ({
+      ...p,
+      data: !data ? "" : (i === 0 ? data : addMeses(data, i)),
+    })));
   }
 
   function handleDtPgto(idx: number, data: string) {
-    setDatasPgto(prev => prev.map((d, i) => i === idx ? data : d));
+    setParcelasForm(prev => prev.map((p, i) => i === idx ? { ...p, data } : p));
+  }
+
+  // ── Handler de valor de parcela ───────────────────────────
+  function handleValorParcela(idx: number, valor: number) {
+    setParcelasForm(prev => {
+      const atualizado = prev.map((p, i) =>
+        i === idx ? { ...p, valor, editado: true } : p
+      );
+      return redistribuirParcelas(atualizado, valorTotal, idx);
+    });
+  }
+
+  // ── Reset de fixação ao mudar parcelas ───────────────────
+  function handleChangeParcelas(n: number) {
+    setParcelas(n);
+    // limpa editados — useEffect acima vai redistribuir
   }
 
   function getTabela(): TabelaPreco | null {
@@ -177,8 +233,10 @@ export default function NovoPedidoPage() {
     setTotalPedidoInput(0);
   }
 
-  const m2Total    = itens.reduce((a, i) => a + calcM2Item(i), 0);
-  const valorTotal = itens.reduce((a, i) => a + calcSubtotal(i), 0);
+  // Diferença entre soma das parcelas e valor total (para alertar se não bater)
+  const somaParcelas = parcelasForm.reduce((a, p) => a + p.valor, 0);
+  const difParcelas  = Math.abs(somaParcelas - valorTotal);
+  const parcelasOk   = difParcelas < 0.02; // tolerância de 2 centavos
 
   async function salvar() {
     if (!clienteId) { alert("Selecione um cliente"); return; }
@@ -191,7 +249,8 @@ export default function NovoPedidoPage() {
       cliente_id: clienteId as number,
       dt_pedido: dtPedido,
       dt_retirada: dtRetirada || null,
-      datas_pgto: datasPgto.filter(d => d),
+      datas_pgto: parcelasForm.map(p => p.data).filter(d => d),
+      valores_pgto: parcelasForm.map(p => p.valor),
       m2_total: m2Total,
       valor_total: valorTotal,
       valor_recebido: 0,
@@ -214,8 +273,18 @@ export default function NovoPedidoPage() {
     }));
 
     const result = await createPedido(pedido, itensInsert);
+
+    if (result) {
+      // Cria lançamentos no financeiro
+      await criarLancamentosParcelados({
+        pedidoId: proximoId,
+        clienteId: clienteId as number,
+        parcelas: parcelasForm,
+      });
+      router.push("/pedidos");
+    }
+
     setSalvando(false);
-    if (result) router.push("/pedidos");
   }
 
   const tab = getTabela();
@@ -271,43 +340,61 @@ export default function NovoPedidoPage() {
                 </select>
               </div>
             </div>
+
             <div className="fr">
               <div className="fg">
                 <label className="fl">Parcelas</label>
-                <select className="fc" value={parcelas} onChange={e => setParcelas(Number(e.target.value))}>
+                <select className="fc" value={parcelas} onChange={e => handleChangeParcelas(Number(e.target.value))}>
                   {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
                 </select>
               </div>
             </div>
 
-            {/* ── Datas de Pagamento ── */}
+            {/* ── Parcelas: data + valor ── */}
             <div style={{ marginTop: "10px", padding: "12px 14px", background: "var(--surf2)", borderRadius: "8px", border: "1px solid var(--b2)" }}>
               <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", marginBottom: "10px", textTransform: "uppercase" }}>
-                {parcelas === 1 ? "Data de Pagamento" : `Datas de Pagamento (${parcelas}x)`}
+                {parcelas === 1 ? "Pagamento" : `Parcelas (${parcelas}x)`}
               </div>
+
+              {/* Cabeçalho */}
+              <div style={{ display: "grid", gridTemplateColumns: "60px 1fr 120px", gap: "8px", marginBottom: "6px", paddingBottom: "6px", borderBottom: "1px solid var(--b1)" }}>
+                {parcelas > 1 && <span style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px" }}></span>}
+                <span style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", gridColumn: parcelas === 1 ? "1 / span 2" : "2" }}>Data</span>
+                <span style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", textAlign: "right" }}>Valor (R$)</span>
+              </div>
+
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                {datasPgto.map((d, idx) => (
-                  <div key={idx} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                {parcelasForm.map((p, idx) => (
+                  <div key={idx} style={{ display: "grid", gridTemplateColumns: parcelas > 1 ? "60px 1fr 120px" : "1fr 120px", gap: "8px", alignItems: "center" }}>
                     {parcelas > 1 && (
-                      <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", width: "60px", flexShrink: 0 }}>
-                        {idx + 1}ª parcela
+                      <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>
+                        {idx + 1}ª
                       </span>
                     )}
                     <DateInput
-                      value={d}
+                      value={p.data}
                       onChange={v => idx === 0 ? handlePrimeiraDtPgto(v) : handleDtPgto(idx, v)}
                     />
-                    {parcelas > 1 && valorTotal > 0 && (
-                      <span style={{ fontSize: "11px", color: "var(--acc)", fontFamily: "'DM Mono', monospace", flexShrink: 0 }}>
-                        {formatBRL(valorTotal / parcelas)}
-                      </span>
-                    )}
+                    <CurrencyInput
+                      value={p.valor}
+                      onChange={v => handleValorParcela(idx, v)}
+                      placeholder="R$ 0,00"
+                      style={{ margin: 0 }}
+                    />
                   </div>
                 ))}
               </div>
+
+              {/* Aviso de soma ≠ total */}
+              {valorTotal > 0 && !parcelasOk && (
+                <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--warn, #f59e0b)", fontFamily: "'DM Mono', monospace" }}>
+                  ⚠ Soma das parcelas ({formatBRL(somaParcelas)}) difere do total ({formatBRL(valorTotal)})
+                </div>
+              )}
+
               {parcelas > 1 && (
                 <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "8px", fontFamily: "'DM Mono', monospace" }}>
-                  Altere a 1ª data para recalcular todas automaticamente
+                  Altere a 1ª data para recalcular todas · edite um valor para fixá-lo
                 </div>
               )}
             </div>
@@ -318,6 +405,7 @@ export default function NovoPedidoPage() {
             </div>
           </div>
 
+          {/* ── Resumo ── */}
           <div className="card">
             <div className="ct">Resumo do Pedido</div>
             <div className="sr"><div className="sl">ID do Pedido</div><div className="sv mono" style={{ color: "var(--acc)" }}>{proximoId}</div></div>
@@ -327,24 +415,32 @@ export default function NovoPedidoPage() {
             {parcelas > 1 && (
               <div className="sr"><div className="sl">Por Parcela</div><div className="sv">{formatBRL(valorTotal / parcelas)}</div></div>
             )}
-            {datasPgto.filter(d => d).length > 0 && (
+
+            {/* Vencimentos no resumo */}
+            {parcelasForm.filter(p => p.data).length > 0 && (
               <div style={{ marginTop: "12px", padding: "10px 12px", background: "var(--surf2)", borderRadius: "8px", border: "1px solid var(--b2)" }}>
                 <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", marginBottom: "8px", textTransform: "uppercase" }}>Vencimentos</div>
-                {datasPgto.filter(d => d).map((d, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: "4px" }}>
-                    <span style={{ color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>
-                      {parcelas > 1 ? `${i + 1}ª` : "Pagamento"}
+                {parcelasForm.filter(p => p.data).map((p, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: "4px", gap: "8px" }}>
+                    <span style={{ color: "var(--t3)", fontFamily: "'DM Mono', monospace", flexShrink: 0 }}>
+                      {parcelas > 1 ? `${i + 1}ª` : "Pgto"}
                     </span>
                     <span style={{ color: "var(--t1)", fontFamily: "'DM Mono', monospace" }}>
-                      {new Date(d + "T12:00:00").toLocaleDateString("pt-BR")}
-                      {parcelas > 1 && valorTotal > 0 && (
-                        <span style={{ color: "var(--acc)", marginLeft: "8px" }}>{formatBRL(valorTotal / parcelas)}</span>
-                      )}
+                      {new Date(p.data + "T12:00:00").toLocaleDateString("pt-BR")}
+                    </span>
+                    <span style={{ color: "var(--acc)", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>
+                      {formatBRL(p.valor)}
                     </span>
                   </div>
                 ))}
+                {valorTotal > 0 && !parcelasOk && (
+                  <div style={{ marginTop: "6px", fontSize: "10px", color: "var(--warn, #f59e0b)", fontFamily: "'DM Mono', monospace" }}>
+                    ⚠ Soma difere {formatBRL(difParcelas)}
+                  </div>
+                )}
               </div>
             )}
+
             {clienteId && tab && tab.min > 0 && valorTotal < tab.min && (
               <div className="al al-w" style={{ marginTop: "10px" }}>⚠ Pedido abaixo do mínimo de {formatBRL(tab.min)}</div>
             )}
@@ -354,6 +450,7 @@ export default function NovoPedidoPage() {
           </div>
         </div>
 
+        {/* ── Itens ── */}
         <div className="card">
           <div className="ct">
             Itens do Pedido
