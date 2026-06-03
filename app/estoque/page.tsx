@@ -14,14 +14,27 @@ const MEDIDAS_PADRAO = [
   { label: "Personalizado",           larg: 0,    alt: 0    },
 ];
 
+interface FormState {
+  produto_id: string;
+  chapas: string;
+  larg_chapa: string;
+  alt_chapa: string;
+  custo_m2: string;
+}
+
+const FORM_VAZIO: FormState = { produto_id: "", chapas: "", larg_chapa: "", alt_chapa: "", custo_m2: "" };
+
 export default function EstoquePage() {
   const [estoque, setEstoque]   = useState<EstoqueItem[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [loading, setLoading]   = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [form, setForm]         = useState({ produto_id: "", chapas: "", larg_chapa: "", alt_chapa: "", custo_m2: "" });
+  const [form, setForm]         = useState<FormState>(FORM_VAZIO);
   const [medidaPadrao, setMedidaPadrao] = useState("");
+
+  // Edição
+  const [editItem, setEditItem] = useState<EstoqueItem | null>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -37,7 +50,7 @@ export default function EstoquePage() {
   }
 
   const prodSelecionado = produtos.find(p => String(p.id) === form.produto_id) || null;
-  const itemExistente   = estoque.find(e => String(e.produto_id) === form.produto_id) || null;
+  const itemExistente   = !editItem ? estoque.find(e => String(e.produto_id) === form.produto_id) || null : null;
 
   const chapasNum  = parseInt(form.chapas || "0");
   const largMm     = parseFloat(form.larg_chapa || "0");
@@ -59,39 +72,90 @@ export default function EstoquePage() {
   }
 
   function resetForm() {
-    setForm({ produto_id: "", chapas: "", larg_chapa: "", alt_chapa: "", custo_m2: "" });
+    setForm(FORM_VAZIO);
     setMedidaPadrao("");
+    setEditItem(null);
+  }
+
+  function abrirNovo() {
+    resetForm();
+    setShowForm(true);
+  }
+
+  function abrirEditar(item: EstoqueItem) {
+    // Tenta reconstruir largura/altura a partir do m2_por_chapa — usa campo direto se disponível
+    // Deixa o usuário corrigir as dimensões manualmente
+    setEditItem(item);
+    setForm({
+      produto_id: String(item.produto_id),
+      chapas:     String(item.chapas_saldo),
+      larg_chapa: "",
+      alt_chapa:  "",
+      custo_m2:   String(item.custo_m2),
+    });
+    setMedidaPadrao("");
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function excluir(item: EstoqueItem) {
+    const nome = item.produtos?.nome ?? item.cod;
+    if (!confirm(`Excluir "${nome}" do estoque permanentemente? Esta ação não pode ser desfeita.`)) return;
+    await supabase.from("estoque").delete().eq("id", item.id);
+    load();
   }
 
   async function handleEntrada() {
-    if (!form.produto_id) { alert("Selecione o produto."); return; }
-    if (chapasNum <= 0)   { alert("Informe a quantidade de chapas."); return; }
-    if (m2PorChapa <= 0)  { alert("Informe as medidas da chapa."); return; }
+    if (!editItem && !form.produto_id) { alert("Selecione o produto."); return; }
+    if (chapasNum <= 0)  { alert("Informe a quantidade de chapas."); return; }
+
+    // Na edição, m²/chapa pode vir do campo ou do item existente
+    const m2ChapFinal = m2PorChapa > 0 ? m2PorChapa : (editItem ? Number(editItem.m2_por_chapa) : 0);
+    if (m2ChapFinal <= 0) { alert("Informe as medidas da chapa."); return; }
+
+    const m2Final = parseFloat((chapasNum * m2ChapFinal).toFixed(4));
 
     setSalvando(true);
 
-    if (itemExistente) {
+    if (editItem) {
+      // Edição: substitui os valores do item pelo que o usuário digitou
+      const novoCusto = custoM2 > 0 ? custoM2 : Number(editItem.custo_m2);
+      const { error } = await supabase.from("estoque").update({
+        chapas_entrada: chapasNum,
+        m2_entrada:     m2Final,
+        chapas_saldo:   chapasNum,
+        m2_saldo:       m2Final,
+        m2_por_chapa:   m2ChapFinal,
+        custo_m2:       novoCusto,
+        updated_at:     new Date().toISOString(),
+      }).eq("id", editItem.id);
+
+      if (error) { alert("Erro: " + error.message); setSalvando(false); return; }
+
+    } else if (itemExistente) {
       const novoCusto = custoM2 > 0 ? custoM2 : Number(itemExistente.custo_m2);
       const { error } = await supabase.from("estoque").update({
         chapas_entrada: Number(itemExistente.chapas_entrada) + chapasNum,
-        m2_entrada:     parseFloat((Number(itemExistente.m2_entrada) + m2Preview).toFixed(4)),
+        m2_entrada:     parseFloat((Number(itemExistente.m2_entrada) + m2Final).toFixed(4)),
         chapas_saldo:   Number(itemExistente.chapas_saldo) + chapasNum,
-        m2_saldo:       parseFloat((Number(itemExistente.m2_saldo) + m2Preview).toFixed(4)),
-        m2_por_chapa:   m2PorChapa,
+        m2_saldo:       parseFloat((Number(itemExistente.m2_saldo) + m2Final).toFixed(4)),
+        m2_por_chapa:   m2ChapFinal,
         custo_m2:       novoCusto,
         updated_at:     new Date().toISOString(),
       }).eq("id", itemExistente.id);
+
       if (error) { alert("Erro: " + error.message); setSalvando(false); return; }
 
     } else {
       if (!prodSelecionado) { setSalvando(false); return; }
       const { error } = await supabase.from("estoque").insert([{
         produto_id: prodSelecionado.id, cod: prodSelecionado.cod,
-        chapas_entrada: chapasNum, m2_entrada: m2Preview,
-        m2_consumido: 0, m2_saldo: m2Preview, chapas_saldo: chapasNum,
-        m2_por_chapa: m2PorChapa, custo_m2: custoM2 || 0,
+        chapas_entrada: chapasNum, m2_entrada: m2Final,
+        m2_consumido: 0, m2_saldo: m2Final, chapas_saldo: chapasNum,
+        m2_por_chapa: m2ChapFinal, custo_m2: custoM2 || 0,
         updated_at: new Date().toISOString(),
       } as never]);
+
       if (error) { alert("Erro: " + error.message); setSalvando(false); return; }
     }
 
@@ -125,11 +189,18 @@ export default function EstoquePage() {
     fontWeight: 600, background: "var(--surf3)", border: "1px solid var(--b1)", cursor: "default",
   };
 
+  const btnExcluir: React.CSSProperties = {
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+    width: "28px", height: "28px", borderRadius: "6px", background: "transparent",
+    border: "1px solid var(--b2)", color: "var(--t3)", fontSize: "13px",
+    cursor: "pointer", transition: "all 0.15s",
+  };
+
   return (
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Estoque · Chapas</div>
-        <button className="btn bp sm" onClick={() => { setShowForm(v => !v); if (showForm) resetForm(); }}>
+        <button className="btn bp sm" onClick={() => { if (showForm) { setShowForm(false); resetForm(); } else abrirNovo(); }}>
           {showForm ? "✕ Cancelar" : "+ Entrada de Estoque"}
         </button>
       </div>
@@ -138,20 +209,30 @@ export default function EstoquePage() {
 
         {showForm && (
           <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "20px 24px", marginBottom: "20px" }}>
-            <div style={{ fontSize: "12px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em", marginBottom: "16px" }}>ENTRADA DE ESTOQUE</div>
+            <div style={{ fontSize: "12px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em", marginBottom: "16px" }}>
+              {editItem ? `EDITANDO: ${editItem.produtos?.nome ?? editItem.cod}` : "ENTRADA DE ESTOQUE"}
+            </div>
 
-            {/* Produto + qtd */}
+            {/* Produto + qtd — bloqueado na edição */}
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px", marginBottom: "12px" }}>
               <div>
                 <label style={lbl}>Produto *</label>
-                <select style={{ ...inp, cursor: "pointer" }} value={form.produto_id} onChange={e => handleProduto(e.target.value)}>
-                  <option value="">Selecione o produto...</option>
-                  {produtos.map(p => <option key={p.id} value={String(p.id)}>{p.cod} — {p.nome}</option>)}
-                </select>
+                {editItem ? (
+                  <div style={ro}>{editItem.produtos?.nome ?? editItem.cod}</div>
+                ) : (
+                  <select style={{ ...inp, cursor: "pointer" }} value={form.produto_id} onChange={e => handleProduto(e.target.value)}>
+                    <option value="">Selecione o produto...</option>
+                    {produtos.map(p => <option key={p.id} value={String(p.id)}>{p.cod} — {p.nome}</option>)}
+                  </select>
+                )}
               </div>
               <div>
-                <label style={lbl}>Quantidade de Chapas *</label>
-                <input style={inp} type="number" min="1" placeholder="Ex: 10" value={form.chapas} onChange={e => setForm(f => ({ ...f, chapas: e.target.value }))} />
+                <label style={lbl}>{editItem ? "Chapas (novo total) *" : "Quantidade de Chapas *"}</label>
+                <input style={inp} type="number" min="1"
+                  placeholder={editItem ? `Atual: ${editItem.chapas_saldo}` : "Ex: 10"}
+                  value={form.chapas}
+                  onChange={e => setForm(f => ({ ...f, chapas: e.target.value }))}
+                />
               </div>
             </div>
 
@@ -164,7 +245,7 @@ export default function EstoquePage() {
               </select>
             </div>
 
-            {/* Dimensões + m²/chapa calculado + custo + total */}
+            {/* Dimensões + calculados + custo */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: "12px", marginBottom: "12px" }}>
               <div>
                 <label style={lbl}>Largura (mm) *</label>
@@ -182,7 +263,13 @@ export default function EstoquePage() {
               </div>
               <div>
                 <label style={lbl}>m² / Chapa</label>
-                <div style={ro}>{m2PorChapa > 0 ? `${m2PorChapa.toFixed(4)} m²` : "—"}</div>
+                <div style={ro}>
+                  {m2PorChapa > 0
+                    ? `${m2PorChapa.toFixed(4)} m²`
+                    : editItem
+                      ? `${Number(editItem.m2_por_chapa).toFixed(4)} m² (atual)`
+                      : "—"}
+                </div>
               </div>
               <div>
                 <label style={lbl}>Custo por m² (R$)</label>
@@ -190,12 +277,35 @@ export default function EstoquePage() {
                   value={form.custo_m2} onChange={e => setForm(f => ({ ...f, custo_m2: e.target.value }))} />
               </div>
               <div>
-                <label style={lbl}>m² Total a Adicionar</label>
-                <div style={ro}>{m2Preview > 0 ? formatM2(m2Preview) : "—"}</div>
+                <label style={lbl}>m² Total</label>
+                <div style={ro}>
+                  {m2Preview > 0
+                    ? formatM2(m2Preview)
+                    : editItem && chapasNum > 0
+                      ? formatM2(chapasNum * Number(editItem.m2_por_chapa))
+                      : "—"}
+                </div>
               </div>
             </div>
 
-            {itemExistente && (
+            {/* Info edição */}
+            {editItem && (
+              <div style={{ display: "flex", gap: "20px", padding: "10px 14px", background: "var(--surf2)", borderRadius: "8px", fontSize: "12px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", marginBottom: "12px" }}>
+                <span>Saldo atual: <strong style={{ color: "var(--acc)" }}>{formatM2(editItem.m2_saldo)}</strong></span>
+                <span>Chapas atuais: <strong style={{ color: "var(--t1)" }}>{editItem.chapas_saldo} un.</strong></span>
+                <span style={{ color: "var(--warn)", fontSize: "11px" }}>⚠ Edição substitui os valores atuais</span>
+              </div>
+            )}
+
+            {/* Info novo produto */}
+            {!editItem && !itemExistente && prodSelecionado && (
+              <div className="al al-i" style={{ marginBottom: "12px", fontSize: "12px" }}>
+                Produto sem entrada no estoque — será criado automaticamente.
+              </div>
+            )}
+
+            {/* Info produto com estoque existente */}
+            {!editItem && itemExistente && (
               <div style={{ display: "flex", gap: "20px", padding: "10px 14px", background: "var(--surf2)", borderRadius: "8px", fontSize: "12px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", marginBottom: "12px" }}>
                 <span>Saldo atual: <strong style={{ color: "var(--acc)" }}>{formatM2(itemExistente.m2_saldo)}</strong></span>
                 <span>Chapas: <strong style={{ color: "var(--t1)" }}>{itemExistente.chapas_saldo} un.</strong></span>
@@ -203,16 +313,10 @@ export default function EstoquePage() {
               </div>
             )}
 
-            {!itemExistente && prodSelecionado && (
-              <div className="al al-i" style={{ marginBottom: "12px", fontSize: "12px" }}>
-                Produto sem entrada no estoque — será criado automaticamente.
-              </div>
-            )}
-
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
               <button className="btn bg sm" onClick={() => { setShowForm(false); resetForm(); }}>Cancelar</button>
               <button className="btn bp sm" onClick={handleEntrada} disabled={salvando}>
-                {salvando ? "Salvando..." : "Registrar Entrada"}
+                {salvando ? "Salvando..." : editItem ? "Salvar Alterações" : "Registrar Entrada"}
               </button>
             </div>
           </div>
@@ -242,11 +346,12 @@ export default function EstoquePage() {
                     <th>Produto</th><th>Código</th><th>Chapas Entrada</th>
                     <th>m² Entrada</th><th>m² Consumido</th><th>Chapas Saldo</th>
                     <th>m² Saldo</th><th>Custo/m²</th><th>Valor Total</th><th>Nível</th>
+                    <th>Ações</th><th style={{ width: "40px" }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {estoque.length === 0 && (
-                    <tr><td colSpan={10} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>Nenhum item no estoque — registre uma entrada acima</td></tr>
+                    <tr><td colSpan={12} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>Nenhum item no estoque — registre uma entrada acima</td></tr>
                   )}
                   {estoque.map(e => {
                     const pct = Number(e.m2_entrada) > 0 ? (Number(e.m2_saldo) / Number(e.m2_entrada)) * 100 : 0;
@@ -272,6 +377,20 @@ export default function EstoquePage() {
                             {nivelChip(pct)}
                           </div>
                         </td>
+                        <td>
+                          <button className="btn bg xs" onClick={() => abrirEditar(e)}>Editar</button>
+                        </td>
+                        <td style={{ width: "40px", textAlign: "center" }}>
+                          <button
+                            title="Excluir item do estoque"
+                            onClick={() => excluir(e)}
+                            style={btnExcluir}
+                            onMouseEnter={e2 => { const b = e2.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
+                            onMouseLeave={e2 => { const b = e2.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
+                          >
+                            🗑
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -296,6 +415,9 @@ export default function EstoquePage() {
                       <div className="prg" style={{ height: "6px" }}>
                         <div className="prg-f" style={{ width: `${pct}%`, background: pct >= 60 ? "var(--ok)" : pct >= 30 ? "var(--warn)" : "var(--err)" }} />
                       </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "6px", marginTop: "10px" }}>
+                      <button className="btn bg xs" style={{ flex: 1 }} onClick={() => abrirEditar(e)}>Editar</button>
                     </div>
                   </div>
                 );
