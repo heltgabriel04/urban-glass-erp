@@ -159,9 +159,8 @@ export default function NovoPedidoPage() {
   }, [parcelas]);
 
   useEffect(() => {
-    setParcelasForm(prev =>
-      redistribuirParcelas(prev.map(p => ({ ...p, editado: false })), valorTotal)
-    );
+    // Redistribui apenas entre parcelas NAO fixadas — respeita valores editados manualmente
+    setParcelasForm(prev => redistribuirParcelas(prev, valorTotal));
   }, [valorTotal]);
 
   function handlePrimeiraDtPgto(data: string) {

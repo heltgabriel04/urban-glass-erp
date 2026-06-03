@@ -3,13 +3,16 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
-import { getPedidoById, avancarStatusPedido, registrarRecebimento, recalcularRecebido } from "@/services/pedidos.service";
-import { getLancamentosPorPedido, deletarLancamento } from "@/services/financeiro.service";
+import { getPedidoById, avancarStatusPedido, registrarRecebimento, recalcularRecebido, updatePedido } from "@/services/pedidos.service";
+import { getLancamentosPorPedido, deletarLancamento, createLancamento } from "@/services/financeiro.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
+import DateInput from "@/components/ui/DateInput";
+import CurrencyInput from "@/components/ui/CurrencyInput";
 import type { Pedido, Lancamento } from "@/types";
 import type { HistoricoOtimizador } from "@/services/otimizador.service";
+import { supabase } from "@/lib/supabase/client";
 
 const CHIP: Record<string, string> = {
   "Aguardando otimização":   "chip cy",
@@ -43,6 +46,21 @@ function parsearValor(formatted: string): number {
   return parseFloat(formatted.replace(/\./g, "").replace(",", ".")) || 0;
 }
 
+function addMeses(dateStr: string, meses: number): string {
+  if (!dateStr || dateStr.length < 10) return "";
+  const d = new Date(dateStr + "T12:00:00");
+  if (isNaN(d.getTime())) return "";
+  d.setMonth(d.getMonth() + meses);
+  if (isNaN(d.getTime())) return "";
+  return d.toISOString().split("T")[0];
+}
+
+interface ParcelaEdit {
+  data: string;
+  valor: number;
+  lancamento_id?: number; // id do lançamento existente no banco
+}
+
 export default function PedidoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -53,11 +71,25 @@ export default function PedidoDetalhe() {
   const [pedido, setPedido]           = useState<Pedido | null>(null);
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [otimizacoes, setOtimizacoes] = useState<HistoricoOtimizador[]>([]);
+  const [clientes, setClientes]       = useState<{ id: number; nome: string }[]>([]);
   const [loading, setLoading]         = useState(true);
   const [recebendo, setRecebendo]     = useState(false);
   const [valorRec, setValorRec]       = useState("");
   const [dataRec, setDataRec]         = useState(hoje());
   const [salvando, setSalvando]       = useState(false);
+
+  // ── Modal de edição ──────────────────────────────────────
+  const [editando, setEditando]       = useState(false);
+  const [editForm, setEditForm]       = useState({
+    cliente_id: 0,
+    dt_pedido: "",
+    dt_retirada: "",
+    forma_pgto: "",
+    conta: "",
+    parcelas: 1,
+    obs: "",
+  });
+  const [editParcelas, setEditParcelas] = useState<ParcelaEdit[]>([]);
 
   useEffect(() => { load(); }, [id]);
 
@@ -70,15 +102,113 @@ export default function PedidoDetalhe() {
 
   async function load() {
     setLoading(true);
-    const [data, lancs, otims] = await Promise.all([
+    const [data, lancs, otims, clis] = await Promise.all([
       getPedidoById(id),
       getLancamentosPorPedido(id),
       getOtimizacoesPorPedido(id),
+      supabase.from("clientes").select("id, nome").eq("ativo", true).order("nome").then(r => r.data ?? []),
     ]);
     setPedido(data);
     setLancamentos(lancs);
     setOtimizacoes(otims);
+    setClientes(clis as { id: number; nome: string }[]);
     setLoading(false);
+  }
+
+  function abrirEdicao() {
+    if (!pedido) return;
+    setEditForm({
+      cliente_id:  pedido.cliente_id,
+      dt_pedido:   pedido.dt_pedido,
+      dt_retirada: pedido.dt_retirada ?? "",
+      forma_pgto:  pedido.forma_pgto ?? "",
+      conta:       pedido.conta ?? "",
+      parcelas:    pedido.parcelas ?? 1,
+      obs:         pedido.obs ?? "",
+    });
+    // Monta parcelas a partir dos lançamentos "A Receber" existentes
+    const aReceber = lancamentos.filter(l => l.status === "A Receber").sort((a, b) =>
+      (a.vencimento ?? "").localeCompare(b.vencimento ?? "")
+    );
+    if (aReceber.length > 0) {
+      setEditParcelas(aReceber.map(l => ({
+        data: l.vencimento ?? "",
+        valor: l.valor,
+        lancamento_id: l.id,
+      })));
+    } else {
+      // Se não tem lançamentos, distribui igualmente
+      const n = pedido.parcelas ?? 1;
+      const valorParcela = parseFloat((pedido.valor_total / n).toFixed(2));
+      const datas = pedido.datas_pgto ?? [];
+      setEditParcelas(Array.from({ length: n }, (_, i) => ({
+        data: datas[i] ?? "",
+        valor: valorParcela,
+      })));
+    }
+    setEditando(true);
+  }
+
+  function handleEditParcelas(n: number) {
+    setEditForm(f => ({ ...f, parcelas: n }));
+    const primeiraData = editParcelas[0]?.data ?? "";
+    setEditParcelas(Array.from({ length: n }, (_, i) => ({
+      data: primeiraData ? (i === 0 ? primeiraData : addMeses(primeiraData, i)) : "",
+      valor: pedido ? parseFloat((pedido.valor_total / n).toFixed(2)) : 0,
+    })));
+  }
+
+  function handlePrimeiraDtEdit(data: string) {
+    setEditParcelas(prev => prev.map((p, i) => ({
+      ...p,
+      data: !data ? "" : (i === 0 ? data : addMeses(data, i)),
+    })));
+  }
+
+  async function salvarEdicao() {
+    if (!pedido) return;
+    setSalvando(true);
+
+    // Atualiza pedido
+    const result = await updatePedido(pedido.id, {
+      cliente_id:  editForm.cliente_id,
+      dt_pedido:   editForm.dt_pedido,
+      dt_retirada: editForm.dt_retirada || null,
+      forma_pgto:  editForm.forma_pgto,
+      conta:       editForm.conta,
+      parcelas:    editForm.parcelas,
+      obs:         editForm.obs,
+      datas_pgto:  editParcelas.map(p => p.data).filter(d => d),
+      valores_pgto: editParcelas.map(p => p.valor),
+    });
+
+    if (!result) { toast("Erro ao salvar pedido", "err"); setSalvando(false); return; }
+
+    // Atualiza lançamentos A Receber: remove os antigos e recria
+    const aReceber = lancamentos.filter(l => l.status === "A Receber");
+    for (const l of aReceber) {
+      await deletarLancamento(l.id);
+    }
+    for (let i = 0; i < editParcelas.length; i++) {
+      const p = editParcelas[i];
+      if (!p.data || p.valor <= 0) continue;
+      await createLancamento({
+        tipo: "Entrada",
+        descricao: editForm.parcelas === 1
+          ? `Recebimento · ${pedido.id}`
+          : `Parcela ${i + 1}/${editForm.parcelas} · ${pedido.id}`,
+        valor: p.valor,
+        status: "A Receber",
+        vencimento: p.data,
+        pedido_id: pedido.id,
+        cliente_id: editForm.cliente_id,
+      });
+    }
+
+    toast("Pedido atualizado");
+    setSalvando(false);
+    setEditando(false);
+    await load();
   }
 
   function handleValorChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -139,12 +269,14 @@ export default function PedidoDetalhe() {
   const podeRomaneio = ["Finalizado","Entregue"].includes(pedido.status);
   const temOtimizacao = otimizacoes.length > 0;
   const ultimaOtim   = otimizacoes[0] ?? null;
-
-  // Verifica se todos os itens são vidro do cliente
   const todosVidroCliente = temItens && (pedido.itens_pedido ?? []).every(i => (i as any).vidro_cliente === true);
+  const bloqueadoSemOtim  = pedido.status === "Aguardando otimização" && !temOtimizacao && !todosVidroCliente;
 
-  // Bloqueia somente se status é "Aguardando otimização" E não tem otimização E não é 100% vidro do cliente
-  const bloqueadoSemOtim = pedido.status === "Aguardando otimização" && !temOtimizacao && !todosVidroCliente;
+  const fc: React.CSSProperties = {
+    background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: "6px",
+    padding: "9px 12px", color: "var(--t1)", fontSize: "13px",
+    outline: "none", width: "100%", boxSizing: "border-box",
+  };
 
   return (
     <>
@@ -171,6 +303,9 @@ export default function PedidoDetalhe() {
           </div>
           <span className={CHIP[pedido.status] ?? "chip cgr"}>{pedido.status}</span>
 
+          {/* Botão Editar */}
+          <button className="btn bg sm" onClick={abrirEdicao}>✏ Editar</button>
+
           {temItens && !todosVidroCliente && (
             <a href={"/otimizador?pedido=" + pedido.id} className="btn bg sm">◈ Otimizar Corte</a>
           )}
@@ -192,16 +327,13 @@ export default function PedidoDetalhe() {
               fontWeight:700, cursor: podeRomaneio ? "pointer" : "default",
               opacity: podeRomaneio ? 1 : 0.35, transition:"all 0.2s",
             }}
-          >
-            R
-          </button>
+          >R</button>
 
           {podeAvancar && (
             <button
               className="btn bp sm"
               onClick={handleAvancar}
               disabled={salvando}
-              title={bloqueadoSemOtim ? "Realize a otimização de corte antes de avançar" : ""}
               style={bloqueadoSemOtim ? { opacity:0.45, cursor:"not-allowed" } : {}}
             >
               {salvando ? "Salvando..." : bloqueadoSemOtim ? "⚠ Otimização pendente" : "Avançar Status →"}
@@ -211,20 +343,16 @@ export default function PedidoDetalhe() {
 
         <div className="con no-print" style={{ display:"flex", flexDirection:"column", gap:"20px" }}>
 
-          {/* Alerta otimização pendente */}
           {bloqueadoSemOtim && (
             <div style={{ background:"rgba(245,158,11,.1)", border:"1px solid var(--warn)", borderRadius:"10px", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px" }}>
               <div>
                 <div style={{ fontSize:"13px", fontWeight:700, color:"var(--warn)", marginBottom:"4px" }}>⚠ Otimização de corte pendente</div>
                 <div style={{ fontSize:"12px", color:"var(--t3)" }}>Este pedido não pode avançar para produção sem um plano de corte gerado.</div>
               </div>
-              <a href={"/otimizador?pedido=" + pedido.id} className="btn bp sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>
-                ◈ Otimizar Agora
-              </a>
+              <a href={"/otimizador?pedido=" + pedido.id} className="btn bp sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>◈ Otimizar Agora</a>
             </div>
           )}
 
-          {/* Badge vidro do cliente */}
           {todosVidroCliente && pedido.status === "Aguardando otimização" && (
             <div style={{ background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.3)", borderRadius:"10px", padding:"12px 18px", display:"flex", alignItems:"center", gap:"10px" }}>
               <span style={{ fontSize:"16px" }}>📦</span>
@@ -235,7 +363,6 @@ export default function PedidoDetalhe() {
             </div>
           )}
 
-          {/* Card otimização salva */}
           {temOtimizacao && ultimaOtim && (
             <div style={{ background:"rgba(16,185,129,.06)", border:"1px solid rgba(16,185,129,.3)", borderRadius:"10px", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px" }}>
               <div style={{ display:"flex", gap:"24px", alignItems:"center" }}>
@@ -269,7 +396,7 @@ export default function PedidoDetalhe() {
                       <div style={{ width:"26px", height:"26px", borderRadius:"50%", background: done ? "var(--ok)" : current ? "var(--acc)" : "var(--surf3)", border: current ? "2px solid var(--acc)" : "2px solid transparent", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"10px", fontWeight:700, color: done || current ? "#000" : "var(--t3)", flexShrink:0 }}>
                         {done ? "✓" : i + 1}
                       </div>
-                      <div style={{ fontSize:"9px", textAlign:"center", lineHeight:1.3, color: current ? "var(--acc)" : done ? "var(--ok)" : "var(--t3)", fontWeight: current ? 700 : 500, fontFamily:"'DM Mono', monospace", letterSpacing:"0.02em", wordBreak:"break-word" }}>
+                      <div style={{ fontSize:"9px", textAlign:"center", lineHeight:1.3, color: current ? "var(--acc)" : done ? "var(--ok)" : "var(--t3)", fontWeight: current ? 700 : 500, fontFamily:"'DM Mono', monospace", wordBreak:"break-word" }}>
                         {step}
                       </div>
                     </div>
@@ -318,17 +445,18 @@ export default function PedidoDetalhe() {
                   <div style={{ display:"flex", flexDirection:"column", gap:"5px" }}>
                     {lancamentos.map(l => (
                       <div key={l.id} style={{ display:"flex", alignItems:"center", gap:"8px", background:"var(--surf2)", borderRadius:"6px", padding:"8px 10px" }}>
+                        <span style={{ fontSize:"11px", color: l.status === "Pago" ? "var(--ok)" : "var(--t3)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>
+                          {l.status === "Pago" ? "✓ Pago" : "⏳ A receber"}
+                        </span>
                         <span style={{ fontSize:"13px", color:"var(--ok)", fontFamily:"'DM Mono', monospace", fontWeight:600, flex:1 }}>{formatBRL(l.valor)}</span>
                         <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono', monospace" }}>{formatDate(l.vencimento)}</span>
                         <button
                           title="Remover"
                           onClick={() => handleDeletarLancamento(l.id)}
                           style={{ background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", fontSize:"11px", cursor:"pointer", padding:"3px 7px", transition:"all 0.15s", lineHeight:1 }}
-                          onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
-                          onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
-                        >
-                          🗑
-                        </button>
+                          onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="rgba(244,63,94,.15)"; b.style.borderColor="var(--err)"; b.style.color="var(--err)"; }}
+                          onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="transparent"; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
+                        >🗑</button>
                       </div>
                     ))}
                   </div>
@@ -393,10 +521,7 @@ export default function PedidoDetalhe() {
                         <td className="mono">{formatBRL(item.valor_m2)}</td>
                         <td className="mono">{item.lapidacao > 0 ? formatBRL(item.lapidacao) : <span style={{ color:"var(--t3)" }}>—</span>}</td>
                         <td style={{ textAlign:"center" }}>
-                          {(item as any).vidro_cliente
-                            ? <span style={{ color:"var(--warn)", fontSize:"13px" }} title="Vidro do cliente">📦</span>
-                            : <span style={{ color:"var(--t3)" }}>—</span>
-                          }
+                          {(item as any).vidro_cliente ? <span style={{ color:"var(--warn)" }}>📦</span> : <span style={{ color:"var(--t3)" }}>—</span>}
                         </td>
                         <td className="mono" style={{ color:"var(--acc)", fontWeight:600 }}>{formatBRL(item.subtotal)}</td>
                       </tr>
@@ -407,6 +532,112 @@ export default function PedidoDetalhe() {
             )}
           </div>
         </div>
+
+        {/* ── MODAL EDIÇÃO ── */}
+        {editando && (
+          <div className="mov open" onClick={e => e.target === e.currentTarget && setEditando(false)}>
+            <div className="mod" style={{ width:"620px", maxHeight:"90vh", overflowY:"auto" }}>
+              <div className="mhd">
+                <div className="mtit">Editar Pedido · {pedido.id}</div>
+                <button className="mcl" onClick={() => setEditando(false)}>✕</button>
+              </div>
+
+              <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
+
+                {/* Cliente */}
+                <div className="fg">
+                  <label className="fl">Cliente</label>
+                  <select style={fc} value={editForm.cliente_id} onChange={e => setEditForm(f => ({ ...f, cliente_id: Number(e.target.value) }))}>
+                    {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                  </select>
+                </div>
+
+                {/* Datas */}
+                <div className="fr">
+                  <div className="fg"><label className="fl">Data do Pedido</label><DateInput value={editForm.dt_pedido} onChange={v => setEditForm(f => ({ ...f, dt_pedido: v }))} /></div>
+                  <div className="fg"><label className="fl">Previsão Retirada</label><DateInput value={editForm.dt_retirada} onChange={v => setEditForm(f => ({ ...f, dt_retirada: v }))} /></div>
+                </div>
+
+                {/* Pagamento */}
+                <div className="fr">
+                  <div className="fg">
+                    <label className="fl">Forma de Pagamento</label>
+                    <select style={fc} value={editForm.forma_pgto} onChange={e => setEditForm(f => ({ ...f, forma_pgto: e.target.value }))}>
+                      <option value="">Selecione...</option>
+                      {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(o => <option key={o}>{o}</option>)}
+                    </select>
+                  </div>
+                  <div className="fg">
+                    <label className="fl">Conta</label>
+                    <select style={fc} value={editForm.conta} onChange={e => setEditForm(f => ({ ...f, conta: e.target.value }))}>
+                      <option value="">Selecione...</option>
+                      {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(o => <option key={o}>{o}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Parcelas */}
+                <div className="fg">
+                  <label className="fl">Parcelas</label>
+                  <select style={fc} value={editForm.parcelas} onChange={e => handleEditParcelas(Number(e.target.value))}>
+                    {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
+                  </select>
+                </div>
+
+                {/* Datas e valores das parcelas */}
+                <div style={{ padding:"12px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)" }}>
+                  <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"10px", textTransform:"uppercase" }}>
+                    {editForm.parcelas === 1 ? "Pagamento" : `Parcelas (${editForm.parcelas}x)`}
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns: editForm.parcelas > 1 ? "50px 1fr 130px" : "1fr 130px", gap:"8px", marginBottom:"6px", paddingBottom:"6px", borderBottom:"1px solid var(--b1)" }}>
+                    {editForm.parcelas > 1 && <span />}
+                    <span style={{ fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px" }}>Data</span>
+                    <span style={{ fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px", textAlign:"right" }}>Valor (R$)</span>
+                  </div>
+                  {editParcelas.map((p, idx) => (
+                    <div key={idx} style={{ display:"grid", gridTemplateColumns: editForm.parcelas > 1 ? "50px 1fr 130px" : "1fr 130px", gap:"8px", alignItems:"center", marginBottom:"6px" }}>
+                      {editForm.parcelas > 1 && (
+                        <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>{idx + 1}ª</span>
+                      )}
+                      <DateInput
+                        value={p.data}
+                        onChange={v => {
+                          if (idx === 0) handlePrimeiraDtEdit(v);
+                          else setEditParcelas(prev => prev.map((x, i) => i === idx ? { ...x, data: v } : x));
+                        }}
+                      />
+                      <CurrencyInput
+                        value={p.valor}
+                        onChange={v => setEditParcelas(prev => prev.map((x, i) => i === idx ? { ...x, valor: v } : x))}
+                        placeholder="R$ 0,00"
+                        style={{ margin: 0 }}
+                      />
+                    </div>
+                  ))}
+                  <div style={{ fontSize:"10px", color:"var(--t3)", marginTop:"4px", fontFamily:"'DM Mono',monospace" }}>
+                    Total das parcelas: <strong style={{ color: "var(--acc)" }}>{formatBRL(editParcelas.reduce((a, p) => a + p.valor, 0))}</strong>
+                    {" · "}Valor do pedido: <strong>{formatBRL(pedido.valor_total)}</strong>
+                  </div>
+                </div>
+
+                {/* Observações */}
+                <div className="fg">
+                  <label className="fl">Observações</label>
+                  <textarea style={{ ...fc, minHeight:"80px", resize:"vertical", fontFamily:"'Inter',sans-serif" }}
+                    value={editForm.obs} onChange={e => setEditForm(f => ({ ...f, obs: e.target.value }))}
+                    placeholder="Observações do pedido..." />
+                </div>
+
+                <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end", paddingTop:"4px" }}>
+                  <button className="btn bg" onClick={() => setEditando(false)}>Cancelar</button>
+                  <button className="btn bp" onClick={salvarEdicao} disabled={salvando}>
+                    {salvando ? "Salvando..." : "Salvar Alterações"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ─── ROMANEIO PDF ─── */}
         <div className="print-area" style={{ padding:"20px 28px", fontFamily:"Arial, sans-serif", color:"#1a1a2e", background:"white", width:"210mm", minHeight:"auto", boxSizing:"border-box" }}>
@@ -513,7 +744,7 @@ export default function PedidoDetalhe() {
   );
 }
 
-function Row({ label, value, accent, color }: { label: string; value: string | number; accent?: boolean; color?: string; }) {
+function Row({ label, value, accent, color }: { label: string; value: string | number; accent?: boolean; color?: string }) {
   return (
     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:"12px" }}>
       <span style={{ fontSize:"13px", color:"var(--t3)", flexShrink:0 }}>{label}</span>
