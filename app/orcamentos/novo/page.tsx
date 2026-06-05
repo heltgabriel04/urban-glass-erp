@@ -358,19 +358,25 @@ export default function NovoOrcamentoPage() {
             return (
               <div key={i} style={{ marginBottom: "10px" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "2fr 70px 70px 50px 90px 90px 90px 36px", gap: "6px", alignItems: "center" }}>
-                  <select
-                    className="fc"
-                    value={item.produto_id || ""}
-                    onChange={e => updItem(i, "produto_id", Number(e.target.value))}
-                    tabIndex={i * 4 + 1}
-                  >
-                    <option value="">Selecione o produto...</option>
-                    {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                  </select>
+                  <AutocompleteInput
+                    options={produtos.map(p => ({ id: p.id, label: p.nome }))}
+                     value={item.produto_id}
+                     onChange={(id, label) => {
+                     const prod = produtos.find(p => p.id === id);
+                     setItens(items => items.map((it, idx) => idx !== i ? it : {
+                     ...it,
+                     produto_id: id,
+                     produto_nome: label,
+                     valor_m2: prod?.valor ?? it.valor_m2,
+                    }));
+               }}
+               placeholder="Buscar produto..."
+               tabIndex={i * 4 + 1}
+/>
                   <input
                     className="fc"
                     type="number"
-                    ref={el => { largRefs.current[i] = el; }}
+                s    ref={el => { largRefs.current[i] = el; }}
                     value={item.largura || ""}
                     onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)}
                     onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); altRefs.current[i]?.focus(); } }}

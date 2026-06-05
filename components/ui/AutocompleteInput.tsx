@@ -14,16 +14,16 @@ interface Props {
   onChange: (id: number, label: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  tabIndex?: number;
 }
 
-export default function AutocompleteInput({ options, value, onChange, placeholder = "Buscar...", disabled }: Props) {
-  const [query, setQuery]       = useState("");
-  const [aberto, setAberto]     = useState(false);
+export default function AutocompleteInput({ options, value, onChange, placeholder = "Buscar...", disabled, tabIndex }: Props) {
+  const [query, setQuery]             = useState("");
+  const [aberto, setAberto]           = useState(false);
   const [highlighted, setHighlighted] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef  = useRef<HTMLUListElement>(null);
 
-  // Sincroniza label quando value muda externamente
   useEffect(() => {
     if (value === null) { setQuery(""); return; }
     const opt = options.find(o => o.id === value);
@@ -52,7 +52,6 @@ export default function AutocompleteInput({ options, value, onChange, placeholde
   }
 
   function handleBlur() {
-    // Delay para permitir click na lista
     setTimeout(() => setAberto(false), 150);
   }
 
@@ -65,6 +64,7 @@ export default function AutocompleteInput({ options, value, onChange, placeholde
         value={query}
         placeholder={placeholder}
         disabled={disabled}
+        tabIndex={tabIndex}
         onChange={e => { setQuery(e.target.value); setAberto(true); setHighlighted(0); }}
         onFocus={() => setAberto(true)}
         onBlur={handleBlur}
