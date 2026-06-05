@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
@@ -41,21 +41,37 @@ export default function NovoOrcamentoPage() {
   const [tabelas, setTabelas]     = useState<TabelaPreco[]>([]);
   const [proximoId, setProximoId] = useState("");
 
-  const [clienteId, setClienteId]       = useState<number | null>(null);
-  const [dtOrcamento, setDtOrcamento]   = useState(new Date().toISOString().split("T")[0]);
-  const [dtValidade, setDtValidade]     = useState("");
-  const [dtEntrega, setDtEntrega]       = useState("");
-  const [formaPgto, setFormaPgto]       = useState("");
-  const [conta, setConta]               = useState("");
-  const [parcelas, setParcelas]         = useState(1);
-  const [frete, setFrete]               = useState("Retirada");
-  const [obs, setObs]                   = useState("");
-  const [desconto, setDesconto]         = useState(0);
-  const [itens, setItens]               = useState<ItemForm[]>([{ ...ITEM_VAZIO }]);
-  const [salvando, setSalvando]         = useState(false);
+  const [clienteId, setClienteId]     = useState<number | null>(null);
+  const [dtOrcamento, setDtOrcamento] = useState(new Date().toISOString().split("T")[0]);
+  const [dtValidade, setDtValidade]   = useState("");
+  const [dtEntrega, setDtEntrega]     = useState("");
+  const [formaPgto, setFormaPgto]     = useState("");
+  const [conta, setConta]             = useState("");
+  const [parcelas, setParcelas]       = useState(1);
+  const [frete, setFrete]             = useState("Retirada");
+  const [obs, setObs]                 = useState("");
+  const [desconto, setDesconto]       = useState(0);
+  const [itens, setItens]             = useState<ItemForm[]>([{ ...ITEM_VAZIO }]);
+  const [salvando, setSalvando]       = useState(false);
   const [totalPedidoInput, setTotalPedidoInput] = useState(0);
 
+  // refs para foco: largRef[i], altRef[i], qtdRef[i]
+  const largRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const altRefs  = useRef<(HTMLInputElement | null)[]>([]);
+  const qtdRefs  = useRef<(HTMLInputElement | null)[]>([]);
+  // índice da linha recém criada que precisa de foco
+  const focarLinha = useRef<number | null>(null);
+
   useEffect(() => { load(); }, []);
+
+  // Sempre que itens crescer e houver linha pendente de foco, aplica
+  useEffect(() => {
+    if (focarLinha.current !== null) {
+      const idx = focarLinha.current;
+      focarLinha.current = null;
+      setTimeout(() => largRefs.current[idx]?.focus(), 30);
+    }
+  }, [itens.length]);
 
   async function load() {
     const [clis, prods, tabs, pid] = await Promise.all([
@@ -84,7 +100,34 @@ export default function NovoOrcamentoPage() {
     return tabelas.find(t => cli.tabela === "g" ? t.tipo === "Grandes Clientes" : t.tipo === "Padrão") || tabelas[0] || null;
   }
 
-  function addItem() { setItens(i => [...i, { ...ITEM_VAZIO }]); }
+  function addItemAposLinha(i: number) {
+    const atual = itens[i];
+    const novo: ItemForm = {
+      ...ITEM_VAZIO,
+      produto_id: atual.produto_id,
+      produto_nome: atual.produto_nome,
+      valor_m2: atual.valor_m2,
+    };
+    focarLinha.current = i + 1;
+    setItens(items => [
+      ...items.slice(0, i + 1),
+      novo,
+      ...items.slice(i + 1),
+    ]);
+  }
+
+  function addItem() {
+    const ultimo = itens[itens.length - 1];
+    const novo: ItemForm = {
+      ...ITEM_VAZIO,
+      produto_id: ultimo?.produto_id ?? null,
+      produto_nome: ultimo?.produto_nome ?? "",
+      valor_m2: ultimo?.valor_m2 ?? 0,
+    };
+    focarLinha.current = itens.length;
+    setItens(i => [...i, novo]);
+  }
+
   function remItem(i: number) { setItens(items => items.filter((_, idx) => idx !== i)); }
 
   function calcM2Item(item: ItemForm): number {
@@ -137,6 +180,28 @@ export default function NovoOrcamentoPage() {
       valor_m2: parseFloat(valorM2Geral.toFixed(4)),
     })));
     setTotalPedidoInput(0);
+  }
+
+  // Navegação por teclado nos campos de medida
+  function handleLargKey(e: React.KeyboardEvent, i: number) {
+    if (e.key === "Enter" || e.key === "Tab") {
+      if (e.key === "Enter") e.preventDefault();
+      altRefs.current[i]?.focus();
+    }
+  }
+
+  function handleAltKey(e: React.KeyboardEvent, i: number) {
+    if (e.key === "Enter" || e.key === "Tab") {
+      if (e.key === "Enter") e.preventDefault();
+      qtdRefs.current[i]?.focus();
+    }
+  }
+
+  function handleQtdKey(e: React.KeyboardEvent, i: number) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addItemAposLinha(i);
+    }
   }
 
   const m2Total       = itens.reduce((a, i) => a + calcM2Item(i), 0);
@@ -292,7 +357,12 @@ export default function NovoOrcamentoPage() {
         <div className="card">
           <div className="ct">
             Itens do Orçamento
-            <button className="btn bp sm" onClick={addItem}>+ Item</button>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>
+                Enter avança · Enter em Qtd cria nova linha
+              </span>
+              <button className="btn bp sm" onClick={addItem}>+ Item</button>
+            </div>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "2fr 70px 70px 50px 90px 90px 90px 36px", gap: "6px", padding: "6px 0", borderBottom: "1px solid var(--b1)", marginBottom: "8px" }}>
@@ -302,9 +372,9 @@ export default function NovoOrcamentoPage() {
           </div>
 
           {itens.map((item, i) => {
-            const m2      = calcM2Item(item);
-            const sub     = calcSubtotal(item);
-            const m2unit  = (() => { const l = arredondarParaMultiplo50(item.largura); const a = arredondarParaMultiplo50(item.altura); return (l/1000)*(a/1000); })();
+            const m2     = calcM2Item(item);
+            const sub    = calcSubtotal(item);
+            const m2unit = (() => { const l = arredondarParaMultiplo50(item.largura); const a = arredondarParaMultiplo50(item.altura); return (l/1000)*(a/1000); })();
             const unitVal = m2unit > 0 ? item.valor_m2 * m2unit : 0;
             const lArred  = arredondarParaMultiplo50(item.largura);
             const aArred  = arredondarParaMultiplo50(item.altura);
@@ -313,13 +383,41 @@ export default function NovoOrcamentoPage() {
             return (
               <div key={i} style={{ marginBottom: "10px" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "2fr 70px 70px 50px 90px 90px 90px 36px", gap: "6px", alignItems: "center" }}>
-                  <select className="fc" value={item.produto_id || ""} onChange={e => updItem(i, "produto_id", Number(e.target.value))}>
+                  <select
+                    className="fc"
+                    value={item.produto_id || ""}
+                    onChange={e => updItem(i, "produto_id", Number(e.target.value))}
+                  >
                     <option value="">Selecione o produto...</option>
                     {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
                   </select>
-                  <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
-                  <input className="fc" type="number" value={item.altura  || ""} onChange={e => updItem(i, "altura",  parseInt(e.target.value) || 0)} placeholder="0" />
-                  <input className="fc" type="number" value={item.quantidade} onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
+                  <input
+                    className="fc"
+                    type="number"
+                    ref={el => { largRefs.current[i] = el; }}
+                    value={item.largura || ""}
+                    onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)}
+                    onKeyDown={e => handleLargKey(e, i)}
+                    placeholder="0"
+                  />
+                  <input
+                    className="fc"
+                    type="number"
+                    ref={el => { altRefs.current[i] = el; }}
+                    value={item.altura || ""}
+                    onChange={e => updItem(i, "altura", parseInt(e.target.value) || 0)}
+                    onKeyDown={e => handleAltKey(e, i)}
+                    placeholder="0"
+                  />
+                  <input
+                    className="fc"
+                    type="number"
+                    ref={el => { qtdRefs.current[i] = el; }}
+                    value={item.quantidade}
+                    onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)}
+                    onKeyDown={e => handleQtdKey(e, i)}
+                    min={1}
+                  />
                   <CurrencyInput value={item.valor_m2} onChange={v => updItem(i, "valor_m2", v)} placeholder="R$/m²" title="Valor por m²" />
                   <CurrencyInput value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(unitVal.toFixed(2)) : 0} onChange={v => updUnitItem(i, v)} placeholder="por peça" title="Valor por peça" />
                   <CurrencyInput value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : 0} onChange={v => updTotalItem(i, v)} placeholder="total" title="Total do item" />
@@ -342,7 +440,7 @@ export default function NovoOrcamentoPage() {
             <span style={{ fontSize: "11px", color: "var(--t2)", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>
               Distribuir total do pedido:
             </span>
-            <CurrencyInput value={totalPedidoInput} onChange={setTotalPedidoInput} placeholder="Ex: R$ 850,00" style={{ width: "140px", margin: 0 }} title="Digite o valor total e pressione Aplicar para distribuir proporcionalmente entre os itens" />
+            <CurrencyInput value={totalPedidoInput} onChange={setTotalPedidoInput} placeholder="Ex: R$ 850,00" style={{ width: "140px", margin: 0 }} />
             <button className="btn bp sm" onClick={() => aplicarTotalPedido(totalPedidoInput)} disabled={totalPedidoInput <= 0 || m2Total === 0}>↵ Aplicar</button>
             <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>distribui proporcionalmente ao m² de cada item</span>
           </div>
