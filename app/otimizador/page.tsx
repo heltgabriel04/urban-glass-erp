@@ -666,6 +666,11 @@ function OtimizadorContent() {
           )}
           {simulando && <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>simulando combinações...</span>}
           <button className="btn bp sm" onClick={rodar} style={{ fontWeight: 700 }}>◈ Calcular</button>
+          {resultado && !modoTeste && pedidoRef && (
+           <button className="btn bp sm" onClick={handleSalvar} disabled={salvando} style={{ background: "var(--ok)", borderColor: "var(--ok)", color: "#000", fontWeight: 700 }}>
+            {salvando ? "Salvando..." : pedidosSelecionados.size > 0 ? `✓ Salvar ${pedidosSelecionados.size + 1} Pedidos` : "✓ Salvar Plano"}
+           </button>
+          )}
           {pedidoRef && (
             <button className="btn bg sm" onClick={handleZerar} disabled={zerando} style={{ borderColor: "var(--err)", color: "var(--err)" }}>
               {zerando ? "Zerando..." : "✕ Zerar Plano"}
@@ -864,25 +869,18 @@ function OtimizadorContent() {
                 </div>
               )}
 
-              {resultado && (
-                <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <button className="btn bg sm" style={{ width: "100%", padding: "10px" }} onClick={handleImprimirTeste}>
-                    🖨 Imprimir Plano (Teste)
-                  </button>
-                  {!modoTeste && pedidoRef && (
-                    <button className="btn bp sm" style={{ width: "100%", padding: "12px", fontSize: "13px" }} onClick={handleSalvar} disabled={salvando}>
-                      {salvando ? "Salvando..." : pedidosSelecionados.size > 0
-                        ? `✓ Salvar e Avançar ${pedidosSelecionados.size + 1} Pedidos para Corte`
-                        : "✓ Salvar Plano e Voltar ao Pedido"}
-                    </button>
-                  )}
-                  {modoTeste && (
-                    <div style={{ padding: "10px", background: "rgba(245,158,11,.08)", border: "1px solid rgba(245,158,11,.3)", borderRadius: "8px", fontSize: "11px", color: "var(--warn)", textAlign: "center" }}>
-                      Modo teste ativo — desative para salvar
-                    </div>
-                  )}
-                </div>
-              )}
+{resultado && (
+  <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
+    <button className="btn bg sm" style={{ width: "100%", padding: "10px" }} onClick={handleImprimirTeste}>
+      🖨 Imprimir Plano (Teste)
+    </button>
+    {modoTeste && (
+      <div style={{ padding: "10px", background: "rgba(245,158,11,.08)", border: "1px solid rgba(245,158,11,.3)", borderRadius: "8px", fontSize: "11px", color: "var(--warn)", textAlign: "center" }}>
+        Modo teste ativo — desative para salvar
+      </div>
+    )}
+  </div>
+)}
             </div>
           </div>
         </div>
