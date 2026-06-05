@@ -38,10 +38,6 @@ export default function DashboardPage() {
     setFinanceiro(fin);
     setFatMensal(fat);
     setLoading(false);
-
-    // Selecionar mês atual por padrão
-    const mesAtual = new Date().getMonth() + 1;
-    setMesSel(mesAtual);
   }
 
   // ── Barras do gráfico ──────────────────────────────────────
