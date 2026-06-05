@@ -464,55 +464,183 @@ function OtimizadorContent() {
     if (!resultado) return;
     const win = window.open("", "_blank");
     if (!win) return;
-    const chapasHtml = resultado.map((r, i) => `
-      <div style="margin-bottom:24px;page-break-inside:avoid">
-        <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:#2d5fa6">
-          CHAPA ${i + 1} · ${r.prod} · ${r.W} × ${r.H} mm
+
+    // Paleta de cores por pedido
+    const CORES_PEDIDO = ["#2d5fa6","#16a34a","#dc2626","#9333ea","#ea580c","#0891b2","#b45309","#be185d","#15803d","#1e40af"];
+    const pedidoList = Array.from(new Set(resultado.flatMap(r => r.placed.map(p => p.pedidoId ?? pedidoRef ?? "?"))));
+    const corPedido = (pid: string) => CORES_PEDIDO[pedidoList.indexOf(pid) % CORES_PEDIDO.length];
+
+    // Gera SVG proporcional da chapa com as peças posicionadas
+    function svgChapa(r: ResultadoChapa): string {
+      const MAX_W = 600, MAX_H = 400;
+      const sc = Math.min(MAX_W / r.W, MAX_H / r.H);
+      const sw = Math.round(r.W * sc), sh = Math.round(r.H * sc);
+      const bp = bord * sc;
+      let s = `<rect width="${sw}" height="${sh}" fill="#dce8f7" stroke="#2d5fa6" stroke-width="1.5" rx="2"/>`;
+      if (bord > 0) {
+        s += `<rect width="${sw}" height="${bp}" fill="rgba(220,80,30,0.12)"/>`;
+        s += `<rect y="${sh - bp}" width="${sw}" height="${bp}" fill="rgba(220,80,30,0.12)"/>`;
+        s += `<rect width="${bp}" height="${sh}" fill="rgba(220,80,30,0.12)"/>`;
+        s += `<rect x="${sw - bp}" width="${bp}" height="${sh}" fill="rgba(220,80,30,0.12)"/>`;
+        s += `<rect x="${bp}" y="${bp}" width="${sw - bp * 2}" height="${sh - bp * 2}" fill="none" stroke="rgba(220,80,30,0.45)" stroke-width="0.8" stroke-dasharray="4,3"/>`;
+      }
+      r.placed.forEach((p, j) => {
+        const pid = p.pedidoId ?? pedidoRef ?? "?";
+        const cor = corPedido(pid);
+        const px = Math.round(bp + p.x * sc), py = Math.round(bp + p.y * sc);
+        const pw = Math.round(p.l * sc), ph = Math.round(p.a * sc);
+        const fs = Math.max(7, Math.min(11, pw / 7));
+        s += `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="${cor}" fill-opacity="0.72" stroke="${cor}" stroke-width="0.9"/>`;
+        s += `<rect x="${px}" y="${py}" width="${pw}" height="${Math.round(ph * 0.28)}" fill="white" fill-opacity="0.18"/>`;
+        if (pw > 22 && ph > 14) {
+          s += `<text x="${px + 3}" y="${py + fs + 1}" font-size="${fs}" font-family="monospace" font-weight="bold" fill="white">${j + 1}· ${p.l}×${p.a}${p.rot ? " ↺" : ""}</text>`;
+          if (ph > 26 && pw > 55) s += `<text x="${px + 3}" y="${py + fs + 12}" font-size="7" font-family="monospace" fill="rgba(255,255,255,0.65)">${pid}</text>`;
+        }
+      });
+      r.free.filter(f => f.l >= 200 && f.a >= 200).forEach(f => {
+        const fx = Math.round(bp + f.x * sc), fy = Math.round(bp + f.y * sc);
+        const fw = Math.round(f.l * sc), fh = Math.round(f.a * sc);
+        s += `<rect x="${fx}" y="${fy}" width="${fw}" height="${fh}" fill="rgba(0,180,220,0.10)" stroke="#0891b2" stroke-width="0.8" stroke-dasharray="4,3"/>`;
+        if (fw > 26 && fh > 13) s += `<text x="${fx + 3}" y="${fy + 10}" font-size="8" font-family="monospace" fill="#0070a0">↺ ${f.l}×${f.a}</text>`;
+      });
+      return `<svg width="${sw}" height="${sh}" viewBox="0 0 ${sw} ${sh}" style="display:block;max-width:100%;height:auto">${s}</svg>`;
+    }
+
+    // Lista global de todas as peças
+    const todasPecas = resultado.flatMap(r => r.placed.map(p => ({ ...p, prod: r.prod })));
+
+    const legendaPedidos = pedidoList.length > 1 ? `
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+        ${pedidoList.map(pid => `<div style="display:flex;align-items:center;gap:5px;font-size:11px">
+          <div style="width:12px;height:12px;border-radius:3px;background:${corPedido(pid)}"></div>
+          <span>${pid}</span>
+        </div>`).join("")}
+      </div>` : "";
+
+    const resumoPecas = `
+      <div style="margin-bottom:28px">
+        <div style="font-size:12px;font-weight:700;color:#2d5fa6;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #2d5fa6;padding-bottom:5px;margin-bottom:10px">
+          Lista de Peças · ${todasPecas.length} peças
         </div>
         <table style="width:100%;border-collapse:collapse;font-size:11px">
           <thead><tr style="background:#2d5fa6;color:white">
-            <th style="padding:6px;text-align:left">Peça</th>
-            <th style="padding:6px">Dim. (mm)</th>
-            <th style="padding:6px">Pedido</th>
-            <th style="padding:6px">Posição X</th>
-            <th style="padding:6px">Posição Y</th>
+            <th style="padding:5px 7px;text-align:left">#</th>
+            <th style="padding:5px 7px;text-align:left">Material</th>
+            <th style="padding:5px 7px;text-align:center">Dimensão (mm)</th>
+            <th style="padding:5px 7px;text-align:center">m²</th>
+            <th style="padding:5px 7px;text-align:center">Pedido</th>
+            <th style="padding:5px 7px;text-align:center">Chapa</th>
           </tr></thead>
-          <tbody>${r.placed.map((p, j) => `
-            <tr style="background:${j % 2 === 0 ? '#fff' : '#f7f9ff'}">
-              <td style="padding:5px 6px">${j + 1}</td>
-              <td style="padding:5px 6px;text-align:center;font-family:monospace">${p.l} × ${p.a}</td>
-              <td style="padding:5px 6px;text-align:center">${p.pedidoId ?? pedidoRef ?? "—"}</td>
-              <td style="padding:5px 6px;text-align:center;font-family:monospace">${p.x}</td>
-              <td style="padding:5px 6px;text-align:center;font-family:monospace">${p.y}</td>
-            </tr>`).join("")}
-          </tbody>
+          <tbody>${todasPecas.map((p, i) => {
+            const chapaIdx = resultado.findIndex(r => r.placed.includes(p as PecaPlacada));
+            return `<tr style="background:${i % 2 === 0 ? "#fff" : "#f4f7ff"}">
+              <td style="padding:4px 7px;font-weight:700">${i + 1}</td>
+              <td style="padding:4px 7px">${p.prod}</td>
+              <td style="padding:4px 7px;text-align:center;font-family:monospace">${p.l} × ${p.a}${p.rot ? " ↺" : ""}</td>
+              <td style="padding:4px 7px;text-align:center;font-family:monospace">${((p.l * p.a) / 1e6).toFixed(4)}</td>
+              <td style="padding:4px 7px;text-align:center;font-family:monospace">${p.pedidoId ?? pedidoRef ?? "—"}</td>
+              <td style="padding:4px 7px;text-align:center;font-weight:700;color:#2d5fa6">${chapaIdx + 1}</td>
+            </tr>`;
+          }).join("")}</tbody>
         </table>
-        ${r.free.filter(f => f.l >= 200 && f.a >= 200).length > 0 ? `
-          <div style="margin-top:8px;font-size:11px;color:#b45309">
-            Retalhos aproveitáveis: ${r.free.filter(f => f.l >= 200 && f.a >= 200).map(f => `${f.l}×${f.a}mm`).join(", ")}
-          </div>` : ""}
-      </div>`).join("");
+      </div>`;
+
+    const chapasHtml = resultado.map((r, i) => {
+      const retalhos = r.free.filter(f => f.l >= 200 && f.a >= 200);
+      const areaUtil = (r.W - bord * 2) * (r.H - bord * 2);
+      const areaUsada = r.placed.reduce((a, p) => a + p.l * p.a, 0);
+      const apChapa = areaUtil > 0 ? ((areaUsada / areaUtil) * 100).toFixed(1) : "0";
+      return `
+        <div style="margin-bottom:28px;border:1px solid #d1daf0;border-radius:10px;overflow:hidden;page-break-inside:avoid">
+          <div style="background:#2d5fa6;color:white;padding:9px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+            <div style="font-size:13px;font-weight:700">CHAPA ${i + 1} · ${r.prod}</div>
+            <div style="display:flex;gap:18px;font-size:11px;opacity:.93">
+              <span>${r.W} × ${r.H} mm</span>
+              <span>Aproveit.: <strong>${apChapa}%</strong></span>
+              <span>${r.placed.length} peça(s)</span>
+              ${retalhos.length > 0 ? `<span>${retalhos.length} retalho(s)</span>` : ""}
+            </div>
+          </div>
+          <div style="padding:14px 16px;background:#f8faff">
+            <div style="margin-bottom:12px;text-align:center">${svgChapa(r)}</div>
+            <table style="width:100%;border-collapse:collapse;font-size:11px">
+              <thead><tr style="background:#e8eef8;color:#2d5fa6">
+                <th style="padding:5px 7px;text-align:left">#</th>
+                <th style="padding:5px 7px">Dimensão (mm)</th>
+                <th style="padding:5px 7px">Pedido</th>
+                <th style="padding:5px 7px">Posição X · Y</th>
+                <th style="padding:5px 7px">Girada</th>
+              </tr></thead>
+              <tbody>${r.placed.map((p, j) => `
+                <tr style="background:${j % 2 === 0 ? "#fff" : "#f4f7ff"}">
+                  <td style="padding:4px 7px;font-weight:700;color:#2d5fa6">${j + 1}</td>
+                  <td style="padding:4px 7px;text-align:center;font-family:monospace">${p.l} × ${p.a}</td>
+                  <td style="padding:4px 7px;text-align:center;font-family:monospace">${p.pedidoId ?? pedidoRef ?? "—"}</td>
+                  <td style="padding:4px 7px;text-align:center;font-family:monospace">${p.x} · ${p.y}</td>
+                  <td style="padding:4px 7px;text-align:center">${p.rot ? "↺ Sim" : "—"}</td>
+                </tr>`).join("")}</tbody>
+            </table>
+            ${retalhos.length > 0 ? `
+              <div style="margin-top:10px;padding:7px 10px;background:#e0f4ff;border-radius:6px;font-size:11px;border-left:3px solid #0891b2">
+                <span style="font-weight:700;color:#0070a0">Retalhos aproveitáveis:</span>
+                <span style="margin-left:6px;font-family:monospace;color:#0070a0">${retalhos.map(f => `${f.l}×${f.a} mm (${((f.l * f.a) / 1e6).toFixed(4)} m²)`).join(" · ")}</span>
+              </div>` : ""}
+          </div>
+        </div>`;
+    }).join("");
+
     win.document.write(`<!DOCTYPE html><html><head>
       <title>Plano de Corte · ${pedidoRef ?? "—"}</title>
-      <style>body{font-family:Arial,sans-serif;padding:20px;color:#1a1a2e} @page{margin:15mm} @media print{button{display:none}}</style>
+      <meta charset="utf-8">
+      <style>
+        body{font-family:Arial,sans-serif;padding:20px;color:#1a1a2e;font-size:13px}
+        @page{margin:12mm}
+        @media print{.noprint{display:none!important}}
+      </style>
     </head><body>
-      <div style="display:flex;justify-content:space-between;margin-bottom:20px;padding-bottom:12px;border-bottom:3px solid #2d5fa6">
-        <div><div style="font-size:22px;font-weight:900;color:#2d5fa6">urbanglass</div><div style="font-size:10px;color:#888">Urban Glass Comércio Ltda</div></div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:12px;border-bottom:3px solid #2d5fa6">
+        <div>
+          <div style="font-size:26px;font-weight:900;color:#2d5fa6;letter-spacing:-1px">urbanglass</div>
+          <div style="font-size:10px;color:#888">Urban Glass Comércio Ltda</div>
+        </div>
         <div style="text-align:right">
           <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:2px">Plano de Corte</div>
-          <div style="font-size:20px;font-weight:900;color:#2d5fa6">${pedidoRef ?? "AVULSO"}</div>
-          <div style="display:inline-block;margin-top:6px;padding:3px 12px;background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:99px;font-size:10px;font-weight:700">⚠ SIMULAÇÃO</div>
+          <div style="font-size:22px;font-weight:900;color:#2d5fa6">${pedidoRef ?? "AVULSO"}</div>
+          <div style="margin-top:4px;display:inline-block;padding:2px 10px;background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:99px;font-size:10px;font-weight:700">⚠ SIMULAÇÃO</div>
           <div style="font-size:10px;color:#888;margin-top:4px">Emissão: ${new Date().toLocaleDateString("pt-BR")}</div>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
-        <div style="padding:10px;background:#f0f4ff;border-radius:8px;border-left:4px solid #2d5fa6"><div style="font-size:9px;color:#2d5fa6;font-weight:700;text-transform:uppercase">Aproveitamento</div><div style="font-size:20px;font-weight:900;color:#2d5fa6">${aprovNum.toFixed(1)}%</div></div>
-        <div style="padding:10px;background:#fff1f2;border-radius:8px;border-left:4px solid #f43f5e"><div style="font-size:9px;color:#f43f5e;font-weight:700;text-transform:uppercase">Perda</div><div style="font-size:20px;font-weight:900;color:#f43f5e">${perdaNum.toFixed(1)}%</div></div>
-        <div style="padding:10px;background:#f0fdff;border-radius:8px;border-left:4px solid #00c8ff"><div style="font-size:9px;color:#00c8ff;font-weight:700;text-transform:uppercase">Chapas</div><div style="font-size:20px;font-weight:900;color:#00c8ff">${statChapas}</div></div>
-        <div style="padding:10px;background:#fffbeb;border-radius:8px;border-left:4px solid #f59e0b"><div style="font-size:9px;color:#f59e0b;font-weight:700;text-transform:uppercase">Retalhos</div><div style="font-size:20px;font-weight:900;color:#f59e0b">${retalhosGerados.length}</div></div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px">
+        <div style="padding:12px;background:#f0f4ff;border-radius:8px;border-left:4px solid #2d5fa6">
+          <div style="font-size:9px;color:#2d5fa6;font-weight:700;text-transform:uppercase">Aproveitamento</div>
+          <div style="font-size:22px;font-weight:900;color:#2d5fa6">${aprovNum.toFixed(1)}%</div>
+        </div>
+        <div style="padding:12px;background:#fff1f2;border-radius:8px;border-left:4px solid #f43f5e">
+          <div style="font-size:9px;color:#f43f5e;font-weight:700;text-transform:uppercase">Perda</div>
+          <div style="font-size:22px;font-weight:900;color:#f43f5e">${perdaNum.toFixed(1)}%</div>
+        </div>
+        <div style="padding:12px;background:#f0fdff;border-radius:8px;border-left:4px solid #00a8cc">
+          <div style="font-size:9px;color:#00a8cc;font-weight:700;text-transform:uppercase">Chapas Usadas</div>
+          <div style="font-size:22px;font-weight:900;color:#00a8cc">${statChapas}</div>
+        </div>
+        <div style="padding:12px;background:#fffbeb;border-radius:8px;border-left:4px solid #f59e0b">
+          <div style="font-size:9px;color:#f59e0b;font-weight:700;text-transform:uppercase">Retalhos Gerados</div>
+          <div style="font-size:22px;font-weight:900;color:#f59e0b">${retalhosGerados.length}</div>
+        </div>
+      </div>
+
+      ${legendaPedidos}
+      ${resumoPecas}
+
+      <div style="font-size:12px;font-weight:700;color:#2d5fa6;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #2d5fa6;padding-bottom:5px;margin-bottom:16px">
+        Diagrama de Corte · ${resultado.length} Chapa(s)
       </div>
       ${chapasHtml}
-      <button onclick="window.print()" style="margin-top:16px;padding:10px 24px;background:#2d5fa6;color:white;border:none;border-radius:8px;font-size:13px;cursor:pointer">🖨 Imprimir</button>
+
+      <div class="noprint" style="text-align:center;margin-top:28px;padding-top:16px;border-top:1px solid #e2e8f0">
+        <button onclick="window.print()" style="padding:10px 32px;background:#2d5fa6;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">🖨 Imprimir / Salvar PDF</button>
+      </div>
     </body></html>`);
     win.document.close();
   }
