@@ -2,16 +2,20 @@
 
 import { useEffect, useState, useMemo } from "react";
 import AppLayout from "@/components/layout/AppLayout";
-import { getFinanceiroClientes, getContasAPagar, criarContaPagar, pagarConta, deletarLancamento, updateLancamento, getLancamentos } from "@/services/financeiro.service";
+import {
+  getFinanceiroClientes, getContasAPagar, criarContaPagar, pagarConta,
+  deletarLancamento, updateLancamento, getLancamentos, createLancamento,
+} from "@/services/financeiro.service";
 import { getPedidos, registrarRecebimento } from "@/services/pedidos.service";
-import { formatBRL, formatPercent, formatDate, diffDias, labelDiff } from "@/lib/formatters";
+import { formatBRL, formatPercent, formatDate, diffDias } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import DateInput from "@/components/ui/DateInput";
 import type { FinanceiroCliente, Pedido, Lancamento } from "@/types";
 
-type Aba = "fluxo" | "receber" | "pagar";
-type Periodo = "7d" | "30d" | "90d" | "mes";
+type Aba      = "fluxo" | "receber" | "pagar";
+type Periodo  = "7d" | "30d" | "90d" | "mes";
+type ViewMode = "resumo" | "diadia";
 
 function hoje() { return new Date().toISOString().split("T")[0]; }
 function addDias(date: string, dias: number): string {
@@ -31,18 +35,14 @@ function fimMes(): string {
 function nomeMes(dateStr: string): string {
   return new Date(dateStr + "T12:00:00").toLocaleDateString("pt-BR", { month: "short", day: "numeric" });
 }
-function formatMes(dateStr: string): string {
-  return new Date(dateStr + "T12:00:00").toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-}
 
 const CATEGORIAS = ["Fornecedor","Aluguel","Energia","Água","Internet","Salário","Imposto","Manutenção","Transporte","Material","Outros"];
 
-// ── Mini barra horizontal ─────────────────────────────────────────────────────
 function BarH({ value, max, color }: { value: number; max: number; color: string }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
-    <div style={{ height: "5px", borderRadius: "3px", background: "var(--surf3)", overflow: "hidden", marginTop: "4px" }}>
-      <div style={{ height: "100%", borderRadius: "3px", width: `${pct}%`, background: color, transition: "width .4s" }} />
+    <div style={{ height:"5px", borderRadius:"3px", background:"var(--surf3)", overflow:"hidden", marginTop:"4px" }}>
+      <div style={{ height:"100%", borderRadius:"3px", width:`${pct}%`, background:color, transition:"width .4s" }} />
     </div>
   );
 }
@@ -55,7 +55,24 @@ export default function FinanceiroPage() {
   const [contasPagar, setContasPagar] = useState<Lancamento[]>([]);
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [loading, setLoading]         = useState(true);
-  const [periodo, setPeriodo]         = useState<Periodo>("30d");
+  const [periodo, setPeriodo]         = useState<Periodo>("mes");
+
+  // Modo de visualização (aba fluxo)
+  const [viewMode, setViewMode]         = useState<ViewMode>("resumo");
+  const [diaExpandido, setDiaExpandido] = useState<string | null>(null);
+
+  // Lançamento rápido
+  const [qa, setQa] = useState({
+    tipo: "Saída" as "Entrada" | "Saída",
+    descricao: "", valor: 0, vencimento: hoje(), categoria: "",
+  });
+  const [salvandoQa, setSalvandoQa] = useState(false);
+
+  // Edição inline (dia a dia)
+  const [editInlineId, setEditInlineId]     = useState<number | null>(null);
+  const [editInlineForm, setEditInlineForm] = useState({
+    descricao: "", valor: 0, vencimento: "", categoria: "", status: "",
+  });
 
   // Modal receber
   const [modalReceber, setModalReceber]   = useState(false);
@@ -83,10 +100,7 @@ export default function FinanceiroPage() {
   async function load() {
     setLoading(true);
     const [fin, peds, pagar, lancs] = await Promise.all([
-      getFinanceiroClientes(),
-      getPedidos(),
-      getContasAPagar(),
-      getLancamentos(),
+      getFinanceiroClientes(), getPedidos(), getContasAPagar(), getLancamentos(),
     ]);
     setFinanceiro(fin);
     setPedidos(peds);
@@ -95,7 +109,7 @@ export default function FinanceiroPage() {
     setLoading(false);
   }
 
-  // ── Fluxo de caixa ────────────────────────────────────────────────────────
+  // ── Período ───────────────────────────────────────────────────────────────
 
   const { dataInicio, dataFim } = useMemo(() => {
     const hj = hoje();
@@ -105,127 +119,137 @@ export default function FinanceiroPage() {
     return { dataInicio: inicioMes(), dataFim: fimMes() };
   }, [periodo]);
 
+  // ── Fluxo de caixa ────────────────────────────────────────────────────────
+
   const fluxo = useMemo(() => {
     const hj = hoje();
+    const entradasFuturas    = lancamentos.filter(l => l.tipo === "Entrada" && l.status === "A Receber" && l.vencimento && l.vencimento >= hj && l.vencimento <= dataFim);
+    const saidasFuturas      = contasPagar.filter(c => c.status !== "Pago" && c.vencimento && c.vencimento >= hj && c.vencimento <= dataFim);
+    const entradasRealizadas = lancamentos.filter(l => l.tipo === "Entrada" && l.status === "Pago" && l.vencimento && l.vencimento >= dataInicio && l.vencimento <= dataFim);
+    const saidasRealizadas   = contasPagar.filter(c => c.status === "Pago" && (c as any).dt_pagamento && (c as any).dt_pagamento >= dataInicio && (c as any).dt_pagamento <= dataFim);
+    const atrasadas          = lancamentos.filter(l => l.tipo === "Entrada" && l.status === "A Receber" && l.vencimento && l.vencimento < hj);
+    const contasAtrasadas    = contasPagar.filter(c => c.status !== "Pago" && c.vencimento && c.vencimento < hj);
 
-    // Entradas futuras — lançamentos "A Receber" dentro do período
-    const entradasFuturas = lancamentos.filter(l =>
-      l.tipo === "Entrada" && l.status === "A Receber" &&
-      l.vencimento && l.vencimento >= hj && l.vencimento <= dataFim
-    );
-
-    // Saídas futuras — contas a pagar pendentes dentro do período
-    const saidasFuturas = contasPagar.filter(c =>
-      c.status !== "Pago" && c.vencimento && c.vencimento >= hj && c.vencimento <= dataFim
-    );
-
-    // Entradas realizadas no período (pagas)
-    const entradasRealizadas = lancamentos.filter(l =>
-      l.tipo === "Entrada" && l.status === "Pago" &&
-      l.vencimento && l.vencimento >= dataInicio && l.vencimento <= dataFim
-    );
-
-    // Saídas realizadas no período
-    const saidasRealizadas = contasPagar.filter(c =>
-      c.status === "Pago" &&
-      (c as any).dt_pagamento &&
-      (c as any).dt_pagamento >= dataInicio &&
-      (c as any).dt_pagamento <= dataFim
-    );
-
-    // Vencidas (entradas atrasadas)
-    const atrasadas = lancamentos.filter(l =>
-      l.tipo === "Entrada" && l.status === "A Receber" && l.vencimento && l.vencimento < hj
-    );
-
-    // Contas vencidas a pagar
-    const contasAtrasadas = contasPagar.filter(c =>
-      c.status !== "Pago" && c.vencimento && c.vencimento < hj
-    );
-
-    const totalEntradFut  = entradasFuturas.reduce((a, l) => a + Number(l.valor), 0);
-    const totalSaidFut    = saidasFuturas.reduce((a, l) => a + Number(l.valor), 0);
-    const totalEntradReal = entradasRealizadas.reduce((a, l) => a + Number(l.valor), 0);
-    const totalSaidReal   = saidasRealizadas.reduce((a, l) => a + Number(l.valor), 0);
-    const totalAtrasado   = atrasadas.reduce((a, l) => a + Number(l.valor), 0);
+    const totalEntradFut   = entradasFuturas.reduce((a, l) => a + Number(l.valor), 0);
+    const totalSaidFut     = saidasFuturas.reduce((a, l) => a + Number(l.valor), 0);
+    const totalEntradReal  = entradasRealizadas.reduce((a, l) => a + Number(l.valor), 0);
+    const totalSaidReal    = saidasRealizadas.reduce((a, l) => a + Number(l.valor), 0);
+    const totalAtrasado    = atrasadas.reduce((a, l) => a + Number(l.valor), 0);
     const totalContasAtras = contasAtrasadas.reduce((a, l) => a + Number(l.valor), 0);
+    const saldoPrevisto    = totalEntradFut - totalSaidFut;
+    const saldoRealizado   = totalEntradReal - totalSaidReal;
 
-    const saldoPrevisto   = totalEntradFut - totalSaidFut;
-    const saldoRealizado  = totalEntradReal - totalSaidReal;
-
-    // Fluxo diário — agrupa por dia no período
     const diasMap = new Map<string, { entradas: number; saidas: number }>();
-    const cursor = new Date(dataInicio + "T12:00:00");
-    const fim    = new Date(dataFim + "T12:00:00");
+    const cursor  = new Date(dataInicio + "T12:00:00");
+    const fim     = new Date(dataFim + "T12:00:00");
     while (cursor <= fim) {
       diasMap.set(cursor.toISOString().split("T")[0], { entradas: 0, saidas: 0 });
       cursor.setDate(cursor.getDate() + 1);
     }
-
-    entradasFuturas.forEach(l => {
-      if (l.vencimento && diasMap.has(l.vencimento)) {
-        diasMap.get(l.vencimento)!.entradas += Number(l.valor);
-      }
-    });
-    entradasRealizadas.forEach(l => {
-      if (l.vencimento && diasMap.has(l.vencimento)) {
-        diasMap.get(l.vencimento)!.entradas += Number(l.valor);
-      }
-    });
-    saidasFuturas.forEach(c => {
-      if (c.vencimento && diasMap.has(c.vencimento)) {
-        diasMap.get(c.vencimento)!.saidas += Number(c.valor);
-      }
-    });
-    saidasRealizadas.forEach(c => {
-      const dt = (c as any).dt_pagamento;
-      if (dt && diasMap.has(dt)) {
-        diasMap.get(dt)!.saidas += Number(c.valor);
-      }
-    });
+    entradasFuturas.forEach(l    => { if (l.vencimento && diasMap.has(l.vencimento)) diasMap.get(l.vencimento)!.entradas += Number(l.valor); });
+    entradasRealizadas.forEach(l => { if (l.vencimento && diasMap.has(l.vencimento)) diasMap.get(l.vencimento)!.entradas += Number(l.valor); });
+    saidasFuturas.forEach(c      => { if (c.vencimento && diasMap.has(c.vencimento)) diasMap.get(c.vencimento)!.saidas   += Number(c.valor); });
+    saidasRealizadas.forEach(c   => { const dt = (c as any).dt_pagamento; if (dt && diasMap.has(dt)) diasMap.get(dt)!.saidas += Number(c.valor); });
 
     const dias = Array.from(diasMap.entries())
       .map(([data, vals]) => ({ data, ...vals, saldo: vals.entradas - vals.saidas }))
       .filter(d => d.entradas > 0 || d.saidas > 0);
-
-    // Saldo acumulado
     let acum = 0;
     const diasAcum = dias.map(d => { acum += d.saldo; return { ...d, acumulado: acum }; });
 
-    return {
-      entradasFuturas, saidasFuturas, entradasRealizadas, saidasRealizadas,
-      atrasadas, contasAtrasadas,
-      totalEntradFut, totalSaidFut, totalEntradReal, totalSaidReal,
-      totalAtrasado, totalContasAtras,
-      saldoPrevisto, saldoRealizado,
-      dias: diasAcum,
-    };
-  }, [lancamentos, contasPagar, dataInicio, dataFim, periodo]);
+    return { entradasFuturas, saidasFuturas, entradasRealizadas, saidasRealizadas, atrasadas, contasAtrasadas, totalEntradFut, totalSaidFut, totalEntradReal, totalSaidReal, totalAtrasado, totalContasAtras, saldoPrevisto, saldoRealizado, dias: diasAcum };
+  }, [lancamentos, contasPagar, dataInicio, dataFim]);
 
-  // Máximo para escala dos gráficos
   const maxDia = useMemo(() => {
     const maxE = Math.max(...fluxo.dias.map(d => d.entradas), 1);
     const maxS = Math.max(...fluxo.dias.map(d => d.saidas), 1);
     return Math.max(maxE, maxS);
   }, [fluxo.dias]);
 
+  // ── Dia a dia ─────────────────────────────────────────────────────────────
+
+  const diasComMovimentos = useMemo(() => {
+    const porDia = new Map<string, Lancamento[]>();
+    for (const l of lancamentos) {
+      const dt = l.vencimento;
+      if (!dt || dt < dataInicio || dt > dataFim) continue;
+      if (!porDia.has(dt)) porDia.set(dt, []);
+      porDia.get(dt)!.push(l);
+    }
+    return Array.from(porDia.entries())
+      .sort(([a], [b]) => a > b ? 1 : -1)
+      .map(([data, items]) => ({
+        data,
+        items,
+        entradas: items.filter(l => l.tipo === "Entrada").reduce((a, l) => a + Number(l.valor), 0),
+        saidas:   items.filter(l => l.tipo === "Saída").reduce((a, l) => a + Number(l.valor), 0),
+      }));
+  }, [lancamentos, dataInicio, dataFim]);
+
+  // ── Lançamento rápido ─────────────────────────────────────────────────────
+
+  async function handleQuickAdd() {
+    if (!qa.descricao.trim() || qa.valor <= 0 || !qa.vencimento) {
+      toast("Preencha descrição, valor e data", "warn"); return;
+    }
+    setSalvandoQa(true);
+    await createLancamento({
+      tipo: qa.tipo,
+      descricao: qa.descricao,
+      valor: qa.valor,
+      status: qa.tipo === "Entrada" ? "A Receber" : "Pendente",
+      vencimento: qa.vencimento,
+      pedido_id: null,
+      cliente_id: null,
+      ...(qa.categoria ? { categoria: qa.categoria } : {}),
+    } as any);
+    toast(`✓ ${qa.tipo} lançada`);
+    setSalvandoQa(false);
+    setQa(q => ({ ...q, descricao: "", valor: 0 }));
+    load();
+  }
+
+  // ── Edição inline ─────────────────────────────────────────────────────────
+
+  function abrirEditInline(l: Lancamento) {
+    setEditInlineId(l.id);
+    setEditInlineForm({
+      descricao: l.descricao,
+      valor: l.valor,
+      vencimento: l.vencimento ?? "",
+      categoria: (l as any).categoria ?? "",
+      status: l.status,
+    });
+  }
+
+  async function salvarEditInline() {
+    if (!editInlineId) return;
+    await updateLancamento(editInlineId, {
+      descricao: editInlineForm.descricao,
+      valor: editInlineForm.valor,
+      vencimento: editInlineForm.vencimento || null,
+      status: editInlineForm.status as any,
+      ...(editInlineForm.categoria ? { categoria: editInlineForm.categoria } : {}),
+    } as any);
+    toast("✓ Lançamento atualizado");
+    setEditInlineId(null);
+    load();
+  }
+
   // ── Receber ───────────────────────────────────────────────────────────────
 
   function abrirReceber(f: FinanceiroCliente) {
     setClienteSel(f); setPedidoSel(null); setValorRec(0); setErro(""); setModalReceber(true);
   }
-
   function selecionarPedido(pedidoId: string) {
     const p = pedidos.find(p => p.id === pedidoId) ?? null;
     setPedidoSel(p); setValorRec(0); setErro("");
   }
-
   function preencherTotal() {
     if (!pedidoSel) return;
     setValorRec(Number(pedidoSel.valor_total) - Number(pedidoSel.valor_recebido));
     setErro("");
   }
-
   async function salvarRecebimento() {
     if (!pedidoSel) { setErro("Selecione um pedido."); return; }
     if (!valorRec || valorRec <= 0) { setErro("Informe um valor válido."); return; }
@@ -246,10 +270,9 @@ export default function FinanceiroPage() {
 
   function abrirNovaConta() {
     setEditandoConta(null);
-    setFormPagar({ descricao: "", fornecedor: "", categoria: "", valor: 0, vencimento: "", dt_pagamento: "", status: "Pendente", obs: "" });
+    setFormPagar({ descricao:"", fornecedor:"", categoria:"", valor:0, vencimento:"", dt_pagamento:"", status:"Pendente", obs:"" });
     setModalPagar(true);
   }
-
   function abrirEditarConta(c: Lancamento) {
     setEditandoConta(c);
     setFormPagar({
@@ -264,7 +287,6 @@ export default function FinanceiroPage() {
     });
     setModalPagar(true);
   }
-
   async function salvarConta() {
     if (!formPagar.descricao.trim() || formPagar.valor <= 0 || !formPagar.vencimento) {
       toast("Preencha descrição, valor e vencimento", "warn"); return;
@@ -290,7 +312,6 @@ export default function FinanceiroPage() {
     }
     setSalvando(false); setModalPagar(false); load();
   }
-
   async function confirmarPagamento() {
     if (!contaParaPagar) return;
     setSalvando(true);
@@ -298,19 +319,17 @@ export default function FinanceiroPage() {
     toast(`✓ "${contaParaPagar.descricao}" marcada como paga`);
     setSalvando(false); setModalConfirmarPgto(false); setContaParaPagar(null); load();
   }
-
   async function handleDeletarConta(c: Lancamento) {
     if (!confirm(`Excluir "${c.descricao}"?`)) return;
     await deletarLancamento(c.id);
-    toast("Conta removida"); load();
+    toast("Lançamento removido"); load();
   }
 
   // ── Cálculos gerais ───────────────────────────────────────────────────────
 
-  const tot = financeiro.reduce((a, f) => ({ fat: a.fat + Number(f.faturado), rec: a.rec + Number(f.recebido) }), { fat: 0, rec: 0 });
+  const tot          = financeiro.reduce((a, f) => ({ fat: a.fat + Number(f.faturado), rec: a.rec + Number(f.recebido) }), { fat: 0, rec: 0 });
   const aReceber     = tot.fat - tot.rec;
   const totalPagar   = contasPagar.filter(c => c.status !== "Pago").reduce((a, c) => a + Number(c.valor), 0);
-  const totalPagoMes = contasPagar.filter(c => c.status === "Pago").reduce((a, c) => a + Number(c.valor), 0);
   const vencidas     = contasPagar.filter(c => c.status !== "Pago" && c.vencimento && c.vencimento < hoje());
 
   const pedidosCliente = clienteSel
@@ -329,12 +348,15 @@ export default function FinanceiroPage() {
   const chipStatus = (c: Lancamento) => {
     if (c.status === "Pago") return <span className="chip cg">✓ Pago</span>;
     if (c.vencimento && c.vencimento < hoje()) return <span className="chip cr">Vencido</span>;
+    if (c.status === "A Receber") return <span className="chip cy">A Receber</span>;
     return <span className="chip cy">Pendente</span>;
   };
 
   const periodoLabel: Record<Periodo, string> = {
-    "7d": "7 dias", "30d": "30 dias", "90d": "90 dias", "mes": "Este mês",
+    "7d":"7 dias", "30d":"30 dias", "90d":"90 dias", "mes":"Este mês",
   };
+
+  const hj = hoje();
 
   return (
     <AppLayout>
@@ -346,12 +368,12 @@ export default function FinanceiroPage() {
       </div>
 
       <div className="con">
-        {/* Cards resumo */}
+        {/* Cards resumo topo */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:"12px", marginBottom:"20px" }}>
           {[
-            { label:"Faturado",       value: formatBRL(tot.fat),       color:"var(--acc)",  sub:"Total pedidos" },
-            { label:"A Receber",      value: formatBRL(aReceber),      color:"var(--warn)", sub:"Em aberto" },
-            { label:"A Pagar",        value: formatBRL(totalPagar),    color:"var(--err)",  sub:`${vencidas.length} vencida(s)` },
+            { label:"Faturado",       value: formatBRL(tot.fat),             color:"var(--acc)",  sub:"Total pedidos" },
+            { label:"A Receber",      value: formatBRL(aReceber),            color:"var(--warn)", sub:"Em aberto" },
+            { label:"A Pagar",        value: formatBRL(totalPagar),          color:"var(--err)",  sub:`${vencidas.length} vencida(s)` },
             { label:"Saldo Previsto", value: formatBRL(fluxo.saldoPrevisto), color: fluxo.saldoPrevisto >= 0 ? "var(--ok)" : "var(--err)", sub:`Próx. ${periodoLabel[periodo]}` },
           ].map(card => (
             <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
@@ -385,10 +407,72 @@ export default function FinanceiroPage() {
                 ABA FLUXO DE CAIXA
             ══════════════════════════════════════════════════════════════ */}
             {aba === "fluxo" && (
-              <div style={{ display:"flex", flexDirection:"column", gap:"20px" }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:"16px" }}>
 
-                {/* Filtro de período */}
-                <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
+                {/* ── Barra de lançamento rápido ── */}
+                <div style={{ display:"flex", gap:"6px", alignItems:"center", padding:"12px 14px", background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px" }}>
+                  {/* Tipo toggle */}
+                  <div style={{ display:"flex", borderRadius:"6px", overflow:"hidden", border:"1px solid var(--b2)", flexShrink:0 }}>
+                    {(["Entrada","Saída"] as const).map(t => (
+                      <button key={t} onClick={() => setQa(q => ({ ...q, tipo: t }))} style={{
+                        padding:"6px 11px", fontSize:"11px", fontWeight:700, cursor:"pointer", border:"none",
+                        background: qa.tipo === t
+                          ? (t === "Entrada" ? "rgba(61,255,160,.18)" : "rgba(244,63,94,.18)")
+                          : "transparent",
+                        color: qa.tipo === t
+                          ? (t === "Entrada" ? "var(--ok)" : "var(--err)")
+                          : "var(--t3)",
+                        transition:"all .1s",
+                      }}>
+                        {t === "Entrada" ? "↑ Entrada" : "↓ Saída"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Descrição */}
+                  <input
+                    className="fc"
+                    style={{ flex:3, fontSize:"13px" }}
+                    placeholder="Descrição..."
+                    value={qa.descricao}
+                    onChange={e => setQa(q => ({ ...q, descricao: e.target.value }))}
+                    onKeyDown={e => e.key === "Enter" && handleQuickAdd()}
+                  />
+
+                  {/* Valor */}
+                  <div style={{ flex:"1 0 120px", maxWidth:"150px" }}>
+                    <CurrencyInput value={qa.valor} onChange={v => setQa(q => ({ ...q, valor: v }))} />
+                  </div>
+
+                  {/* Data */}
+                  <div style={{ flex:"1 0 120px", maxWidth:"140px" }}>
+                    <DateInput value={qa.vencimento} onChange={v => setQa(q => ({ ...q, vencimento: v }))} />
+                  </div>
+
+                  {/* Categoria */}
+                  <select
+                    className="fc"
+                    style={{ flex:"1 0 110px", maxWidth:"140px", fontSize:"12px" }}
+                    value={qa.categoria}
+                    onChange={e => setQa(q => ({ ...q, categoria: e.target.value }))}
+                  >
+                    <option value="">Categoria...</option>
+                    {CATEGORIAS.map(c => <option key={c}>{c}</option>)}
+                  </select>
+
+                  {/* Botão */}
+                  <button
+                    className="btn bp"
+                    onClick={handleQuickAdd}
+                    disabled={salvandoQa}
+                    style={{ flexShrink:0, whiteSpace:"nowrap", fontWeight:700 }}
+                  >
+                    {salvandoQa ? "..." : "+ Lançar"}
+                  </button>
+                </div>
+
+                {/* ── Filtro de período + toggle de visualização ── */}
+                <div style={{ display:"flex", alignItems:"center", gap:"8px", flexWrap:"wrap" }}>
                   <span style={{ fontSize:"12px", color:"var(--t3)", fontWeight:600 }}>Período:</span>
                   {(["7d","30d","90d","mes"] as Periodo[]).map(p => (
                     <button key={p} onClick={() => setPeriodo(p)} style={{
@@ -399,12 +483,24 @@ export default function FinanceiroPage() {
                       color: periodo === p ? "var(--acc)" : "var(--t3)",
                     }}>{periodoLabel[p]}</button>
                   ))}
-                  <span style={{ marginLeft:"8px", fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>
+                  <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>
                     {new Date(dataInicio + "T12:00:00").toLocaleDateString("pt-BR")} → {new Date(dataFim + "T12:00:00").toLocaleDateString("pt-BR")}
                   </span>
+
+                  {/* View toggle */}
+                  <div style={{ marginLeft:"auto", display:"flex", gap:"0", borderRadius:"7px", overflow:"hidden", border:"1px solid var(--b2)" }}>
+                    {([["resumo","Resumo"],["diadia","Dia a dia"]] as const).map(([m, label]) => (
+                      <button key={m} onClick={() => setViewMode(m)} style={{
+                        padding:"5px 14px", fontSize:"12px", fontWeight:600, cursor:"pointer", border:"none",
+                        background: viewMode === m ? "var(--surf3)" : "transparent",
+                        color: viewMode === m ? "var(--t1)" : "var(--t3)",
+                        transition:"all .1s",
+                      }}>{label}</button>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Alertas */}
+                {/* ── Alertas ── */}
                 {(fluxo.totalAtrasado > 0 || fluxo.totalContasAtras > 0) && (
                   <div style={{ display:"grid", gridTemplateColumns: fluxo.totalAtrasado > 0 && fluxo.totalContasAtras > 0 ? "1fr 1fr" : "1fr", gap:"12px" }}>
                     {fluxo.totalAtrasado > 0 && (
@@ -430,165 +526,317 @@ export default function FinanceiroPage() {
                   </div>
                 )}
 
-                {/* Cards fluxo */}
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"12px" }}>
-                  {[
-                    { label:"Entradas Previstas",  value: fluxo.totalEntradFut,  color:"var(--ok)",   icon:"↑", sub:`${fluxo.entradasFuturas.length} lançamentos` },
-                    { label:"Saídas Previstas",    value: fluxo.totalSaidFut,    color:"var(--err)",  icon:"↓", sub:`${fluxo.saidasFuturas.length} contas` },
-                    { label:"Saldo Previsto",      value: fluxo.saldoPrevisto,   color: fluxo.saldoPrevisto >= 0 ? "var(--ok)" : "var(--err)", icon:"≈", sub:"Entradas − Saídas" },
-                    { label:"Realizado no Período",value: fluxo.saldoRealizado,  color: fluxo.saldoRealizado >= 0 ? "var(--acc)" : "var(--err)", icon:"✓", sub:`${fluxo.entradasRealizadas.length + fluxo.saidasRealizadas.length} movimentos` },
-                  ].map(c => (
-                    <div key={c.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"14px 16px" }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"6px" }}>
-                        <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>{c.label}</div>
-                        <div style={{ fontSize:"16px", color:c.color }}>{c.icon}</div>
-                      </div>
-                      <div style={{ fontSize:"20px", fontWeight:800, color:c.color, fontFamily:"'DM Mono',monospace", lineHeight:1.1 }}>{formatBRL(c.value)}</div>
-                      <div style={{ fontSize:"10px", color:"var(--t3)", marginTop:"4px" }}>{c.sub}</div>
-                      <BarH value={Math.abs(c.value)} max={Math.max(fluxo.totalEntradFut, fluxo.totalSaidFut, 1)} color={c.color} />
-                    </div>
-                  ))}
-                </div>
-
-                {/* Gráfico de barras diário */}
-                {fluxo.dias.length > 0 && (
-                  <div className="card" style={{ padding:"20px" }}>
-                    <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em", marginBottom:"16px", textTransform:"uppercase" }}>
-                      Fluxo Diário — {periodoLabel[periodo]}
-                    </div>
-                    <div style={{ display:"flex", gap:"3px", alignItems:"flex-end", height:"120px", overflowX:"auto", paddingBottom:"4px" }}>
-                      {fluxo.dias.map((d, i) => {
-                        const hE = maxDia > 0 ? (d.entradas / maxDia) * 100 : 0;
-                        const hS = maxDia > 0 ? (d.saidas   / maxDia) * 100 : 0;
-                        return (
-                          <div key={i} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"2px", minWidth:"32px", flex:"1 0 32px", position:"relative" }}
-                            title={`${new Date(d.data + "T12:00:00").toLocaleDateString("pt-BR")}\nEntradas: ${formatBRL(d.entradas)}\nSaídas: ${formatBRL(d.saidas)}`}>
-                            <div style={{ display:"flex", alignItems:"flex-end", gap:"2px", height:"100px" }}>
-                              {d.entradas > 0 && (
-                                <div style={{ width:"12px", height:`${hE}%`, background:"var(--ok)", borderRadius:"2px 2px 0 0", opacity:0.85, minHeight:"3px" }} />
-                              )}
-                              {d.saidas > 0 && (
-                                <div style={{ width:"12px", height:`${hS}%`, background:"var(--err)", borderRadius:"2px 2px 0 0", opacity:0.75, minHeight:"3px" }} />
-                              )}
-                            </div>
-                            <div style={{ fontSize:"8px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap", transform:"rotate(-45deg)", transformOrigin:"top left", marginTop:"4px", marginLeft:"8px" }}>
-                              {nomeMes(d.data)}
-                            </div>
+                {/* ════════════════════════════════════════
+                    MODO RESUMO
+                ════════════════════════════════════════ */}
+                {viewMode === "resumo" && (
+                  <>
+                    {/* Cards fluxo */}
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"12px" }}>
+                      {[
+                        { label:"Entradas Previstas",   value: fluxo.totalEntradFut,  color:"var(--ok)",   icon:"↑", sub:`${fluxo.entradasFuturas.length} lançamentos` },
+                        { label:"Saídas Previstas",     value: fluxo.totalSaidFut,    color:"var(--err)",  icon:"↓", sub:`${fluxo.saidasFuturas.length} contas` },
+                        { label:"Saldo Previsto",       value: fluxo.saldoPrevisto,   color: fluxo.saldoPrevisto >= 0 ? "var(--ok)" : "var(--err)", icon:"≈", sub:"Entradas − Saídas" },
+                        { label:"Realizado no Período", value: fluxo.saldoRealizado,  color: fluxo.saldoRealizado >= 0 ? "var(--acc)" : "var(--err)", icon:"✓", sub:`${fluxo.entradasRealizadas.length + fluxo.saidasRealizadas.length} movimentos` },
+                      ].map(c => (
+                        <div key={c.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"14px 16px" }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"6px" }}>
+                            <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>{c.label}</div>
+                            <div style={{ fontSize:"16px", color:c.color }}>{c.icon}</div>
                           </div>
-                        );
-                      })}
+                          <div style={{ fontSize:"20px", fontWeight:800, color:c.color, fontFamily:"'DM Mono',monospace", lineHeight:1.1 }}>{formatBRL(c.value)}</div>
+                          <div style={{ fontSize:"10px", color:"var(--t3)", marginTop:"4px" }}>{c.sub}</div>
+                          <BarH value={Math.abs(c.value)} max={Math.max(fluxo.totalEntradFut, fluxo.totalSaidFut, 1)} color={c.color} />
+                        </div>
+                      ))}
                     </div>
-                    <div style={{ display:"flex", gap:"16px", marginTop:"24px", paddingTop:"12px", borderTop:"1px solid var(--b1)" }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:"6px", fontSize:"11px", color:"var(--t2)" }}>
-                        <div style={{ width:"12px", height:"12px", background:"var(--ok)", borderRadius:"2px" }} />
-                        Entradas
+
+                    {/* Gráfico de barras diário */}
+                    {fluxo.dias.length > 0 && (
+                      <div className="card" style={{ padding:"20px" }}>
+                        <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em", marginBottom:"16px", textTransform:"uppercase" }}>
+                          Fluxo Diário — {periodoLabel[periodo]}
+                        </div>
+                        <div style={{ display:"flex", gap:"3px", alignItems:"flex-end", height:"120px", overflowX:"auto", paddingBottom:"4px" }}>
+                          {fluxo.dias.map((d, i) => {
+                            const hE = maxDia > 0 ? (d.entradas / maxDia) * 100 : 0;
+                            const hS = maxDia > 0 ? (d.saidas   / maxDia) * 100 : 0;
+                            return (
+                              <div key={i} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"2px", minWidth:"32px", flex:"1 0 32px" }}
+                                title={`${new Date(d.data + "T12:00:00").toLocaleDateString("pt-BR")}\nEntradas: ${formatBRL(d.entradas)}\nSaídas: ${formatBRL(d.saidas)}`}>
+                                <div style={{ display:"flex", alignItems:"flex-end", gap:"2px", height:"100px" }}>
+                                  {d.entradas > 0 && <div style={{ width:"12px", height:`${hE}%`, background:"var(--ok)", borderRadius:"2px 2px 0 0", opacity:0.85, minHeight:"3px" }} />}
+                                  {d.saidas   > 0 && <div style={{ width:"12px", height:`${hS}%`, background:"var(--err)", borderRadius:"2px 2px 0 0", opacity:0.75, minHeight:"3px" }} />}
+                                </div>
+                                <div style={{ fontSize:"8px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap", transform:"rotate(-45deg)", transformOrigin:"top left", marginTop:"4px", marginLeft:"8px" }}>
+                                  {nomeMes(d.data)}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div style={{ display:"flex", gap:"16px", marginTop:"24px", paddingTop:"12px", borderTop:"1px solid var(--b1)" }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:"6px", fontSize:"11px", color:"var(--t2)" }}>
+                            <div style={{ width:"12px", height:"12px", background:"var(--ok)", borderRadius:"2px" }} /> Entradas
+                          </div>
+                          <div style={{ display:"flex", alignItems:"center", gap:"6px", fontSize:"11px", color:"var(--t2)" }}>
+                            <div style={{ width:"12px", height:"12px", background:"var(--err)", borderRadius:"2px" }} /> Saídas
+                          </div>
+                        </div>
                       </div>
-                      <div style={{ display:"flex", alignItems:"center", gap:"6px", fontSize:"11px", color:"var(--t2)" }}>
-                        <div style={{ width:"12px", height:"12px", background:"var(--err)", borderRadius:"2px" }} />
-                        Saídas
+                    )}
+
+                    {/* Duas colunas */}
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"16px" }}>
+                      <div className="card" style={{ padding:"16px" }}>
+                        <div style={{ fontSize:"11px", color:"var(--ok)", fontWeight:700, letterSpacing:"0.06em", marginBottom:"12px", textTransform:"uppercase" }}>
+                          ↑ Entradas Previstas ({fluxo.entradasFuturas.length})
+                        </div>
+                        {fluxo.entradasFuturas.length === 0 ? (
+                          <div style={{ fontSize:"12px", color:"var(--t3)", textAlign:"center", padding:"16px 0" }}>Nenhuma entrada prevista</div>
+                        ) : (
+                          <div style={{ display:"flex", flexDirection:"column", gap:"6px", maxHeight:"280px", overflowY:"auto" }}>
+                            {[...fluxo.entradasFuturas].sort((a, b) => (a.vencimento ?? "") > (b.vencimento ?? "") ? 1 : -1).map(l => {
+                              const diff = diffDias(l.vencimento);
+                              const corData = diff !== null && diff < 3 ? "var(--warn)" : "var(--t3)";
+                              return (
+                                <div key={l.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"8px 10px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid rgba(61,255,160,.1)" }}>
+                                  <div style={{ flex:1, minWidth:0 }}>
+                                    <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.descricao}</div>
+                                    <div style={{ fontSize:"10px", color:corData, fontFamily:"'DM Mono',monospace", marginTop:"1px" }}>
+                                      {formatDate(l.vencimento)} {diff !== null && diff < 3 ? "⚡" : ""}
+                                    </div>
+                                  </div>
+                                  <div style={{ fontSize:"13px", fontWeight:700, color:"var(--ok)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>{formatBRL(l.valor)}</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <div style={{ marginTop:"10px", paddingTop:"8px", borderTop:"1px solid var(--b1)", display:"flex", justifyContent:"space-between", fontSize:"12px" }}>
+                          <span style={{ color:"var(--t3)" }}>Total previsto</span>
+                          <span style={{ color:"var(--ok)", fontWeight:700, fontFamily:"'DM Mono',monospace" }}>{formatBRL(fluxo.totalEntradFut)}</span>
+                        </div>
+                      </div>
+
+                      <div className="card" style={{ padding:"16px" }}>
+                        <div style={{ fontSize:"11px", color:"var(--err)", fontWeight:700, letterSpacing:"0.06em", marginBottom:"12px", textTransform:"uppercase" }}>
+                          ↓ Saídas Previstas ({fluxo.saidasFuturas.length})
+                        </div>
+                        {fluxo.saidasFuturas.length === 0 ? (
+                          <div style={{ fontSize:"12px", color:"var(--t3)", textAlign:"center", padding:"16px 0" }}>Nenhuma saída prevista</div>
+                        ) : (
+                          <div style={{ display:"flex", flexDirection:"column", gap:"6px", maxHeight:"280px", overflowY:"auto" }}>
+                            {[...fluxo.saidasFuturas].sort((a, b) => (a.vencimento ?? "") > (b.vencimento ?? "") ? 1 : -1).map(c => {
+                              const diff = diffDias(c.vencimento);
+                              const corData = diff !== null && diff < 3 ? "var(--err)" : "var(--t3)";
+                              return (
+                                <div key={c.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"8px 10px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid rgba(244,63,94,.1)" }}>
+                                  <div style={{ flex:1, minWidth:0 }}>
+                                    <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.descricao}</div>
+                                    <div style={{ display:"flex", gap:"6px", marginTop:"1px" }}>
+                                      <span style={{ fontSize:"10px", color:corData, fontFamily:"'DM Mono',monospace" }}>
+                                        {formatDate(c.vencimento)} {diff !== null && diff < 3 ? "🔴" : ""}
+                                      </span>
+                                      {(c as any).categoria && (
+                                        <span style={{ fontSize:"9px", color:"var(--t3)", background:"var(--surf3)", padding:"1px 5px", borderRadius:"4px" }}>{(c as any).categoria}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div style={{ fontSize:"13px", fontWeight:700, color:"var(--err)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>{formatBRL(c.valor)}</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <div style={{ marginTop:"10px", paddingTop:"8px", borderTop:"1px solid var(--b1)", display:"flex", justifyContent:"space-between", fontSize:"12px" }}>
+                          <span style={{ color:"var(--t3)" }}>Total previsto</span>
+                          <span style={{ color:"var(--err)", fontWeight:700, fontFamily:"'DM Mono',monospace" }}>{formatBRL(fluxo.totalSaidFut)}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
+
+                    {/* Resumo do período */}
+                    <div className="card" style={{ padding:"20px" }}>
+                      <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em", marginBottom:"16px", textTransform:"uppercase" }}>
+                        Resumo do Período — {periodoLabel[periodo]}
+                      </div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"16px" }}>
+                        {[
+                          { label:"Total entradas previstas", value: fluxo.totalEntradFut,  color:"var(--ok)" },
+                          { label:"Total saídas previstas",   value: fluxo.totalSaidFut,    color:"var(--err)" },
+                          { label:"Saldo líquido previsto",   value: fluxo.saldoPrevisto,   color: fluxo.saldoPrevisto >= 0 ? "var(--ok)" : "var(--err)" },
+                          { label:"Entradas realizadas",      value: fluxo.totalEntradReal, color:"var(--acc)" },
+                          { label:"Saídas realizadas",        value: fluxo.totalSaidReal,   color:"var(--warn)" },
+                          { label:"Saldo realizado",          value: fluxo.saldoRealizado,  color: fluxo.saldoRealizado >= 0 ? "var(--acc)" : "var(--err)" },
+                        ].map(item => (
+                          <div key={item.label} style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", padding:"10px 0", borderBottom:"1px solid var(--b1)" }}>
+                            <span style={{ fontSize:"12px", color:"var(--t3)" }}>{item.label}</span>
+                            <span style={{ fontSize:"14px", fontWeight:700, color:item.color, fontFamily:"'DM Mono',monospace" }}>{formatBRL(item.value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
                 )}
 
-                {/* Duas colunas: entradas previstas / saídas previstas */}
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"16px" }}>
-
-                  {/* Entradas previstas */}
-                  <div className="card" style={{ padding:"16px" }}>
-                    <div style={{ fontSize:"11px", color:"var(--ok)", fontWeight:700, letterSpacing:"0.06em", marginBottom:"12px", textTransform:"uppercase" }}>
-                      ↑ Entradas Previstas ({fluxo.entradasFuturas.length})
-                    </div>
-                    {fluxo.entradasFuturas.length === 0 ? (
-                      <div style={{ fontSize:"12px", color:"var(--t3)", textAlign:"center", padding:"16px 0" }}>Nenhuma entrada prevista</div>
-                    ) : (
-                      <div style={{ display:"flex", flexDirection:"column", gap:"6px", maxHeight:"280px", overflowY:"auto" }}>
-                        {[...fluxo.entradasFuturas].sort((a, b) => (a.vencimento ?? "") > (b.vencimento ?? "") ? 1 : -1).map(l => {
-                          const diff = diffDias(l.vencimento);
-                          const corData = diff !== null && diff < 3 ? "var(--warn)" : "var(--t3)";
-                          return (
-                            <div key={l.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"8px 10px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid rgba(61,255,160,.1)" }}>
-                              <div style={{ flex:1, minWidth:0 }}>
-                                <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.descricao}</div>
-                                <div style={{ fontSize:"10px", color:corData, fontFamily:"'DM Mono',monospace", marginTop:"1px" }}>
-                                  {formatDate(l.vencimento)} {diff !== null && diff < 3 ? "⚡" : ""}
-                                </div>
-                              </div>
-                              <div style={{ fontSize:"13px", fontWeight:700, color:"var(--ok)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>
-                                {formatBRL(l.valor)}
-                              </div>
-                            </div>
-                          );
-                        })}
+                {/* ════════════════════════════════════════
+                    MODO DIA A DIA
+                ════════════════════════════════════════ */}
+                {viewMode === "diadia" && (
+                  <div className="card" style={{ padding:0, overflow:"hidden" }}>
+                    <div style={{ padding:"14px 20px", borderBottom:"1px solid var(--b1)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                      <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>
+                        Lançamentos por dia — {periodoLabel[periodo]}
                       </div>
-                    )}
-                    <div style={{ marginTop:"10px", paddingTop:"8px", borderTop:"1px solid var(--b1)", display:"flex", justifyContent:"space-between", fontSize:"12px" }}>
-                      <span style={{ color:"var(--t3)" }}>Total previsto</span>
-                      <span style={{ color:"var(--ok)", fontWeight:700, fontFamily:"'DM Mono',monospace" }}>{formatBRL(fluxo.totalEntradFut)}</span>
+                      <div style={{ display:"flex", gap:"16px", fontSize:"11px" }}>
+                        <span style={{ color:"var(--ok)", display:"flex", alignItems:"center", gap:"5px" }}>
+                          <span style={{ width:"8px", height:"8px", background:"var(--ok)", borderRadius:"50%", display:"inline-block" }} /> Entradas
+                        </span>
+                        <span style={{ color:"var(--err)", display:"flex", alignItems:"center", gap:"5px" }}>
+                          <span style={{ width:"8px", height:"8px", background:"var(--err)", borderRadius:"50%", display:"inline-block" }} /> Saídas
+                        </span>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Saídas previstas */}
-                  <div className="card" style={{ padding:"16px" }}>
-                    <div style={{ fontSize:"11px", color:"var(--err)", fontWeight:700, letterSpacing:"0.06em", marginBottom:"12px", textTransform:"uppercase" }}>
-                      ↓ Saídas Previstas ({fluxo.saidasFuturas.length})
-                    </div>
-                    {fluxo.saidasFuturas.length === 0 ? (
-                      <div style={{ fontSize:"12px", color:"var(--t3)", textAlign:"center", padding:"16px 0" }}>Nenhuma saída prevista</div>
+                    {diasComMovimentos.length === 0 ? (
+                      <div style={{ padding:"40px", textAlign:"center", fontSize:"13px", color:"var(--t3)" }}>
+                        Nenhum lançamento no período selecionado.<br />
+                        <span style={{ fontSize:"11px" }}>Use a barra acima para adicionar entradas e saídas.</span>
+                      </div>
                     ) : (
-                      <div style={{ display:"flex", flexDirection:"column", gap:"6px", maxHeight:"280px", overflowY:"auto" }}>
-                        {[...fluxo.saidasFuturas].sort((a, b) => (a.vencimento ?? "") > (b.vencimento ?? "") ? 1 : -1).map(c => {
-                          const diff = diffDias(c.vencimento);
-                          const corData = diff !== null && diff < 3 ? "var(--err)" : "var(--t3)";
+                      <div>
+                        {diasComMovimentos.map((dia) => {
+                          const isExpanded = diaExpandido === dia.data;
+                          const saldo      = dia.entradas - dia.saidas;
+                          const isHoje     = dia.data === hj;
+
                           return (
-                            <div key={c.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"8px 10px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid rgba(244,63,94,.1)" }}>
-                              <div style={{ flex:1, minWidth:0 }}>
-                                <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.descricao}</div>
-                                <div style={{ display:"flex", gap:"6px", marginTop:"1px" }}>
-                                  <span style={{ fontSize:"10px", color:corData, fontFamily:"'DM Mono',monospace" }}>
-                                    {formatDate(c.vencimento)} {diff !== null && diff < 3 ? "🔴" : ""}
-                                  </span>
-                                  {(c as any).categoria && (
-                                    <span style={{ fontSize:"9px", color:"var(--t3)", background:"var(--surf3)", padding:"1px 5px", borderRadius:"4px" }}>{(c as any).categoria}</span>
+                            <div key={dia.data} style={{ borderBottom:"1px solid var(--b1)" }}>
+                              {/* Linha do dia */}
+                              <div
+                                onClick={() => setDiaExpandido(prev => prev === dia.data ? null : dia.data)}
+                                style={{
+                                  display:"flex", alignItems:"center", gap:"12px", padding:"11px 20px",
+                                  cursor:"pointer",
+                                  background: isHoje ? "rgba(61,255,160,.03)" : "transparent",
+                                }}
+                              >
+                                <div style={{ minWidth:"150px", fontSize:"13px", fontWeight:700, fontFamily:"'DM Mono',monospace", color: isHoje ? "var(--acc)" : "var(--t1)", display:"flex", alignItems:"center", gap:"6px" }}>
+                                  {new Date(dia.data + "T12:00:00").toLocaleDateString("pt-BR", { weekday:"short", day:"2-digit", month:"short" })}
+                                  {isHoje && (
+                                    <span style={{ fontSize:"9px", background:"var(--acc)", color:"#090b10", padding:"1px 5px", borderRadius:"3px", fontFamily:"sans-serif", fontWeight:800 }}>HOJE</span>
                                   )}
                                 </div>
+                                <div style={{ display:"flex", gap:"14px", flex:1 }}>
+                                  {dia.entradas > 0 && (
+                                    <span style={{ fontSize:"12px", color:"var(--ok)", fontFamily:"'DM Mono',monospace" }}>↑ {formatBRL(dia.entradas)}</span>
+                                  )}
+                                  {dia.saidas > 0 && (
+                                    <span style={{ fontSize:"12px", color:"var(--err)", fontFamily:"'DM Mono',monospace" }}>↓ {formatBRL(dia.saidas)}</span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize:"13px", fontWeight:700, fontFamily:"'DM Mono',monospace", color: saldo >= 0 ? "var(--ok)" : "var(--err)", flexShrink:0 }}>
+                                  {saldo >= 0 ? "+" : ""}{formatBRL(saldo)}
+                                </div>
+                                <div style={{ fontSize:"11px", color:"var(--t3)", flexShrink:0 }}>{dia.items.length} lanç.</div>
+                                <div style={{ fontSize:"11px", color:"var(--t3)", flexShrink:0 }}>{isExpanded ? "▲" : "▼"}</div>
                               </div>
-                              <div style={{ fontSize:"13px", fontWeight:700, color:"var(--err)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>
-                                {formatBRL(c.valor)}
-                              </div>
+
+                              {/* Lançamentos expandidos */}
+                              {isExpanded && (
+                                <div style={{ padding:"6px 20px 12px", display:"flex", flexDirection:"column", gap:"4px" }}>
+                                  {dia.items.map(l => (
+                                    editInlineId === l.id ? (
+                                      /* ── Formulário inline de edição ── */
+                                      <div key={l.id} style={{ display:"flex", gap:"6px", alignItems:"center", padding:"8px 10px", background:"var(--surf1)", borderRadius:"8px", border:"1px solid var(--acc)" }}>
+                                        <select
+                                          className="fc"
+                                          value={editInlineForm.status}
+                                          onChange={e => setEditInlineForm(f => ({ ...f, status: e.target.value }))}
+                                          style={{ width:"110px", fontSize:"11px", padding:"5px 7px", flexShrink:0 }}
+                                        >
+                                          <option value="A Receber">A Receber</option>
+                                          <option value="Pago">Pago</option>
+                                          <option value="Pendente">Pendente</option>
+                                        </select>
+                                        <input
+                                          className="fc"
+                                          value={editInlineForm.descricao}
+                                          onChange={e => setEditInlineForm(f => ({ ...f, descricao: e.target.value }))}
+                                          style={{ flex:2, fontSize:"12px" }}
+                                        />
+                                        <div style={{ minWidth:"130px", flexShrink:0 }}>
+                                          <CurrencyInput value={editInlineForm.valor} onChange={v => setEditInlineForm(f => ({ ...f, valor: v }))} />
+                                        </div>
+                                        <div style={{ minWidth:"120px", flexShrink:0 }}>
+                                          <DateInput value={editInlineForm.vencimento} onChange={v => setEditInlineForm(f => ({ ...f, vencimento: v }))} />
+                                        </div>
+                                        <select
+                                          className="fc"
+                                          value={editInlineForm.categoria}
+                                          onChange={e => setEditInlineForm(f => ({ ...f, categoria: e.target.value }))}
+                                          style={{ minWidth:"110px", flexShrink:0, fontSize:"11px", padding:"5px 7px" }}
+                                        >
+                                          <option value="">Categoria</option>
+                                          {CATEGORIAS.map(c => <option key={c}>{c}</option>)}
+                                        </select>
+                                        <button className="btn bp xs" onClick={salvarEditInline} style={{ flexShrink:0 }}>✓ Salvar</button>
+                                        <button className="btn bg xs" onClick={() => setEditInlineId(null)} style={{ flexShrink:0 }}>✕</button>
+                                      </div>
+                                    ) : (
+                                      /* ── Linha normal ── */
+                                      <div key={l.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"8px 10px", background:"var(--surf2)", borderRadius:"8px", border:`1px solid ${l.tipo === "Entrada" ? "rgba(61,255,160,.1)" : "rgba(244,63,94,.08)"}` }}>
+                                        <div style={{ fontSize:"14px", color: l.tipo === "Entrada" ? "var(--ok)" : "var(--err)", fontWeight:700, flexShrink:0, width:"14px", textAlign:"center" }}>
+                                          {l.tipo === "Entrada" ? "↑" : "↓"}
+                                        </div>
+                                        <div style={{ flex:1, minWidth:0 }}>
+                                          <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                                            {l.descricao}
+                                          </div>
+                                          <div style={{ display:"flex", gap:"5px", marginTop:"2px", alignItems:"center" }}>
+                                            {(l as any).categoria && (
+                                              <span style={{ fontSize:"9px", color:"var(--t3)", background:"var(--surf3)", padding:"1px 5px", borderRadius:"3px" }}>
+                                                {(l as any).categoria}
+                                              </span>
+                                            )}
+                                            {l.clientes?.nome && (
+                                              <span style={{ fontSize:"10px", color:"var(--t3)" }}>{l.clientes.nome}</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                        {chipStatus(l)}
+                                        <div style={{ fontSize:"13px", fontWeight:700, color: l.tipo === "Entrada" ? "var(--ok)" : "var(--err)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>
+                                          {formatBRL(l.valor)}
+                                        </div>
+                                        <div style={{ display:"flex", gap:"3px", flexShrink:0 }}>
+                                          {l.tipo === "Saída" && l.status !== "Pago" && (
+                                            <button
+                                              className="btn bp xs"
+                                              title="Marcar como pago"
+                                              onClick={() => { setContaParaPagar(l); setDtPagamentoConfirm(hj); setModalConfirmarPgto(true); }}
+                                            >✓</button>
+                                          )}
+                                          <button className="btn bg xs" title="Editar" onClick={() => abrirEditInline(l)}>✏</button>
+                                          <button
+                                            className="btn bg xs"
+                                            style={{ color:"var(--err)", borderColor:"rgba(244,63,94,.3)" }}
+                                            title="Excluir"
+                                            onClick={() => handleDeletarConta(l)}
+                                          >🗑</button>
+                                        </div>
+                                      </div>
+                                    )
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
                       </div>
                     )}
-                    <div style={{ marginTop:"10px", paddingTop:"8px", borderTop:"1px solid var(--b1)", display:"flex", justifyContent:"space-between", fontSize:"12px" }}>
-                      <span style={{ color:"var(--t3)" }}>Total previsto</span>
-                      <span style={{ color:"var(--err)", fontWeight:700, fontFamily:"'DM Mono',monospace" }}>{formatBRL(fluxo.totalSaidFut)}</span>
-                    </div>
                   </div>
-                </div>
-
-                {/* Resumo do saldo */}
-                <div className="card" style={{ padding:"20px" }}>
-                  <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em", marginBottom:"16px", textTransform:"uppercase" }}>
-                    Resumo do Período — {periodoLabel[periodo]}
-                  </div>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"16px" }}>
-                    {[
-                      { label:"Total entradas previstas", value: fluxo.totalEntradFut,  color:"var(--ok)" },
-                      { label:"Total saídas previstas",   value: fluxo.totalSaidFut,    color:"var(--err)" },
-                      { label:"Saldo líquido previsto",   value: fluxo.saldoPrevisto,   color: fluxo.saldoPrevisto >= 0 ? "var(--ok)" : "var(--err)" },
-                      { label:"Entradas realizadas",      value: fluxo.totalEntradReal, color:"var(--acc)" },
-                      { label:"Saídas realizadas",        value: fluxo.totalSaidReal,   color:"var(--warn)" },
-                      { label:"Saldo realizado",          value: fluxo.saldoRealizado,  color: fluxo.saldoRealizado >= 0 ? "var(--acc)" : "var(--err)" },
-                    ].map(item => (
-                      <div key={item.label} style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", padding:"10px 0", borderBottom:"1px solid var(--b1)" }}>
-                        <span style={{ fontSize:"12px", color:"var(--t3)" }}>{item.label}</span>
-                        <span style={{ fontSize:"14px", fontWeight:700, color:item.color, fontFamily:"'DM Mono',monospace" }}>{formatBRL(item.value)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                )}
 
               </div>
             )}
@@ -680,7 +928,7 @@ export default function FinanceiroPage() {
                           <td>
                             <div style={{ display:"flex", gap:"4px" }}>
                               {c.status !== "Pago" && (
-                                <button className="btn bp xs" onClick={() => { setContaParaPagar(c); setDtPagamentoConfirm(hoje()); setModalConfirmarPgto(true); }}>✓ Pagar</button>
+                                <button className="btn bp xs" onClick={() => { setContaParaPagar(c); setDtPagamentoConfirm(hj); setModalConfirmarPgto(true); }}>✓ Pagar</button>
                               )}
                               <button className="btn bg xs" onClick={() => abrirEditarConta(c)}>✏</button>
                               <button className="btn bg xs" style={{ color:"var(--err)", borderColor:"var(--err)" }} onClick={() => handleDeletarConta(c)}>🗑</button>
