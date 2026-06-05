@@ -55,9 +55,9 @@ export default function NovoOrcamentoPage() {
   const [salvando, setSalvando]       = useState(false);
   const [totalPedidoInput, setTotalPedidoInput] = useState(0);
 
-  const largRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const altRefs  = useRef<(HTMLInputElement | null)[]>([]);
-  const qtdRefs  = useRef<(HTMLInputElement | null)[]>([]);
+  const largRefs   = useRef<(HTMLInputElement | null)[]>([]);
+  const altRefs    = useRef<(HTMLInputElement | null)[]>([]);
+  const qtdRefs    = useRef<(HTMLInputElement | null)[]>([]);
   const focarLinha = useRef<number | null>(null);
 
   useEffect(() => { load(); }, []);
@@ -137,15 +137,20 @@ export default function NovoOrcamentoPage() {
     return calcM2Item(item) * item.valor_m2;
   }
 
+  function updProduto(i: number, id: number, label: string) {
+    const prod = produtos.find(p => p.id === id);
+    setItens(items => items.map((item, idx) => idx !== i ? item : {
+      ...item,
+      produto_id: id,
+      produto_nome: label,
+      valor_m2: prod?.valor ?? item.valor_m2,
+    }));
+  }
+
   function updItem(i: number, field: keyof ItemForm, value: string | number) {
     setItens(items => items.map((item, idx) => {
       if (idx !== i) return item;
-      const novo = { ...item, [field]: value };
-      if (field === "produto_id") {
-        const prod = produtos.find(p => p.id === Number(value));
-        if (prod) { novo.produto_nome = prod.nome; novo.valor_m2 = prod.valor; }
-      }
-      return novo;
+      return { ...item, [field]: value };
     }));
   }
 
@@ -189,6 +194,8 @@ export default function NovoOrcamentoPage() {
     label: c.nome,
     sub: c.cidade || undefined,
   }));
+
+  const produtoOptions = produtos.map(p => ({ id: p.id, label: p.nome }));
 
   async function salvar() {
     if (!clienteId) { alert("Selecione um cliente"); return; }
@@ -254,6 +261,7 @@ export default function NovoOrcamentoPage() {
                 value={clienteId}
                 onChange={(id) => setClienteId(id)}
                 placeholder="Digite o nome do cliente..."
+                tabIndex={-1}
               />
             </div>
 
@@ -359,24 +367,16 @@ export default function NovoOrcamentoPage() {
               <div key={i} style={{ marginBottom: "10px" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "2fr 70px 70px 50px 90px 90px 90px 36px", gap: "6px", alignItems: "center" }}>
                   <AutocompleteInput
-                    options={produtos.map(p => ({ id: p.id, label: p.nome }))}
-                     value={item.produto_id}
-                     onChange={(id, label) => {
-                     const prod = produtos.find(p => p.id === id);
-                     setItens(items => items.map((it, idx) => idx !== i ? it : {
-                     ...it,
-                     produto_id: id,
-                     produto_nome: label,
-                     valor_m2: prod?.valor ?? it.valor_m2,
-                    }));
-               }}
-               placeholder="Buscar produto..."
-               tabIndex={i * 4 + 1}
-/>
+                    options={produtoOptions}
+                    value={item.produto_id}
+                    onChange={(id, label) => updProduto(i, id, label)}
+                    placeholder="Buscar produto..."
+                    tabIndex={i * 4 + 1}
+                  />
                   <input
                     className="fc"
                     type="number"
-                s    ref={el => { largRefs.current[i] = el; }}
+                    ref={el => { largRefs.current[i] = el; }}
                     value={item.largura || ""}
                     onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)}
                     onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); altRefs.current[i]?.focus(); } }}
