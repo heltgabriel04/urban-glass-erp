@@ -19,26 +19,64 @@ const CHIP: Record<string, string> = {
   "Cancelado":                "chip cr",
 };
 
+const CHAPAS_DIMS = [
+  { w: 3300, h: 2250 }, { w: 2250, h: 3300 },
+  { w: 3660, h: 2140 }, { w: 2140, h: 3660 },
+  { w: 2150, h: 3660 }, { w: 3660, h: 2150 },
+];
+
+function isChapaInteira(largura: number, altura: number): boolean {
+  return CHAPAS_DIMS.some(c =>
+    Math.abs(largura - c.w) < 50 && Math.abs(altura - c.h) < 50
+  );
+}
+
 export default function PedidosPage() {
   const { toast } = useToast();
-  const [pedidos, setPedidos]           = useState<Pedido[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [filtro, setFiltro]             = useState("");
+  const [pedidos, setPedidos]             = useState<Pedido[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [filtro, setFiltro]               = useState("");
   const [comOtimizacao, setComOtimizacao] = useState<Set<string>>(new Set());
+  const [pedidosChapa, setPedidosChapa]   = useState<Set<string>>(new Set());
+  const [pedidosVidroCliente, setPedidosVidroCliente] = useState<Set<string>>(new Set());
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     setLoading(true);
-    const [data, otimRows] = await Promise.all([
+    const [data, otimRows, itensRows] = await Promise.all([
       getPedidos(),
       supabase.from("historico_otimizador").select("pedido_id"),
+      supabase.from("itens_pedido").select("pedido_id, largura, altura, vidro_cliente"),
     ]);
     setPedidos(data);
+
     const ids = new Set<string>(
       (otimRows.data ?? []).map((r: any) => r.pedido_id as string)
     );
     setComOtimizacao(ids);
+
+    // Agrupa itens por pedido
+    const itensPorPedido: Record<string, any[]> = {};
+    for (const item of (itensRows.data ?? [])) {
+      if (!itensPorPedido[item.pedido_id]) itensPorPedido[item.pedido_id] = [];
+      itensPorPedido[item.pedido_id].push(item);
+    }
+
+    // Detecta pedidos de chapa inteira e vidro do cliente
+    const chapas = new Set<string>();
+    const vidroCliente = new Set<string>();
+    for (const [pedidoId, itens] of Object.entries(itensPorPedido)) {
+      if (itens.length > 0 && itens.every((i: any) => isChapaInteira(i.largura, i.altura))) {
+        chapas.add(pedidoId);
+      }
+      if (itens.length > 0 && itens.every((i: any) => i.vidro_cliente === true)) {
+        vidroCliente.add(pedidoId);
+      }
+    }
+    setPedidosChapa(chapas);
+    setPedidosVidroCliente(vidroCliente);
+
     setLoading(false);
   }
 
@@ -118,7 +156,6 @@ export default function PedidosPage() {
 
       <div className="con">
 
-        {/* CARDS */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:"12px", marginBottom:"20px" }}>
           {[
             { label:"Total",       value: String(pedidos.length),    color:"var(--t1)",   sub:"pedidos" },
@@ -135,7 +172,6 @@ export default function PedidosPage() {
           ))}
         </div>
 
-        {/* TABELA */}
         {loading ? (
           <div className="loading">Carregando pedidos...</div>
         ) : (
@@ -164,12 +200,16 @@ export default function PedidosPage() {
                   </tr>
                 )}
                 {filtrados.map(p => {
-                  const aberto       = p.valor_total - p.valor_recebido;
-                  const quitado      = aberto <= 0;
-                  const finalizado   = ["Entregue","Cancelado"].includes(p.status);
-                  const primeiro     = p.status === "Aguardando otimização";
-                  const podeRomaneio = ["Finalizado","Entregue"].includes(p.status);
-                  const temOtim      = comOtimizacao.has(p.id);
+                  const aberto        = p.valor_total - p.valor_recebido;
+                  const quitado       = aberto <= 0;
+                  const finalizado    = ["Entregue","Cancelado"].includes(p.status);
+                  const primeiro      = p.status === "Aguardando otimização";
+                  const podeRomaneio  = ["Finalizado","Entregue"].includes(p.status);
+                  const temOtim       = comOtimizacao.has(p.id);
+                  const isChapa       = pedidosChapa.has(p.id);
+                  const isVidroCliente = pedidosVidroCliente.has(p.id);
+                  const podeAvancarSemOtim = temOtim || isChapa || isVidroCliente;
+                  const bloqueado     = !finalizado && p.status === "Aguardando otimização" && !podeAvancarSemOtim;
 
                   return (
                     <tr key={p.id}>
@@ -196,28 +236,12 @@ export default function PedidosPage() {
                       <td>
                         <div style={{ display:"flex", gap:"4px", alignItems:"center" }}>
 
-                          {/* Ver pedido */}
                           {btnLink(`/pedidos/${p.id}`, "Ver pedido", "◉", "var(--acc)", "rgba(99,102,241,.12)")}
 
-                          {/* Plano de corte — só se tiver otimização */}
-                          {temOtim && btnLink(
-                            `/pedidos/${p.id}/plano`,
-                            "Ver Plano de Corte",
-                            "◈",
-                            "var(--ok)",
-                            "rgba(16,185,129,.12)"
-                          )}
+                          {temOtim && btnLink(`/pedidos/${p.id}/plano`, "Ver Plano de Corte", "◈", "var(--ok)", "rgba(16,185,129,.12)")}
 
-                          {/* Etiquetas — só se tiver otimização */}
-                          {temOtim && btnLink(
-                            `/pedidos/${p.id}/etiquetas`,
-                            "Imprimir Etiquetas",
-                            "🏷",
-                            "var(--acc2)",
-                            "rgba(139,92,246,.12)"
-                          )}
+                          {temOtim && btnLink(`/pedidos/${p.id}/etiquetas`, "Imprimir Etiquetas", "🏷", "var(--acc2)", "rgba(139,92,246,.12)")}
 
-                          {/* Romaneio */}
                           {podeRomaneio && (
                             <button
                               title="Imprimir Romaneio de Saída"
@@ -231,14 +255,24 @@ export default function PedidosPage() {
                               style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", height:"28px", padding:"0 8px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"10px", fontWeight:700, fontFamily:"DM Mono, monospace", letterSpacing:"0.5px", cursor:"pointer", transition:"all 0.15s" }}
                               onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(16,185,129,.15)"; b.style.borderColor = "var(--ok)"; b.style.color = "var(--ok)"; }}
                               onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
-                            >
-                              R
-                            </button>
+                            >R</button>
                           )}
 
-                          {/* Retroceder / Avançar */}
-                          {btnAcao("var(--warn)", "rgba(245,158,11,.15)", primeiro ? "Já está no início do fluxo" : "Retroceder etapa", "←", () => !primeiro && handleRetroceder(p.id, p.status))}
-                          {btnAcao("var(--ok)",   "rgba(16,185,129,.15)", finalizado ? "Pedido encerrado" : (!temOtim && p.status === "Aguardando otimização") ? "Otimização pendente — gere o plano antes de avançar" : "Avançar etapa", "→", () => { if (finalizado) return; if (!temOtim && p.status === "Aguardando otimização") { toast("Gere a otimização de corte antes de avançar este pedido.", "warn"); return; } handleAvancar(p.id, p.status); })}
+                          {btnAcao("var(--warn)", "rgba(245,158,11,.15)",
+                            primeiro ? "Já está no início do fluxo" : "Retroceder etapa",
+                            "←",
+                            () => !primeiro && handleRetroceder(p.id, p.status)
+                          )}
+
+                          {btnAcao("var(--ok)", "rgba(16,185,129,.15)",
+                            finalizado ? "Pedido encerrado" : bloqueado ? "Otimização pendente — gere o plano antes de avançar" : "Avançar etapa",
+                            "→",
+                            () => {
+                              if (finalizado) return;
+                              if (bloqueado) { toast("Gere a otimização de corte antes de avançar este pedido.", "warn"); return; }
+                              handleAvancar(p.id, p.status);
+                            }
+                          )}
                         </div>
                       </td>
                       <td style={{ width:"40px", textAlign:"center" }}>
@@ -248,9 +282,7 @@ export default function PedidosPage() {
                           style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", cursor:"pointer", transition:"all 0.15s" }}
                           onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
                           onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
-                        >
-                          🗑
-                        </button>
+                        >🗑</button>
                       </td>
                     </tr>
                   );
