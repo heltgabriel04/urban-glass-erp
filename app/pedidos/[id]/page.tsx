@@ -33,6 +33,18 @@ const FLUXO = [
   "Entregue",
 ];
 
+const CHAPAS_DIMS = [
+  { w: 3300, h: 2250 }, { w: 2250, h: 3300 },
+  { w: 3660, h: 2140 }, { w: 2140, h: 3660 },
+  { w: 2150, h: 3660 }, { w: 3660, h: 2150 },
+];
+
+function isChapaInteira(largura: number, altura: number): boolean {
+  return CHAPAS_DIMS.some(c =>
+    Math.abs(largura - c.w) < 50 && Math.abs(altura - c.h) < 50
+  );
+}
+
 function hoje() { return new Date().toISOString().split("T")[0]; }
 
 function formatarValorDigitado(raw: string): string {
@@ -81,13 +93,8 @@ export default function PedidoDetalhe() {
 
   const [editando, setEditando]         = useState(false);
   const [editForm, setEditForm]         = useState({
-    cliente_id: 0,
-    dt_pedido: "",
-    dt_retirada: "",
-    forma_pgto: "",
-    conta: "",
-    parcelas: 1,
-    obs: "",
+    cliente_id: 0, dt_pedido: "", dt_retirada: "",
+    forma_pgto: "", conta: "", parcelas: 1, obs: "",
   });
   const [editParcelas, setEditParcelas] = useState<ParcelaEdit[]>([]);
 
@@ -112,12 +119,10 @@ export default function PedidoDetalhe() {
     setLancamentos(lancs);
     setOtimizacoes(otims);
     setClientes(clis as { id: number; nome: string }[]);
-
     if (data?.cliente_id) {
       const cred = await getCreditoCliente(data.cliente_id);
       setCreditoCliente(cred);
     }
-
     setLoading(false);
   }
 
@@ -136,19 +141,12 @@ export default function PedidoDetalhe() {
       (a.vencimento ?? "").localeCompare(b.vencimento ?? "")
     );
     if (aReceber.length > 0) {
-      setEditParcelas(aReceber.map(l => ({
-        data: l.vencimento ?? "",
-        valor: l.valor,
-        lancamento_id: l.id,
-      })));
+      setEditParcelas(aReceber.map(l => ({ data: l.vencimento ?? "", valor: l.valor, lancamento_id: l.id })));
     } else {
       const n = pedido.parcelas ?? 1;
       const valorParcela = parseFloat((pedido.valor_total / n).toFixed(2));
       const datas = pedido.datas_pgto ?? [];
-      setEditParcelas(Array.from({ length: n }, (_, i) => ({
-        data: datas[i] ?? "",
-        valor: valorParcela,
-      })));
+      setEditParcelas(Array.from({ length: n }, (_, i) => ({ data: datas[i] ?? "", valor: valorParcela })));
     }
     setEditando(true);
   }
@@ -164,15 +162,13 @@ export default function PedidoDetalhe() {
 
   function handlePrimeiraDtEdit(data: string) {
     setEditParcelas(prev => prev.map((p, i) => ({
-      ...p,
-      data: !data ? "" : (i === 0 ? data : addMeses(data, i)),
+      ...p, data: !data ? "" : (i === 0 ? data : addMeses(data, i)),
     })));
   }
 
   async function salvarEdicao() {
     if (!pedido) return;
     setSalvando(true);
-
     const result = await updatePedido(pedido.id, {
       cliente_id:   editForm.cliente_id,
       dt_pedido:    editForm.dt_pedido,
@@ -184,9 +180,7 @@ export default function PedidoDetalhe() {
       datas_pgto:   editParcelas.map(p => p.data).filter(d => d),
       valores_pgto: editParcelas.map(p => p.valor),
     });
-
     if (!result) { toast("Erro ao salvar pedido", "err"); setSalvando(false); return; }
-
     const aReceber = lancamentos.filter(l => l.status === "A Receber");
     for (const l of aReceber) await deletarLancamento(l.id);
     for (let i = 0; i < editParcelas.length; i++) {
@@ -194,17 +188,11 @@ export default function PedidoDetalhe() {
       if (!p.data || p.valor <= 0) continue;
       await createLancamento({
         tipo: "Entrada",
-        descricao: editForm.parcelas === 1
-          ? `Recebimento · ${pedido.id}`
-          : `Parcela ${i + 1}/${editForm.parcelas} · ${pedido.id}`,
-        valor: p.valor,
-        status: "A Receber",
-        vencimento: p.data,
-        pedido_id: pedido.id,
-        cliente_id: editForm.cliente_id,
+        descricao: editForm.parcelas === 1 ? `Recebimento · ${pedido.id}` : `Parcela ${i + 1}/${editForm.parcelas} · ${pedido.id}`,
+        valor: p.valor, status: "A Receber", vencimento: p.data,
+        pedido_id: pedido.id, cliente_id: editForm.cliente_id,
       });
     }
-
     toast("Pedido atualizado");
     setSalvando(false);
     setEditando(false);
@@ -218,7 +206,7 @@ export default function PedidoDetalhe() {
 
   async function handleAvancar() {
     if (!pedido) return;
-    if (pedido.status === "Aguardando otimização" && otimizacoes.length === 0 && !todosVidroCliente) {
+    if (pedido.status === "Aguardando otimização" && otimizacoes.length === 0 && !todosVidroCliente && !todosChapa) {
       toast("Realize a otimização de corte antes de avançar para produção.", "warn");
       return;
     }
@@ -238,7 +226,6 @@ export default function PedidoDetalhe() {
     const result = await registrarRecebimento(pedido.id, valor, dataRec);
     setSalvando(false);
     if (!result) { toast("Erro ao registrar recebimento", "err"); return; }
-
     const { excedente } = result as any;
     if (excedente > 0.005) {
       toast(`✓ Pedido quitado! ${formatBRL(excedente)} ficaram como crédito do cliente.`);
@@ -285,7 +272,8 @@ export default function PedidoDetalhe() {
   const temOtimizacao = otimizacoes.length > 0;
   const ultimaOtim   = otimizacoes[0] ?? null;
   const todosVidroCliente = temItens && (pedido.itens_pedido ?? []).every(i => (i as any).vidro_cliente === true);
-  const bloqueadoSemOtim  = pedido.status === "Aguardando otimização" && !temOtimizacao && !todosVidroCliente;
+  const todosChapa        = temItens && (pedido.itens_pedido ?? []).every(i => isChapaInteira(i.largura, i.altura));
+  const bloqueadoSemOtim  = pedido.status === "Aguardando otimização" && !temOtimizacao && !todosVidroCliente && !todosChapa;
 
   const fc: React.CSSProperties = {
     background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: "6px",
@@ -320,7 +308,7 @@ export default function PedidoDetalhe() {
 
           <button className="btn bg sm" onClick={abrirEdicao}>✏ Editar</button>
 
-          {temItens && !todosVidroCliente && (
+          {temItens && !todosVidroCliente && !todosChapa && (
             <a href={"/otimizador?pedido=" + pedido.id} className="btn bg sm">◈ Otimizar Corte</a>
           )}
 
@@ -373,6 +361,16 @@ export default function PedidoDetalhe() {
               <div>
                 <div style={{ fontSize:"13px", fontWeight:700, color:"var(--warn)" }}>Vidro fornecido pelo cliente</div>
                 <div style={{ fontSize:"12px", color:"var(--t3)" }}>Todos os itens são vidro do cliente — otimização não é necessária para avançar.</div>
+              </div>
+            </div>
+          )}
+
+          {todosChapa && pedido.status === "Aguardando otimização" && (
+            <div style={{ background:"rgba(0,200,255,.08)", border:"1px solid rgba(0,200,255,.25)", borderRadius:"10px", padding:"12px 18px", display:"flex", alignItems:"center", gap:"10px" }}>
+              <span style={{ fontSize:"16px" }}>🪟</span>
+              <div>
+                <div style={{ fontSize:"13px", fontWeight:700, color:"var(--acc2)" }}>Pedido de chapas inteiras</div>
+                <div style={{ fontSize:"12px", color:"var(--t3)" }}>Este pedido contém apenas chapas — otimização de corte não é necessária para avançar.</div>
               </div>
             </div>
           )}
@@ -477,16 +475,13 @@ export default function PedidoDetalhe() {
                 </div>
               )}
 
-              {/* Crédito disponível */}
               {creditoCliente > 0.005 && !quitado && (
                 <div style={{ marginBottom:"10px", padding:"10px 12px", background:"rgba(0,200,255,.07)", border:"1px solid rgba(0,200,255,.25)", borderRadius:"8px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"10px" }}>
                   <div>
                     <div style={{ fontSize:"11px", fontWeight:700, color:"var(--acc2)" }}>Crédito disponível do cliente</div>
                     <div style={{ fontSize:"13px", fontWeight:700, color:"var(--t1)", fontFamily:"'DM Mono', monospace" }}>{formatBRL(creditoCliente)}</div>
                   </div>
-                  <button className="btn bg sm" onClick={handleUsarCredito} disabled={salvando}>
-                    Aplicar crédito
-                  </button>
+                  <button className="btn bg sm" onClick={handleUsarCredito} disabled={salvando}>Aplicar crédito</button>
                 </div>
               )}
 
@@ -528,7 +523,7 @@ export default function PedidoDetalhe() {
           <div className="card" style={{ padding:"20px 24px" }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px" }}>
               <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>ITENS DO PEDIDO ({pedido.itens_pedido?.length ?? 0})</div>
-              {temItens && !todosVidroCliente && (
+              {temItens && !todosVidroCliente && !todosChapa && (
                 <a href={"/otimizador?pedido=" + pedido.id} className="btn bg xs">◈ Otimizar Corte</a>
               )}
             </div>
@@ -571,7 +566,6 @@ export default function PedidoDetalhe() {
                 <div className="mtit">Editar Pedido · {pedido.id}</div>
                 <button className="mcl" onClick={() => setEditando(false)}>✕</button>
               </div>
-
               <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
                 <div className="fg">
                   <label className="fl">Cliente</label>
@@ -579,12 +573,10 @@ export default function PedidoDetalhe() {
                     {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                   </select>
                 </div>
-
                 <div className="fr">
                   <div className="fg"><label className="fl">Data do Pedido</label><DateInput value={editForm.dt_pedido} onChange={v => setEditForm(f => ({ ...f, dt_pedido: v }))} /></div>
                   <div className="fg"><label className="fl">Previsão Retirada</label><DateInput value={editForm.dt_retirada} onChange={v => setEditForm(f => ({ ...f, dt_retirada: v }))} /></div>
                 </div>
-
                 <div className="fr">
                   <div className="fg">
                     <label className="fl">Forma de Pagamento</label>
@@ -601,14 +593,12 @@ export default function PedidoDetalhe() {
                     </select>
                   </div>
                 </div>
-
                 <div className="fg">
                   <label className="fl">Parcelas</label>
                   <select style={fc} value={editForm.parcelas} onChange={e => handleEditParcelas(Number(e.target.value))}>
                     {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
                   </select>
                 </div>
-
                 <div style={{ padding:"12px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)" }}>
                   <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"10px", textTransform:"uppercase" }}>
                     {editForm.parcelas === 1 ? "Pagamento" : `Parcelas (${editForm.parcelas}x)`}
@@ -620,22 +610,9 @@ export default function PedidoDetalhe() {
                   </div>
                   {editParcelas.map((p, idx) => (
                     <div key={idx} style={{ display:"grid", gridTemplateColumns: editForm.parcelas > 1 ? "50px 1fr 130px" : "1fr 130px", gap:"8px", alignItems:"center", marginBottom:"6px" }}>
-                      {editForm.parcelas > 1 && (
-                        <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>{idx + 1}ª</span>
-                      )}
-                      <DateInput
-                        value={p.data}
-                        onChange={v => {
-                          if (idx === 0) handlePrimeiraDtEdit(v);
-                          else setEditParcelas(prev => prev.map((x, i) => i === idx ? { ...x, data: v } : x));
-                        }}
-                      />
-                      <CurrencyInput
-                        value={p.valor}
-                        onChange={v => setEditParcelas(prev => prev.map((x, i) => i === idx ? { ...x, valor: v } : x))}
-                        placeholder="R$ 0,00"
-                        style={{ margin: 0 }}
-                      />
+                      {editForm.parcelas > 1 && <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>{idx + 1}ª</span>}
+                      <DateInput value={p.data} onChange={v => { if (idx === 0) handlePrimeiraDtEdit(v); else setEditParcelas(prev => prev.map((x, i) => i === idx ? { ...x, data: v } : x)); }} />
+                      <CurrencyInput value={p.valor} onChange={v => setEditParcelas(prev => prev.map((x, i) => i === idx ? { ...x, valor: v } : x))} placeholder="R$ 0,00" style={{ margin: 0 }} />
                     </div>
                   ))}
                   <div style={{ fontSize:"10px", color:"var(--t3)", marginTop:"4px", fontFamily:"'DM Mono',monospace" }}>
@@ -643,14 +620,12 @@ export default function PedidoDetalhe() {
                     {" · "}Valor do pedido: <strong>{formatBRL(pedido.valor_total)}</strong>
                   </div>
                 </div>
-
                 <div className="fg">
                   <label className="fl">Observações</label>
                   <textarea style={{ ...fc, minHeight:"80px", resize:"vertical", fontFamily:"'Inter',sans-serif" }}
                     value={editForm.obs} onChange={e => setEditForm(f => ({ ...f, obs: e.target.value }))}
                     placeholder="Observações do pedido..." />
                 </div>
-
                 <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end", paddingTop:"4px" }}>
                   <button className="btn bg" onClick={() => setEditando(false)}>Cancelar</button>
                   <button className="btn bp" onClick={salvarEdicao} disabled={salvando}>

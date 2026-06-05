@@ -42,6 +42,18 @@ const ITEM_VAZIO: ItemForm = {
   vidro_cliente: false,
 };
 
+const CHAPAS_DIMS = [
+  { w: 3300, h: 2250 }, { w: 2250, h: 3300 },
+  { w: 3660, h: 2140 }, { w: 2140, h: 3660 },
+  { w: 2150, h: 3660 }, { w: 3660, h: 2150 },
+];
+
+function isChapaInteira(largura: number, altura: number): boolean {
+  return CHAPAS_DIMS.some(c =>
+    Math.abs(largura - c.w) < 50 && Math.abs(altura - c.h) < 50
+  );
+}
+
 function arredondarParaMultiplo50(v: number): number {
   if (v % 50 === 0) return v;
   return Math.ceil(v / 50) * 50;
@@ -113,20 +125,8 @@ export default function NovoPedidoPage() {
     if (cli) setFormaPgto(cli.pgto || "");
   }, [clienteId, clientes]);
 
-  // ── Opções para autocomplete ──────────────────────────────
-  const clienteOpts = clientes.map(c => ({
-    id: c.id,
-    label: c.nome,
-    sub: c.cidade ?? undefined,
-  }));
-
-  const produtoOpts = produtos.map(p => ({
-    id: p.id,
-    label: p.nome,
-    sub: formatBRL(p.valor) + "/m²",
-  }));
-
-  // ── Cálculos ─────────────────────────────────────────────
+  const clienteOpts = clientes.map(c => ({ id: c.id, label: c.nome, sub: c.cidade ?? undefined }));
+  const produtoOpts = produtos.map(p => ({ id: p.id, label: p.nome, sub: formatBRL(p.valor) + "/m²" }));
 
   function calcM2Item(item: ItemForm): number {
     const l = arredondarParaMultiplo50(item.largura);
@@ -149,8 +149,6 @@ export default function NovoPedidoPage() {
   const valorTotal = itens.reduce((a, i) => a + calcSubtotal(i), 0);
   const todosVidroCliente = itens.length > 0 && itens.every(i => i.vidro_cliente);
   const algumVidroCliente = itens.some(i => i.vidro_cliente);
-
-  // ── Parcelas ─────────────────────────────────────────────
 
   useEffect(() => {
     setParcelasForm(prev => {
@@ -184,8 +182,6 @@ export default function NovoPedidoPage() {
     });
   }
 
-  // ── Itens ─────────────────────────────────────────────────
-
   function getTabela(): TabelaPreco | null {
     if (!clienteId) return tabelas[0] || null;
     const cli = clientes.find(c => c.id === clienteId);
@@ -193,13 +189,8 @@ export default function NovoPedidoPage() {
     return tabelas.find(t => cli.tabela === "g" ? t.tipo === "Grandes Clientes" : t.tipo === "Padrão") || tabelas[0] || null;
   }
 
-  function addItem() {
-    setItens(i => [...i, { ...ITEM_VAZIO }]);
-  }
-
-  function remItem(i: number) {
-    setItens(items => items.filter((_, idx) => idx !== i));
-  }
+  function addItem() { setItens(i => [...i, { ...ITEM_VAZIO }]); }
+  function remItem(i: number) { setItens(items => items.filter((_, idx) => idx !== i)); }
 
   function updItem(i: number, field: keyof ItemForm, value: string | number | boolean) {
     setItens(items => items.map((item, idx) => {
@@ -277,6 +268,8 @@ export default function NovoPedidoPage() {
 
     setSalvando(true);
 
+    const todosChapa = itens.every(i => isChapaInteira(i.largura, i.altura));
+
     const pedido: PedidoInsert = {
       id: proximoId,
       cliente_id: clienteId,
@@ -287,7 +280,7 @@ export default function NovoPedidoPage() {
       m2_total: m2Total,
       valor_total: valorTotal,
       valor_recebido: 0,
-      status: "Aguardando otimização",
+      status: todosChapa ? "Em Produção – Corte" : "Aguardando otimização",
       forma_pgto: formaPgto,
       conta, parcelas, obs,
     };
@@ -338,15 +331,9 @@ export default function NovoPedidoPage() {
           <div className="card">
             <div className="ct">Dados do Pedido</div>
 
-            {/* Cliente com autocomplete */}
             <div className="fg" style={{ marginBottom: "10px" }}>
               <label className="fl">Cliente *</label>
-              <AutocompleteInput
-                options={clienteOpts}
-                value={clienteId}
-                onChange={(id) => setClienteId(id)}
-                placeholder="Buscar cliente..."
-              />
+              <AutocompleteInput options={clienteOpts} value={clienteId} onChange={(id) => setClienteId(id)} placeholder="Buscar cliente..." />
             </div>
 
             {clienteId && tab && (
@@ -457,7 +444,6 @@ export default function NovoPedidoPage() {
             </div>
           )}
 
-          {/* Cabeçalho colunas */}
           <div style={{ display: "grid", gridTemplateColumns: isMl ? colsMl : colsM2, gap: "6px", padding: "6px 0", borderBottom: "1px solid var(--b1)", marginBottom: "8px", alignItems: "center" }}>
             {(isMl
               ? ["Produto","Larg. (mm)","Alt. (mm)","Qtd","R$/ml","Total(R$)",""]
@@ -505,7 +491,6 @@ export default function NovoPedidoPage() {
                 {isMl ? (
                   <div>
                     <div style={{ display: "grid", gridTemplateColumns: colsMl, gap: "6px", alignItems: "center" }}>
-                      {/* Autocomplete produto */}
                       <AutocompleteInput options={produtoOpts} value={item.produto_id} onChange={(id, label) => setProdutoItem(i, id, label)} placeholder="Buscar produto..." />
                       <div style={{ position: "relative" }}>
                         <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" style={{ paddingRight: "24px" }} />
@@ -535,7 +520,6 @@ export default function NovoPedidoPage() {
                 ) : (
                   <div>
                     <div style={{ display: "grid", gridTemplateColumns: colsM2, gap: "6px", alignItems: "center" }}>
-                      {/* Autocomplete produto */}
                       <AutocompleteInput options={produtoOpts} value={item.produto_id} onChange={(id, label) => setProdutoItem(i, id, label)} placeholder="Buscar produto..." />
                       <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
                       <input className="fc" type="number" value={item.altura  || ""} onChange={e => updItem(i, "altura",  parseInt(e.target.value) || 0)} placeholder="0" />
