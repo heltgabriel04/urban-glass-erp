@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
-import { getPedidos, avancarStatusPedido } from "@/services/pedidos.service";
+import { getPedidos, avancarStatusPedido, retrocederStatusPedido } from "@/services/pedidos.service";
 import { formatBRL, formatDate, formatM2 } from "@/lib/formatters";
 import type { Pedido, StatusPedido } from "@/types";
 import { useToast } from "@/components/ui/toast";
@@ -32,6 +32,7 @@ export default function ProducaoPage() {
   const [comOtimizacao, setComOtimizacao] = useState<Set<string>>(new Set());
   const [vidroCliente, setVidroCliente]   = useState<Set<string>>(new Set()); // pedidos 100% vidro do cliente
   const [avancando, setAvancando]         = useState<string | null>(null);
+  const [recuando, setRecuando]           = useState<string | null>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -79,6 +80,13 @@ export default function ProducaoPage() {
     setAvancando(p.id);
     await avancarStatusPedido(p.id, p.status as StatusPedido);
     setAvancando(null);
+    load();
+  }
+
+  async function handleRetroceder(p: Pedido) {
+    setRecuando(p.id);
+    await retrocederStatusPedido(p.id, p.status as StatusPedido);
+    setRecuando(null);
     load();
   }
 
@@ -218,14 +226,26 @@ export default function ProducaoPage() {
                           )}
 
                           {!ultimo && !semOtim && (
-                            <button
-                              className="btn bp xs"
-                              style={{ marginTop:"8px", width:"100%" }}
-                              disabled={avancando === p.id}
-                              onClick={e => { e.stopPropagation(); handleAvancar(p); }}
-                            >
-                              {avancando === p.id ? "..." : "Avançar →"}
-                            </button>
+                            <div style={{ display:"flex", gap:"4px", marginTop:"8px" }}>
+                              {p.status !== COLUNAS[0] && (
+                                <button
+                                  className="btn bg xs"
+                                  style={{ flex: 1 }}
+                                  disabled={recuando === p.id}
+                                  onClick={e => { e.stopPropagation(); handleRetroceder(p); }}
+                                >
+                                  {recuando === p.id ? "..." : "← Recuar"}
+                                </button>
+                              )}
+                              <button
+                                className="btn bp xs"
+                                style={{ flex: 1 }}
+                                disabled={avancando === p.id}
+                                onClick={e => { e.stopPropagation(); handleAvancar(p); }}
+                              >
+                                {avancando === p.id ? "..." : "Avançar →"}
+                              </button>
+                            </div>
                           )}
                         </div>
                       );
@@ -282,9 +302,16 @@ export default function ProducaoPage() {
                                   ◈ Otimizar
                                 </a>
                               ) : (
-                                <button className="btn bp xs" disabled={avancando === p.id} onClick={() => handleAvancar(p)}>
-                                  {avancando === p.id ? "..." : "Avançar →"}
-                                </button>
+                                <div style={{ display:"flex", gap:"4px" }}>
+                                  {p.status !== COLUNAS[0] && (
+                                    <button className="btn bg xs" disabled={recuando === p.id} onClick={() => handleRetroceder(p)}>
+                                      {recuando === p.id ? "..." : "← Recuar"}
+                                    </button>
+                                  )}
+                                  <button className="btn bp xs" disabled={avancando === p.id} onClick={() => handleAvancar(p)}>
+                                    {avancando === p.id ? "..." : "Avançar →"}
+                                  </button>
+                                </div>
                               )
                             )}
                           </td>
