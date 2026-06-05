@@ -107,6 +107,14 @@ function getColorForPedido(pid: string) {
   return PEDIDO_COLORS[pid];
 }
 
+// Detecta se um item é chapa inteira (dimensões iguais ou muito próximas à chapa padrão)
+function isItemChapaInteira(largura: number, altura: number): boolean {
+  return CHAPAS_PADRAO.some(c =>
+    (Math.abs(largura - c.w) < 50 && Math.abs(altura - c.h) < 50) ||
+    (Math.abs(largura - c.h) < 50 && Math.abs(altura - c.w) < 50)
+  );
+}
+
 function OtimizadorContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -130,11 +138,15 @@ function OtimizadorContent() {
   const [retalhosGerados, setRetalhosGerados] = useState<RetalhoGerado[]>([]);
   const [salvando, setSalvando]           = useState(false);
   const [zerando, setZerando]             = useState(false);
-  const [modoTeste, setModoTeste]         = useState(false); // 1.1 — modo teste
+  const [modoTeste, setModoTeste]         = useState(false);
 
   const [pedidosSugeridos, setPedidosSugeridos]       = useState<PedidoSugerido[]>([]);
   const [pedidosSelecionados, setPedidosSelecionados] = useState<Set<string>>(new Set());
   const [carregandoSugestoes, setCarregandoSugestoes] = useState(false);
+
+  // Seções colapsáveis
+  const [chapaAberta, setChapaAberta]       = useState(false);
+  const [agrupAberta, setAgrupAberta]       = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -179,6 +191,11 @@ function OtimizadorContent() {
     for (const ped of pedidosAguardando) {
       const { data: itens } = await supabase.from("itens_pedido").select("*").eq("pedido_id", ped.id);
       if (!itens || itens.length === 0) continue;
+
+      // Exclui pedidos onde TODOS os itens são chapas inteiras
+      const todosChapa = itens.every((item: any) => isItemChapaInteira(item.largura, item.altura));
+      if (todosChapa) continue;
+
       const produtosDoPedido = [...new Set(itens.map((i: any) => i.produto_nome as string))];
       if (!produtosDoPedido.some(p => produtosNoPedido.includes(p))) continue;
       const map = new Map<string, Peca>();
@@ -191,6 +208,8 @@ function OtimizadorContent() {
     }
     setPedidosSugeridos(sugestoes);
     setCarregandoSugestoes(false);
+    // Abre automaticamente se houver sugestões
+    if (sugestoes.length > 0) setAgrupAberta(true);
   }
 
   function toggleSugerido(id: string) {
@@ -330,7 +349,6 @@ function OtimizadorContent() {
     );
   }
 
-  // ── 1.1 — Imprimir plano de corte (teste — sem salvar) ────────────────────
   function handleImprimirTeste() {
     if (!resultado) return;
     const win = window.open("", "_blank");
@@ -407,7 +425,7 @@ function OtimizadorContent() {
         </div>
         ${chapasHtml}
         <div style="margin-top:20px;padding:10px;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;font-size:11px;color:#92400e">
-          ⚠ Este documento é uma SIMULAÇÃO. Nenhum dado foi salvo no sistema. Para confirmar o plano, use "Salvar Plano" no otimizador.
+          ⚠ Este documento é uma SIMULAÇÃO. Nenhum dado foi salvo no sistema.
         </div>
         <button onclick="window.print()" style="margin-top:16px;padding:10px 24px;background:#2d5fa6;color:white;border:none;border-radius:8px;font-size:13px;cursor:pointer">🖨 Imprimir</button>
       </body></html>
@@ -415,41 +433,27 @@ function OtimizadorContent() {
     win.document.close();
   }
 
-  // ── 1.3 — Zerar plano de corte ────────────────────────────────────────────
   async function handleZerar() {
     if (!pedidoRef) return;
     if (!confirm("Apagar completamente a otimização deste pedido? Esta ação não pode ser desfeita.")) return;
     setZerando(true);
-
-    // Remove otimizações do banco
     await supabase.from("otimizacoes").delete().eq("pedido_id", pedidoRef);
-
-    // Volta status do pedido para "Aguardando otimização"
     await updatePedido(pedidoRef, { status: "Aguardando otimização" });
-
-    // Se havia pedidos agrupados, reverte status deles também
     for (const pid of pedidosSelecionados) {
       await supabase.from("otimizacoes").delete().eq("pedido_id", pid);
       await updatePedido(pid, { status: "Aguardando otimização" });
     }
-
-    setResultado(null);
-    setMsg("");
-    setRetalhosGerados([]);
-    setPedidosSelecionados(new Set());
+    setResultado(null); setMsg(""); setRetalhosGerados([]); setPedidosSelecionados(new Set());
     setZerando(false);
     alert("Plano de corte zerado. O pedido voltou para 'Aguardando otimização'.");
   }
 
-  // ── Salvar plano (real) ───────────────────────────────────────────────────
   async function handleSalvar() {
     if (!resultado || !pedidoRef) return;
     setSalvando(true);
     const hoje = new Date().toISOString().split("T")[0];
     const todosPedidos = [pedidoRef, ...Array.from(pedidosSelecionados)];
     const chapasJson = resultado.map(r => ({ W: r.W, H: r.H, prod: r.prod, placed: r.placed, free: r.free }));
-
-    // Salva otimização por pedido
     for (const pid of todosPedidos) {
       const pecasDoPedido = pid === pedidoRef
         ? pecas.filter(p => !p.pedidoId || p.pedidoId === pedidoRef)
@@ -466,40 +470,24 @@ function OtimizadorContent() {
         pecas_json: pecasDoPedido, chapas_json: chapasComPecasDoPedido, usuario: null,
       });
     }
-
-    // Avança status
     for (const pid of todosPedidos) {
       await updatePedido(pid, { status: "Em Produção – Corte" });
     }
-
-    // ── 1.4 — Salva retalhos corretamente ────────────────────────────────────
     if (retalhosGerados.length > 0) {
       await salvarRetalhos(retalhosGerados.map(fr => ({
-        produto_nome: fr.prod,
-        largura: fr.l,
-        altura: fr.a,
-        m2: fr.m2,
-        chapa_origem: `CHAPA ${fr.chapaIdx + 1}`,
-        pedido_origem: pedidoRef,
-        status: "Disponível",
-        dt_gerado: hoje,
+        produto_nome: fr.prod, largura: fr.l, altura: fr.a, m2: fr.m2,
+        chapa_origem: `CHAPA ${fr.chapaIdx + 1}`, pedido_origem: pedidoRef,
+        status: "Disponível", dt_gerado: hoje,
       })));
     }
-
-    // ── 6.1 — Baixa de chapas no estoque por produto ─────────────────────────
     const consumoPorProd = new Map<string, { chapas: number; m2: number }>();
     resultado.forEach(r => {
       const prev = consumoPorProd.get(r.prod) ?? { chapas: 0, m2: 0 };
-      consumoPorProd.set(r.prod, {
-        chapas: prev.chapas + 1,
-        m2: parseFloat((prev.m2 + (r.W * r.H) / 1e6).toFixed(4)),
-      });
+      consumoPorProd.set(r.prod, { chapas: prev.chapas + 1, m2: parseFloat((prev.m2 + (r.W * r.H) / 1e6).toFixed(4)) });
     });
-
     for (const [prodNome, consumo] of consumoPorProd.entries()) {
       await baixarChapasEstoque(prodNome, consumo.chapas, consumo.m2);
     }
-
     router.push("/pedidos/" + pedidoRef);
   }
 
@@ -519,36 +507,55 @@ function OtimizadorContent() {
     { label: "Chapas",         value: resultado ? String(statChapas)         : "—", color: "#00c8ff", bg: "rgba(0,200,255,.08)",   border: "rgba(0,200,255,.2)",   icon: "▦" },
     { label: "Retalhos",       value: resultado ? String(retalhosGerados.length) : "—", color: "#f59e0b", bg: "rgba(245,158,11,.08)", border: "rgba(245,158,11,.2)", icon: "↺" },
   ];
-  const pedidosNoCanvas = pedidoRef ? [pedidoRef, ...Array.from(pedidosSelecionados)] : [];
+
+  // Estilo do cabeçalho colapsável
+  function collapseHeader(label: string, aberto: boolean, toggle: () => void, badge?: string) {
+    return (
+      <div
+        onClick={toggle}
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
+      >
+        <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)" }}>
+          {label}
+          {badge && <span style={{ marginLeft: "8px", fontSize: "10px", padding: "1px 7px", borderRadius: "99px", background: "rgba(61,255,160,.15)", color: "var(--acc)", border: "1px solid rgba(61,255,160,.3)" }}>{badge}</span>}
+        </span>
+        <span style={{ fontSize: "12px", color: "var(--t3)", transition: "transform 0.2s", display: "inline-block", transform: aberto ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
+      </div>
+    );
+  }
 
   return (
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Otimizador de Corte</div>
-        {pedidoRef && (
-          <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>
-            Pedido <strong style={{ color: "var(--acc)" }}>{pedidoRef}</strong>
-            {pedidosSelecionados.size > 0 && <span style={{ color: "var(--acc2)", marginLeft: "8px" }}>+ {pedidosSelecionados.size} agrupado(s)</span>}
-          </span>
-        )}
-        {/* 1.3 — Botão Zerar */}
-        {pedidoRef && (
-          <button className="btn bg sm" onClick={handleZerar} disabled={zerando}
-            style={{ borderColor: "var(--err)", color: "var(--err)" }}>
-            {zerando ? "Zerando..." : "✕ Zerar Plano"}
-          </button>
-        )}
-        {pedidoRef && <a href={"/pedidos/" + pedidoRef} className="btn bg sm">← Voltar ao Pedido</a>}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+          {pedidoRef && (
+            <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>
+              Pedido <strong style={{ color: "var(--acc)" }}>{pedidoRef}</strong>
+              {pedidosSelecionados.size > 0 && <span style={{ color: "var(--acc2)", marginLeft: "8px" }}>+ {pedidosSelecionados.size} agrupado(s)</span>}
+            </span>
+          )}
+          {/* Botão Calcular na topbar — sempre visível */}
+          <button className="btn bp sm" onClick={rodar} style={{ fontWeight: 700 }}>◈ Calcular</button>
+          {pedidoRef && (
+            <button className="btn bg sm" onClick={handleZerar} disabled={zerando}
+              style={{ borderColor: "var(--err)", color: "var(--err)" }}>
+              {zerando ? "Zerando..." : "✕ Zerar Plano"}
+            </button>
+          )}
+          {pedidoRef && <a href={"/pedidos/" + pedidoRef} className="btn bg sm">← Voltar ao Pedido</a>}
+        </div>
       </div>
 
       <div className="con">
         <div className="g2" style={{ alignItems: "start", gap: "14px" }}>
 
           {/* ── COL ESQUERDA ── */}
-          <div>
-            {/* 1.1 — Toggle modo teste */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+
+            {/* Modo Teste */}
             {pedidoRef && (
-              <div style={{ marginBottom: "14px", padding: "10px 14px", background: modoTeste ? "rgba(245,158,11,.1)" : "var(--surf1)", border: `1px solid ${modoTeste ? "var(--warn)" : "var(--b1)"}`, borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+              <div style={{ padding: "10px 14px", background: modoTeste ? "rgba(245,158,11,.1)" : "var(--surf1)", border: `1px solid ${modoTeste ? "var(--warn)" : "var(--b1)"}`, borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
                 <div>
                   <div style={{ fontSize: "12px", fontWeight: 700, color: modoTeste ? "var(--warn)" : "var(--t2)" }}>
                     {modoTeste ? "⚠ Modo Teste ativo" : "Modo Teste"}
@@ -566,40 +573,48 @@ function OtimizadorContent() {
               </div>
             )}
 
-            <div className="card mb14">
-              <div className="ct">Configuração da Chapa</div>
-              <div style={{ marginBottom: "12px" }}>
-                <label className="fl" style={{ marginBottom: "6px", display: "block" }}>Tamanho Padrão</label>
-                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                  {[{ label: "3300 × 2250", w: 3300, h: 2250 }, { label: "3660 × 2140", w: 3660, h: 2140 }, { label: "2150 × 3660", w: 2150, h: 3660 }].map(c => {
-                    const ativo = chapaW === c.w && chapaH === c.h;
-                    return (
-                      <button key={c.label} onClick={() => { setChapaW(c.w); setChapaH(c.h); }}
-                        style={{ padding: "5px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "11px", fontFamily: "'DM Mono', monospace", fontWeight: 600, border: `1px solid ${ativo ? "var(--acc)" : "var(--b2)"}`, background: ativo ? "rgba(61,255,160,.1)" : "transparent", color: ativo ? "var(--acc)" : "var(--t2)", transition: "all 0.15s" }}>
-                        {c.label} mm
-                      </button>
-                    );
-                  })}
+            {/* Configuração da Chapa — colapsável */}
+            <div className="card">
+              {collapseHeader("Configuração da Chapa", chapaAberta, () => setChapaAberta(v => !v), `${chapaW} × ${chapaH}`)}
+              {chapaAberta && (
+                <div style={{ marginTop: "14px" }}>
+                  <div style={{ marginBottom: "12px" }}>
+                    <label className="fl" style={{ marginBottom: "6px", display: "block" }}>Tamanho Padrão</label>
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                      {[{ label: "3300 × 2250", w: 3300, h: 2250 }, { label: "3660 × 2140", w: 3660, h: 2140 }, { label: "2150 × 3660", w: 2150, h: 3660 }].map(c => {
+                        const ativo = chapaW === c.w && chapaH === c.h;
+                        return (
+                          <button key={c.label} onClick={() => { setChapaW(c.w); setChapaH(c.h); }}
+                            style={{ padding: "5px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "11px", fontFamily: "'DM Mono', monospace", fontWeight: 600, border: `1px solid ${ativo ? "var(--acc)" : "var(--b2)"}`, background: ativo ? "rgba(61,255,160,.1)" : "transparent", color: ativo ? "var(--acc)" : "var(--t2)", transition: "all 0.15s" }}>
+                            {c.label} mm
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="fr">
+                    <div className="fg"><label className="fl">Largura Chapa (mm)</label><input type="number" className="fc" value={chapaW} onChange={e => setChapaW(Number(e.target.value))} /></div>
+                    <div className="fg"><label className="fl">Altura Chapa (mm)</label><input type="number" className="fc" value={chapaH} onChange={e => setChapaH(Number(e.target.value))} /></div>
+                  </div>
+                  <div className="fr">
+                    <div className="fg"><label className="fl">Folga / Diamante (mm)</label><input type="number" className="fc" value={kerf} min={0} max={20} onChange={e => setKerf(Number(e.target.value))} /></div>
+                    <div className="fg"><label className="fl">Borda Lapidação (mm)</label><input type="number" className="fc" value={bord} min={0} max={30} onChange={e => setBord(Number(e.target.value))} /></div>
+                  </div>
                 </div>
-              </div>
-              <div className="fr">
-                <div className="fg"><label className="fl">Largura Chapa (mm)</label><input type="number" className="fc" value={chapaW} onChange={e => setChapaW(Number(e.target.value))} /></div>
-                <div className="fg"><label className="fl">Altura Chapa (mm)</label><input type="number" className="fc" value={chapaH} onChange={e => setChapaH(Number(e.target.value))} /></div>
-              </div>
-              <div className="fr">
-                <div className="fg"><label className="fl">Folga / Diamante (mm)</label><input type="number" className="fc" value={kerf} min={0} max={20} onChange={e => setKerf(Number(e.target.value))} /></div>
-                <div className="fg"><label className="fl">Borda Lapidação (mm)</label><input type="number" className="fc" value={bord} min={0} max={30} onChange={e => setBord(Number(e.target.value))} /></div>
-              </div>
+              )}
             </div>
 
-            {pedidoRef && (
-              <div className="card mb14">
-                <div className="ct">Agrupar Pedidos {carregandoSugestoes && <span style={{ fontSize: "10px", color: "var(--t3)" }}>buscando...</span>}</div>
-                {!carregandoSugestoes && pedidosSugeridos.length === 0 && (
-                  <div style={{ fontSize: "11px", color: "var(--t3)", padding: "8px 0", textAlign: "center" }}>Nenhum outro pedido aguardando com o mesmo produto.</div>
+            {/* Agrupar Pedidos — colapsável, só aparece se houver sugestões */}
+            {pedidoRef && (pedidosSugeridos.length > 0 || carregandoSugestoes) && (
+              <div className="card">
+                {collapseHeader(
+                  "Agrupar Pedidos",
+                  agrupAberta,
+                  () => setAgrupAberta(v => !v),
+                  carregandoSugestoes ? "buscando..." : pedidosSugeridos.length > 0 ? `${pedidosSugeridos.length} disponível(is)` : undefined
                 )}
-                {pedidosSugeridos.length > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                {agrupAberta && (
+                  <div style={{ marginTop: "14px", display: "flex", flexDirection: "column", gap: "6px" }}>
                     {pedidosSugeridos.map(ps => {
                       const selecionado = pedidosSelecionados.has(ps.id);
                       const { stroke } = getColorForPedido(ps.id);
@@ -622,8 +637,9 @@ function OtimizadorContent() {
               </div>
             )}
 
+            {/* Peças a Cortar */}
             <div className="card">
-              <div className="ct">Peças a Cortar <button className="btn bp sm" onClick={rodar}>◈ Calcular</button></div>
+              <div className="ct">Peças a Cortar</div>
               {carregando && <div style={{ textAlign: "center", color: "var(--t3)", fontSize: "12px", padding: "14px" }}>Carregando peças do pedido...</div>}
               {pecas.map((p, i) => (
                 <div key={i} className="op">
@@ -664,7 +680,6 @@ function OtimizadorContent() {
 
               {msg && <div style={{ fontSize: "11px", color: "var(--t2)", fontFamily: "'DM Mono', monospace", marginBottom: "10px", padding: "7px 10px", background: "var(--surf2)", borderRadius: "6px", border: "1px solid var(--b1)" }}>{msg}</div>}
 
-              {/* 1.1 — Badge modo teste */}
               {modoTeste && resultado && (
                 <div style={{ marginBottom: "10px", padding: "8px 12px", background: "rgba(245,158,11,.1)", border: "1px solid var(--warn)", borderRadius: "8px", fontSize: "12px", color: "var(--warn)", fontWeight: 700 }}>
                   ⚠ MODO TESTE — Este resultado não será salvo
@@ -715,12 +730,9 @@ function OtimizadorContent() {
 
               {resultado && (
                 <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {/* 1.2 — Botão imprimir teste */}
                   <button className="btn bg sm" style={{ width: "100%", padding: "10px" }} onClick={handleImprimirTeste}>
                     🖨 Imprimir Plano (Teste — sem salvar)
                   </button>
-
-                  {/* Botão salvar — oculto em modo teste */}
                   {!modoTeste && pedidoRef && (
                     <button className="btn bp sm" style={{ width: "100%", padding: "12px", fontSize: "13px" }} onClick={handleSalvar} disabled={salvando}>
                       {salvando ? "Salvando..." : pedidosSelecionados.size > 0
