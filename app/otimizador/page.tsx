@@ -16,7 +16,16 @@ interface PecaPlacada { x: number; y: number; l: number; a: number; idx: number;
 interface EspacoLivre { x: number; y: number; l: number; a: number; }
 interface ResultadoChapa { placed: PecaPlacada[]; free: EspacoLivre[]; W: number; H: number; prod: string; }
 interface RetalhoGerado extends EspacoLivre { chapaIdx: number; prod: string; m2: number; }
-interface PedidoSugerido { id: string; clienteNome: string; totalPecas: number; produtos: string[]; itens: Peca[]; }
+interface PedidoSugerido {
+  id: string;
+  clienteNome: string;
+  totalPecas: number;
+  produtos: string[];
+  itens: Peca[];
+  dtRetirada: string | null;
+  aprovSeCombinado: number | null; // delta vs base
+  diasParaEntrega: number | null;
+}
 interface Retangulo { x: number; y: number; w: number; h: number; }
 
 function empacotar(
@@ -73,6 +82,43 @@ function empacotar(
   return { placed, usados, free };
 }
 
+// Calcula aproveitamento de um conjunto de peças (sem estado React)
+function calcAproveitamento(
+  pecasFlat: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
+  bord: number, kerf: number
+): number {
+  const grupos = new Map<string, typeof pecasFlat>();
+  pecasFlat.forEach(p => { const g = grupos.get(p.prod) ?? []; g.push(p); grupos.set(p.prod, g); });
+
+  let totA = 0, usedA = 0;
+  grupos.forEach((grupo, prodNome) => {
+    const ci2 = PRODUTO_CHAPA[prodNome];
+    const chapa = ci2 !== undefined ? CHAPAS_PADRAO[ci2] : null;
+    const CW = chapa ? chapa.w : 3300;
+    const CH = chapa ? chapa.h : 2250;
+    const W = CW - bord * 2;
+    const H = CH - bord * 2;
+    let rem = [...grupo];
+    let ci = 0;
+    while (rem.length > 0 && ci < 100) {
+      const { placed, usados } = empacotar(W, H, rem, kerf);
+      if (placed.length === 0) break;
+      totA += W * H;
+      placed.forEach(p => (usedA += p.l * p.a));
+      rem = rem.filter((_, i) => !usados.has(i));
+      ci++;
+    }
+  });
+  return totA > 0 ? (usedA / totA) * 100 : 0;
+}
+
+function diasAte(dtStr: string | null): number | null {
+  if (!dtStr) return null;
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const dt = new Date(dtStr + "T00:00:00");
+  return Math.round((dt.getTime() - hoje.getTime()) / 86400000);
+}
+
 const CHAPAS_PADRAO = [
   { label: "Chapa 4+4 Incolor — 3300 × 2250 mm",         w: 3300, h: 2250 },
   { label: "Chapa 3+3 Incolor — 3300 × 2250 mm",         w: 3300, h: 2250 },
@@ -107,7 +153,6 @@ function getColorForPedido(pid: string) {
   return PEDIDO_COLORS[pid];
 }
 
-// Detecta se um item é chapa inteira (dimensões iguais ou muito próximas à chapa padrão)
 function isItemChapaInteira(largura: number, altura: number): boolean {
   return CHAPAS_PADRAO.some(c =>
     (Math.abs(largura - c.w) < 50 && Math.abs(altura - c.h) < 50) ||
@@ -132,21 +177,29 @@ function OtimizadorContent() {
   const [carregando, setCarregando]       = useState(false);
   const [aprovNum, setAprovNum]           = useState(0);
   const [perdaNum, setPerdaNum]           = useState(0);
-  const [totalPecasNum, setTotalPecasNum] = useState(0);
   const [statChapas, setStatChapas]       = useState(0);
   const [msg, setMsg]                     = useState("");
   const [retalhosGerados, setRetalhosGerados] = useState<RetalhoGerado[]>([]);
   const [salvando, setSalvando]           = useState(false);
   const [zerando, setZerando]             = useState(false);
   const [modoTeste, setModoTeste]         = useState(false);
+  const [simulando, setSimulando]         = useState(false);
 
   const [pedidosSugeridos, setPedidosSugeridos]       = useState<PedidoSugerido[]>([]);
   const [pedidosSelecionados, setPedidosSelecionados] = useState<Set<string>>(new Set());
   const [carregandoSugestoes, setCarregandoSugestoes] = useState(false);
+  const [aprovBase, setAprovBase]                     = useState<number | null>(null);
 
-  // Seções colapsáveis
-  const [chapaAberta, setChapaAberta]       = useState(false);
-  const [agrupAberta, setAgrupAberta]       = useState(false);
+  const [chapaAberta, setChapaAberta] = useState(false);
+  const [agrupAberta, setAgrupAberta] = useState(false);
+
+  // Ref para pecas atual (usado na simulação sem re-render)
+  const pecasRef = useRef<Peca[]>([]);
+  pecasRef.current = pecas;
+  const bordRef = useRef(bord);
+  bordRef.current = bord;
+  const kerfRef = useRef(kerf);
+  kerfRef.current = kerf;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -173,7 +226,7 @@ function OtimizadorContent() {
       setPedidoRef(pedidoParam);
       if (carregadas.length > 0) autoSetChapa(carregadas[0].prod);
       const produtosNoPedido = [...new Set(carregadas.map(p => p.prod))];
-      buscarSugestoes(pedidoParam, produtosNoPedido);
+      buscarSugestoes(pedidoParam, produtosNoPedido, carregadas);
     });
   }, [pedidoParam]);
 
@@ -181,34 +234,93 @@ function OtimizadorContent() {
     if (resultado && resultado[chapaIdx]) drawOpt(resultado[chapaIdx], chapaIdx, bord);
   }, [resultado, chapaIdx]);
 
-  async function buscarSugestoes(pedidoPrincipal: string, produtosNoPedido: string[]) {
+  // Monta flat de peças sem estado
+  function montarFlat(pecasList: Peca[], pedidoId: string | null) {
+    const flat: Array<{ l: number; a: number; prod: string; pedidoId?: string }> = [];
+    pecasList.forEach(p => {
+      if (p.l > 0 && p.a > 0)
+        for (let q = 0; q < (p.qtd || 1); q++)
+          flat.push({ l: p.l, a: p.a, prod: p.prod, pedidoId: p.pedidoId ?? pedidoId ?? undefined });
+    });
+    return flat;
+  }
+
+  async function buscarSugestoes(pedidoPrincipal: string, produtosNoPedido: string[], pecasBase: Peca[]) {
     setCarregandoSugestoes(true);
+    setSimulando(true);
+
     const { data: pedidosAguardando } = await supabase
-      .from("pedidos").select("id, clientes(nome)")
-      .eq("status", "Aguardando otimização").neq("id", pedidoPrincipal);
-    if (!pedidosAguardando || pedidosAguardando.length === 0) { setCarregandoSugestoes(false); return; }
+      .from("pedidos")
+      .select("id, clientes(nome), dt_retirada")
+      .eq("status", "Aguardando otimização")
+      .neq("id", pedidoPrincipal);
+
+    if (!pedidosAguardando || pedidosAguardando.length === 0) {
+      setCarregandoSugestoes(false);
+      setSimulando(false);
+      return;
+    }
+
+    // Calcula aproveitamento base (só o pedido principal)
+    const flatBase = montarFlat(pecasBase, pedidoPrincipal);
+    const base = calcAproveitamento(flatBase, bordRef.current, kerfRef.current);
+    setAprovBase(base);
+
     const sugestoes: PedidoSugerido[] = [];
+
     for (const ped of pedidosAguardando) {
       const { data: itens } = await supabase.from("itens_pedido").select("*").eq("pedido_id", ped.id);
       if (!itens || itens.length === 0) continue;
 
-      // Exclui pedidos onde TODOS os itens são chapas inteiras
       const todosChapa = itens.every((item: any) => isItemChapaInteira(item.largura, item.altura));
       if (todosChapa) continue;
 
       const produtosDoPedido = [...new Set(itens.map((i: any) => i.produto_nome as string))];
       if (!produtosDoPedido.some(p => produtosNoPedido.includes(p))) continue;
+
       const map = new Map<string, Peca>();
       itens.forEach((item: any) => {
         const key = `${item.largura}x${item.altura}x${item.produto_nome}`;
         if (map.has(key)) map.get(key)!.qtd += item.quantidade;
         else map.set(key, { l: item.largura, a: item.altura, qtd: item.quantidade, prod: item.produto_nome, pedidoId: ped.id });
       });
-      sugestoes.push({ id: ped.id, clienteNome: (ped as any).clientes?.nome ?? "—", totalPecas: itens.length, produtos: produtosDoPedido, itens: Array.from(map.values()) });
+
+      const itensDoPedido = Array.from(map.values());
+
+      // Simula aproveitamento com este pedido incluído
+      const flatCombinado = [...flatBase, ...montarFlat(itensDoPedido, ped.id)];
+      const aprovCombinado = calcAproveitamento(flatCombinado, bordRef.current, kerfRef.current);
+      const delta = aprovCombinado - base;
+
+      const dias = diasAte((ped as any).dt_retirada);
+
+      sugestoes.push({
+        id: ped.id,
+        clienteNome: (ped as any).clientes?.nome ?? "—",
+        totalPecas: itens.length,
+        produtos: produtosDoPedido,
+        itens: itensDoPedido,
+        dtRetirada: (ped as any).dt_retirada ?? null,
+        aprovSeCombinado: parseFloat(delta.toFixed(1)),
+        diasParaEntrega: dias,
+      });
     }
+
+    // Ordena: urgentes (≤3 dias) primeiro, depois por maior ganho de aproveitamento
+    sugestoes.sort((a, b) => {
+      const aUrgente = a.diasParaEntrega !== null && a.diasParaEntrega <= 3;
+      const bUrgente = b.diasParaEntrega !== null && b.diasParaEntrega <= 3;
+      if (aUrgente && !bUrgente) return -1;
+      if (!aUrgente && bUrgente) return 1;
+      // Ambos urgentes: menor prazo primeiro
+      if (aUrgente && bUrgente) return (a.diasParaEntrega ?? 99) - (b.diasParaEntrega ?? 99);
+      // Nenhum urgente: maior ganho primeiro
+      return (b.aprovSeCombinado ?? 0) - (a.aprovSeCombinado ?? 0);
+    });
+
     setPedidosSugeridos(sugestoes);
     setCarregandoSugestoes(false);
-    // Abre automaticamente se houver sugestões
+    setSimulando(false);
     if (sugestoes.length > 0) setAgrupAberta(true);
   }
 
@@ -330,8 +442,7 @@ function OtimizadorContent() {
       r.placed.forEach(p => (usedA += p.l * p.a));
     });
     const aprov = totA > 0 ? (usedA / totA) * 100 : 0;
-    setAprovNum(aprov); setPerdaNum(100 - aprov);
-    setTotalPecasNum(totalPecas); setStatChapas(results.length);
+    setAprovNum(aprov); setPerdaNum(100 - aprov); setStatChapas(results.length);
 
     const retPend: RetalhoGerado[] = [];
     results.forEach((r, ri) =>
@@ -359,83 +470,56 @@ function OtimizadorContent() {
           CHAPA ${i + 1} · ${r.prod} · ${r.W} × ${r.H} mm
         </div>
         <table style="width:100%;border-collapse:collapse;font-size:11px">
-          <thead>
-            <tr style="background:#2d5fa6;color:white">
-              <th style="padding:6px;text-align:left">Peça</th>
-              <th style="padding:6px">Dim. (mm)</th>
-              <th style="padding:6px">Pedido</th>
-              <th style="padding:6px">Posição X</th>
-              <th style="padding:6px">Posição Y</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${r.placed.map((p, j) => `
-              <tr style="background:${j % 2 === 0 ? '#fff' : '#f7f9ff'}">
-                <td style="padding:5px 6px">${j + 1}</td>
-                <td style="padding:5px 6px;text-align:center;font-family:monospace">${p.l} × ${p.a}</td>
-                <td style="padding:5px 6px;text-align:center">${p.pedidoId ?? pedidoRef ?? "—"}</td>
-                <td style="padding:5px 6px;text-align:center;font-family:monospace">${p.x}</td>
-                <td style="padding:5px 6px;text-align:center;font-family:monospace">${p.y}</td>
-              </tr>
-            `).join("")}
+          <thead><tr style="background:#2d5fa6;color:white">
+            <th style="padding:6px;text-align:left">Peça</th>
+            <th style="padding:6px">Dim. (mm)</th>
+            <th style="padding:6px">Pedido</th>
+            <th style="padding:6px">Posição X</th>
+            <th style="padding:6px">Posição Y</th>
+          </tr></thead>
+          <tbody>${r.placed.map((p, j) => `
+            <tr style="background:${j % 2 === 0 ? '#fff' : '#f7f9ff'}">
+              <td style="padding:5px 6px">${j + 1}</td>
+              <td style="padding:5px 6px;text-align:center;font-family:monospace">${p.l} × ${p.a}</td>
+              <td style="padding:5px 6px;text-align:center">${p.pedidoId ?? pedidoRef ?? "—"}</td>
+              <td style="padding:5px 6px;text-align:center;font-family:monospace">${p.x}</td>
+              <td style="padding:5px 6px;text-align:center;font-family:monospace">${p.y}</td>
+            </tr>`).join("")}
           </tbody>
         </table>
         ${r.free.filter(f => f.l >= 200 && f.a >= 200).length > 0 ? `
           <div style="margin-top:8px;font-size:11px;color:#b45309">
             Retalhos aproveitáveis: ${r.free.filter(f => f.l >= 200 && f.a >= 200).map(f => `${f.l}×${f.a}mm`).join(", ")}
-          </div>
-        ` : ""}
+          </div>` : ""}
+      </div>`).join("");
+    win.document.write(`<!DOCTYPE html><html><head>
+      <title>Plano de Corte · ${pedidoRef ?? "—"}</title>
+      <style>body{font-family:Arial,sans-serif;padding:20px;color:#1a1a2e} @page{margin:15mm} @media print{button{display:none}}</style>
+    </head><body>
+      <div style="display:flex;justify-content:space-between;margin-bottom:20px;padding-bottom:12px;border-bottom:3px solid #2d5fa6">
+        <div><div style="font-size:22px;font-weight:900;color:#2d5fa6">urbanglass</div><div style="font-size:10px;color:#888">Urban Glass Comércio Ltda</div></div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:2px">Plano de Corte</div>
+          <div style="font-size:20px;font-weight:900;color:#2d5fa6">${pedidoRef ?? "AVULSO"}</div>
+          <div style="display:inline-block;margin-top:6px;padding:3px 12px;background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:99px;font-size:10px;font-weight:700">⚠ SIMULAÇÃO</div>
+          <div style="font-size:10px;color:#888;margin-top:4px">Emissão: ${new Date().toLocaleDateString("pt-BR")}</div>
+        </div>
       </div>
-    `).join("");
-
-    win.document.write(`
-      <!DOCTYPE html><html><head>
-        <title>Plano de Corte (TESTE) · ${pedidoRef ?? "—"}</title>
-        <style>body{font-family:Arial,sans-serif;padding:20px;color:#1a1a2e} @page{margin:15mm} @media print{button{display:none}}</style>
-      </head><body>
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:12px;border-bottom:3px solid #2d5fa6">
-          <div>
-            <div style="font-size:22px;font-weight:900;color:#2d5fa6">urbanglass</div>
-            <div style="font-size:10px;color:#888;margin-top:2px">Urban Glass Comércio Ltda</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:2px">Plano de Corte</div>
-            <div style="font-size:20px;font-weight:900;color:#2d5fa6">${pedidoRef ?? "AVULSO"}</div>
-            <div style="display:inline-block;margin-top:6px;padding:3px 12px;background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:99px;font-size:10px;font-weight:700">⚠ SIMULAÇÃO — NÃO SALVO</div>
-            <div style="font-size:10px;color:#888;margin-top:4px">Emissão: ${new Date().toLocaleDateString("pt-BR")}</div>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
-          <div style="padding:10px;background:#f0f4ff;border-radius:8px;border-left:4px solid #2d5fa6">
-            <div style="font-size:9px;color:#2d5fa6;font-weight:700;text-transform:uppercase">Aproveitamento</div>
-            <div style="font-size:20px;font-weight:900;color:#2d5fa6">${aprovNum.toFixed(1)}%</div>
-          </div>
-          <div style="padding:10px;background:#fff1f2;border-radius:8px;border-left:4px solid #f43f5e">
-            <div style="font-size:9px;color:#f43f5e;font-weight:700;text-transform:uppercase">Perda</div>
-            <div style="font-size:20px;font-weight:900;color:#f43f5e">${perdaNum.toFixed(1)}%</div>
-          </div>
-          <div style="padding:10px;background:#f0fdff;border-radius:8px;border-left:4px solid #00c8ff">
-            <div style="font-size:9px;color:#00c8ff;font-weight:700;text-transform:uppercase">Chapas</div>
-            <div style="font-size:20px;font-weight:900;color:#00c8ff">${statChapas}</div>
-          </div>
-          <div style="padding:10px;background:#fffbeb;border-radius:8px;border-left:4px solid #f59e0b">
-            <div style="font-size:9px;color:#f59e0b;font-weight:700;text-transform:uppercase">Retalhos</div>
-            <div style="font-size:20px;font-weight:900;color:#f59e0b">${retalhosGerados.length}</div>
-          </div>
-        </div>
-        ${chapasHtml}
-        <div style="margin-top:20px;padding:10px;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;font-size:11px;color:#92400e">
-          ⚠ Este documento é uma SIMULAÇÃO. Nenhum dado foi salvo no sistema.
-        </div>
-        <button onclick="window.print()" style="margin-top:16px;padding:10px 24px;background:#2d5fa6;color:white;border:none;border-radius:8px;font-size:13px;cursor:pointer">🖨 Imprimir</button>
-      </body></html>
-    `);
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+        <div style="padding:10px;background:#f0f4ff;border-radius:8px;border-left:4px solid #2d5fa6"><div style="font-size:9px;color:#2d5fa6;font-weight:700;text-transform:uppercase">Aproveitamento</div><div style="font-size:20px;font-weight:900;color:#2d5fa6">${aprovNum.toFixed(1)}%</div></div>
+        <div style="padding:10px;background:#fff1f2;border-radius:8px;border-left:4px solid #f43f5e"><div style="font-size:9px;color:#f43f5e;font-weight:700;text-transform:uppercase">Perda</div><div style="font-size:20px;font-weight:900;color:#f43f5e">${perdaNum.toFixed(1)}%</div></div>
+        <div style="padding:10px;background:#f0fdff;border-radius:8px;border-left:4px solid #00c8ff"><div style="font-size:9px;color:#00c8ff;font-weight:700;text-transform:uppercase">Chapas</div><div style="font-size:20px;font-weight:900;color:#00c8ff">${statChapas}</div></div>
+        <div style="padding:10px;background:#fffbeb;border-radius:8px;border-left:4px solid #f59e0b"><div style="font-size:9px;color:#f59e0b;font-weight:700;text-transform:uppercase">Retalhos</div><div style="font-size:20px;font-weight:900;color:#f59e0b">${retalhosGerados.length}</div></div>
+      </div>
+      ${chapasHtml}
+      <button onclick="window.print()" style="margin-top:16px;padding:10px 24px;background:#2d5fa6;color:white;border:none;border-radius:8px;font-size:13px;cursor:pointer">🖨 Imprimir</button>
+    </body></html>`);
     win.document.close();
   }
 
   async function handleZerar() {
     if (!pedidoRef) return;
-    if (!confirm("Apagar completamente a otimização deste pedido? Esta ação não pode ser desfeita.")) return;
+    if (!confirm("Apagar completamente a otimização deste pedido?")) return;
     setZerando(true);
     await supabase.from("otimizacoes").delete().eq("pedido_id", pedidoRef);
     await updatePedido(pedidoRef, { status: "Aguardando otimização" });
@@ -445,7 +529,7 @@ function OtimizadorContent() {
     }
     setResultado(null); setMsg(""); setRetalhosGerados([]); setPedidosSelecionados(new Set());
     setZerando(false);
-    alert("Plano de corte zerado. O pedido voltou para 'Aguardando otimização'.");
+    alert("Plano zerado.");
   }
 
   async function handleSalvar() {
@@ -470,9 +554,7 @@ function OtimizadorContent() {
         pecas_json: pecasDoPedido, chapas_json: chapasComPecasDoPedido, usuario: null,
       });
     }
-    for (const pid of todosPedidos) {
-      await updatePedido(pid, { status: "Em Produção – Corte" });
-    }
+    for (const pid of todosPedidos) await updatePedido(pid, { status: "Em Produção – Corte" });
     if (retalhosGerados.length > 0) {
       await salvarRetalhos(retalhosGerados.map(fr => ({
         produto_nome: fr.prod, largura: fr.l, altura: fr.a, m2: fr.m2,
@@ -508,18 +590,65 @@ function OtimizadorContent() {
     { label: "Retalhos",       value: resultado ? String(retalhosGerados.length) : "—", color: "#f59e0b", bg: "rgba(245,158,11,.08)", border: "rgba(245,158,11,.2)", icon: "↺" },
   ];
 
-  // Estilo do cabeçalho colapsável
   function collapseHeader(label: string, aberto: boolean, toggle: () => void, badge?: string) {
     return (
-      <div
-        onClick={toggle}
-        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
-      >
+      <div onClick={toggle} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}>
         <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)" }}>
           {label}
           {badge && <span style={{ marginLeft: "8px", fontSize: "10px", padding: "1px 7px", borderRadius: "99px", background: "rgba(61,255,160,.15)", color: "var(--acc)", border: "1px solid rgba(61,255,160,.3)" }}>{badge}</span>}
         </span>
         <span style={{ fontSize: "12px", color: "var(--t3)", transition: "transform 0.2s", display: "inline-block", transform: aberto ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
+      </div>
+    );
+  }
+
+  // Renderiza badge de urgência ou ganho de aproveitamento
+  function renderBadgePedido(ps: PedidoSugerido) {
+    const urgente = ps.diasParaEntrega !== null && ps.diasParaEntrega <= 3;
+    const atrasado = ps.diasParaEntrega !== null && ps.diasParaEntrega < 0;
+
+    if (atrasado) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "3px" }}>
+          <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 7px", borderRadius: "99px", background: "rgba(244,63,94,.2)", color: "#f43f5e", border: "1px solid rgba(244,63,94,.4)" }}>
+            ⚠ {Math.abs(ps.diasParaEntrega!)}d atrasado
+          </span>
+          {ps.aprovSeCombinado !== null && (
+            <span style={{ fontSize: "10px", color: ps.aprovSeCombinado >= 0 ? "#3dffa0" : "#f43f5e", fontFamily: "'DM Mono',monospace" }}>
+              {ps.aprovSeCombinado >= 0 ? "+" : ""}{ps.aprovSeCombinado}%
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    if (urgente) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "3px" }}>
+          <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 7px", borderRadius: "99px", background: "rgba(245,158,11,.2)", color: "#f59e0b", border: "1px solid rgba(245,158,11,.4)" }}>
+            ⏰ {ps.diasParaEntrega}d
+          </span>
+          {ps.aprovSeCombinado !== null && (
+            <span style={{ fontSize: "10px", color: ps.aprovSeCombinado >= 0 ? "#3dffa0" : "#f43f5e", fontFamily: "'DM Mono',monospace" }}>
+              {ps.aprovSeCombinado >= 0 ? "+" : ""}{ps.aprovSeCombinado}%
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "3px" }}>
+        {ps.aprovSeCombinado !== null && (
+          <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "99px", background: ps.aprovSeCombinado >= 0 ? "rgba(61,255,160,.12)" : "rgba(244,63,94,.12)", color: ps.aprovSeCombinado >= 0 ? "#3dffa0" : "#f43f5e", border: `1px solid ${ps.aprovSeCombinado >= 0 ? "rgba(61,255,160,.3)" : "rgba(244,63,94,.3)"}`, fontFamily: "'DM Mono',monospace" }}>
+            {ps.aprovSeCombinado >= 0 ? "+" : ""}{ps.aprovSeCombinado}%
+          </span>
+        )}
+        {ps.dtRetirada && (
+          <span style={{ fontSize: "9px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>
+            entrega {new Date(ps.dtRetirada + "T00:00:00").toLocaleDateString("pt-BR")}
+          </span>
+        )}
       </div>
     );
   }
@@ -535,11 +664,10 @@ function OtimizadorContent() {
               {pedidosSelecionados.size > 0 && <span style={{ color: "var(--acc2)", marginLeft: "8px" }}>+ {pedidosSelecionados.size} agrupado(s)</span>}
             </span>
           )}
-          {/* Botão Calcular na topbar — sempre visível */}
+          {simulando && <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>simulando combinações...</span>}
           <button className="btn bp sm" onClick={rodar} style={{ fontWeight: 700 }}>◈ Calcular</button>
           {pedidoRef && (
-            <button className="btn bg sm" onClick={handleZerar} disabled={zerando}
-              style={{ borderColor: "var(--err)", color: "var(--err)" }}>
+            <button className="btn bg sm" onClick={handleZerar} disabled={zerando} style={{ borderColor: "var(--err)", color: "var(--err)" }}>
               {zerando ? "Zerando..." : "✕ Zerar Plano"}
             </button>
           )}
@@ -557,17 +685,10 @@ function OtimizadorContent() {
             {pedidoRef && (
               <div style={{ padding: "10px 14px", background: modoTeste ? "rgba(245,158,11,.1)" : "var(--surf1)", border: `1px solid ${modoTeste ? "var(--warn)" : "var(--b1)"}`, borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
                 <div>
-                  <div style={{ fontSize: "12px", fontWeight: 700, color: modoTeste ? "var(--warn)" : "var(--t2)" }}>
-                    {modoTeste ? "⚠ Modo Teste ativo" : "Modo Teste"}
-                  </div>
-                  <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "2px" }}>
-                    {modoTeste ? "Nada será salvo — apenas simulação visual" : "Calcular sem salvar no banco"}
-                  </div>
+                  <div style={{ fontSize: "12px", fontWeight: 700, color: modoTeste ? "var(--warn)" : "var(--t2)" }}>{modoTeste ? "⚠ Modo Teste ativo" : "Modo Teste"}</div>
+                  <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "2px" }}>{modoTeste ? "Nada será salvo — apenas simulação visual" : "Calcular sem salvar no banco"}</div>
                 </div>
-                <button
-                  onClick={() => setModoTeste(v => !v)}
-                  style={{ padding: "6px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: 700, cursor: "pointer", border: `1px solid ${modoTeste ? "var(--warn)" : "var(--b2)"}`, background: modoTeste ? "rgba(245,158,11,.2)" : "transparent", color: modoTeste ? "var(--warn)" : "var(--t3)", transition: "all 0.15s" }}
-                >
+                <button onClick={() => setModoTeste(v => !v)} style={{ padding: "6px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: 700, cursor: "pointer", border: `1px solid ${modoTeste ? "var(--warn)" : "var(--b2)"}`, background: modoTeste ? "rgba(245,158,11,.2)" : "transparent", color: modoTeste ? "var(--warn)" : "var(--t3)", transition: "all 0.15s" }}>
                   {modoTeste ? "Desativar" : "Ativar"}
                 </button>
               </div>
@@ -604,34 +725,50 @@ function OtimizadorContent() {
               )}
             </div>
 
-            {/* Agrupar Pedidos — colapsável, só aparece se houver sugestões */}
-            {pedidoRef && (pedidosSugeridos.length > 0 || carregandoSugestoes) && (
+            {/* Agrupar Pedidos — colapsável com ranking */}
+            {pedidoRef && (pedidosSugeridos.length > 0 || carregandoSugestoes || simulando) && (
               <div className="card">
                 {collapseHeader(
                   "Agrupar Pedidos",
                   agrupAberta,
                   () => setAgrupAberta(v => !v),
-                  carregandoSugestoes ? "buscando..." : pedidosSugeridos.length > 0 ? `${pedidosSugeridos.length} disponível(is)` : undefined
+                  simulando ? "simulando..." : pedidosSugeridos.length > 0 ? `${pedidosSugeridos.length} disponível(is)` : undefined
                 )}
                 {agrupAberta && (
-                  <div style={{ marginTop: "14px", display: "flex", flexDirection: "column", gap: "6px" }}>
-                    {pedidosSugeridos.map(ps => {
-                      const selecionado = pedidosSelecionados.has(ps.id);
-                      const { stroke } = getColorForPedido(ps.id);
-                      return (
-                        <div key={ps.id} onClick={() => toggleSugerido(ps.id)}
-                          style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", borderRadius: "8px", cursor: "pointer", border: `1px solid ${selecionado ? stroke : "var(--b2)"}`, background: selecionado ? `${stroke}14` : "var(--surf2)", transition: "all 0.15s" }}>
-                          <div style={{ width: "16px", height: "16px", borderRadius: "4px", flexShrink: 0, border: `2px solid ${selecionado ? stroke : "var(--b3)"}`, background: selecionado ? stroke : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            {selecionado && <span style={{ fontSize: "10px", color: "#000", fontWeight: 900 }}>✓</span>}
+                  <div style={{ marginTop: "14px" }}>
+                    {aprovBase !== null && (
+                      <div style={{ marginBottom: "10px", padding: "6px 10px", background: "var(--surf2)", borderRadius: "6px", fontSize: "11px", color: "var(--t2)", fontFamily: "'DM Mono',monospace" }}>
+                        Base atual: <strong style={{ color: "var(--acc)" }}>{aprovBase.toFixed(1)}%</strong> aproveitamento · badges mostram ganho se incluído
+                      </div>
+                    )}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      {pedidosSugeridos.map((ps, rank) => {
+                        const selecionado = pedidosSelecionados.has(ps.id);
+                        const { stroke } = getColorForPedido(ps.id);
+                        const urgente = ps.diasParaEntrega !== null && ps.diasParaEntrega <= 3;
+                        const atrasado = ps.diasParaEntrega !== null && ps.diasParaEntrega < 0;
+                        return (
+                          <div key={ps.id} onClick={() => toggleSugerido(ps.id)}
+                            style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", borderRadius: "8px", cursor: "pointer", border: `1px solid ${atrasado ? "rgba(244,63,94,.4)" : urgente ? "rgba(245,158,11,.4)" : selecionado ? stroke : "var(--b2)"}`, background: selecionado ? `${stroke}14` : atrasado ? "rgba(244,63,94,.05)" : urgente ? "rgba(245,158,11,.05)" : "var(--surf2)", transition: "all 0.15s" }}>
+                            {/* Rank */}
+                            <div style={{ fontSize: "9px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", minWidth: "14px", textAlign: "center" }}>#{rank + 1}</div>
+                            {/* Checkbox */}
+                            <div style={{ width: "16px", height: "16px", borderRadius: "4px", flexShrink: 0, border: `2px solid ${selecionado ? stroke : "var(--b3)"}`, background: selecionado ? stroke : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              {selecionado && <span style={{ fontSize: "10px", color: "#000", fontWeight: 900 }}>✓</span>}
+                            </div>
+                            {/* Info */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", fontFamily: "'DM Mono', monospace" }}>
+                                {ps.id} <span style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 400 }}>{ps.clienteNome}</span>
+                              </div>
+                              <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "2px" }}>{ps.totalPecas} peça(s) · {ps.produtos.join(", ")}</div>
+                            </div>
+                            {/* Badge direito */}
+                            {renderBadgePedido(ps)}
                           </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", fontFamily: "'DM Mono', monospace" }}>{ps.id} <span style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 400 }}>{ps.clienteNome}</span></div>
-                            <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "2px" }}>{ps.totalPecas} peça(s) · {ps.produtos.join(", ")}</div>
-                          </div>
-                          <div style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "99px", border: `1px solid ${stroke}`, color: stroke }}>{selecionado ? "incluído" : "incluir"}</div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -708,8 +845,7 @@ function OtimizadorContent() {
                 <div style={{ marginTop: "14px" }}>
                   <div style={{ fontSize: "11px", fontWeight: 700, color: "#f59e0b", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
                     <span style={{ fontSize: "14px" }}>↺</span>
-                    {retalhosGerados.length} retalho(s)
-                    {modoTeste ? " — NÃO serão salvos (modo teste)" : " — salvos automaticamente ao confirmar"}
+                    {retalhosGerados.length} retalho(s) {modoTeste ? "— NÃO serão salvos" : "— salvos ao confirmar"}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                     {retalhosGerados.map((r, i) => (
@@ -731,7 +867,7 @@ function OtimizadorContent() {
               {resultado && (
                 <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
                   <button className="btn bg sm" style={{ width: "100%", padding: "10px" }} onClick={handleImprimirTeste}>
-                    🖨 Imprimir Plano (Teste — sem salvar)
+                    🖨 Imprimir Plano (Teste)
                   </button>
                   {!modoTeste && pedidoRef && (
                     <button className="btn bp sm" style={{ width: "100%", padding: "12px", fontSize: "13px" }} onClick={handleSalvar} disabled={salvando}>
@@ -742,7 +878,7 @@ function OtimizadorContent() {
                   )}
                   {modoTeste && (
                     <div style={{ padding: "10px", background: "rgba(245,158,11,.08)", border: "1px solid rgba(245,158,11,.3)", borderRadius: "8px", fontSize: "11px", color: "var(--warn)", textAlign: "center" }}>
-                      Modo teste ativo — desative para salvar o plano
+                      Modo teste ativo — desative para salvar
                     </div>
                   )}
                 </div>
