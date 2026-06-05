@@ -655,7 +655,7 @@ async function handleMarcarPago(lancId: number) {
 
         {/* ── MODAL EDIÇÃO ── */}
         {editando && (
-          <div className="mov open" onClick={e => e.target === e.currentTarget && setEditando(false)}>
+          <div className="mov open" >
             <div className="mod" style={{ width:"780px", maxHeight:"90vh", overflowY:"auto" }}>
               <div className="mhd">
                 <div className="mtit">Editar Pedido · {pedido.id}</div>
