@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
-import { getPedidoById, avancarStatusPedido, registrarRecebimento, recalcularRecebido, updatePedido, getCreditoCliente, utilizarCreditoEmPedido } from "@/services/pedidos.service";
+import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido } from "@/services/pedidos.service";
 import { getLancamentosPorPedido, deletarLancamento, createLancamento, updateLancamento } from "@/services/financeiro.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
@@ -247,7 +247,10 @@ export default function PedidoDetalhe() {
     }
 
     const aReceber = lancamentos.filter(l => l.status === "A Receber");
-    for (const l of aReceber) await deletarLancamento(l.id);
+    for (const l of aReceber) {
+      const ok = await deletarLancamento(l.id);
+      if (!ok) { toast("Erro ao remover lançamento", "err"); setSalvando(false); return; }
+    }
     for (let i = 0; i < editParcelas.length; i++) {
       const p = editParcelas[i];
       if (!p.data || p.valor <= 0) continue;
@@ -289,7 +292,7 @@ async function handleMarcarPago(lancId: number) {
   const excedente = Math.max(0, valorPagar - pag.valorOriginal);
   if (excedente > 0.005 && pedido.cliente_id) {
     const creditoAtual = await getCreditoCliente(pedido.cliente_id);
-    // importar atualizarCreditoCliente se necessário
+    await atualizarCreditoCliente(pedido.cliente_id, creditoAtual + excedente);
   }
 
   toast(`✓ ${formatBRL(valorPagar)} registrado`);

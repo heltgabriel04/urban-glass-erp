@@ -199,8 +199,8 @@ export async function rejeitarOrcamento(orcamentoId: string) {
 
   const pedidoId = (orc as any).pedido_id;
 
-  // Sem FK: deleta itens e pedido diretamente
   if (pedidoId) {
+    await supabase.from('lancamentos').delete().eq('pedido_id', pedidoId);
     await supabase.from('itens_pedido').delete().eq('pedido_id', pedidoId);
     await supabase.from('pedidos').delete().eq('id', pedidoId);
   }
@@ -222,6 +222,7 @@ export async function deletarOrcamento(orcamentoId: string): Promise<boolean> {
   const pedidoId = (orc as any)?.pedido_id;
 
   if (pedidoId) {
+    await supabase.from('lancamentos').delete().eq('pedido_id', pedidoId);
     await supabase.from('itens_pedido').delete().eq('pedido_id', pedidoId);
     await supabase.from('pedidos').delete().eq('id', pedidoId);
   }

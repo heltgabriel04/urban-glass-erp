@@ -132,22 +132,38 @@ export async function registrarRecebimento(
   const aplicado  = Math.min(valor, aberto);
   const excedente = Math.max(0, valor - aberto);
 
-  const novoRecebido     = Number(pedido.valor_recebido) + aplicado;
-  const pedidoAtualizado = await updatePedido(pedidoId, { valor_recebido: novoRecebido });
-  if (!pedidoAtualizado) return null;
-
   const vencimento = data ?? new Date().toISOString().split('T')[0];
   const clienteId  = pedido.clientes?.id ?? pedido.cliente_id ?? null;
 
-  await supabase.from('lancamentos').insert({
-    tipo: 'Entrada',
-    descricao: `Recebimento pedido ${pedidoId}`,
-    valor: aplicado,
-    status: 'Pago',
-    vencimento,
-    pedido_id: pedidoId,
-    cliente_id: clienteId,
-  } as never);
+  // Reutiliza o primeiro lançamento "A Receber" existente em vez de criar duplicata
+  const { data: primeiro } = await supabase
+    .from('lancamentos')
+    .select('id')
+    .eq('pedido_id', pedidoId)
+    .eq('status', 'A Receber')
+    .order('vencimento', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (primeiro) {
+    await supabase.from('lancamentos')
+      .update({ status: 'Pago', valor: aplicado, vencimento } as never)
+      .eq('id', (primeiro as any).id);
+  } else {
+    await supabase.from('lancamentos').insert({
+      tipo: 'Entrada',
+      descricao: `Recebimento pedido ${pedidoId}`,
+      valor: aplicado,
+      status: 'Pago',
+      vencimento,
+      pedido_id: pedidoId,
+      cliente_id: clienteId,
+    } as never);
+  }
+
+  // Recalcula a partir dos lançamentos para manter consistência com handleMarcarPago
+  const pedidoAtualizado = await recalcularRecebido(pedidoId);
+  if (!pedidoAtualizado) return null;
 
   if (excedente > 0.005 && clienteId) {
     const creditoAtual = await getCreditoCliente(clienteId);
@@ -155,7 +171,7 @@ export async function registrarRecebimento(
 
     await supabase.from('lancamentos').insert({
       tipo: 'Entrada',
-      descricao: `Crédito gerado · excedente pedido ${pedidoId}`,
+      descricao: `Crédito · excedente pedido ${pedidoId}`,
       valor: excedente,
       status: 'Pago',
       vencimento,

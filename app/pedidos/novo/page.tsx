@@ -72,13 +72,20 @@ function redistribuirParcelas(parcelas: ParcelaForm[], valorTotal: number, idxEd
   if (parcelas.length === 0) return parcelas;
   const fixadas = parcelas.filter((p, i) => p.editado && i !== idxEditado);
   const somaFixadas = fixadas.reduce((a, p) => a + p.valor, 0);
-  const restante = valorTotal - somaFixadas;
+  const restante = Math.max(0, valorTotal - somaFixadas);
   const qtdLivres = parcelas.filter((p, i) => !p.editado || i === idxEditado).length;
   if (qtdLivres === 0) return parcelas;
-  const valorPorLivre = Math.max(0, restante / qtdLivres);
+  const valorBase = parseFloat((restante / qtdLivres).toFixed(2));
+  const somaBase  = parseFloat((valorBase * qtdLivres).toFixed(2));
+  const diff      = parseFloat((restante - somaBase).toFixed(2));
+  // Finds the last free parcel to absorb the centavo rounding diff
+  let lastFreeIdx = -1;
+  for (let i = parcelas.length - 1; i >= 0; i--) {
+    if (!parcelas[i].editado || i === idxEditado) { lastFreeIdx = i; break; }
+  }
   return parcelas.map((p, i) => {
     if (p.editado && i !== idxEditado) return p;
-    return { ...p, valor: parseFloat(valorPorLivre.toFixed(2)) };
+    return { ...p, valor: i === lastFreeIdx ? parseFloat((valorBase + diff).toFixed(2)) : valorBase };
   });
 }
 
@@ -265,6 +272,7 @@ export default function NovoPedidoPage() {
   async function salvar() {
     if (!clienteId) { alert("Selecione um cliente"); return; }
     if (itens.some(i => i.largura === 0 || i.altura === 0)) { alert("Preencha as dimensões de todos os itens"); return; }
+    if (!parcelasOk) { alert(`Soma das parcelas (${formatBRL(somaParcelas)}) difere do total (${formatBRL(valorTotal)}). Ajuste os valores antes de salvar.`); return; }
 
     setSalvando(true);
 

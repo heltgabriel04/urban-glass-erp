@@ -189,6 +189,7 @@ export default function FinanceiroPage() {
   // ── Lançamento rápido ─────────────────────────────────────────────────────
 
   async function handleQuickAdd() {
+    if (salvandoQa) return;
     if (!qa.descricao.trim() || qa.valor <= 0 || !qa.vencimento) {
       toast("Preencha descrição, valor e data", "warn"); return;
     }
