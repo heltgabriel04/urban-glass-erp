@@ -235,8 +235,8 @@ export default function NovoOrcamentoPage() {
       <div className="tb">
         <div className="tb-title">Novo Orçamento · {proximoId}</div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button className="btn bg sm" onClick={() => router.push("/orcamentos")}>Cancelar</button>
-          <button className="btn bp sm" onClick={salvar} disabled={salvando}>
+          <button className="btn bg sm" tabIndex={-1} onClick={() => router.push("/orcamentos")}>Cancelar</button>
+          <button className="btn bp sm" tabIndex={-1} onClick={salvar} disabled={salvando}>
             {salvando ? "Salvando..." : "✓ Salvar Orçamento"}
           </button>
         </div>
@@ -271,7 +271,7 @@ export default function NovoOrcamentoPage() {
               <div className="fg"><label className="fl">Previsão de Entrega</label><DateInput value={dtEntrega} onChange={setDtEntrega} /></div>
               <div className="fg">
                 <label className="fl">Frete</label>
-                <select className="fc" value={frete} onChange={e => setFrete(e.target.value)}>
+                <select tabIndex={-1} className="fc" value={frete} onChange={e => setFrete(e.target.value)}>
                   {["Retirada","CIF","FOB"].map(f => <option key={f}>{f}</option>)}
                 </select>
               </div>
@@ -279,14 +279,14 @@ export default function NovoOrcamentoPage() {
             <div className="fr">
               <div className="fg">
                 <label className="fl">Forma de Pagamento</label>
-                <select className="fc" value={formaPgto} onChange={e => setFormaPgto(e.target.value)}>
+                <select tabIndex={-1} className="fc" value={formaPgto} onChange={e => setFormaPgto(e.target.value)}>
                   <option value="">Selecione...</option>
                   {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
                 </select>
               </div>
               <div className="fg">
                 <label className="fl">Conta</label>
-                <select className="fc" value={conta} onChange={e => setConta(e.target.value)}>
+                <select tabIndex={-1} className="fc" value={conta} onChange={e => setConta(e.target.value)}>
                   <option value="">Selecione...</option>
                   {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => <option key={c}>{c}</option>)}
                 </select>
@@ -295,18 +295,18 @@ export default function NovoOrcamentoPage() {
             <div className="fr">
               <div className="fg">
                 <label className="fl">Parcelas</label>
-                <select className="fc" value={parcelas} onChange={e => setParcelas(Number(e.target.value))}>
+                <select tabIndex={-1} className="fc" value={parcelas} onChange={e => setParcelas(Number(e.target.value))}>
                   {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
                 </select>
               </div>
               <div className="fg">
                 <label className="fl">Desconto Global (%)</label>
-                <input className="fc" type="number" min="0" max="100" step="0.5" value={desconto || ""} onChange={e => setDesconto(parseFloat(e.target.value) || 0)} placeholder="0" />
+                <input tabIndex={-1} className="fc" type="number" min="0" max="100" step="0.5" value={desconto || ""} onChange={e => setDesconto(parseFloat(e.target.value) || 0)} placeholder="0" />
               </div>
             </div>
             <div className="fg">
               <label className="fl">Observações</label>
-              <textarea className="fc" value={obs} onChange={e => setObs(e.target.value)} placeholder="Observações do orçamento..." />
+              <textarea tabIndex={-1} className="fc" value={obs} onChange={e => setObs(e.target.value)} placeholder="Observações do orçamento..." />
             </div>
           </div>
 
@@ -336,7 +336,7 @@ export default function NovoOrcamentoPage() {
               <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>
                 Enter avança · Enter em Qtd cria nova linha
               </span>
-              <button className="btn bp sm" onClick={addItem}>+ Item</button>
+              <button tabIndex={-1} className="btn bp sm" onClick={addItem}>+ Item</button>
             </div>
           </div>
 
@@ -362,7 +362,7 @@ export default function NovoOrcamentoPage() {
                     className="fc"
                     value={item.produto_id || ""}
                     onChange={e => updItem(i, "produto_id", Number(e.target.value))}
-                    tabIndex={i * 10 + 1}
+                    tabIndex={i * 4 + 1}
                   >
                     <option value="">Selecione o produto...</option>
                     {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
@@ -374,7 +374,7 @@ export default function NovoOrcamentoPage() {
                     value={item.largura || ""}
                     onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)}
                     onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); altRefs.current[i]?.focus(); } }}
-                    tabIndex={i * 10 + 2}
+                    tabIndex={i * 4 + 2}
                     placeholder="0"
                   />
                   <input
@@ -384,7 +384,7 @@ export default function NovoOrcamentoPage() {
                     value={item.altura || ""}
                     onChange={e => updItem(i, "altura", parseInt(e.target.value) || 0)}
                     onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); qtdRefs.current[i]?.focus(); } }}
-                    tabIndex={i * 10 + 3}
+                    tabIndex={i * 4 + 3}
                     placeholder="0"
                   />
                   <input
@@ -394,13 +394,13 @@ export default function NovoOrcamentoPage() {
                     value={item.quantidade}
                     onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)}
                     onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addItemAposLinha(i); } }}
-                    tabIndex={i * 10 + 4}
+                    tabIndex={i * 4 + 4}
                     min={1}
                   />
-                  <CurrencyInput value={item.valor_m2} onChange={v => updItem(i, "valor_m2", v)} placeholder="R$/m²" title="Valor por m²" />
-                  <CurrencyInput value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(unitVal.toFixed(2)) : 0} onChange={v => updUnitItem(i, v)} placeholder="por peça" title="Valor por peça" />
-                  <CurrencyInput value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : 0} onChange={v => updTotalItem(i, v)} placeholder="total" title="Total do item" />
-                  <button className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1} tabIndex={-1}>✕</button>
+                  <CurrencyInput tabIndex={-1} value={item.valor_m2} onChange={v => updItem(i, "valor_m2", v)} placeholder="R$/m²" title="Valor por m²" />
+                  <CurrencyInput tabIndex={-1} value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(unitVal.toFixed(2)) : 0} onChange={v => updUnitItem(i, v)} placeholder="por peça" title="Valor por peça" />
+                  <CurrencyInput tabIndex={-1} value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : 0} onChange={v => updTotalItem(i, v)} placeholder="total" title="Total do item" />
+                  <button tabIndex={-1} className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1}>✕</button>
                 </div>
                 {m2 > 0 && (
                   <div style={{ display: "flex", gap: "14px", padding: "4px 0 0 4px", alignItems: "center", flexWrap: "wrap" }}>
@@ -419,8 +419,8 @@ export default function NovoOrcamentoPage() {
             <span style={{ fontSize: "11px", color: "var(--t2)", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>
               Distribuir total do pedido:
             </span>
-            <CurrencyInput value={totalPedidoInput} onChange={setTotalPedidoInput} placeholder="Ex: R$ 850,00" style={{ width: "140px", margin: 0 }} />
-            <button className="btn bp sm" onClick={() => aplicarTotalPedido(totalPedidoInput)} disabled={totalPedidoInput <= 0 || m2Total === 0}>↵ Aplicar</button>
+            <CurrencyInput tabIndex={-1} value={totalPedidoInput} onChange={setTotalPedidoInput} placeholder="Ex: R$ 850,00" style={{ width: "140px", margin: 0 }} />
+            <button tabIndex={-1} className="btn bp sm" onClick={() => aplicarTotalPedido(totalPedidoInput)} disabled={totalPedidoInput <= 0 || m2Total === 0}>↵ Aplicar</button>
             <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>distribui proporcionalmente ao m² de cada item</span>
           </div>
 

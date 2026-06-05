@@ -10,6 +10,7 @@ interface CurrencyInputProps {
   style?: React.CSSProperties;
   className?: string;
   disabled?: boolean;
+  tabIndex?: number;
 }
 
 export default function CurrencyInput({
@@ -20,11 +21,11 @@ export default function CurrencyInput({
   style,
   className = "fc",
   disabled,
+  tabIndex,
 }: CurrencyInputProps) {
   const [display, setDisplay] = useState("");
   const focused = useRef(false);
 
-  // Quando o valor externo muda (e campo não está focado), formata para exibição
   useEffect(() => {
     if (!focused.current) {
       setDisplay(value > 0 ? formatarExibicao(value) : "");
@@ -41,17 +42,14 @@ export default function CurrencyInput({
 
   function handleFocus() {
     focused.current = true;
-    // Ao focar, mostra só o número sem R$ para facilitar edição
     setDisplay(value > 0 ? value.toFixed(2).replace(".", ",") : "");
   }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const raw = e.target.value;
-    setDisplay(raw);
+    setDisplay(e.target.value);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    // Permite: números, vírgula, ponto, backspace, delete, tab, arrows
     const allowed = ["Backspace","Delete","Tab","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End",".","," ];
     if (!allowed.includes(e.key) && !/^\d$/.test(e.key)) {
       e.preventDefault();
@@ -60,11 +58,10 @@ export default function CurrencyInput({
 
   function handleBlur() {
     focused.current = false;
-    // Converte o que o usuário digitou para número
     const raw = display
       .replace(/R\$\s?/g, "")
-      .replace(/\./g, "")   // remove pontos de milhar
-      .replace(",", ".");    // vírgula vira ponto decimal
+      .replace(/\./g, "")
+      .replace(",", ".");
     const num = parseFloat(raw) || 0;
     onChange(num);
     setDisplay(num > 0 ? formatarExibicao(num) : "");
@@ -80,6 +77,7 @@ export default function CurrencyInput({
       title={title}
       style={style}
       disabled={disabled}
+      tabIndex={tabIndex}
       onFocus={handleFocus}
       onChange={handleChange}
       onKeyDown={handleKeyDown}
