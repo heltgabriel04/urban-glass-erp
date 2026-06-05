@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const sessaoExpirada = searchParams.get("expired") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -120,6 +122,24 @@ export default function LoginPage() {
               Entre com suas credenciais para acessar
             </p>
           </div>
+
+          {sessaoExpirada && (
+            <div style={{
+              background: "rgba(245,158,11,0.08)",
+              border: "1px solid rgba(245,158,11,0.3)",
+              color: "#f59e0b",
+              borderRadius: "8px",
+              padding: "10px 14px",
+              fontSize: "12px",
+              marginBottom: "20px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}>
+              <span>⏱</span>
+              <span>Sessão encerrada automaticamente à meia-noite. Faça login para continuar.</span>
+            </div>
+          )}
 
           {/* Form */}
           <form onSubmit={handleLogin}>
