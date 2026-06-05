@@ -198,8 +198,8 @@ function OtimizadorContent() {
   const [pecas, setPecas]                 = useState<Peca[]>([{ l: 0, a: 0, qtd: 1, prod: "" }]);
   const [chapaW, setChapaW]               = useState(3300);
   const [chapaH, setChapaH]               = useState(2250);
-  const [kerf, setKerf]                   = useState(4);
-  const [bord, setBord]                   = useState(3);
+  const [kerf, setKerf]                   = useState(0);
+  const [bord, setBord]                   = useState(0);
   const [resultado, setResultado]         = useState<ResultadoChapa[] | null>(null);
   const [chapaIdx, setChapaIdx]           = useState(0);
   const [pedidoRef, setPedidoRef]         = useState<string | null>(null);
