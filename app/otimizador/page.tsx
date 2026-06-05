@@ -472,7 +472,7 @@ function OtimizadorContent() {
 
     // Gera SVG proporcional da chapa com as peças posicionadas
     function svgChapa(r: ResultadoChapa): string {
-      const MAX_W = 600, MAX_H = 400;
+      const MAX_W = 580, MAX_H = 270;
       const sc = Math.min(MAX_W / r.W, MAX_H / r.H);
       const sw = Math.round(r.W * sc), sh = Math.round(r.H * sc);
       const bp = bord * sc;
@@ -551,7 +551,7 @@ function OtimizadorContent() {
       const areaUsada = r.placed.reduce((a, p) => a + p.l * p.a, 0);
       const apChapa = areaUtil > 0 ? ((areaUsada / areaUtil) * 100).toFixed(1) : "0";
       return `
-        <div style="margin-bottom:28px;border:1px solid #d1daf0;border-radius:10px;overflow:hidden;page-break-inside:avoid">
+        <div style="margin-bottom:28px;border:1px solid #d1daf0;border-radius:10px;${i > 0 ? "page-break-before:always;" : ""}">
           <div style="background:#2d5fa6;color:white;padding:9px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
             <div style="font-size:13px;font-weight:700">CHAPA ${i + 1} · ${r.prod}</div>
             <div style="display:flex;gap:18px;font-size:11px;opacity:.93">
