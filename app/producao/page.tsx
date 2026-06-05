@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidos, avancarStatusPedido } from "@/services/pedidos.service";
 import { formatBRL, formatDate, formatM2 } from "@/lib/formatters";
@@ -25,6 +26,7 @@ const COR_COL: Record<string, string> = {
 
 export default function ProducaoPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [pedidos, setPedidos]             = useState<Pedido[]>([]);
   const [loading, setLoading]             = useState(true);
   const [comOtimizacao, setComOtimizacao] = useState<Set<string>>(new Set());
@@ -172,7 +174,7 @@ export default function ProducaoPage() {
                       const retUrgente = diasRet !== null && diasRet <= 3 && !ultimo;
 
                       return (
-                        <div key={p.id} className="kbcard" style={{ borderLeft: retUrgente ? "3px solid var(--warn)" : undefined }}>
+                        <div key={p.id} className="kbcard" style={{ borderLeft: retUrgente ? "3px solid var(--warn)" : undefined, cursor: "pointer" }} onClick={() => router.push(`/pedidos/${p.id}`)}>
                           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                             <span className="kbcid">{p.id}</span>
                             <div style={{ display:"flex", gap:"4px", alignItems:"center" }}>
@@ -201,6 +203,7 @@ export default function ProducaoPage() {
                           {semOtim && (
                             <a
                               href={`/otimizador?pedido=${p.id}`}
+                              onClick={e => e.stopPropagation()}
                               style={{ display:"block", marginTop:"8px", textAlign:"center", fontSize:"10px", color:"var(--warn)", background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)", borderRadius:"5px", padding:"4px 0", textDecoration:"none" }}
                             >
                               ◈ Otimizar primeiro
@@ -219,7 +222,7 @@ export default function ProducaoPage() {
                               className="btn bp xs"
                               style={{ marginTop:"8px", width:"100%" }}
                               disabled={avancando === p.id}
-                              onClick={() => handleAvancar(p)}
+                              onClick={e => { e.stopPropagation(); handleAvancar(p); }}
                             >
                               {avancando === p.id ? "..." : "Avançar →"}
                             </button>
@@ -256,7 +259,7 @@ export default function ProducaoPage() {
                         <tr key={p.id}>
                           <td>
                             <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
-                              <span className="mono" style={{ color:"var(--acc)" }}>{p.id}</span>
+                              <a href={`/pedidos/${p.id}`} className="mono" style={{ color:"var(--acc)", textDecoration:"none" }}>{p.id}</a>
                               {eVidroCliente && <span title="Vidro do cliente" style={{ fontSize:"11px" }}>📦</span>}
                             </div>
                           </td>
