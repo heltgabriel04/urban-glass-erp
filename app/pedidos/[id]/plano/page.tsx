@@ -298,14 +298,15 @@ export default function PlanoCorte() {
 
         @media print {
           .no-print { display: none !important; }
+          .print-page { display: flex !important; flex-direction: column; gap: 14px; page-break-before: always; }
+          .print-page:first-of-type { page-break-before: avoid; }
+          .pecas-list { max-height: none !important; overflow: visible !important; }
           html, body { background: white; color: #000; }
           .layout { display: block; height: auto; }
           .col-main { padding: 0; overflow: visible; }
           .col-side { display: none; }
-          .card { background: white; border: 1px solid #ccc; page-break-inside: avoid; }
+          .card { background: white; border: 1px solid #ccc; }
           .card-title { color: #374151; }
-          .print-page { page-break-after: always; }
-          .print-page:last-child { page-break-after: avoid; }
           @page { margin: 12mm; size: A4; }
         }
       `}</style>
@@ -353,8 +354,8 @@ export default function PlanoCorte() {
             const cPerda     = cChapaM2 > 0 ? (((cChapaM2 - cUsedM2) / cChapaM2) * 100).toFixed(1) : "0";
 
             return (
-              <div key={ci} className={`print-page${ci !== chapaAtiva ? " no-print" : ""}`}
-                style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div key={ci} className="print-page"
+                style={{ display: ci !== chapaAtiva ? "none" : "flex", flexDirection: "column", gap: "14px" }}>
 
                 {/* Cabeçalho da chapa */}
                 <div className="card" style={{ padding: "14px 18px" }}>
@@ -411,7 +412,7 @@ export default function PlanoCorte() {
                         <div key={h} style={{ fontSize: "9px", color: "#6b7280", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</div>
                       ))}
                     </div>
-                    <div style={{ maxHeight: "260px", overflowY: "auto" }}>
+                    <div className="pecas-list" style={{ maxHeight: "260px", overflowY: "auto" }}>
                       {c.placed.map((p, pi) => {
                         const key = p.pedidoId ? `${p.pedidoId}:${p.prod}` : p.prod;
                         const colorIdx = pi % STROKE_COLORS.length;
