@@ -45,6 +45,11 @@ function isChapaInteira(largura: number, altura: number): boolean {
   );
 }
 
+function arredondarParaMultiplo50(v: number): number {
+  if (v % 50 === 0) return v;
+  return Math.ceil(v / 50) * 50;
+}
+
 function hoje() { return new Date().toISOString().split("T")[0]; }
 
 function formatarValorDigitado(raw: string): string {
@@ -73,6 +78,16 @@ interface ParcelaEdit {
   lancamento_id?: number;
 }
 
+interface ItemEdit {
+  id: number;
+  produto_nome: string;
+  largura: number;
+  altura: number;
+  quantidade: number;
+  valor_m2: number;
+  lapidacao: number;
+}
+
 export default function PedidoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -97,6 +112,7 @@ export default function PedidoDetalhe() {
     forma_pgto: "", conta: "", parcelas: 1, obs: "",
   });
   const [editParcelas, setEditParcelas] = useState<ParcelaEdit[]>([]);
+  const [editItens, setEditItens]       = useState<ItemEdit[]>([]);
 
   useEffect(() => { load(); }, [id]);
 
@@ -148,6 +164,15 @@ export default function PedidoDetalhe() {
       const datas = pedido.datas_pgto ?? [];
       setEditParcelas(Array.from({ length: n }, (_, i) => ({ data: datas[i] ?? "", valor: valorParcela })));
     }
+    setEditItens((pedido.itens_pedido ?? []).map((item: any) => ({
+      id: item.id,
+      produto_nome: item.produto_nome,
+      largura: item.largura,
+      altura: item.altura,
+      quantidade: item.quantidade,
+      valor_m2: Number(item.valor_m2),
+      lapidacao: Number(item.lapidacao ?? 0),
+    })));
     setEditando(true);
   }
 
@@ -166,9 +191,30 @@ export default function PedidoDetalhe() {
     })));
   }
 
+  function calcM2Item(item: ItemEdit): number {
+    const l = arredondarParaMultiplo50(item.largura);
+    const a = arredondarParaMultiplo50(item.altura);
+    return (l / 1000) * (a / 1000) * item.quantidade;
+  }
+
+  function calcSubtotalItem(item: ItemEdit): number {
+    const m2 = calcM2Item(item);
+    return m2 * item.valor_m2 + item.lapidacao * m2;
+  }
+
+  function updEditItem(idx: number, field: keyof ItemEdit, value: number) {
+    setEditItens(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  }
+
+  // Valor total calculado a partir dos itens editados
+  const valorTotalEditado = editItens.reduce((a, i) => a + calcSubtotalItem(i), 0);
+  const m2TotalEditado    = editItens.reduce((a, i) => a + calcM2Item(i), 0);
+
   async function salvarEdicao() {
     if (!pedido) return;
     setSalvando(true);
+
+    // Salva dados do pedido
     const result = await updatePedido(pedido.id, {
       cliente_id:   editForm.cliente_id,
       dt_pedido:    editForm.dt_pedido,
@@ -179,8 +225,28 @@ export default function PedidoDetalhe() {
       obs:          editForm.obs,
       datas_pgto:   editParcelas.map(p => p.data).filter(d => d),
       valores_pgto: editParcelas.map(p => p.valor),
+      valor_total:  parseFloat(valorTotalEditado.toFixed(2)),
+      m2_total:     parseFloat(m2TotalEditado.toFixed(4)),
     });
+
     if (!result) { toast("Erro ao salvar pedido", "err"); setSalvando(false); return; }
+
+    // Salva cada item editado
+    for (const item of editItens) {
+      const m2 = calcM2Item(item);
+      const subtotal = calcSubtotalItem(item);
+      await supabase.from("itens_pedido").update({
+        largura:   item.largura,
+        altura:    item.altura,
+        quantidade: item.quantidade,
+        valor_m2:  item.valor_m2,
+        lapidacao: item.lapidacao,
+        m2:        parseFloat(m2.toFixed(4)),
+        subtotal:  parseFloat(subtotal.toFixed(2)),
+      }).eq("id", item.id);
+    }
+
+    // Atualiza lançamentos A Receber
     const aReceber = lancamentos.filter(l => l.status === "A Receber");
     for (const l of aReceber) await deletarLancamento(l.id);
     for (let i = 0; i < editParcelas.length; i++) {
@@ -193,6 +259,7 @@ export default function PedidoDetalhe() {
         pedido_id: pedido.id, cliente_id: editForm.cliente_id,
       });
     }
+
     toast("Pedido atualizado");
     setSalvando(false);
     setEditando(false);
@@ -281,6 +348,8 @@ export default function PedidoDetalhe() {
     outline: "none", width: "100%", boxSizing: "border-box",
   };
 
+  const fcSm: React.CSSProperties = { ...fc, padding: "7px 10px", fontSize: "12px" };
+
   return (
     <>
       <style>{`
@@ -305,39 +374,20 @@ export default function PedidoDetalhe() {
             Pedido <span style={{ color:"var(--acc)" }}>{pedido.id}</span>
           </div>
           <span className={CHIP[pedido.status] ?? "chip cgr"}>{pedido.status}</span>
-
           <button className="btn bg sm" onClick={abrirEdicao}>✏ Editar</button>
-
           {temItens && !todosVidroCliente && !todosChapa && (
             <a href={"/otimizador?pedido=" + pedido.id} className="btn bg sm">◈ Otimizar Corte</a>
           )}
-
           {temOtimizacao && (
-            <a href={"/pedidos/" + pedido.id + "/etiquetas"} className="btn bg sm" style={{ textDecoration:"none" }}>
-              🏷 Etiquetas
-            </a>
+            <a href={"/pedidos/" + pedido.id + "/etiquetas"} className="btn bg sm" style={{ textDecoration:"none" }}>🏷 Etiquetas</a>
           )}
-
           <button
             className="btn sm"
             onClick={() => podeRomaneio && window.print()}
-            title={podeRomaneio ? "Imprimir Romaneio de Saída" : "Disponível a partir de Finalizado"}
-            style={{
-              background: podeRomaneio ? "rgba(16,185,129,.15)" : "transparent",
-              border: "1px solid " + (podeRomaneio ? "var(--ok)" : "var(--b2)"),
-              color: podeRomaneio ? "var(--ok)" : "var(--t3)",
-              fontWeight:700, cursor: podeRomaneio ? "pointer" : "default",
-              opacity: podeRomaneio ? 1 : 0.35, transition:"all 0.2s",
-            }}
+            style={{ background: podeRomaneio ? "rgba(16,185,129,.15)" : "transparent", border: "1px solid " + (podeRomaneio ? "var(--ok)" : "var(--b2)"), color: podeRomaneio ? "var(--ok)" : "var(--t3)", fontWeight:700, cursor: podeRomaneio ? "pointer" : "default", opacity: podeRomaneio ? 1 : 0.35, transition:"all 0.2s" }}
           >R</button>
-
           {podeAvancar && (
-            <button
-              className="btn bp sm"
-              onClick={handleAvancar}
-              disabled={salvando || bloqueadoSemOtim}
-              style={bloqueadoSemOtim ? { opacity:0.45, cursor:"not-allowed" } : {}}
-            >
+            <button className="btn bp sm" onClick={handleAvancar} disabled={salvando || bloqueadoSemOtim} style={bloqueadoSemOtim ? { opacity:0.45, cursor:"not-allowed" } : {}}>
               {salvando ? "Salvando..." : bloqueadoSemOtim ? "⚠ Otimização pendente" : "Avançar Status →"}
             </button>
           )}
@@ -462,9 +512,7 @@ export default function PedidoDetalhe() {
                         </span>
                         <span style={{ fontSize:"13px", color:"var(--ok)", fontFamily:"'DM Mono', monospace", fontWeight:600, flex:1 }}>{formatBRL(l.valor)}</span>
                         <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono', monospace" }}>{formatDate(l.vencimento)}</span>
-                        <button
-                          title="Remover"
-                          onClick={() => handleDeletarLancamento(l.id)}
+                        <button title="Remover" onClick={() => handleDeletarLancamento(l.id)}
                           style={{ background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", fontSize:"11px", cursor:"pointer", padding:"3px 7px", transition:"all 0.15s", lineHeight:1 }}
                           onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="rgba(244,63,94,.15)"; b.style.borderColor="var(--err)"; b.style.color="var(--err)"; }}
                           onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="transparent"; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
@@ -474,7 +522,6 @@ export default function PedidoDetalhe() {
                   </div>
                 </div>
               )}
-
               {creditoCliente > 0.005 && !quitado && (
                 <div style={{ marginBottom:"10px", padding:"10px 12px", background:"rgba(0,200,255,.07)", border:"1px solid rgba(0,200,255,.25)", borderRadius:"8px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"10px" }}>
                   <div>
@@ -484,7 +531,6 @@ export default function PedidoDetalhe() {
                   <button className="btn bg sm" onClick={handleUsarCredito} disabled={salvando}>Aplicar crédito</button>
                 </div>
               )}
-
               {!quitado && (
                 <div>
                   {!recebendo ? (
@@ -561,12 +607,14 @@ export default function PedidoDetalhe() {
         {/* ── MODAL EDIÇÃO ── */}
         {editando && (
           <div className="mov open" onClick={e => e.target === e.currentTarget && setEditando(false)}>
-            <div className="mod" style={{ width:"620px", maxHeight:"90vh", overflowY:"auto" }}>
+            <div className="mod" style={{ width:"780px", maxHeight:"90vh", overflowY:"auto" }}>
               <div className="mhd">
                 <div className="mtit">Editar Pedido · {pedido.id}</div>
                 <button className="mcl" onClick={() => setEditando(false)}>✕</button>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
+
+                {/* Dados básicos */}
                 <div className="fg">
                   <label className="fl">Cliente</label>
                   <select style={fc} value={editForm.cliente_id} onChange={e => setEditForm(f => ({ ...f, cliente_id: Number(e.target.value) }))}>
@@ -599,14 +647,11 @@ export default function PedidoDetalhe() {
                     {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
                   </select>
                 </div>
+
+                {/* Parcelas */}
                 <div style={{ padding:"12px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)" }}>
                   <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"10px", textTransform:"uppercase" }}>
                     {editForm.parcelas === 1 ? "Pagamento" : `Parcelas (${editForm.parcelas}x)`}
-                  </div>
-                  <div style={{ display:"grid", gridTemplateColumns: editForm.parcelas > 1 ? "50px 1fr 130px" : "1fr 130px", gap:"8px", marginBottom:"6px", paddingBottom:"6px", borderBottom:"1px solid var(--b1)" }}>
-                    {editForm.parcelas > 1 && <span />}
-                    <span style={{ fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px" }}>Data</span>
-                    <span style={{ fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px", textAlign:"right" }}>Valor (R$)</span>
                   </div>
                   {editParcelas.map((p, idx) => (
                     <div key={idx} style={{ display:"grid", gridTemplateColumns: editForm.parcelas > 1 ? "50px 1fr 130px" : "1fr 130px", gap:"8px", alignItems:"center", marginBottom:"6px" }}>
@@ -616,16 +661,69 @@ export default function PedidoDetalhe() {
                     </div>
                   ))}
                   <div style={{ fontSize:"10px", color:"var(--t3)", marginTop:"4px", fontFamily:"'DM Mono',monospace" }}>
-                    Total das parcelas: <strong style={{ color:"var(--acc)" }}>{formatBRL(editParcelas.reduce((a, p) => a + p.valor, 0))}</strong>
-                    {" · "}Valor do pedido: <strong>{formatBRL(pedido.valor_total)}</strong>
+                    Total parcelas: <strong style={{ color:"var(--acc)" }}>{formatBRL(editParcelas.reduce((a, p) => a + p.valor, 0))}</strong>
                   </div>
                 </div>
+
+                {/* Itens */}
+                <div style={{ padding:"12px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)" }}>
+                  <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"12px", textTransform:"uppercase" }}>
+                    Itens do Pedido
+                  </div>
+
+                  {/* Header */}
+                  <div style={{ display:"grid", gridTemplateColumns:"2fr 70px 70px 50px 100px 90px 90px", gap:"6px", marginBottom:"6px", paddingBottom:"6px", borderBottom:"1px solid var(--b1)" }}>
+                    {["Produto","Larg.","Alt.","Qtd","R$/m²","Lap./m²","Subtotal"].map(h => (
+                      <div key={h} style={{ fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px", fontFamily:"'DM Mono',monospace" }}>{h}</div>
+                    ))}
+                  </div>
+
+                  {editItens.map((item, idx) => {
+                    const m2  = calcM2Item(item);
+                    const sub = calcSubtotalItem(item);
+                    return (
+                      <div key={item.id} style={{ marginBottom:"10px" }}>
+                        <div style={{ display:"grid", gridTemplateColumns:"2fr 70px 70px 50px 100px 90px 90px", gap:"6px", alignItems:"center" }}>
+                          {/* Produto — somente leitura */}
+                          <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", padding:"7px 10px", background:"var(--surf1)", borderRadius:"6px", border:"1px solid var(--b1)" }}>
+                            {item.produto_nome}
+                          </div>
+                          <input style={fcSm} type="number" value={item.largura || ""} onChange={e => updEditItem(idx, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
+                          <input style={fcSm} type="number" value={item.altura || ""} onChange={e => updEditItem(idx, "altura", parseInt(e.target.value) || 0)} placeholder="0" />
+                          <input style={fcSm} type="number" value={item.quantidade} onChange={e => updEditItem(idx, "quantidade", parseInt(e.target.value) || 1)} min={1} />
+                          <CurrencyInput value={item.valor_m2} onChange={v => updEditItem(idx, "valor_m2", v)} placeholder="R$/m²" style={{ margin:0, padding:"7px 10px", fontSize:"12px" }} />
+                          <CurrencyInput value={item.lapidacao} onChange={v => updEditItem(idx, "lapidacao", v)} placeholder="0" style={{ margin:0, padding:"7px 10px", fontSize:"12px" }} />
+                          <div style={{ fontSize:"12px", color:"var(--acc)", fontWeight:700, fontFamily:"'DM Mono',monospace", padding:"7px 0" }}>
+                            {formatBRL(sub)}
+                          </div>
+                        </div>
+                        {m2 > 0 && (
+                          <div style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", marginTop:"2px", paddingLeft:"2px" }}>
+                            {m2.toFixed(4)} m²
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Total calculado */}
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", borderTop:"1px solid var(--b1)", paddingTop:"10px", marginTop:"4px" }}>
+                    <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>
+                      Total calculado · {m2TotalEditado.toFixed(4)} m²
+                    </span>
+                    <span style={{ fontSize:"15px", fontWeight:800, color:"var(--acc)", fontFamily:"'DM Mono',monospace" }}>
+                      {formatBRL(valorTotalEditado)}
+                    </span>
+                  </div>
+                </div>
+
                 <div className="fg">
                   <label className="fl">Observações</label>
                   <textarea style={{ ...fc, minHeight:"80px", resize:"vertical", fontFamily:"'Inter',sans-serif" }}
                     value={editForm.obs} onChange={e => setEditForm(f => ({ ...f, obs: e.target.value }))}
                     placeholder="Observações do pedido..." />
                 </div>
+
                 <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end", paddingTop:"4px" }}>
                   <button className="btn bg" onClick={() => setEditando(false)}>Cancelar</button>
                   <button className="btn bp" onClick={salvarEdicao} disabled={salvando}>
