@@ -26,58 +26,87 @@ interface PedidoSugerido {
   aprovSeCombinado: number | null; // delta vs base
   diasParaEntrega: number | null;
 }
-interface Retangulo { x: number; y: number; w: number; h: number; }
 
+
+// Algoritmo de guilhotina em 2 estágios (strip-packing):
+// 1° corte: horizontal por toda a largura → separa faixas
+// 2° corte: vertical dentro de cada faixa → peças individuais
+// Reflete o fluxo real de corte em vidro pesado.
 function empacotar(
   W: number, H: number,
   pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
   kerf: number
 ): { placed: PecaPlacada[]; usados: Set<number>; free: EspacoLivre[] } {
+  type Strip = { y: number; h: number; xUsed: number };
+
   const placed: PecaPlacada[] = [];
-  const usados = new Set<number>();
-  let espacos: Retangulo[] = [{ x: 0, y: 0, w: W, h: H }];
-  const ordem = pecas.map((p, i) => ({ ...p, origIdx: i })).sort((a, b) => b.l * b.a - a.l * a.a);
+  const usados  = new Set<number>();
+  const strips: Strip[] = [];
+  let   bottomY = 0;
+
+  // Ordena pela menor dimensão decrescente: peças mais "altas" (em paisagem) abrem
+  // as primeiras faixas e permitem que peças menores caibam nelas.
+  const ordem = pecas
+    .map((p, i) => ({ ...p, origIdx: i }))
+    .sort((a, b) => Math.min(b.l, b.a) - Math.min(a.l, a.a));
 
   for (const peca of ordem) {
     if (usados.has(peca.origIdx)) continue;
-    let melhor: { espacoIdx: number; rotacionado: boolean; fit: number; areaLivre: number; pl: number; pa: number } | null = null;
-    for (let i = 0; i < espacos.length; i++) {
-      const e = espacos[i];
-      for (const rot of [false, true]) {
-        const pl = rot ? peca.a : peca.l;
-        const pa = rot ? peca.l : peca.a;
-        if (pl > e.w || pa > e.h) continue;
-        const fit = Math.floor(e.w / pl) * Math.floor(e.h / pa);
-        const areaLivre = e.w * e.h - pl * pa;
-        if (!melhor || fit > melhor.fit || (fit === melhor.fit && areaLivre < melhor.areaLivre)) {
-          melhor = { espacoIdx: i, rotacionado: rot, fit, areaLivre, pl, pa };
-        }
+
+    // Ambas as orientações que cabem na largura da chapa
+    const oris = [
+      { pl: peca.l, pa: peca.a, rot: false as boolean },
+      { pl: peca.a, pa: peca.l, rot: true  as boolean },
+    ].filter(o => o.pl <= W);
+
+    if (oris.length === 0) continue;
+
+    let ok = false;
+
+    // ── Tenta encaixar numa faixa existente (First-Fit) ──
+    for (const strip of strips) {
+      // Orientações que cabem na altura da faixa; prefere a que mais preenche a altura
+      const cand = oris
+        .filter(o => o.pa <= strip.h)
+        .sort((a, b) => b.pa - a.pa);
+
+      for (const ori of cand) {
+        const x = strip.xUsed > 0 ? strip.xUsed + kerf : 0;
+        if (x + ori.pl > W) continue;
+        placed.push({ x, y: strip.y, l: ori.pl, a: ori.pa,
+          idx: peca.origIdx, prod: peca.prod, rot: ori.rot, pedidoId: peca.pedidoId });
+        usados.add(peca.origIdx);
+        strip.xUsed = x + ori.pl;
+        ok = true;
+        break;
       }
+      if (ok) break;
     }
-    if (!melhor) continue;
-    const { espacoIdx, rotacionado, pl, pa } = melhor;
-    const e = espacos[espacoIdx];
-    placed.push({ x: e.x, y: e.y, l: pl, a: pa, idx: peca.origIdx, prod: peca.prod, rot: rotacionado, pedidoId: peca.pedidoId });
-    usados.add(peca.origIdx);
-    const dx = e.w - pl - kerf;
-    const dy = e.h - pa - kerf;
-    let dir: Retangulo, baixo: Retangulo;
-    if (dx >= dy) {
-      dir   = { x: e.x + pl + kerf, y: e.y,            w: dx, h: e.h };
-      baixo = { x: e.x,             y: e.y + pa + kerf, w: pl, h: dy  };
-    } else {
-      dir   = { x: e.x + pl + kerf, y: e.y,            w: dx, h: pa  };
-      baixo = { x: e.x,             y: e.y + pa + kerf, w: e.w,h: dy  };
+
+    // ── Abre nova faixa (novo corte longitudinal) ──
+    if (!ok) {
+      // Prefere orientação que gera faixa mais estreita (menor altura)
+      const best = [...oris].sort((a, b) => a.pa - b.pa)[0];
+      const y    = strips.length > 0 ? bottomY + kerf : 0;
+      if (y + best.pa > H) continue;
+
+      placed.push({ x: 0, y, l: best.pl, a: best.pa,
+        idx: peca.origIdx, prod: peca.prod, rot: best.rot, pedidoId: peca.pedidoId });
+      usados.add(peca.origIdx);
+      strips.push({ y, h: best.pa, xUsed: best.pl });
+      bottomY = y + best.pa;
     }
-    espacos.splice(espacoIdx, 1);
-    if (dir.w   > 0 && dir.h   > 0) espacos.push(dir);
-    if (baixo.w > 0 && baixo.h > 0) espacos.push(baixo);
-    espacos.sort((a, b) => a.w * a.h - b.w * b.h);
   }
 
-  const free: EspacoLivre[] = espacos
-    .filter(e => e.w >= 200 && e.h >= 200)
-    .map(e => ({ x: e.x, y: e.y, l: e.w, a: e.h }));
+  // Espaços livres: lateral direita de cada faixa + retalho inferior
+  const free: EspacoLivre[] = [];
+  for (const s of strips) {
+    const x = s.xUsed > 0 ? s.xUsed + kerf : 0;
+    const w = W - x;
+    if (w >= 200 && s.h >= 200) free.push({ x, y: s.y, l: w, a: s.h });
+  }
+  const yBot = strips.length > 0 ? bottomY + kerf : 0;
+  if (H - yBot >= 200 && W >= 200) free.push({ x: 0, y: yBot, l: W, a: H - yBot });
 
   return { placed, usados, free };
 }
