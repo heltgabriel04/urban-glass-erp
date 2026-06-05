@@ -91,6 +91,8 @@ export async function retrocederStatusPedido(id: string, statusAtual: StatusPedi
 }
 
 export async function deletarPedido(pedidoId: string): Promise<boolean> {
+  await supabase.from('historico_otimizador').delete().eq('pedido_id', pedidoId);
+  await supabase.from('otimizacoes').delete().eq('pedido_id', pedidoId);
   await supabase.from('lancamentos').delete().eq('pedido_id', pedidoId);
   await supabase.from('itens_pedido').delete().eq('pedido_id', pedidoId);
   await supabase.from('orcamentos').update({ pedido_id: null } as never).eq('pedido_id', pedidoId);
