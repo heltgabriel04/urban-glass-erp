@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidoById, avancarStatusPedido, registrarRecebimento, recalcularRecebido, updatePedido, getCreditoCliente, utilizarCreditoEmPedido } from "@/services/pedidos.service";
-import { getLancamentosPorPedido, deletarLancamento, createLancamento } from "@/services/financeiro.service";
+import { getLancamentosPorPedido, deletarLancamento, createLancamento, updateLancamento } from "@/services/financeiro.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
@@ -52,17 +52,6 @@ function arredondarParaMultiplo50(v: number): number {
 
 function hoje() { return new Date().toISOString().split("T")[0]; }
 
-function formatarValorDigitado(raw: string): string {
-  const nums = raw.replace(/\D/g, "");
-  if (!nums) return "";
-  const num = parseInt(nums, 10) / 100;
-  return num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function parsearValor(formatted: string): number {
-  return parseFloat(formatted.replace(/\./g, "").replace(",", ".")) || 0;
-}
-
 function addMeses(dateStr: string, meses: number): string {
   if (!dateStr || dateStr.length < 10) return "";
   const d = new Date(dateStr + "T12:00:00");
@@ -88,6 +77,14 @@ interface ItemEdit {
   lapidacao: number;
 }
 
+// Estado de pagamento por parcela no painel financeiro
+interface PagamentoParcela {
+  lancId: number;
+  valorOriginal: number;
+  valorDigitado: number; // 0 = usa valorOriginal
+  marcando: boolean;
+}
+
 export default function PedidoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -101,9 +98,6 @@ export default function PedidoDetalhe() {
   const [clientes, setClientes]         = useState<{ id: number; nome: string }[]>([]);
   const [creditoCliente, setCreditoCliente] = useState(0);
   const [loading, setLoading]           = useState(true);
-  const [recebendo, setRecebendo]       = useState(false);
-  const [valorRec, setValorRec]         = useState("");
-  const [dataRec, setDataRec]           = useState(hoje());
   const [salvando, setSalvando]         = useState(false);
 
   const [editando, setEditando]         = useState(false);
@@ -113,6 +107,9 @@ export default function PedidoDetalhe() {
   });
   const [editParcelas, setEditParcelas] = useState<ParcelaEdit[]>([]);
   const [editItens, setEditItens]       = useState<ItemEdit[]>([]);
+
+  // Estado de pagamento por parcela
+  const [pagamentos, setPagamentos]     = useState<Record<number, PagamentoParcela>>({});
 
   useEffect(() => { load(); }, [id]);
 
@@ -139,6 +136,14 @@ export default function PedidoDetalhe() {
       const cred = await getCreditoCliente(data.cliente_id);
       setCreditoCliente(cred);
     }
+    // Inicializa estado de pagamento para parcelas A Receber
+    const initPag: Record<number, PagamentoParcela> = {};
+    for (const l of lancs) {
+      if (l.status === "A Receber") {
+        initPag[l.id] = { lancId: l.id, valorOriginal: Number(l.valor), valorDigitado: 0, marcando: false };
+      }
+    }
+    setPagamentos(initPag);
     setLoading(false);
   }
 
@@ -206,7 +211,6 @@ export default function PedidoDetalhe() {
     setEditItens(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
   }
 
-  // Valor total calculado a partir dos itens editados
   const valorTotalEditado = editItens.reduce((a, i) => a + calcSubtotalItem(i), 0);
   const m2TotalEditado    = editItens.reduce((a, i) => a + calcM2Item(i), 0);
 
@@ -214,7 +218,6 @@ export default function PedidoDetalhe() {
     if (!pedido) return;
     setSalvando(true);
 
-    // Salva dados do pedido
     const result = await updatePedido(pedido.id, {
       cliente_id:   editForm.cliente_id,
       dt_pedido:    editForm.dt_pedido,
@@ -231,22 +234,18 @@ export default function PedidoDetalhe() {
 
     if (!result) { toast("Erro ao salvar pedido", "err"); setSalvando(false); return; }
 
-    // Salva cada item editado
     for (const item of editItens) {
       const m2 = calcM2Item(item);
       const subtotal = calcSubtotalItem(item);
       await supabase.from("itens_pedido").update({
-        largura:   item.largura,
-        altura:    item.altura,
-        quantidade: item.quantidade,
-        valor_m2:  item.valor_m2,
+        largura: item.largura, altura: item.altura,
+        quantidade: item.quantidade, valor_m2: item.valor_m2,
         lapidacao: item.lapidacao,
-        m2:        parseFloat(m2.toFixed(4)),
-        subtotal:  parseFloat(subtotal.toFixed(2)),
+        m2: parseFloat(m2.toFixed(4)),
+        subtotal: parseFloat(subtotal.toFixed(2)),
       }).eq("id", item.id);
     }
 
-    // Atualiza lançamentos A Receber
     const aReceber = lancamentos.filter(l => l.status === "A Receber");
     for (const l of aReceber) await deletarLancamento(l.id);
     for (let i = 0; i < editParcelas.length; i++) {
@@ -266,9 +265,46 @@ export default function PedidoDetalhe() {
     await load();
   }
 
-  function handleValorChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const raw = e.target.value.replace(/\D/g, "");
-    setValorRec(formatarValorDigitado(raw));
+  // Marcar parcela como paga (checkbox)
+  async function handleMarcarPago(lancId: number) {
+    if (!pedido) return;
+    const pag = pagamentos[lancId];
+    if (!pag) return;
+
+    setPagamentos(prev => ({ ...prev, [lancId]: { ...prev[lancId], marcando: true } }));
+
+    const valorPagar = pag.valorDigitado > 0 ? pag.valorDigitado : pag.valorOriginal;
+    const result = await registrarRecebimento(pedido.id, valorPagar, hoje());
+
+    if (!result) {
+      toast("Erro ao registrar pagamento", "err");
+      setPagamentos(prev => ({ ...prev, [lancId]: { ...prev[lancId], marcando: false } }));
+      return;
+    }
+
+    // Marca o lançamento como Pago
+    await updateLancamento(lancId, { status: "Pago", vencimento: hoje() });
+
+    const { excedente } = result as any;
+    if (excedente > 0.005) {
+      toast(`✓ Quitado! ${formatBRL(excedente)} viraram crédito do cliente.`);
+    } else {
+      toast(`✓ ${formatBRL(valorPagar)} registrado`);
+    }
+
+    await load();
+  }
+
+  async function handleDeletarLancamento(lancId: number) {
+    if (!pedido) return;
+    if (!confirm("Remover este lançamento?")) return;
+    setSalvando(true);
+    const ok = await deletarLancamento(lancId);
+    if (!ok) { toast("Erro ao remover lançamento", "err"); setSalvando(false); return; }
+    await recalcularRecebido(pedido.id);
+    toast("Lançamento removido");
+    await load();
+    setSalvando(false);
   }
 
   async function handleAvancar() {
@@ -285,25 +321,6 @@ export default function PedidoDetalhe() {
     setSalvando(false);
   }
 
-  async function handleReceber() {
-    if (!pedido) return;
-    const valor = parsearValor(valorRec);
-    if (!valor || valor <= 0) { toast("Informe um valor válido", "warn"); return; }
-    setSalvando(true);
-    const result = await registrarRecebimento(pedido.id, valor, dataRec);
-    setSalvando(false);
-    if (!result) { toast("Erro ao registrar recebimento", "err"); return; }
-    const { excedente } = result as any;
-    if (excedente > 0.005) {
-      toast(`✓ Pedido quitado! ${formatBRL(excedente)} ficaram como crédito do cliente.`);
-    } else {
-      const aberto = Number(pedido.valor_total) - Number(pedido.valor_recebido);
-      toast(valor >= aberto - 0.01 ? `✓ Pedido ${pedido.id} quitado!` : `${formatBRL(valor)} registrado`);
-    }
-    setValorRec(""); setDataRec(hoje()); setRecebendo(false);
-    await load();
-  }
-
   async function handleUsarCredito() {
     if (!pedido) return;
     setSalvando(true);
@@ -312,18 +329,6 @@ export default function PedidoDetalhe() {
     if (!result) { toast("Erro ao aplicar crédito", "err"); return; }
     toast(`✓ ${formatBRL(creditoCliente - result.creditoRestante)} de crédito aplicado`);
     await load();
-  }
-
-  async function handleDeletarLancamento(lancId: number) {
-    if (!pedido) return;
-    if (!confirm("Remover este recebimento?")) return;
-    setSalvando(true);
-    const ok = await deletarLancamento(lancId);
-    if (!ok) { toast("Erro ao remover lançamento", "err"); setSalvando(false); return; }
-    await recalcularRecebido(pedido.id);
-    toast("Recebimento removido");
-    await load();
-    setSalvando(false);
   }
 
   if (loading) return <AppLayout><div className="con"><div className="loading">Carregando pedido...</div></div></AppLayout>;
@@ -341,6 +346,9 @@ export default function PedidoDetalhe() {
   const todosVidroCliente = temItens && (pedido.itens_pedido ?? []).every(i => (i as any).vidro_cliente === true);
   const todosChapa        = temItens && (pedido.itens_pedido ?? []).every(i => isChapaInteira(i.largura, i.altura));
   const bloqueadoSemOtim  = pedido.status === "Aguardando otimização" && !temOtimizacao && !todosVidroCliente && !todosChapa;
+
+  const parcelasAReceber = lancamentos.filter(l => l.status === "A Receber").sort((a, b) => (a.vencimento ?? "").localeCompare(b.vencimento ?? ""));
+  const lancamentosPagos = lancamentos.filter(l => l.status === "Pago");
 
   const fc: React.CSSProperties = {
     background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: "6px",
@@ -488,11 +496,15 @@ export default function PedidoDetalhe() {
 
             <div className="card" style={{ padding:"20px 24px" }}>
               <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, marginBottom:"16px", letterSpacing:".06em" }}>FINANCEIRO</div>
-              <div style={{ display:"flex", flexDirection:"column", gap:"10px", marginBottom:"16px" }}>
+
+              {/* Resumo */}
+              <div style={{ display:"flex", flexDirection:"column", gap:"8px", marginBottom:"16px" }}>
                 <Row label="Valor total" value={formatBRL(pedido.valor_total)} accent />
                 <Row label="Recebido"    value={formatBRL(pedido.valor_recebido)} color={pedido.valor_recebido > 0 ? "var(--ok)" : "var(--t2)"} />
                 <Row label="Em aberto"   value={formatBRL(Math.max(0, aberto))} color={quitado ? "var(--ok)" : "var(--err)"} />
               </div>
+
+              {/* Barra de progresso */}
               <div style={{ marginBottom:"16px" }}>
                 <div style={{ display:"flex", justifyContent:"space-between", fontSize:"11px", color:"var(--t3)", marginBottom:"6px" }}>
                   <span>Recebimento</span><span>{pctRec.toFixed(0)}%</span>
@@ -501,18 +513,80 @@ export default function PedidoDetalhe() {
                   <div style={{ height:"100%", borderRadius:"3px", width:`${pctRec}%`, background: quitado ? "var(--ok)" : "var(--acc)", transition:"width .3s" }} />
                 </div>
               </div>
-              {lancamentos.length > 0 && (
+
+              {/* Parcelas a receber com checkbox */}
+              {parcelasAReceber.length > 0 && (
                 <div style={{ marginBottom:"16px" }}>
-                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"8px" }}>HISTÓRICO</div>
+                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"8px" }}>PARCELAS A RECEBER</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
+                    {parcelasAReceber.map((l, idx) => {
+                      const pag = pagamentos[l.id];
+                      const marcando = pag?.marcando ?? false;
+                      const valorDigitado = pag?.valorDigitado ?? 0;
+                      const vencido = l.vencimento && l.vencimento < hoje();
+                      return (
+                        <div key={l.id} style={{ background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px", border:`1px solid ${vencido ? "rgba(244,63,94,.3)" : "var(--b2)"}` }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
+                            {/* Checkbox */}
+                            <input
+                              type="checkbox"
+                              disabled={marcando}
+                              onChange={() => handleMarcarPago(l.id)}
+                              style={{ width:"16px", height:"16px", accentColor:"var(--ok)", cursor:"pointer", flexShrink:0 }}
+                              title="Marcar como pago"
+                            />
+                            {/* Descrição */}
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                                {l.descricao}
+                              </div>
+                              <div style={{ fontSize:"10px", color: vencido ? "var(--err)" : "var(--t3)", fontFamily:"'DM Mono',monospace", marginTop:"2px" }}>
+                                {vencido ? "⚠ Vencido · " : ""}{formatDate(l.vencimento)}
+                              </div>
+                            </div>
+                            {/* Valor original */}
+                            <div style={{ fontSize:"13px", fontWeight:700, color:"var(--t1)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>
+                              {formatBRL(l.valor)}
+                            </div>
+                            {/* Lixeira */}
+                            <button
+                              title="Remover parcela"
+                              onClick={() => handleDeletarLancamento(l.id)}
+                              style={{ background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", fontSize:"11px", cursor:"pointer", padding:"3px 7px", transition:"all 0.15s", lineHeight:1, flexShrink:0 }}
+                              onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="rgba(244,63,94,.15)"; b.style.borderColor="var(--err)"; b.style.color="var(--err)"; }}
+                              onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="transparent"; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
+                            >🗑</button>
+                          </div>
+                          {/* Campo valor diferente — aparece abaixo */}
+                          <div style={{ marginTop:"8px", display:"flex", alignItems:"center", gap:"8px" }}>
+                            <span style={{ fontSize:"10px", color:"var(--t3)", whiteSpace:"nowrap" }}>Valor diferente:</span>
+                            <CurrencyInput
+                              value={valorDigitado}
+                              onChange={v => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], valorDigitado: v } }))}
+                              placeholder={`deixe 0 para usar ${formatBRL(l.valor)}`}
+                              style={{ margin:0, fontSize:"11px", padding:"5px 8px", flex:1 }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Histórico de pagamentos já feitos */}
+              {lancamentosPagos.length > 0 && (
+                <div style={{ marginBottom:"16px" }}>
+                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"8px" }}>HISTÓRICO PAGO</div>
                   <div style={{ display:"flex", flexDirection:"column", gap:"5px" }}>
-                    {lancamentos.map(l => (
+                    {lancamentosPagos.map(l => (
                       <div key={l.id} style={{ display:"flex", alignItems:"center", gap:"8px", background:"var(--surf2)", borderRadius:"6px", padding:"8px 10px" }}>
-                        <span style={{ fontSize:"11px", color: l.status === "Pago" ? "var(--ok)" : "var(--t3)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>
-                          {l.status === "Pago" ? "✓ Pago" : "⏳ A receber"}
-                        </span>
+                        <span style={{ fontSize:"11px", color:"var(--ok)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>✓ Pago</span>
                         <span style={{ fontSize:"13px", color:"var(--ok)", fontFamily:"'DM Mono', monospace", fontWeight:600, flex:1 }}>{formatBRL(l.valor)}</span>
                         <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono', monospace" }}>{formatDate(l.vencimento)}</span>
-                        <button title="Remover" onClick={() => handleDeletarLancamento(l.id)}
+                        <button
+                          title="Remover"
+                          onClick={() => handleDeletarLancamento(l.id)}
                           style={{ background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", fontSize:"11px", cursor:"pointer", padding:"3px 7px", transition:"all 0.15s", lineHeight:1 }}
                           onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="rgba(244,63,94,.15)"; b.style.borderColor="var(--err)"; b.style.color="var(--err)"; }}
                           onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="transparent"; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
@@ -522,6 +596,8 @@ export default function PedidoDetalhe() {
                   </div>
                 </div>
               )}
+
+              {/* Crédito */}
               {creditoCliente > 0.005 && !quitado && (
                 <div style={{ marginBottom:"10px", padding:"10px 12px", background:"rgba(0,200,255,.07)", border:"1px solid rgba(0,200,255,.25)", borderRadius:"8px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"10px" }}>
                   <div>
@@ -531,32 +607,7 @@ export default function PedidoDetalhe() {
                   <button className="btn bg sm" onClick={handleUsarCredito} disabled={salvando}>Aplicar crédito</button>
                 </div>
               )}
-              {!quitado && (
-                <div>
-                  {!recebendo ? (
-                    <button className="btn bp sm" style={{ width:"100%" }} onClick={() => { setRecebendo(true); setValorRec(""); setDataRec(hoje()); }}>
-                      + Registrar Recebimento
-                    </button>
-                  ) : (
-                    <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
-                      <div style={{ display:"flex", gap:"6px", alignItems:"center" }}>
-                        <div style={{ flex:2, display:"flex", alignItems:"center", background:"var(--surf2)", border:"1px solid var(--acc)", borderRadius:"6px", padding:"0 10px", gap:"6px" }}>
-                          <span style={{ fontSize:"13px", color:"var(--t3)", fontFamily:"'DM Mono', monospace", flexShrink:0 }}>R$</span>
-                          <input type="text" inputMode="numeric" placeholder="0,00" value={valorRec} onChange={handleValorChange}
-                            style={{ flex:1, background:"transparent", border:"none", outline:"none", color:"var(--t1)", fontSize:"15px", fontFamily:"'DM Mono', monospace", padding:"10px 0" }} autoFocus />
-                        </div>
-                        <input type="date" value={dataRec} onChange={e => setDataRec(e.target.value)}
-                          style={{ flex:1, background:"var(--surf2)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"10px 8px", color:"var(--t1)", fontSize:"12px", fontFamily:"'DM Mono', monospace", outline:"none" }} />
-                        <button className="btn bp sm" onClick={handleReceber} disabled={salvando}>{salvando ? "..." : "Salvar"}</button>
-                        <button className="btn bg sm" onClick={() => { setRecebendo(false); setValorRec(""); }}>✕</button>
-                      </div>
-                      <div style={{ fontSize:"11px", color:"var(--t3)", textAlign:"right" }}>
-                        Pode ser maior que o saldo — excedente vira crédito do cliente
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+
               {quitado && (
                 <div style={{ padding:"10px", background:"rgba(0,200,100,.08)", borderRadius:"8px", color:"var(--ok)", fontSize:"13px", textAlign:"center" }}>
                   ✓ Pagamento quitado
@@ -591,9 +642,7 @@ export default function PedidoDetalhe() {
                         <td className="mono">{item.quantidade}</td>
                         <td className="mono">{formatBRL(item.valor_m2)}</td>
                         <td className="mono">{item.lapidacao > 0 ? formatBRL(item.lapidacao) : <span style={{ color:"var(--t3)" }}>—</span>}</td>
-                        <td style={{ textAlign:"center" }}>
-                          {(item as any).vidro_cliente ? <span style={{ color:"var(--warn)" }}>📦</span> : <span style={{ color:"var(--t3)" }}>—</span>}
-                        </td>
+                        <td style={{ textAlign:"center" }}>{(item as any).vidro_cliente ? <span style={{ color:"var(--warn)" }}>📦</span> : <span style={{ color:"var(--t3)" }}>—</span>}</td>
                         <td className="mono" style={{ color:"var(--acc)", fontWeight:600 }}>{formatBRL(item.subtotal)}</td>
                       </tr>
                     ))}
@@ -613,8 +662,6 @@ export default function PedidoDetalhe() {
                 <button className="mcl" onClick={() => setEditando(false)}>✕</button>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
-
-                {/* Dados básicos */}
                 <div className="fg">
                   <label className="fl">Cliente</label>
                   <select style={fc} value={editForm.cliente_id} onChange={e => setEditForm(f => ({ ...f, cliente_id: Number(e.target.value) }))}>
@@ -647,8 +694,6 @@ export default function PedidoDetalhe() {
                     {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
                   </select>
                 </div>
-
-                {/* Parcelas */}
                 <div style={{ padding:"12px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)" }}>
                   <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"10px", textTransform:"uppercase" }}>
                     {editForm.parcelas === 1 ? "Pagamento" : `Parcelas (${editForm.parcelas}x)`}
@@ -667,24 +712,18 @@ export default function PedidoDetalhe() {
 
                 {/* Itens */}
                 <div style={{ padding:"12px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)" }}>
-                  <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"12px", textTransform:"uppercase" }}>
-                    Itens do Pedido
-                  </div>
-
-                  {/* Header */}
+                  <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"12px", textTransform:"uppercase" }}>Itens do Pedido</div>
                   <div style={{ display:"grid", gridTemplateColumns:"2fr 70px 70px 50px 100px 90px 90px", gap:"6px", marginBottom:"6px", paddingBottom:"6px", borderBottom:"1px solid var(--b1)" }}>
                     {["Produto","Larg.","Alt.","Qtd","R$/m²","Lap./m²","Subtotal"].map(h => (
                       <div key={h} style={{ fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px", fontFamily:"'DM Mono',monospace" }}>{h}</div>
                     ))}
                   </div>
-
                   {editItens.map((item, idx) => {
                     const m2  = calcM2Item(item);
                     const sub = calcSubtotalItem(item);
                     return (
                       <div key={item.id} style={{ marginBottom:"10px" }}>
                         <div style={{ display:"grid", gridTemplateColumns:"2fr 70px 70px 50px 100px 90px 90px", gap:"6px", alignItems:"center" }}>
-                          {/* Produto — somente leitura */}
                           <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", padding:"7px 10px", background:"var(--surf1)", borderRadius:"6px", border:"1px solid var(--b1)" }}>
                             {item.produto_nome}
                           </div>
@@ -693,27 +732,17 @@ export default function PedidoDetalhe() {
                           <input style={fcSm} type="number" value={item.quantidade} onChange={e => updEditItem(idx, "quantidade", parseInt(e.target.value) || 1)} min={1} />
                           <CurrencyInput value={item.valor_m2} onChange={v => updEditItem(idx, "valor_m2", v)} placeholder="R$/m²" style={{ margin:0, padding:"7px 10px", fontSize:"12px" }} />
                           <CurrencyInput value={item.lapidacao} onChange={v => updEditItem(idx, "lapidacao", v)} placeholder="0" style={{ margin:0, padding:"7px 10px", fontSize:"12px" }} />
-                          <div style={{ fontSize:"12px", color:"var(--acc)", fontWeight:700, fontFamily:"'DM Mono',monospace", padding:"7px 0" }}>
-                            {formatBRL(sub)}
-                          </div>
+                          <div style={{ fontSize:"12px", color:"var(--acc)", fontWeight:700, fontFamily:"'DM Mono',monospace", padding:"7px 0" }}>{formatBRL(sub)}</div>
                         </div>
                         {m2 > 0 && (
-                          <div style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", marginTop:"2px", paddingLeft:"2px" }}>
-                            {m2.toFixed(4)} m²
-                          </div>
+                          <div style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", marginTop:"2px", paddingLeft:"2px" }}>{m2.toFixed(4)} m²</div>
                         )}
                       </div>
                     );
                   })}
-
-                  {/* Total calculado */}
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", borderTop:"1px solid var(--b1)", paddingTop:"10px", marginTop:"4px" }}>
-                    <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>
-                      Total calculado · {m2TotalEditado.toFixed(4)} m²
-                    </span>
-                    <span style={{ fontSize:"15px", fontWeight:800, color:"var(--acc)", fontFamily:"'DM Mono',monospace" }}>
-                      {formatBRL(valorTotalEditado)}
-                    </span>
+                    <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>Total calculado · {m2TotalEditado.toFixed(4)} m²</span>
+                    <span style={{ fontSize:"15px", fontWeight:800, color:"var(--acc)", fontFamily:"'DM Mono',monospace" }}>{formatBRL(valorTotalEditado)}</span>
                   </div>
                 </div>
 
@@ -723,7 +752,6 @@ export default function PedidoDetalhe() {
                     value={editForm.obs} onChange={e => setEditForm(f => ({ ...f, obs: e.target.value }))}
                     placeholder="Observações do pedido..." />
                 </div>
-
                 <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end", paddingTop:"4px" }}>
                   <button className="btn bg" onClick={() => setEditando(false)}>Cancelar</button>
                   <button className="btn bp" onClick={salvarEdicao} disabled={salvando}>
