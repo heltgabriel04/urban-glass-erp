@@ -134,7 +134,7 @@ export default function NovoOrcamentoPage() {
   }
 
   function calcSubtotal(item: ItemForm): number {
-    return calcM2Item(item) * item.valor_m2;
+    return calcM2Item(item) * (item.valor_m2 + item.lapidacao);
   }
 
   function updProduto(i: number, id: number, label: string) {
@@ -212,7 +212,7 @@ export default function NovoOrcamentoPage() {
       quantidade: i.quantidade,
       m2: calcM2Item(i),
       valor_m2: i.valor_m2,
-      lapidacao: 0,
+      lapidacao: i.lapidacao,
       desconto: 0,
       subtotal: calcSubtotal(i),
     }));
@@ -348,8 +348,8 @@ export default function NovoOrcamentoPage() {
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 70px 70px 50px 90px 90px 90px 36px", gap: "6px", padding: "6px 0", borderBottom: "1px solid var(--b1)", marginBottom: "8px" }}>
-            {["Produto","Larg.","Alt.","Qtd","R$/m²","Unit.(R$)","Total(R$)",""].map((h, idx) => (
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 70px 70px 50px 90px 80px 90px 90px 36px", gap: "6px", padding: "6px 0", borderBottom: "1px solid var(--b1)", marginBottom: "8px" }}>
+            {["Produto","Larg.","Alt.","Qtd","R$/m²","Lap./m²","Unit.(R$)","Total(R$)",""].map((h, idx) => (
               <div key={idx} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>{h}</div>
             ))}
           </div>
@@ -358,14 +358,14 @@ export default function NovoOrcamentoPage() {
             const m2      = calcM2Item(item);
             const sub     = calcSubtotal(item);
             const m2unit  = (() => { const l = arredondarParaMultiplo50(item.largura); const a = arredondarParaMultiplo50(item.altura); return (l/1000)*(a/1000); })();
-            const unitVal = m2unit > 0 ? item.valor_m2 * m2unit : 0;
+            const unitVal = m2unit > 0 ? (item.valor_m2 + item.lapidacao) * m2unit : 0;
             const lArred  = arredondarParaMultiplo50(item.largura);
             const aArred  = arredondarParaMultiplo50(item.altura);
             const mostrarArred = item.largura > 0 && item.altura > 0 && (lArred !== item.largura || aArred !== item.altura);
 
             return (
               <div key={i} style={{ marginBottom: "10px" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 70px 70px 50px 90px 90px 90px 36px", gap: "6px", alignItems: "center" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 70px 70px 50px 90px 80px 90px 90px 36px", gap: "6px", alignItems: "center" }}>
                   <AutocompleteInput
                     options={produtoOptions}
                     value={item.produto_id}
@@ -404,8 +404,9 @@ export default function NovoOrcamentoPage() {
                     min={1}
                   />
                   <CurrencyInput tabIndex={-1} value={item.valor_m2} onChange={v => updItem(i, "valor_m2", v)} placeholder="R$/m²" title="Valor por m²" />
-                  <CurrencyInput tabIndex={-1} value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(unitVal.toFixed(2)) : 0} onChange={v => updUnitItem(i, v)} placeholder="por peça" title="Valor por peça" />
-                  <CurrencyInput tabIndex={-1} value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : 0} onChange={v => updTotalItem(i, v)} placeholder="total" title="Total do item" />
+                  <CurrencyInput tabIndex={-1} value={item.lapidacao} onChange={v => updItem(i, "lapidacao", v)} placeholder="0" title="Lapidação por m²" />
+                  <CurrencyInput tabIndex={-1} value={m2 > 0 ? parseFloat(unitVal.toFixed(2)) : 0} onChange={v => updUnitItem(i, v)} placeholder="por peça" title="Valor por peça" />
+                  <CurrencyInput tabIndex={-1} value={m2 > 0 ? parseFloat(sub.toFixed(2)) : 0} onChange={v => updTotalItem(i, v)} placeholder="total" title="Total do item" />
                   <button tabIndex={-1} className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1}>✕</button>
                 </div>
                 {m2 > 0 && (

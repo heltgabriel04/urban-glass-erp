@@ -1,4 +1,11 @@
 import { supabase } from '@/lib/supabase/client';
+import { criarLancamentosParcelados } from './financeiro.service';
+
+function addMonthsStr(dateStr: string, months: number): string {
+  const d = new Date(dateStr + "T12:00:00");
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().split("T")[0];
+}
 
 export type StatusOrcamento = 'Rascunho' | 'Enviado' | 'Aprovado' | 'Rejeitado';
 
@@ -148,6 +155,29 @@ export async function aprovarOrcamento(orcamentoId: string) {
     const { error: errItens } = await supabase.from('itens_pedido').insert(itensPedido as never);
     if (errItens) console.error('aprovarOrcamento itens_pedido:', errItens);
   }
+
+  // Gerar parcelas com datas (mensal a partir de dt_entrega ou hoje)
+  const n = orc.parcelas || 1;
+  const valorParcela = parseFloat((orc.valor_total / n).toFixed(2));
+  const primeiraData = orc.dt_entrega || new Date().toISOString().split("T")[0];
+  const parcelasGeradas = Array.from({ length: n }, (_, i) => ({
+    data: i === 0 ? primeiraData : addMonthsStr(primeiraData, i),
+    valor: valorParcela,
+  }));
+
+  await supabase
+    .from('pedidos')
+    .update({
+      datas_pgto:   parcelasGeradas.map(p => p.data),
+      valores_pgto: parcelasGeradas.map(p => p.valor),
+    } as never)
+    .eq('id', pedidoId);
+
+  await criarLancamentosParcelados({
+    pedidoId,
+    clienteId: orc.cliente_id,
+    parcelas: parcelasGeradas,
+  });
 
   await updateOrcamento(orcamentoId, {
     status: 'Aprovado',

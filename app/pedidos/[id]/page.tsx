@@ -258,6 +258,7 @@ export default function PedidoDetalhe() {
         pedido_id: pedido.id, cliente_id: editForm.cliente_id,
       });
     }
+    await recalcularRecebido(pedido.id);
 
     toast("Pedido atualizado");
     setSalvando(false);
