@@ -16,7 +16,7 @@ export interface EstoqueItem {
 }
 
 export interface RetalhoItem {
-  id?: number;
+  id?: string;
   produto_id?: number | null;
   produto_nome: string;
   largura: number;
@@ -128,7 +128,8 @@ export async function getRetalhos(): Promise<RetalhoItem[]> {
 
 export async function salvarRetalhos(retalhos: Omit<RetalhoItem, 'id' | 'created_at'>[]): Promise<boolean> {
   if (retalhos.length === 0) return true;
-  const { error } = await supabase.from('retalhos').insert(retalhos as never[]);
+  const rows = retalhos.map(r => ({ ...r, id: crypto.randomUUID() }));
+  const { error } = await supabase.from('retalhos').insert(rows as never[]);
   if (error) { console.error('salvarRetalhos:', error); return false; }
   return true;
 }
