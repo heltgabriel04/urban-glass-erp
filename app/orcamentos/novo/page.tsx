@@ -9,6 +9,7 @@ import { createOrcamento, getProximoIdOrcamento } from "@/services/orcamentos.se
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
+import AutocompleteInput from "@/components/ui/AutocompleteInput";
 import type { Cliente, Produto, TabelaPreco } from "@/types";
 
 interface ItemForm {
@@ -40,7 +41,7 @@ export default function NovoOrcamentoPage() {
   const [tabelas, setTabelas]     = useState<TabelaPreco[]>([]);
   const [proximoId, setProximoId] = useState("");
 
-  const [clienteId, setClienteId]       = useState<number | "">("");
+  const [clienteId, setClienteId]       = useState<number | null>(null);
   const [dtOrcamento, setDtOrcamento]   = useState(new Date().toISOString().split("T")[0]);
   const [dtValidade, setDtValidade]     = useState("");
   const [dtEntrega, setDtEntrega]       = useState("");
@@ -143,6 +144,12 @@ export default function NovoOrcamentoPage() {
   const valorDesconto = subtotalBruto * (desconto / 100);
   const valorTotal    = subtotalBruto - valorDesconto;
 
+  const clienteOptions = clientes.map(c => ({
+    id: c.id,
+    label: c.nome,
+    sub: c.cidade || undefined,
+  }));
+
   async function salvar() {
     if (!clienteId) { alert("Selecione um cliente"); return; }
     if (itens.some(i => !i.produto_id)) { alert("Selecione o produto em todos os itens"); return; }
@@ -165,7 +172,7 @@ export default function NovoOrcamentoPage() {
 
     const result = await createOrcamento({
       id: proximoId,
-      cliente_id: clienteId as number,
+      cliente_id: clienteId,
       dt_orcamento: dtOrcamento,
       dt_validade: dtValidade || null,
       dt_entrega: dtEntrega || null,
@@ -202,10 +209,12 @@ export default function NovoOrcamentoPage() {
 
             <div className="fg" style={{ marginBottom: "10px" }}>
               <label className="fl">Cliente *</label>
-              <select className="fc" value={clienteId} onChange={e => setClienteId(Number(e.target.value) || "")}>
-                <option value="">Selecione o cliente...</option>
-                {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-              </select>
+              <AutocompleteInput
+                options={clienteOptions}
+                value={clienteId}
+                onChange={(id) => setClienteId(id)}
+                placeholder="Digite o nome do cliente..."
+              />
             </div>
 
             {clienteId && tab && (
@@ -311,24 +320,9 @@ export default function NovoOrcamentoPage() {
                   <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
                   <input className="fc" type="number" value={item.altura  || ""} onChange={e => updItem(i, "altura",  parseInt(e.target.value) || 0)} placeholder="0" />
                   <input className="fc" type="number" value={item.quantidade} onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
-                  <CurrencyInput
-                    value={item.valor_m2}
-                    onChange={v => updItem(i, "valor_m2", v)}
-                    placeholder="R$/m²"
-                    title="Valor por m²"
-                  />
-                  <CurrencyInput
-                    value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(unitVal.toFixed(2)) : 0}
-                    onChange={v => updUnitItem(i, v)}
-                    placeholder="por peça"
-                    title="Valor por peça"
-                  />
-                  <CurrencyInput
-                    value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : 0}
-                    onChange={v => updTotalItem(i, v)}
-                    placeholder="total"
-                    title="Total do item"
-                  />
+                  <CurrencyInput value={item.valor_m2} onChange={v => updItem(i, "valor_m2", v)} placeholder="R$/m²" title="Valor por m²" />
+                  <CurrencyInput value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(unitVal.toFixed(2)) : 0} onChange={v => updUnitItem(i, v)} placeholder="por peça" title="Valor por peça" />
+                  <CurrencyInput value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : 0} onChange={v => updTotalItem(i, v)} placeholder="total" title="Total do item" />
                   <button className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1}>✕</button>
                 </div>
                 {m2 > 0 && (
@@ -344,28 +338,13 @@ export default function NovoOrcamentoPage() {
             );
           })}
 
-          {/* ── Total geral do pedido ── */}
           <div style={{ marginTop: "14px", padding: "12px 14px", background: "var(--surf2)", borderRadius: "8px", border: "1px solid var(--b2)", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             <span style={{ fontSize: "11px", color: "var(--t2)", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>
               Distribuir total do pedido:
             </span>
-            <CurrencyInput
-              value={totalPedidoInput}
-              onChange={setTotalPedidoInput}
-              placeholder="Ex: R$ 850,00"
-              style={{ width: "140px", margin: 0 }}
-              title="Digite o valor total e pressione Aplicar para distribuir proporcionalmente entre os itens"
-            />
-            <button
-              className="btn bp sm"
-              onClick={() => aplicarTotalPedido(totalPedidoInput)}
-              disabled={totalPedidoInput <= 0 || m2Total === 0}
-            >
-              ↵ Aplicar
-            </button>
-            <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>
-              distribui proporcionalmente ao m² de cada item
-            </span>
+            <CurrencyInput value={totalPedidoInput} onChange={setTotalPedidoInput} placeholder="Ex: R$ 850,00" style={{ width: "140px", margin: 0 }} title="Digite o valor total e pressione Aplicar para distribuir proporcionalmente entre os itens" />
+            <button className="btn bp sm" onClick={() => aplicarTotalPedido(totalPedidoInput)} disabled={totalPedidoInput <= 0 || m2Total === 0}>↵ Aplicar</button>
+            <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>distribui proporcionalmente ao m² de cada item</span>
           </div>
 
           <div className="totbar" style={{ marginTop: "8px" }}>
