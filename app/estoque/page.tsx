@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatM2 } from "@/lib/formatters";
+import { baixarChapasEstoque } from "@/services/estoque.service";
 import type { EstoqueItem, Produto } from "@/types";
 
 const MEDIDAS_PADRAO = [
@@ -34,9 +35,81 @@ export default function EstoquePage() {
   const [medidaPadrao, setMedidaPadrao] = useState("");
 
   // Edição
-  const [editItem, setEditItem] = useState<EstoqueItem | null>(null);
+  const [editItem, setEditItem]         = useState<EstoqueItem | null>(null);
+  const [sincronizando, setSincronizando] = useState(false);
 
   useEffect(() => { load(); }, []);
+
+  async function handleSincronizarBaixas() {
+    if (!confirm(
+      "Aplicar baixas de estoque com base no histórico de otimizações?\n\n" +
+      "⚠ Execute APENAS UMA VEZ por lote de pedidos ainda não descontados.\n" +
+      "Se as baixas já foram aplicadas anteriormente, haverá duplo desconto."
+    )) return;
+
+    setSincronizando(true);
+
+    const { data: historico, error } = await supabase
+      .from("historico_otimizador")
+      .select("id, chapas_json, created_at")
+      .order("created_at", { ascending: true });
+
+    if (error || !historico) {
+      alert("Erro ao buscar histórico: " + (error?.message ?? "Desconhecido"));
+      setSincronizando(false);
+      return;
+    }
+
+    // Agrupa registros por sessão de otimização: registros salvos em sequência
+    // dentro de uma janela de 120 s pertencem à mesma sessão (mesma chamada de handleSalvar).
+    // Cada sessão usa o 1º registro como representante para evitar dupla contagem.
+    const sessions: { chapas_json: any }[][] = [];
+    let cur: typeof historico = [];
+    for (const rec of historico) {
+      if (cur.length === 0) { cur.push(rec); continue; }
+      const last = new Date(cur[cur.length - 1].created_at).getTime();
+      const now  = new Date(rec.created_at).getTime();
+      if (now - last <= 120_000) { cur.push(rec); }
+      else { sessions.push(cur); cur = [rec]; }
+    }
+    if (cur.length > 0) sessions.push(cur);
+
+    // Soma consumo por produto usando apenas o 1º registro de cada sessão
+    const consumoPorProd = new Map<string, { chapas: number; m2: number }>();
+    for (const session of sessions) {
+      const chapas = session[0].chapas_json as Array<{ prod: string; W: number; H: number }> | null;
+      if (!chapas) continue;
+      for (const chapa of chapas) {
+        if (!chapa?.prod) continue;
+        const prev = consumoPorProd.get(chapa.prod) ?? { chapas: 0, m2: 0 };
+        consumoPorProd.set(chapa.prod, {
+          chapas: prev.chapas + 1,
+          m2: parseFloat((prev.m2 + (chapa.W * chapa.H) / 1e6).toFixed(4)),
+        });
+      }
+    }
+
+    if (consumoPorProd.size === 0) {
+      alert("Nenhuma chapa encontrada no histórico de otimizações.");
+      setSincronizando(false);
+      return;
+    }
+
+    let ok = 0, fail = 0;
+    const naoEncontrados: string[] = [];
+    for (const [prodNome, consumo] of consumoPorProd.entries()) {
+      const success = await baixarChapasEstoque(prodNome, consumo.chapas, consumo.m2);
+      if (success) ok++;
+      else { fail++; naoEncontrados.push(prodNome); }
+    }
+
+    setSincronizando(false);
+    load();
+
+    let msg = `Baixas sincronizadas!\n${ok} produto(s) atualizado(s).`;
+    if (fail > 0) msg += `\n\n${fail} produto(s) não encontrado(s) no estoque:\n${naoEncontrados.join("\n")}`;
+    alert(msg);
+  }
 
   async function load() {
     setLoading(true);
@@ -200,9 +273,14 @@ export default function EstoquePage() {
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Estoque · Chapas</div>
-        <button className="btn bp sm" onClick={() => { if (showForm) { setShowForm(false); resetForm(); } else abrirNovo(); }}>
-          {showForm ? "✕ Cancelar" : "+ Entrada de Estoque"}
-        </button>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button className="btn bg sm" onClick={handleSincronizarBaixas} disabled={sincronizando}>
+            {sincronizando ? "Sincronizando..." : "Sincronizar Baixas"}
+          </button>
+          <button className="btn bp sm" onClick={() => { if (showForm) { setShowForm(false); resetForm(); } else abrirNovo(); }}>
+            {showForm ? "✕ Cancelar" : "+ Entrada de Estoque"}
+          </button>
+        </div>
       </div>
 
       <div className="con">
