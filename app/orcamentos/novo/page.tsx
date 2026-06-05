@@ -55,16 +55,13 @@ export default function NovoOrcamentoPage() {
   const [salvando, setSalvando]       = useState(false);
   const [totalPedidoInput, setTotalPedidoInput] = useState(0);
 
-  // refs para foco: largRef[i], altRef[i], qtdRef[i]
   const largRefs = useRef<(HTMLInputElement | null)[]>([]);
   const altRefs  = useRef<(HTMLInputElement | null)[]>([]);
   const qtdRefs  = useRef<(HTMLInputElement | null)[]>([]);
-  // índice da linha recém criada que precisa de foco
   const focarLinha = useRef<number | null>(null);
 
   useEffect(() => { load(); }, []);
 
-  // Sempre que itens crescer e houver linha pendente de foco, aplica
   useEffect(() => {
     if (focarLinha.current !== null) {
       const idx = focarLinha.current;
@@ -180,28 +177,6 @@ export default function NovoOrcamentoPage() {
       valor_m2: parseFloat(valorM2Geral.toFixed(4)),
     })));
     setTotalPedidoInput(0);
-  }
-
-  // Navegação por teclado nos campos de medida
-  function handleLargKey(e: React.KeyboardEvent, i: number) {
-    if (e.key === "Enter" || e.key === "Tab") {
-      if (e.key === "Enter") e.preventDefault();
-      altRefs.current[i]?.focus();
-    }
-  }
-
-  function handleAltKey(e: React.KeyboardEvent, i: number) {
-    if (e.key === "Enter" || e.key === "Tab") {
-      if (e.key === "Enter") e.preventDefault();
-      qtdRefs.current[i]?.focus();
-    }
-  }
-
-  function handleQtdKey(e: React.KeyboardEvent, i: number) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      addItemAposLinha(i);
-    }
   }
 
   const m2Total       = itens.reduce((a, i) => a + calcM2Item(i), 0);
@@ -366,15 +341,15 @@ export default function NovoOrcamentoPage() {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "2fr 70px 70px 50px 90px 90px 90px 36px", gap: "6px", padding: "6px 0", borderBottom: "1px solid var(--b1)", marginBottom: "8px" }}>
-            {["Produto","Larg.","Alt.","Qtd","R$/m²","Unit.(R$)","Total(R$)",""].map((h, i) => (
-              <div key={i} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>{h}</div>
+            {["Produto","Larg.","Alt.","Qtd","R$/m²","Unit.(R$)","Total(R$)",""].map((h, idx) => (
+              <div key={idx} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>{h}</div>
             ))}
           </div>
 
           {itens.map((item, i) => {
-            const m2     = calcM2Item(item);
-            const sub    = calcSubtotal(item);
-            const m2unit = (() => { const l = arredondarParaMultiplo50(item.largura); const a = arredondarParaMultiplo50(item.altura); return (l/1000)*(a/1000); })();
+            const m2      = calcM2Item(item);
+            const sub     = calcSubtotal(item);
+            const m2unit  = (() => { const l = arredondarParaMultiplo50(item.largura); const a = arredondarParaMultiplo50(item.altura); return (l/1000)*(a/1000); })();
             const unitVal = m2unit > 0 ? item.valor_m2 * m2unit : 0;
             const lArred  = arredondarParaMultiplo50(item.largura);
             const aArred  = arredondarParaMultiplo50(item.altura);
@@ -387,6 +362,7 @@ export default function NovoOrcamentoPage() {
                     className="fc"
                     value={item.produto_id || ""}
                     onChange={e => updItem(i, "produto_id", Number(e.target.value))}
+                    tabIndex={i * 10 + 1}
                   >
                     <option value="">Selecione o produto...</option>
                     {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
@@ -397,7 +373,8 @@ export default function NovoOrcamentoPage() {
                     ref={el => { largRefs.current[i] = el; }}
                     value={item.largura || ""}
                     onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)}
-                    onKeyDown={e => handleLargKey(e, i)}
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); altRefs.current[i]?.focus(); } }}
+                    tabIndex={i * 10 + 2}
                     placeholder="0"
                   />
                   <input
@@ -406,7 +383,8 @@ export default function NovoOrcamentoPage() {
                     ref={el => { altRefs.current[i] = el; }}
                     value={item.altura || ""}
                     onChange={e => updItem(i, "altura", parseInt(e.target.value) || 0)}
-                    onKeyDown={e => handleAltKey(e, i)}
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); qtdRefs.current[i]?.focus(); } }}
+                    tabIndex={i * 10 + 3}
                     placeholder="0"
                   />
                   <input
@@ -415,13 +393,14 @@ export default function NovoOrcamentoPage() {
                     ref={el => { qtdRefs.current[i] = el; }}
                     value={item.quantidade}
                     onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)}
-                    onKeyDown={e => handleQtdKey(e, i)}
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addItemAposLinha(i); } }}
+                    tabIndex={i * 10 + 4}
                     min={1}
                   />
                   <CurrencyInput value={item.valor_m2} onChange={v => updItem(i, "valor_m2", v)} placeholder="R$/m²" title="Valor por m²" />
                   <CurrencyInput value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(unitVal.toFixed(2)) : 0} onChange={v => updUnitItem(i, v)} placeholder="por peça" title="Valor por peça" />
                   <CurrencyInput value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : 0} onChange={v => updTotalItem(i, v)} placeholder="total" title="Total do item" />
-                  <button className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1}>✕</button>
+                  <button className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1} tabIndex={-1}>✕</button>
                 </div>
                 {m2 > 0 && (
                   <div style={{ display: "flex", gap: "14px", padding: "4px 0 0 4px", alignItems: "center", flexWrap: "wrap" }}>
