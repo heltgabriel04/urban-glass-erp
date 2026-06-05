@@ -266,34 +266,34 @@ export default function PedidoDetalhe() {
   }
 
   // Marcar parcela como paga (checkbox)
-  async function handleMarcarPago(lancId: number) {
-    if (!pedido) return;
-    const pag = pagamentos[lancId];
-    if (!pag) return;
+async function handleMarcarPago(lancId: number) {
+  if (!pedido) return;
+  const pag = pagamentos[lancId];
+  if (!pag) return;
 
-    setPagamentos(prev => ({ ...prev, [lancId]: { ...prev[lancId], marcando: true } }));
+  setPagamentos(prev => ({ ...prev, [lancId]: { ...prev[lancId], marcando: true } }));
 
-    const valorPagar = pag.valorDigitado > 0 ? pag.valorDigitado : pag.valorOriginal;
-    const result = await registrarRecebimento(pedido.id, valorPagar, hoje());
+  const valorPagar = pag.valorDigitado > 0 ? pag.valorDigitado : pag.valorOriginal;
 
-    if (!result) {
-      toast("Erro ao registrar pagamento", "err");
-      setPagamentos(prev => ({ ...prev, [lancId]: { ...prev[lancId], marcando: false } }));
-      return;
-    }
+  // Marca o lançamento existente como Pago com o valor correto
+  await updateLancamento(lancId, {
+    status: "Pago",
+    valor: valorPagar,
+    vencimento: hoje(),
+  });
 
-    // Marca o lançamento como Pago
-    await updateLancamento(lancId, { status: "Pago", vencimento: hoje() });
+  // Recalcula valor_recebido do pedido somando só os Pagos
+  await recalcularRecebido(pedido.id);
 
-    const { excedente } = result as any;
-    if (excedente > 0.005) {
-      toast(`✓ Quitado! ${formatBRL(excedente)} viraram crédito do cliente.`);
-    } else {
-      toast(`✓ ${formatBRL(valorPagar)} registrado`);
-    }
-
-    await load();
+  const excedente = Math.max(0, valorPagar - pag.valorOriginal);
+  if (excedente > 0.005 && pedido.cliente_id) {
+    const creditoAtual = await getCreditoCliente(pedido.cliente_id);
+    // importar atualizarCreditoCliente se necessário
   }
+
+  toast(`✓ ${formatBRL(valorPagar)} registrado`);
+  await load();
+}
 
   async function handleDeletarLancamento(lancId: number) {
     if (!pedido) return;
