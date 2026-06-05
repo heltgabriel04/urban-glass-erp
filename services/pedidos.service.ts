@@ -60,7 +60,8 @@ export async function recalcularRecebido(pedidoId: string) {
     .from('lancamentos')
     .select('valor')
     .eq('pedido_id', pedidoId)
-    .eq('tipo', 'Entrada');
+    .eq('tipo', 'Entrada')
+    .eq('status', 'Pago');  // <-- só pagos
 
   if (error) { console.error('recalcularRecebido:', error); return null; }
 
