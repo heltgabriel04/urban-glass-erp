@@ -31,6 +31,7 @@ interface Etiqueta {
   totalPecasGeral: number;
   loteCorte: string;
   qrUrl: string;
+  modoCaixa?: boolean;
 }
 
 function QRCode({ url, size = 72 }: { url: string; size?: number }) {
@@ -72,11 +73,23 @@ function EtiquetaCard({ et, num }: { et: Etiqueta; num: number }) {
             <span className="et-val et-medidas">L {et.largura} × H {et.altura} mm</span>
           </div>
           <div className="et-rodape-info">
-            <span># Montagem: {et.chapaNum}/{et.totalChapas} #</span>
-            <span className="et-sep">·</span>
-            <span>Peça: {et.pecaNum}/{et.totalPecasNaChapa}</span>
-            <span className="et-sep">·</span>
-            <span>Total geral: {et.totalPecasGeral}</span>
+            {et.modoCaixa ? (
+              <>
+                <span>Caixa: {et.chapaNum}/{et.totalChapas}</span>
+                <span className="et-sep">·</span>
+                <span>Chapas: {et.pecaNum}/{et.totalPecasNaChapa}</span>
+                <span className="et-sep">·</span>
+                <span>Total: {et.totalPecasGeral} chapas</span>
+              </>
+            ) : (
+              <>
+                <span># Montagem: {et.chapaNum}/{et.totalChapas} #</span>
+                <span className="et-sep">·</span>
+                <span>Peça: {et.pecaNum}/{et.totalPecasNaChapa}</span>
+                <span className="et-sep">·</span>
+                <span>Total geral: {et.totalPecasGeral}</span>
+              </>
+            )}
           </div>
           <div className="et-lote">Lote: {et.loteCorte}</div>
         </div>
@@ -156,31 +169,44 @@ export default function EtiquetasPage() {
           const lote = `${dd}${mm}${aa}-${id}`;
 
           const totalGeral = itens.reduce((s, i) => s + i.quantidade, 0);
-          setTotalChapas(totalGeral);
+
+          // 3+3 vem 24 chapas por caixa; demais (4+4, etc.) vem 18
+          function chapasPorCaixa(nome: string) {
+            return nome.includes("3+3") ? 24 : 18;
+          }
 
           const ets: Etiqueta[] = [];
-          let chapaIdx = 1;
+          let caixaIdx = 1;
+
           itens.forEach((item) => {
-            for (let q = 0; q < item.quantidade; q++) {
+            const porCaixa   = chapasPorCaixa(item.produto_nome);
+            const numCaixas  = Math.ceil(item.quantidade / porCaixa);
+            for (let c = 0; c < numCaixas; c++) {
+              const nessaCaixa = (c === numCaixas - 1)
+                ? item.quantidade - c * porCaixa
+                : porCaixa;
               ets.push({
                 pedidoId:          id,
                 clienteNome:       ped?.clientes?.nome ?? "—",
                 material:          item.produto_nome,
                 largura:           item.largura,
                 altura:            item.altura,
-                chapaNum:          chapaIdx,
-                totalChapas:       totalGeral,
-                pecaNum:           1,
-                totalPecasNaChapa: 1,
+                chapaNum:          caixaIdx,
+                totalChapas:       0, // preenchido abaixo
+                pecaNum:           nessaCaixa,
+                totalPecasNaChapa: porCaixa,
                 totalPecasGeral:   totalGeral,
                 loteCorte:         lote,
                 qrUrl: `https://urbanglasserp.vercel.app/pedidos/${id}/producao`,
+                modoCaixa:         true,
               });
-              chapaIdx++;
+              caixaIdx++;
             }
           });
 
-          setEtiquetas(ets);
+          const totalCaixas = ets.length;
+          setTotalChapas(totalCaixas);
+          setEtiquetas(ets.map(e => ({ ...e, totalChapas: totalCaixas })));
         }
       }
       setLoading(false);
