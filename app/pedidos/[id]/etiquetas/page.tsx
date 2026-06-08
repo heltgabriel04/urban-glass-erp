@@ -81,7 +81,7 @@ function EtiquetaCard({ et, num }: { et: Etiqueta; num: number }) {
           <div className="et-lote">Lote: {et.loteCorte}</div>
         </div>
         <div className="et-dir">
-          <QRCode url={et.qrUrl} size={68} />
+          <QRCode url={et.qrUrl} size={48} />
           <div className="et-qrlbl">ESCANEAR</div>
         </div>
       </div>
@@ -249,7 +249,7 @@ export default function EtiquetasPage() {
         }
 
         .etiqueta {
-          width: 300px; height: 150px;
+          width: 300px; height: 171px;
           background: white; border: 1.5px solid #888; border-radius: 6px;
           overflow: hidden; display: flex; flex-direction: column;
           box-shadow: 0 2px 8px rgba(0,0,0,0.35);
@@ -294,23 +294,23 @@ export default function EtiquetasPage() {
           .grid-wrapper { padding: 0; background: white; gap: 0; align-items: flex-start; }
 
           .etiqueta {
-            width: 100mm; height: 50mm;
-            border: 0.3pt solid #999; border-radius: 2mm;
+            width: 70mm; height: 40mm;
+            border: 0.3pt solid #999; border-radius: 1.5mm;
             box-shadow: none;
             page-break-after: always; break-after: page;
           }
-          .et-empresa { font-size: 9pt; }
-          .et-seq     { font-size: 7pt; }
-          .et-lbl     { font-size: 5pt; }
-          .et-val     { font-size: 8pt; }
-          .et-cliente { font-size: 9pt; }
-          .et-pedido  { font-size: 10pt; }
-          .et-medidas { font-size: 10pt; }
-          .et-rodape-info { font-size: 6pt; }
-          .et-lote    { font-size: 5pt; }
-          .et-qrlbl   { font-size: 5pt; }
+          .et-empresa { font-size: 6pt; }
+          .et-seq     { font-size: 5pt; }
+          .et-lbl     { font-size: 4pt; }
+          .et-val     { font-size: 6pt; }
+          .et-cliente { font-size: 6.5pt; }
+          .et-pedido  { font-size: 7pt; }
+          .et-medidas { font-size: 7pt; }
+          .et-rodape-info { font-size: 4pt; }
+          .et-lote    { font-size: 4pt; }
+          .et-qrlbl   { font-size: 4pt; }
 
-          @page { size: 100mm 50mm; margin: 0; }
+          @page { size: 70mm 40mm; margin: 0; }
         }
       `}</style>
 
