@@ -42,8 +42,11 @@ function maskCEP(v: string) {
 }
 
 function maskIE(v: string) {
-  const d = v.replace(/\D/g, "").slice(0, 12);
-  return d.replace(/^(\d{3})(\d)/, "$1.$2").replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1/$2");
+  const d = v.replace(/\D/g, "").slice(0, 13);
+  return d
+    .replace(/^(\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4");
 }
 
 async function buscarCep(cep: string) {
