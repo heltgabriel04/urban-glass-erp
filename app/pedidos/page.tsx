@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidos, avancarStatusPedido, retrocederStatusPedido, deletarPedido } from "@/services/pedidos.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
@@ -33,6 +34,7 @@ function isChapaInteira(largura: number, altura: number): boolean {
 
 export default function PedidosPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [pedidos, setPedidos]             = useState<Pedido[]>([]);
   const [loading, setLoading]             = useState(true);
   const [filtro, setFiltro]               = useState("");
@@ -115,7 +117,7 @@ export default function PedidosPage() {
     return (
       <button
         title={titulo}
-        onClick={onClick}
+        onClick={e => { e.stopPropagation(); onClick(); }}
         style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", cursor:"pointer", transition:"all 0.15s" }}
         onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = bgHover; b.style.borderColor = corHover; b.style.color = corHover; }}
         onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
@@ -130,6 +132,7 @@ export default function PedidosPage() {
       <a
         href={href}
         title={titulo}
+        onClick={e => e.stopPropagation()}
         style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", textDecoration:"none", transition:"all 0.15s" }}
         onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.background = bgHover; a.style.borderColor = corHover; a.style.color = corHover; }}
         onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.background = "transparent"; a.style.borderColor = "var(--b2)"; a.style.color = "var(--t3)"; }}
@@ -212,7 +215,13 @@ export default function PedidosPage() {
                   const bloqueado     = !finalizado && p.status === "Aguardando otimização" && !podeAvancarSemOtim;
 
                   return (
-                    <tr key={p.id}>
+                    <tr
+                      key={p.id}
+                      onClick={() => router.push(`/pedidos/${p.id}`)}
+                      style={{ cursor:"pointer" }}
+                      onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = "var(--surf2)"}
+                      onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = ""}
+                    >
                       <td><span className="mono" style={{ color:"var(--acc)" }}>{p.id}</span></td>
                       <td>
                         <strong>{p.clientes?.nome ?? "—"}</strong>
@@ -236,8 +245,6 @@ export default function PedidosPage() {
                       <td>
                         <div style={{ display:"flex", gap:"4px", alignItems:"center" }}>
 
-                          {btnLink(`/pedidos/${p.id}`, "Ver pedido", "◉", "var(--acc)", "rgba(99,102,241,.12)")}
-
                           {temOtim && btnLink(`/pedidos/${p.id}/plano`, "Ver Plano de Corte", "◈", "var(--ok)", "rgba(16,185,129,.12)")}
 
                           {temOtim && btnLink(`/pedidos/${p.id}/etiquetas`, "Imprimir Etiquetas", "🏷", "var(--acc2)", "rgba(139,92,246,.12)")}
@@ -245,7 +252,8 @@ export default function PedidosPage() {
                           {podeRomaneio && (
                             <button
                               title="Imprimir Romaneio de Saída"
-                              onClick={() => {
+                              onClick={e => {
+                                e.stopPropagation();
                                 const i = document.createElement("iframe");
                                 i.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:9999;background:white;";
                                 i.src = "/pedidos/" + p.id + "?print=1";
@@ -278,7 +286,7 @@ export default function PedidosPage() {
                       <td style={{ width:"40px", textAlign:"center" }}>
                         <button
                           title="Excluir pedido"
-                          onClick={() => handleDeletar(p.id)}
+                          onClick={e => { e.stopPropagation(); handleDeletar(p.id); }}
                           style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", cursor:"pointer", transition:"all 0.15s" }}
                           onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
                           onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}

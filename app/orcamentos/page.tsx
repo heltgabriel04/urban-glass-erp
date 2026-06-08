@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getOrcamentos, updateOrcamento, aprovarOrcamento, rejeitarOrcamento, deletarOrcamento } from "@/services/orcamentos.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
@@ -17,6 +18,7 @@ const FILTROS = ["Todos", "Rascunho", "Enviado", "Aprovado", "Rejeitado"];
 
 export default function OrcamentosPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [orcamentos, setOrcamentos] = useState<any[]>([]);
   const [loading, setLoading]       = useState(true);
   const [busca, setBusca]           = useState("");
@@ -71,7 +73,7 @@ export default function OrcamentosPage() {
     return (
       <button
         title={titulo}
-        onClick={onClick}
+        onClick={e => { e.stopPropagation(); onClick(); }}
         style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", cursor:"pointer", transition:"all 0.15s" }}
         onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = bgHover; b.style.borderColor = corHover; b.style.color = corHover; }}
         onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
@@ -181,7 +183,13 @@ export default function OrcamentosPage() {
                   </tr>
                 )}
                 {filtrados.map(o => (
-                  <tr key={o.id}>
+                  <tr
+                    key={o.id}
+                    onClick={() => router.push(`/orcamentos/${o.id}`)}
+                    style={{ cursor:"pointer" }}
+                    onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = "var(--surf2)"}
+                    onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = ""}
+                  >
                     <td><span className="mono" style={{ color:"var(--acc)" }}>{o.id}</span></td>
                     <td>
                       <strong>{o.clientes?.nome ?? "—"}</strong>
@@ -194,25 +202,17 @@ export default function OrcamentosPage() {
                     <td><span className={CHIP[o.status] ?? "chip cgr"}>{o.status}</span></td>
                     <td>
                       {o.pedido_id ? (
-                        <a href={`/pedidos/${o.pedido_id}`} className="mono" style={{ color:"var(--acc2)", fontSize:"12px" }}>{o.pedido_id}</a>
+                        <a href={`/pedidos/${o.pedido_id}`} className="mono" onClick={e => e.stopPropagation()} style={{ color:"var(--acc2)", fontSize:"12px" }}>{o.pedido_id}</a>
                       ) : (
                         <span style={{ color:"var(--t3)" }}>—</span>
                       )}
                     </td>
                     <td>
                       <div style={{ display:"flex", gap:"4px", alignItems:"center" }}>
-                        
-                          <a href={`/orcamentos/${o.id}`}
-                          title="Ver orçamento"
-                          style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", textDecoration:"none", transition:"all 0.15s" }}
-                          onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.borderColor = "var(--acc)"; a.style.color = "var(--acc)"; }}
-                          onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.borderColor = "var(--b2)"; a.style.color = "var(--t3)"; }}
-                        >
-                          ◉
-                        </a>
                         <button
                           title="Gerar PDF"
-                          onClick={() => {
+                          onClick={e => {
+                            e.stopPropagation();
                             const iframe = document.createElement("iframe");
                             iframe.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:9999;background:white;";
                             iframe.src = `/orcamentos/${o.id}?print=1`;
@@ -233,7 +233,7 @@ export default function OrcamentosPage() {
                     <td style={{ width:"40px", textAlign:"center" }}>
                       <button
                         title="Excluir orçamento"
-                        onClick={() => handleDeletar(o.id)}
+                        onClick={e => { e.stopPropagation(); handleDeletar(o.id); }}
                         style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", cursor:"pointer", transition:"all 0.15s" }}
                         onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
                         onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
