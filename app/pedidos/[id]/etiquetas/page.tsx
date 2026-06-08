@@ -291,22 +291,28 @@ export default function EtiquetasPage() {
 @media print {
   .toolbar, .info-bar { display: none !important; }
 
+  /* margem lateral 5mm + margem superior 3mm — igual ao sistema anterior */
+  @page {
+    size: 100mm 50mm;
+    margin: 3mm 5mm 0mm 5mm;
+  }
+
   html, body {
     background: white;
     margin: 0; padding: 0;
-    width: 100mm; height: 50mm;
+    width: 90mm; height: 47mm;
   }
 
   .grid-wrapper {
     display: block;
     padding: 0; margin: 0;
-    width: 100mm;
+    width: 90mm;
     background: white;
   }
 
   .etiqueta {
     display: flex; flex-direction: column;
-    width: 100mm; height: 50mm;
+    width: 90mm; height: 47mm;
     box-sizing: border-box;
     border: 0.3pt solid #000; border-radius: 2mm;
     box-shadow: none; overflow: hidden;
@@ -320,8 +326,6 @@ export default function EtiquetasPage() {
 
   .et-topo { padding: 3px 8px; }
   .et-corpo { padding: 4px 5px 3px 6px; }
-
-  /* reduz QR em print para dar espaço ao texto sem cortar à direita */
   .et-dir img { width: 52px !important; height: 52px !important; }
 
   .et-empresa { font-size: 9pt; letter-spacing: 2px; }
@@ -334,8 +338,6 @@ export default function EtiquetasPage() {
   .et-rodape-info { font-size: 6pt; }
   .et-lote    { font-size: 5pt; }
   .et-qrlbl   { font-size: 5pt; }
-
-  @page { size: 100mm 50mm; margin: 0; }
 }
       `}</style>
 
