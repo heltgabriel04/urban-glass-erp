@@ -114,7 +114,8 @@ function empacotar(
 // Calcula aproveitamento de um conjunto de peças (sem estado React)
 function calcAproveitamento(
   pecasFlat: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
-  bord: number, kerf: number
+  bord: number, kerf: number,
+  fallbackW = 3300, fallbackH = 2250
 ): number {
   const grupos = new Map<string, typeof pecasFlat>();
   pecasFlat.forEach(p => { const g = grupos.get(p.prod) ?? []; g.push(p); grupos.set(p.prod, g); });
@@ -123,8 +124,8 @@ function calcAproveitamento(
   grupos.forEach((grupo, prodNome) => {
     const ci2 = PRODUTO_CHAPA[prodNome];
     const chapa = ci2 !== undefined ? CHAPAS_PADRAO[ci2] : null;
-    const CW = chapa ? chapa.w : 3300;
-    const CH = chapa ? chapa.h : 2250;
+    const CW = chapa ? chapa.w : fallbackW;
+    const CH = chapa ? chapa.h : fallbackH;
     const W = CW - bord * 2;
     const H = CH - bord * 2;
     let rem = [...grupo];
@@ -232,6 +233,10 @@ function OtimizadorContent() {
   bordRef.current = bord;
   const kerfRef = useRef(kerf);
   kerfRef.current = kerf;
+  const chapaWRef = useRef(chapaW);
+  chapaWRef.current = chapaW;
+  const chapaHRef = useRef(chapaH);
+  chapaHRef.current = chapaH;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -311,7 +316,7 @@ function OtimizadorContent() {
 
     // Calcula aproveitamento base (só o pedido principal)
     const flatBase = montarFlat(pecasBase, pedidoPrincipal);
-    const base = calcAproveitamento(flatBase, bordRef.current, kerfRef.current);
+    const base = calcAproveitamento(flatBase, bordRef.current, kerfRef.current, chapaWRef.current, chapaHRef.current);
     setAprovBase(base);
 
     const sugestoes: PedidoSugerido[] = [];
@@ -337,7 +342,7 @@ function OtimizadorContent() {
 
       // Simula aproveitamento com este pedido incluído
       const flatCombinado = [...flatBase, ...montarFlat(itensDoPedido, ped.id)];
-      const aprovCombinado = calcAproveitamento(flatCombinado, bordRef.current, kerfRef.current);
+      const aprovCombinado = calcAproveitamento(flatCombinado, bordRef.current, kerfRef.current, chapaWRef.current, chapaHRef.current);
       const delta = aprovCombinado - base;
 
       const dias = diasAte((ped as any).dt_retirada);
@@ -503,7 +508,8 @@ function OtimizadorContent() {
 
     let totA = 0, usedA = 0;
     results.forEach(r => {
-      const W = r.W - bord * 2, H = r.H - bord * 2;
+      const bordEfetivo = r.retalhoId ? 0 : bord;
+      const W = r.W - bordEfetivo * 2, H = r.H - bordEfetivo * 2;
       totA += W * H;
       r.placed.forEach(p => (usedA += p.l * p.a));
     });
@@ -613,7 +619,7 @@ function OtimizadorContent() {
 
     const chapasHtml = resultado.map((r, i) => {
       const retalhos = r.free.filter(f => f.l >= 200 && f.a >= 200);
-      const areaUtil = (r.W - bord * 2) * (r.H - bord * 2);
+      const areaUtil = r.retalhoId ? r.W * r.H : (r.W - bord * 2) * (r.H - bord * 2);
       const areaUsada = r.placed.reduce((a, p) => a + p.l * p.a, 0);
       const apChapa = areaUtil > 0 ? ((areaUsada / areaUtil) * 100).toFixed(1) : "0";
       return `
@@ -766,10 +772,10 @@ function OtimizadorContent() {
     resultado.forEach(r => {
       if (r.retalhoId) return; // retalho do estoque: não baixa chapa nova
       const prev = consumoPorProd.get(r.prod) ?? { chapas: 0, m2: 0 };
-      consumoPorProd.set(r.prod, { chapas: prev.chapas + 1, m2: parseFloat((prev.m2 + (r.W * r.H) / 1e6).toFixed(4)) });
+      consumoPorProd.set(r.prod, { chapas: prev.chapas + 1, m2: prev.m2 + (r.W * r.H) / 1e6 });
     });
     for (const [prodNome, consumo] of consumoPorProd.entries()) {
-      await baixarChapasEstoque(prodNome, consumo.chapas, consumo.m2);
+      await baixarChapasEstoque(prodNome, consumo.chapas, parseFloat(consumo.m2.toFixed(4)));
     }
     router.push("/pedidos/" + pedidoRef);
   }
