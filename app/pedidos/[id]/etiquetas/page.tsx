@@ -81,7 +81,7 @@ function EtiquetaCard({ et, num }: { et: Etiqueta; num: number }) {
           <div className="et-lote">Lote: {et.loteCorte}</div>
         </div>
         <div className="et-dir">
-          <QRCode url={et.qrUrl} size={68} />
+          <QRCode url={et.qrUrl} size={90} />
           <div className="et-qrlbl">ESCANEAR</div>
         </div>
       </div>
@@ -214,7 +214,7 @@ export default function EtiquetasPage() {
     <>
       <style>{`
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { font-family: Arial, sans-serif; background: #777; color: #000; }
+        html, body { font-family: Arial, sans-serif; background: #666; color: #000; }
 
         .toolbar {
           position: sticky; top: 0; z-index: 100;
@@ -244,50 +244,80 @@ export default function EtiquetasPage() {
         .info-bar span { color: #3dffa0; }
 
         .grid-wrapper {
-          padding: 20px;
-          display: flex; flex-direction: column; align-items: center; gap: 16px;
+          padding: 24px;
+          display: flex; flex-direction: column; align-items: center; gap: 20px;
         }
 
+        /* ── Etiqueta tela: proporção 2:1 igual à física 100x50mm ── */
         .etiqueta {
-          width: 300px; height: 150px;
-          background: white; border: 1.5px solid #888; border-radius: 6px;
-          overflow: hidden; display: flex; flex-direction: column;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+          width: 500px; height: 250px;
+          background: white;
+          border: 2px solid #555;
+          border-radius: 8px;
+          overflow: hidden;
+          display: flex; flex-direction: column;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.4);
         }
 
         .et-topo {
-          background: #000; color: white; padding: 3px 8px;
+          background: #000; color: white;
+          padding: 6px 14px;
           display: flex; justify-content: space-between; align-items: center;
+          flex-shrink: 0;
         }
-        .et-empresa { font-size: 11px; font-weight: 900; letter-spacing: 2px; font-family: Arial Black, Arial, sans-serif; }
-        .et-seq { font-size: 9px; font-family: 'Courier New', monospace; color: #ccc; }
+        .et-empresa {
+          font-size: 15px; font-weight: 900; letter-spacing: 3px;
+          font-family: Arial Black, Arial, sans-serif;
+        }
+        .et-seq { font-size: 12px; font-family: 'Courier New', monospace; color: #bbb; }
 
         .et-corpo {
-          flex: 1; display: flex; gap: 0; padding: 5px 6px 4px 6px;
+          flex: 1; display: flex; padding: 10px 12px 8px 14px; gap: 10px;
+          min-height: 0;
         }
-        .et-esq { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .et-esq {
+          flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0;
+        }
         .et-dir {
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
-          gap: 2px; flex-shrink: 0; margin-left: 5px;
+          display: flex; flex-direction: column; align-items: center;
+          justify-content: center; gap: 3px; flex-shrink: 0;
         }
-        .et-qrlbl { font-size: 6px; color: #333; letter-spacing: 1px; font-family: 'Courier New', monospace; text-align: center; font-weight: 700; }
+        .et-qrlbl {
+          font-size: 8px; color: #333; letter-spacing: 1px;
+          font-family: 'Courier New', monospace; text-align: center; font-weight: 700;
+        }
 
         .et-linha { display: flex; flex-direction: column; gap: 0; }
-        .et-lbl { font-size: 6px; font-weight: 900; letter-spacing: 1px; color: #333; line-height: 1; text-transform: uppercase; }
-        .et-val { font-size: 10px; font-weight: 700; color: #000; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .et-cliente { font-size: 11px; font-weight: 900; }
-        .et-pedido  { font-size: 12px; font-weight: 900; letter-spacing: 1px; }
-        .et-medidas { font-size: 12px; font-weight: 900; font-family: 'Courier New', monospace; color: #000; }
-        .et-dim { margin-top: 1px; }
+        .et-lbl {
+          font-size: 8px; font-weight: 900; letter-spacing: 1.5px;
+          color: #333; line-height: 1; text-transform: uppercase;
+        }
+        .et-val {
+          font-size: 14px; font-weight: 700; color: #000;
+          line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .et-cliente { font-size: 15px; font-weight: 900; }
+        .et-pedido  { font-size: 16px; font-weight: 900; letter-spacing: 1px; }
+        .et-medidas {
+          font-size: 16px; font-weight: 900;
+          font-family: 'Courier New', monospace; color: #000;
+        }
+        .et-dim { margin-top: 2px; }
 
         .et-rodape-info {
-          margin-top: auto; font-size: 7.5px; font-family: 'Courier New', monospace;
-          color: #000; font-weight: 700; border-top: 0.5px solid #ccc;
-          padding-top: 2px; display: flex; gap: 3px; align-items: center; flex-wrap: wrap;
+          margin-top: auto;
+          font-size: 10px; font-family: 'Courier New', monospace;
+          color: #000; font-weight: 700;
+          border-top: 1px solid #ddd; padding-top: 4px;
+          display: flex; gap: 4px; align-items: center; flex-wrap: wrap;
         }
-        .et-sep { color: #666; }
-        .et-lote { font-size: 6.5px; font-family: 'Courier New', monospace; color: #333; margin-top: 1px; font-weight: 700; }
+        .et-sep { color: #888; }
+        .et-lote {
+          font-size: 9px; font-family: 'Courier New', monospace;
+          color: #333; margin-top: 2px; font-weight: 700;
+        }
 
+        /* ── Impressão ── */
         @media print {
           .toolbar, .info-bar { display: none !important; }
 
@@ -311,11 +341,12 @@ export default function EtiquetasPage() {
 
           .etiqueta {
             display: flex; flex-direction: column;
-            width: 100mm; height: 50mm;
+            width: 105mm; height: 50mm;
             box-sizing: border-box;
             border: none; border-radius: 0;
             box-shadow: none; overflow: hidden;
             margin: 0; padding: 0;
+            margin-left: -5mm;
             page-break-after: always; break-after: page;
           }
 
@@ -324,20 +355,22 @@ export default function EtiquetasPage() {
             background: #000 !important;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
+            flex-shrink: 0;
           }
-          .et-corpo { padding: 4px 4px 3px 5px; }
-          .et-dir img { width: 44px !important; height: 44px !important; }
+          .et-corpo { padding: 3px 4px 3px 4px; gap: 6px; }
+          .et-dir img { width: 52px !important; height: 52px !important; }
 
           .et-empresa { font-size: 9pt; letter-spacing: 2px; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .et-seq     { font-size: 7pt; color: #ccc !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .et-lbl     { font-size: 7pt; color: #000 !important; font-weight: 900 !important; }
+          .et-lbl     { font-size: 7pt; color: #000 !important; font-weight: 900 !important; letter-spacing: 0.5px; }
           .et-val     { font-size: 8pt; color: #000 !important; font-weight: 900 !important; }
-          .et-cliente { font-size: 9pt; color: #000 !important; font-weight: 900 !important; }
+          .et-cliente { font-size: 8.5pt; color: #000 !important; font-weight: 900 !important; }
           .et-pedido  { font-size: 10pt; color: #000 !important; font-weight: 900 !important; }
-          .et-medidas { font-size: 10pt; color: #000 !important; font-weight: 900 !important; }
-          .et-rodape-info { font-size: 7pt; color: #000 !important; font-weight: 700 !important; }
+          .et-medidas { font-size: 9pt; color: #000 !important; font-weight: 900 !important; }
+          .et-rodape-info { font-size: 7pt; color: #000 !important; font-weight: 700 !important; border-top: 0.3pt solid #ccc; padding-top: 2px; }
           .et-lote    { font-size: 7pt; color: #000 !important; font-weight: 700 !important; }
           .et-qrlbl   { font-size: 7pt; color: #000 !important; font-weight: 700 !important; }
+          .et-dim     { margin-top: 0; }
         }
       `}</style>
 
