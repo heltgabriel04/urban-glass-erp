@@ -32,7 +32,7 @@ export default function DashboardPage() {
     const [peds, fin, fat] = await Promise.all([
       getPedidos(),
       getFinanceiroClientes(),
-      getFaturamentoMensal(2026),
+      getFaturamentoMensal(new Date().getFullYear()),
     ]);
     setPedidos(peds);
     setFinanceiro(fin);
@@ -108,7 +108,8 @@ export default function DashboardPage() {
 
   const maxTop = Math.max(...topCli.map(c => Number(c.faturado)), 1);
 
-  const mesLabel = mesSel ? MESES_ABREV[mesSel - 1] + "/2026" : "2026 completo";
+  const anoAtual = new Date().getFullYear();
+  const mesLabel = mesSel ? MESES_ABREV[mesSel - 1] + "/" + anoAtual : anoAtual + " completo";
 
   return (
     <AppLayout>
@@ -139,7 +140,7 @@ export default function DashboardPage() {
                   color:  "var(--acc)",
                   sub:    mesSel && fatMesAnt > 0
                     ? (varMes >= 0 ? "↑ " : "↓ ") + Math.abs(varMes).toFixed(1) + "% vs " + MESES_ABREV[mesSel-2]
-                    : "↑ Acumulado 2026",
+                    : `↑ Acumulado ${anoAtual}`,
                   subColor: varMes >= 0 ? "var(--ok)" : "var(--err)",
                 },
                 {

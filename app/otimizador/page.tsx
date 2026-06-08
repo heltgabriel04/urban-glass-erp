@@ -10,6 +10,7 @@ import { salvarOtimizacao } from "@/services/otimizador.service";
 import { updatePedido } from "@/services/pedidos.service";
 import { baixarChapasEstoque, salvarRetalhos } from "@/services/estoque.service";
 import type { Produto, Retalho } from "@/types";
+import { CHAPAS_PADRAO, PRODUTO_CHAPA, isChapaInteira } from "@/lib/chapas";
 
 interface Peca { l: number; a: number; qtd: number; prod: string; pedidoId?: string; }
 interface PecaPlacada { x: number; y: number; l: number; a: number; idx: number; prod: string; rot: boolean; pedidoId?: string; }
@@ -149,27 +150,6 @@ function diasAte(dtStr: string | null): number | null {
   return Math.round((dt.getTime() - hoje.getTime()) / 86400000);
 }
 
-const CHAPAS_PADRAO = [
-  { label: "Chapa 4+4 Incolor — 3300 × 2250 mm",         w: 3300, h: 2250 },
-  { label: "Chapa 3+3 Incolor — 3300 × 2250 mm",         w: 3300, h: 2250 },
-  { label: "Chapa 4+4 Verde — 3300 × 2250 mm",           w: 3300, h: 2250 },
-  { label: "Reflecta 4+4 — 2150 × 3660 mm",              w: 2150, h: 3660 },
-  { label: "Reflecta 4+4 Silver Grey — 3660 × 2140 mm",  w: 3660, h: 2140 },
-  { label: "Reflecta 4+4 Champagne — 3660 × 2140 mm",    w: 3660, h: 2140 },
-  { label: "Euro Grey Laminado 4+4 — 3660 × 2140 mm",    w: 3660, h: 2140 },
-  { label: "French Green Laminado 4+4 — 3660 × 2140 mm", w: 3660, h: 2140 },
-  { label: "Reflecta Silver Grey 4mm — 3660 × 2140 mm",  w: 3660, h: 2140 },
-  { label: "Reflecta Silver Grey 6mm — 3660 × 2140 mm",  w: 3660, h: 2140 },
-  { label: "Vidro Monolítico 4mm — 3660 × 2140 mm",      w: 3660, h: 2140 },
-  { label: "Vidro Monolítico 6mm — 3660 × 2140 mm",      w: 3660, h: 2140 },
-  { label: "Personalizado",                               w: 3300, h: 2250 },
-];
-
-const PRODUTO_CHAPA: Record<string, number> = {
-  "Vidro Laminado 4+4": 0, "Vidro Laminado 3+3": 1, "Verde Laminado 4+4": 2,
-  "Reflecta 4+4 Prata": 3, "Reflecta 4+4 Silver Grey": 4, "Reflecta 4+4 Champagne": 5,
-  "Laminado 4+4 Fumê": 6, "Vidro Monolítico 4mm": 10,
-};
 
 const PEDIDO_COLORS: Record<string, { fill: string; stroke: string }> = {};
 const FILL_POOL   = ["#1e2d45","#2d1e3f","#1e2d28","#2d2a1e","#1e2535","#2a1e2d","#1e3035","#2d1e25"];
@@ -183,12 +163,6 @@ function getColorForPedido(pid: string) {
   return PEDIDO_COLORS[pid];
 }
 
-function isItemChapaInteira(largura: number, altura: number): boolean {
-  return CHAPAS_PADRAO.some(c =>
-    (Math.abs(largura - c.w) < 50 && Math.abs(altura - c.h) < 50) ||
-    (Math.abs(largura - c.h) < 50 && Math.abs(altura - c.w) < 50)
-  );
-}
 
 function OtimizadorContent() {
   const searchParams = useSearchParams();
@@ -319,45 +293,45 @@ function OtimizadorContent() {
     const base = calcAproveitamento(flatBase, bordRef.current, kerfRef.current, chapaWRef.current, chapaHRef.current);
     setAprovBase(base);
 
-    const sugestoes: PedidoSugerido[] = [];
+    const resultados = await Promise.all(
+      pedidosAguardando.map(async (ped) => {
+        const { data: itens } = await supabase.from("itens_pedido").select("*").eq("pedido_id", ped.id);
+        if (!itens || itens.length === 0) return null;
 
-    for (const ped of pedidosAguardando) {
-      const { data: itens } = await supabase.from("itens_pedido").select("*").eq("pedido_id", ped.id);
-      if (!itens || itens.length === 0) continue;
+        const todosChapa = itens.every((item: any) => isChapaInteira(item.largura, item.altura));
+        if (todosChapa) return null;
 
-      const todosChapa = itens.every((item: any) => isItemChapaInteira(item.largura, item.altura));
-      if (todosChapa) continue;
+        const produtosDoPedido = [...new Set(itens.map((i: any) => i.produto_nome as string))];
+        if (!produtosDoPedido.some(p => produtosNoPedido.includes(p))) return null;
 
-      const produtosDoPedido = [...new Set(itens.map((i: any) => i.produto_nome as string))];
-      if (!produtosDoPedido.some(p => produtosNoPedido.includes(p))) continue;
+        const map = new Map<string, Peca>();
+        itens.forEach((item: any) => {
+          const key = `${item.largura}x${item.altura}x${item.produto_nome}`;
+          if (map.has(key)) map.get(key)!.qtd += item.quantidade;
+          else map.set(key, { l: item.largura, a: item.altura, qtd: item.quantidade, prod: item.produto_nome, pedidoId: ped.id });
+        });
 
-      const map = new Map<string, Peca>();
-      itens.forEach((item: any) => {
-        const key = `${item.largura}x${item.altura}x${item.produto_nome}`;
-        if (map.has(key)) map.get(key)!.qtd += item.quantidade;
-        else map.set(key, { l: item.largura, a: item.altura, qtd: item.quantidade, prod: item.produto_nome, pedidoId: ped.id });
-      });
+        const itensDoPedido = Array.from(map.values());
 
-      const itensDoPedido = Array.from(map.values());
+        const flatCombinado = [...flatBase, ...montarFlat(itensDoPedido, ped.id)];
+        const aprovCombinado = calcAproveitamento(flatCombinado, bordRef.current, kerfRef.current, chapaWRef.current, chapaHRef.current);
+        const delta = aprovCombinado - base;
+        const dias = diasAte((ped as any).dt_retirada);
 
-      // Simula aproveitamento com este pedido incluído
-      const flatCombinado = [...flatBase, ...montarFlat(itensDoPedido, ped.id)];
-      const aprovCombinado = calcAproveitamento(flatCombinado, bordRef.current, kerfRef.current, chapaWRef.current, chapaHRef.current);
-      const delta = aprovCombinado - base;
+        return {
+          id: ped.id,
+          clienteNome: (ped as any).clientes?.nome ?? "—",
+          totalPecas: itens.length,
+          produtos: produtosDoPedido,
+          itens: itensDoPedido,
+          dtRetirada: (ped as any).dt_retirada ?? null,
+          aprovSeCombinado: parseFloat(delta.toFixed(1)),
+          diasParaEntrega: dias,
+        } as PedidoSugerido;
+      })
+    );
 
-      const dias = diasAte((ped as any).dt_retirada);
-
-      sugestoes.push({
-        id: ped.id,
-        clienteNome: (ped as any).clientes?.nome ?? "—",
-        totalPecas: itens.length,
-        produtos: produtosDoPedido,
-        itens: itensDoPedido,
-        dtRetirada: (ped as any).dt_retirada ?? null,
-        aprovSeCombinado: parseFloat(delta.toFixed(1)),
-        diasParaEntrega: dias,
-      });
-    }
+    const sugestoes = resultados.filter((s): s is PedidoSugerido => s !== null);
 
     // Ordena: urgentes (≤3 dias) primeiro, depois por maior ganho de aproveitamento
     sugestoes.sort((a, b) => {
@@ -457,6 +431,12 @@ function OtimizadorContent() {
       })
     );
     if (flat.length === 0) return;
+
+    const invalidas = flat.filter(p => p.l <= 0 || p.a <= 0);
+    if (invalidas.length > 0) {
+      setMsg(`Erro: ${invalidas.length} peça(s) com dimensão inválida (0mm). Corrija antes de otimizar.`);
+      return;
+    }
 
     const grupos = new Map<string, typeof flat>();
     flat.forEach(p => { const g = grupos.get(p.prod) ?? []; g.push(p); grupos.set(p.prod, g); });

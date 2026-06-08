@@ -17,7 +17,7 @@ const VAZIO: ClienteForm = {
   endereco: "", cidade: "",
   cep: "", logradouro: "", numero: "", complemento: "", bairro: "", uf: "", cod_ibge: "",
   ie: "", ind_ie: "9", consumidor_final: false, obs_nfe: "",
-  pgto: "", tabela: "p", ativo: true,
+  pgto: "", tabela: "p", ativo: true, credito: 0,
 };
 
 function maskCNPJ(v: string) {

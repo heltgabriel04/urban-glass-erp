@@ -201,10 +201,6 @@ export async function utilizarCreditoEmPedido(
   const valorAplicado = Math.min(valorCredito, creditoDisponivel, aberto);
   if (valorAplicado <= 0.005) return null;
 
-  const novoRecebido     = Number(pedido.valor_recebido) + valorAplicado;
-  const pedidoAtualizado = await updatePedido(pedidoId, { valor_recebido: novoRecebido });
-  if (!pedidoAtualizado) return null;
-
   const creditoRestante = creditoDisponivel - valorAplicado;
   await atualizarCreditoCliente(clienteId, creditoRestante);
 
@@ -219,6 +215,9 @@ export async function utilizarCreditoEmPedido(
     cliente_id: clienteId,
   } as never);
 
+  const pedidoAtualizado = await recalcularRecebido(pedidoId);
+  if (!pedidoAtualizado) return null;
+
   return { pedido: pedidoAtualizado, creditoRestante };
 }
 
@@ -226,14 +225,13 @@ export async function getProximoIdPedido(): Promise<string> {
   const { data } = await supabase
     .from('pedidos')
     .select('id')
-    .order('id', { ascending: false });
+    .order('id', { ascending: false })
+    .limit(1);
 
   let proximoNum = 1;
   if (data && data.length > 0) {
-    const nums = data
-      .map((p: any) => parseInt(p.id.replace('P-', ''), 10))
-      .filter((n: number) => !isNaN(n));
-    if (nums.length > 0) proximoNum = Math.max(...nums) + 1;
+    const n = parseInt((data[0] as any).id.replace('P-', ''), 10);
+    if (!isNaN(n)) proximoNum = n + 1;
   }
   return `P-${String(proximoNum).padStart(3, '0')}`;
 }

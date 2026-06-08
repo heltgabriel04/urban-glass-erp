@@ -52,6 +52,7 @@ export interface Cliente {
   pgto: string;
   tabela: TabelaCliente;
   ativo: boolean;
+  credito: number;
   created_at: string;
 }
 
@@ -233,6 +234,14 @@ export interface HistoricoOtimizador {
   perda: number;
   chapas_usadas: number;
   retalhos_gerados: number;
+  total_pecas: number | null;
+  kerf: number | null;
+  borda: number | null;
+  chapa_w: number | null;
+  chapa_h: number | null;
+  pecas_json: unknown | null;
+  chapas_json: unknown | null;
+  usuario: string | null;
   created_at: string;
 }
 

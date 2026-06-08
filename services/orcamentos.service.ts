@@ -107,14 +107,13 @@ export async function aprovarOrcamento(orcamentoId: string) {
   const { data: todosPedidos } = await supabase
     .from('pedidos')
     .select('id')
-    .order('id', { ascending: false });
+    .order('id', { ascending: false })
+    .limit(1);
 
   let proximoNum = 1;
   if (todosPedidos && todosPedidos.length > 0) {
-    const nums = todosPedidos
-      .map((p: any) => parseInt(p.id.replace('P-', ''), 10))
-      .filter((n: number) => !isNaN(n));
-    proximoNum = Math.max(...nums) + 1;
+    const n = parseInt((todosPedidos[0] as any).id.replace('P-', ''), 10);
+    if (!isNaN(n)) proximoNum = n + 1;
   }
   const pedidoId = `P-${String(proximoNum).padStart(3, '0')}`;
 
@@ -239,14 +238,13 @@ export async function getProximoIdOrcamento(): Promise<string> {
   const { data } = await supabase
     .from('orcamentos')
     .select('id')
-    .order('id', { ascending: false });
+    .order('id', { ascending: false })
+    .limit(1);
 
   let proximoNum = 1;
   if (data && data.length > 0) {
-    const nums = data
-      .map((o: any) => parseInt(o.id.replace('ORC-', ''), 10))
-      .filter((n: number) => !isNaN(n));
-    if (nums.length > 0) proximoNum = Math.max(...nums) + 1;
+    const n = parseInt((data[0] as any).id.replace('ORC-', ''), 10);
+    if (!isNaN(n)) proximoNum = n + 1;
   }
   return `ORC-${String(proximoNum).padStart(3, '0')}`;
 }

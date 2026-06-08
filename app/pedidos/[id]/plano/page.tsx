@@ -216,11 +216,12 @@ export default function PlanoCorte() {
   const chapa = chapas[chapaAtiva];
   const usedArea  = chapa?.placed.reduce((s, p) => s + p.l * p.a, 0) ?? 0;
   const chapaM2   = chapa ? (chapa.W * chapa.H) / 1e6 : 0;
+  const utilM2    = chapa ? Math.max((chapa.W - bord * 2) * (chapa.H - bord * 2), 1) / 1e6 : 0;
   const usedM2    = usedArea / 1e6;
   const retalhos  = chapa?.free.filter(f => f.l >= 200 && f.a >= 200) ?? [];
   const retM2     = retalhos.reduce((s, f) => s + (f.l * f.a) / 1e6, 0);
-  const aprovPct  = chapaM2 > 0 ? ((usedM2 / chapaM2) * 100).toFixed(1) : "0";
-  const perdaPct  = chapaM2 > 0 ? (((chapaM2 - usedM2) / chapaM2) * 100).toFixed(1) : "0";
+  const aprovPct  = utilM2 > 0 ? ((usedM2 / utilM2) * 100).toFixed(1) : "0";
+  const perdaPct  = utilM2 > 0 ? (((utilM2 - usedM2) / utilM2) * 100).toFixed(1) : "0";
 
   return (
     <>
@@ -347,11 +348,12 @@ export default function PlanoCorte() {
           {chapas.map((c, ci) => {
             const cUsedArea  = c.placed.reduce((s, p) => s + p.l * p.a, 0);
             const cChapaM2   = (c.W * c.H) / 1e6;
+            const cUtilM2    = Math.max((c.W - bord * 2) * (c.H - bord * 2), 1) / 1e6;
             const cUsedM2    = cUsedArea / 1e6;
             const cRetalhos  = c.free.filter(f => f.l >= 200 && f.a >= 200);
             const cRetM2     = cRetalhos.reduce((s, f) => s + (f.l * f.a) / 1e6, 0);
-            const cAprov     = cChapaM2 > 0 ? ((cUsedM2 / cChapaM2) * 100).toFixed(1) : "0";
-            const cPerda     = cChapaM2 > 0 ? (((cChapaM2 - cUsedM2) / cChapaM2) * 100).toFixed(1) : "0";
+            const cAprov     = cUtilM2 > 0 ? ((cUsedM2 / cUtilM2) * 100).toFixed(1) : "0";
+            const cPerda     = cUtilM2 > 0 ? (((cUtilM2 - cUsedM2) / cUtilM2) * 100).toFixed(1) : "0";
 
             return (
               <div key={ci} className="print-page"
@@ -378,7 +380,7 @@ export default function PlanoCorte() {
                     </div>
                     <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end" }}>
                       <StatBox label="Aproveitamento" value={cAprov + "%"} sub={cUsedM2.toFixed(3) + " m²"} color="#3dffa0" />
-                      <StatBox label="Perda"          value={cPerda + "%"} sub={((cChapaM2 - cUsedM2)).toFixed(3) + " m²"} color="#f43f5e" />
+                      <StatBox label="Perda"          value={cPerda + "%"} sub={((cUtilM2 - cUsedM2)).toFixed(3) + " m²"} color="#f43f5e" />
                       <StatBox label="Peças"          value={String(c.placed.length)} color="#60a5fa" />
                       <StatBox label="Retalhos"       value={String(cRetalhos.length)} sub={cRetM2.toFixed(3) + " m²"} color="#f59e0b" />
                     </div>

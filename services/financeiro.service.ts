@@ -143,7 +143,7 @@ export async function criarLancamentosParcelados({
   clienteId: number;
   parcelas: { data: string; valor: number }[];
 }) {
-  await supabase.from('lancamentos').delete().eq('pedido_id', pedidoId);
+  await supabase.from('lancamentos').delete().eq('pedido_id', pedidoId).eq('status', 'A Receber');
   const total = parcelas.length;
   const inserts: LancamentoInsert[] = parcelas
     .filter(p => p.data && p.valor > 0)

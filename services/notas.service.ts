@@ -122,6 +122,15 @@ export async function salvarNotaCompleta(p: PayloadNota): Promise<boolean> {
 
 // ─── HELPERS ───────────────────────────────────────────────
 
+/** Chama a API route server-side para emitir uma NF-e. */
+async function chamarEmitirNFe(payload: Record<string, unknown>): Promise<Response> {
+  return fetch("/api/notas/emitir", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 async function getClienteCompleto(clienteId: number): Promise<Cliente | null> {
   const { data, error } = await supabase.from("clientes").select("*").eq("id", clienteId).single();
   if (error) { console.error("getClienteCompleto:", error); return null; }
@@ -161,8 +170,6 @@ function montarDestinatario(c: Cliente) {
 
 // ─── EMISSÃO COMPLETA ──────────────────────────────────────
 
-const NF_API = "https://api.nuvemfiscal.com.br";
-
 export async function emitirNFeCompleta(p: PayloadNota): Promise<{ ok: boolean; mensagem: string }> {
   const { form, valorProdutos, valorIcms, valorPis, valorCofins, valorIpi, valorNota } = p;
 
@@ -187,10 +194,9 @@ export async function emitirNFeCompleta(p: PayloadNota): Promise<{ ok: boolean; 
   const cfopNum  = form.cfop_padrao.replace(".", "");
   const aliqIcms = form.cfop_padrao.startsWith("5") ? 0.18 : 0.12;
 
+  // ambiente e emitente.cpf_cnpj são injetados server-side na API route
   const payload: Record<string, unknown> = {
-    ambiente:   "homologacao",
     referencia: `UG-${form.pedido_id}-${notaId}`,
-    emitente:   { cpf_cnpj: "65668970000105" },
     destinatario: montarDestinatario(cliente),
     itens: form.itens.map((item, i) => ({
       numero_item:               i + 1,
@@ -240,12 +246,7 @@ export async function emitirNFeCompleta(p: PayloadNota): Promise<{ ok: boolean; 
   };
 
   try {
-    const token = process.env.NEXT_PUBLIC_NUVEM_FISCAL_TOKEN ?? "";
-    const res = await fetch(`${NF_API}/nfe`, {
-      method:"POST",
-      headers:{ "Content-Type":"application/json", "Authorization":`Bearer ${token}` },
-      body: JSON.stringify(payload),
-    });
+    const res = await chamarEmitirNFe(payload);
     const json = await res.json();
     if (!res.ok) {
       await supabase.from("notas_fiscais").update({ status:"rejeitada", motivo_rejeicao: json.message ?? JSON.stringify(json.errors ?? json) } as never).eq("id", notaId);
@@ -275,9 +276,9 @@ export async function emitirNFe(notaId: number, pedido: Pedido): Promise<{ ok: b
   const aliqIcms = nota.cfop.startsWith("5") ? 0.18 : 0.12;
   const cfopNum  = nota.cfop.replace(".", "");
 
+  // ambiente e emitente.cpf_cnpj são injetados server-side na API route
   const payload = {
-    ambiente:"homologacao", referencia:`UG-${pedido.id}-${notaId}`,
-    emitente:{ cpf_cnpj:"65668970000105" },
+    referencia:`UG-${pedido.id}-${notaId}`,
     destinatario: montarDestinatario(cliente),
     itens: (pedidoCompleto.itens_pedido ?? []).map((item, i) => {
       const vItem = Number(item.subtotal);
@@ -301,8 +302,7 @@ export async function emitirNFe(notaId: number, pedido: Pedido): Promise<{ ok: b
   };
 
   try {
-    const token = process.env.NEXT_PUBLIC_NUVEM_FISCAL_TOKEN ?? "";
-    const res = await fetch(`${NF_API}/nfe`, { method:"POST", headers:{ "Content-Type":"application/json","Authorization":`Bearer ${token}` }, body:JSON.stringify(payload) });
+    const res = await chamarEmitirNFe(payload as Record<string, unknown>);
     const json = await res.json();
     if (!res.ok) {
       await supabase.from("notas_fiscais").update({ status:"rejeitada", motivo_rejeicao:json.message ?? JSON.stringify(json.errors ?? json) } as never).eq("id", notaId);
@@ -317,8 +317,7 @@ export async function consultarStatusNFe(notaId: number): Promise<void> {
   const nota = await getNotaById(notaId);
   if (!nota?.nuvem_fiscal_id) return;
   try {
-    const token = process.env.NEXT_PUBLIC_NUVEM_FISCAL_TOKEN ?? "";
-    const res = await fetch(`${NF_API}/nfe/${nota.nuvem_fiscal_id}`, { headers:{ "Authorization":`Bearer ${token}` } });
+    const res = await fetch(`/api/notas/consultar/${nota.nuvem_fiscal_id}`);
     const json = await res.json();
     if (!res.ok) return;
     const updates: Record<string, unknown> = {};
