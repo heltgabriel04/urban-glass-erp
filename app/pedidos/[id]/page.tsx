@@ -374,6 +374,7 @@ async function handleMarcarPago(lancId: number) {
           .print-area { display: block !important; }
           .con { padding: 0 !important; }
           @page { margin: 0; size: A4; }
+          .print-area * { font-weight: 700 !important; }
         }
         .print-area { display: none; }
         @media print { .print-area { display: block; } }
@@ -772,16 +773,16 @@ async function handleMarcarPago(lancId: number) {
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"20px", paddingBottom:"16px", borderBottom:"3px solid #2d5fa6" }}>
             <div>
               <div style={{ fontSize:"26px", fontWeight:900, color:"#2d5fa6", letterSpacing:"-1px" }}>urbanglass</div>
-              <div style={{ fontSize:"9px", color:"#888", textTransform:"uppercase", letterSpacing:"1.5px", marginTop:"2px" }}>Urban Glass Comércio Ltda</div>
-              <div style={{ fontSize:"9px", color:"#888", marginTop:"2px" }}>CNPJ: 65.668.970/0001-05</div>
-              <div style={{ fontSize:"9px", color:"#888" }}>Av. Vereador Raymundo Hargreaves, 1250 – Fontesville – Juiz de Fora/MG</div>
-              <div style={{ fontSize:"9px", color:"#888" }}>(32) 99986-0317</div>
+              <div style={{ fontSize:"9px", color:"#333", textTransform:"uppercase", letterSpacing:"1.5px", marginTop:"2px" }}>Urban Glass Comércio Ltda</div>
+              <div style={{ fontSize:"9px", color:"#333", marginTop:"2px" }}>CNPJ: 65.668.970/0001-05</div>
+              <div style={{ fontSize:"9px", color:"#333" }}>Av. Vereador Raymundo Hargreaves, 1250 – Fontesville – Juiz de Fora/MG</div>
+              <div style={{ fontSize:"9px", color:"#333" }}>(32) 99986-0317</div>
             </div>
             <div style={{ textAlign:"right" }}>
-              <div style={{ fontSize:"11px", color:"#888", textTransform:"uppercase", letterSpacing:"2px", marginBottom:"4px" }}>Romaneio de Saída</div>
+              <div style={{ fontSize:"11px", color:"#333", textTransform:"uppercase", letterSpacing:"2px", marginBottom:"4px" }}>Romaneio de Saída</div>
               <div style={{ fontSize:"28px", fontWeight:900, color:"#2d5fa6", letterSpacing:"-1px" }}>{pedido.id}</div>
-              <div style={{ fontSize:"11px", color:"#555", marginTop:"6px" }}>Emissão: <strong>{new Date().toLocaleDateString("pt-BR")}</strong></div>
-              <div style={{ fontSize:"11px", color:"#555" }}>Pedido: <strong>{formatDate(pedido.dt_pedido)}</strong></div>
+              <div style={{ fontSize:"11px", color:"#333", marginTop:"6px" }}>Emissão: <strong>{new Date().toLocaleDateString("pt-BR")}</strong></div>
+              <div style={{ fontSize:"11px", color:"#333" }}>Pedido: <strong>{formatDate(pedido.dt_pedido)}</strong></div>
               <div style={{ display:"inline-block", marginTop:"8px", padding:"3px 14px", borderRadius:"99px", fontSize:"10px", fontWeight:700, letterSpacing:"1px", background:"#d4edda", color:"#155724", border:"1px solid #c3e6cb" }}>
                 {pedido.status.toUpperCase()}
               </div>
@@ -792,17 +793,17 @@ async function handleMarcarPago(lancId: number) {
             <div style={{ padding:"12px", background:"#f0f4ff", borderRadius:"8px", borderLeft:"4px solid #2d5fa6" }}>
               <div style={{ fontSize:"9px", fontWeight:700, color:"#2d5fa6", textTransform:"uppercase", letterSpacing:"1.5px", marginBottom:"8px" }}>Comprador</div>
               <div style={{ fontSize:"13px", fontWeight:700, color:"#1a1a2e" }}>{pedido.clientes?.nome ?? "—"}</div>
-              {(pedido.clientes as any)?.cnpj && <div style={{ fontSize:"10px", color:"#555", marginTop:"3px" }}>CNPJ: {(pedido.clientes as any).cnpj}</div>}
-              {pedido.clientes?.cidade && <div style={{ fontSize:"10px", color:"#555" }}>{pedido.clientes.cidade}</div>}
-              {pedido.clientes?.tel && <div style={{ fontSize:"10px", color:"#555" }}>Tel: {pedido.clientes.tel}</div>}
+              {(pedido.clientes as any)?.cnpj && <div style={{ fontSize:"10px", color:"#333", marginTop:"3px" }}>CNPJ: {(pedido.clientes as any).cnpj}</div>}
+              {pedido.clientes?.cidade && <div style={{ fontSize:"10px", color:"#333" }}>{pedido.clientes.cidade}</div>}
+              {pedido.clientes?.tel && <div style={{ fontSize:"10px", color:"#333" }}>Tel: {pedido.clientes.tel}</div>}
             </div>
             <div style={{ padding:"12px", background:"#f0f4ff", borderRadius:"8px", borderLeft:"4px solid #3d8c5c" }}>
               <div style={{ fontSize:"9px", fontWeight:700, color:"#3d8c5c", textTransform:"uppercase", letterSpacing:"1.5px", marginBottom:"8px" }}>Condições Comerciais</div>
-              <div style={{ fontSize:"11px", color:"#333", display:"flex", flexDirection:"column", gap:"4px" }}>
-                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#777" }}>Pagamento</span><strong>{pedido.forma_pgto || "—"}</strong></div>
-                {pedido.parcelas > 1 && <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#777" }}>Parcelas</span><strong>{pedido.parcelas}×</strong></div>}
-                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#777" }}>Retirada prevista</span><strong>{formatDate(pedido.dt_retirada)}</strong></div>
-                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#777" }}>m² total</span><strong>{Number(pedido.m2_total).toFixed(2)} m²</strong></div>
+              <div style={{ fontSize:"11px", color:"#1a1a2e", display:"flex", flexDirection:"column", gap:"4px" }}>
+                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Pagamento</span><strong>{pedido.forma_pgto || "—"}</strong></div>
+                {pedido.parcelas > 1 && <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Parcelas</span><strong>{pedido.parcelas}×</strong></div>}
+                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Retirada prevista</span><strong>{formatDate(pedido.dt_retirada)}</strong></div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>m² total</span><strong>{Number(pedido.m2_total).toFixed(2)} m²</strong></div>
               </div>
             </div>
           </div>
@@ -817,13 +818,13 @@ async function handleMarcarPago(lancId: number) {
             <tbody>
               {(pedido.itens_pedido ?? []).map((item, i) => (
                 <tr key={item.id} style={{ background: i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
-                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"center", color:"#aaa", fontSize:"10px" }}>{i + 1}</td>
-                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontWeight:600, color:"#1a1a2e" }}>{item.produto_nome}</td>
-                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontFamily:"monospace", fontSize:"10px" }}>{item.largura} × {item.altura}</td>
-                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontFamily:"monospace", fontSize:"10px" }}>{Number(item.m2).toFixed(3)}</td>
-                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"center" }}>{item.quantidade}</td>
-                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"right", fontFamily:"monospace", fontSize:"10px" }}>{formatBRL(item.valor_m2)}</td>
-                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"right", fontFamily:"monospace", fontSize:"10px" }}>{item.lapidacao > 0 ? formatBRL(item.lapidacao) : "—"}</td>
+                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"center", color:"#333", fontSize:"10px", fontWeight:700 }}>{i + 1}</td>
+                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontWeight:700, color:"#1a1a2e" }}>{item.produto_nome}</td>
+                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontFamily:"monospace", fontSize:"10px", fontWeight:700 }}>{item.largura} × {item.altura}</td>
+                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontFamily:"monospace", fontSize:"10px", fontWeight:700 }}>{Number(item.m2).toFixed(3)}</td>
+                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"center", fontWeight:700 }}>{item.quantidade}</td>
+                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"right", fontFamily:"monospace", fontSize:"10px", fontWeight:700 }}>{formatBRL(item.valor_m2)}</td>
+                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"right", fontFamily:"monospace", fontSize:"10px", fontWeight:700 }}>{item.lapidacao > 0 ? formatBRL(item.lapidacao) : "—"}</td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"right", fontFamily:"monospace", fontWeight:700, color:"#2d5fa6" }}>{formatBRL(item.subtotal)}</td>
                 </tr>
               ))}
@@ -833,8 +834,8 @@ async function handleMarcarPago(lancId: number) {
             <div style={{ padding:"12px", background:"#f0f4ff", borderRadius:"8px", borderLeft:"4px solid #2d5fa6" }}>
               <div style={{ fontSize:"9px", fontWeight:700, color:"#2d5fa6", textTransform:"uppercase", letterSpacing:"1.5px", marginBottom:"8px" }}>Condições de Pagamento</div>
               <div style={{ display:"flex", flexDirection:"column", gap:"6px", fontSize:"11px" }}>
-                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#777" }}>Valor total</span><strong style={{ fontFamily:"monospace" }}>{formatBRL(pedido.valor_total)}</strong></div>
-                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#777" }}>Recebido</span><strong style={{ fontFamily:"monospace", color:"#155724" }}>{formatBRL(pedido.valor_recebido)}</strong></div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Valor total</span><strong style={{ fontFamily:"monospace" }}>{formatBRL(pedido.valor_total)}</strong></div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Recebido</span><strong style={{ fontFamily:"monospace", color:"#155724" }}>{formatBRL(pedido.valor_recebido)}</strong></div>
                 <div style={{ display:"flex", justifyContent:"space-between", borderTop:"1px solid #d0daf0", paddingTop:"6px" }}>
                   <span style={{ color: aberto > 0 ? "#c00" : "#155724", fontWeight:700 }}>{aberto > 0 ? "Em aberto" : "✓ Quitado"}</span>
                   <strong style={{ fontFamily:"monospace", color: aberto > 0 ? "#c00" : "#155724" }}>{aberto > 0 ? formatBRL(aberto) : formatBRL(0)}</strong>
@@ -852,19 +853,19 @@ async function handleMarcarPago(lancId: number) {
           </div>
           {pedido.obs && (
             <div style={{ padding:"10px 14px", background:"#fffbea", borderRadius:"8px", marginBottom:"16px", fontSize:"10px", borderLeft:"3px solid #f59e0b" }}>
-              <strong style={{ color:"#92400e" }}>Observações:</strong> <span style={{ color:"#555" }}>{pedido.obs}</span>
+              <strong style={{ color:"#92400e" }}>Observações:</strong> <span style={{ color:"#333", fontWeight:700 }}>{pedido.obs}</span>
             </div>
           )}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"32px", marginBottom:"16px", marginTop:"32px" }}>
             {["Vendedor / Urban Glass","Recebido por / Comprador","Motorista / Entregador"].map(label => (
               <div key={label} style={{ textAlign:"center" }}>
-                <div style={{ borderTop:"1px solid #999", paddingTop:"8px", fontSize:"10px", color:"#555" }}>{label}</div>
+                <div style={{ borderTop:"1px solid #999", paddingTop:"8px", fontSize:"10px", color:"#333", fontWeight:700 }}>{label}</div>
               </div>
             ))}
           </div>
-          <div style={{ borderTop:"2px solid #2d5fa6", paddingTop:"8px", display:"flex", justifyContent:"space-between", fontSize:"8px", color:"#aaa" }}>
+          <div style={{ borderTop:"2px solid #2d5fa6", paddingTop:"8px", display:"flex", justifyContent:"space-between", fontSize:"8px", color:"#333", fontWeight:700 }}>
             <div>Urban Glass Comércio Ltda · CNPJ 65.668.970/0001-05 · Av. Vereador Raymundo Hargreaves, 1250 – Fontesville – Juiz de Fora/MG</div>
-            <div style={{ color:"#e00", fontStyle:"italic" }}>Este documento não substitui a Nota Fiscal Eletrônica</div>
+            <div style={{ color:"#c00", fontStyle:"italic", fontWeight:700 }}>Este documento não substitui a Nota Fiscal Eletrônica</div>
           </div>
         </div>
       </AppLayout>
