@@ -327,19 +327,19 @@ export default function EtiquetasPage() {
           html, body {
             background: white;
             margin: 0; padding: 0;
-            width: 95mm; height: 50mm;
+            width: 88mm; height: 50mm;
           }
 
           .grid-wrapper {
             display: block;
             padding: 0; margin: 0;
-            width: 95mm;
+            width: 88mm;
             background: white;
           }
 
           .etiqueta {
             display: flex; flex-direction: column;
-            width: 95mm; height: 50mm;
+            width: 88mm; height: 50mm;
             box-sizing: border-box;
             border: none; border-radius: 0;
             box-shadow: none; overflow: hidden;
