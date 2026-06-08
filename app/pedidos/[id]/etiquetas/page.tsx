@@ -321,25 +321,25 @@ export default function EtiquetasPage() {
 
           @page {
             size: 100mm 50mm landscape;
-            margin: 0mm;
+            margin: 0mm 0mm 0mm 8mm;
           }
 
           html, body {
             background: white;
             margin: 0; padding: 0;
-            width: 88mm; height: 50mm;
+            width: 92mm; height: 50mm;
           }
 
           .grid-wrapper {
             display: block;
             padding: 0; margin: 0;
-            width: 88mm;
+            width: 92mm;
             background: white;
           }
 
           .etiqueta {
             display: flex; flex-direction: column;
-            width: 88mm; height: 50mm;
+            width: 92mm; height: 50mm;
             box-sizing: border-box;
             border: none; border-radius: 0;
             box-shadow: none; overflow: hidden;
