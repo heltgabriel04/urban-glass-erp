@@ -50,8 +50,8 @@ const FORM_VAZIO: FormNota = {
   forma_pgto:"01", parcelas:1, modalidade_frete:9,
   transportadora:"", placa_veiculo:"", uf_veiculo:"", rntc:"",
   peso_bruto:"", peso_liquido:"", volumes:"", especie_volume:"",
-  dt_saida: new Date().toISOString().split("T")[0],
-  hora_saida: new Date().toTimeString().slice(0,5),
+  dt_saida: "",
+  hora_saida: "",
   obs_contribuinte:"", obs_internas:"",
 };
 
