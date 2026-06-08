@@ -260,7 +260,7 @@ export default function EtiquetasPage() {
           display: flex; justify-content: space-between; align-items: center;
         }
         .et-empresa { font-size: 11px; font-weight: 900; letter-spacing: 2px; font-family: Arial Black, Arial, sans-serif; }
-        .et-seq { font-size: 9px; font-family: 'Courier New', monospace; color: #aaa; }
+        .et-seq { font-size: 9px; font-family: 'Courier New', monospace; color: #ccc; }
 
         .et-corpo {
           flex: 1; display: flex; gap: 0; padding: 5px 6px 4px 6px;
@@ -270,23 +270,23 @@ export default function EtiquetasPage() {
           display: flex; flex-direction: column; align-items: center; justify-content: center;
           gap: 2px; flex-shrink: 0; margin-left: 5px;
         }
-        .et-qrlbl { font-size: 6px; color: #888; letter-spacing: 1px; font-family: 'Courier New', monospace; text-align: center; }
+        .et-qrlbl { font-size: 6px; color: #333; letter-spacing: 1px; font-family: 'Courier New', monospace; text-align: center; font-weight: 700; }
 
         .et-linha { display: flex; flex-direction: column; gap: 0; }
-        .et-lbl { font-size: 6px; font-weight: 700; letter-spacing: 1px; color: #888; line-height: 1; text-transform: uppercase; }
+        .et-lbl { font-size: 6px; font-weight: 900; letter-spacing: 1px; color: #333; line-height: 1; text-transform: uppercase; }
         .et-val { font-size: 10px; font-weight: 700; color: #000; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .et-cliente { font-size: 11px; font-weight: 900; }
         .et-pedido  { font-size: 12px; font-weight: 900; letter-spacing: 1px; }
-        .et-medidas { font-size: 12px; font-weight: 900; font-family: 'Courier New', monospace; color: #111; }
+        .et-medidas { font-size: 12px; font-weight: 900; font-family: 'Courier New', monospace; color: #000; }
         .et-dim { margin-top: 1px; }
 
         .et-rodape-info {
           margin-top: auto; font-size: 7.5px; font-family: 'Courier New', monospace;
-          color: #333; font-weight: 700; border-top: 0.5px solid #ccc;
+          color: #000; font-weight: 700; border-top: 0.5px solid #ccc;
           padding-top: 2px; display: flex; gap: 3px; align-items: center; flex-wrap: wrap;
         }
-        .et-sep { color: #bbb; }
-        .et-lote { font-size: 6.5px; font-family: 'Courier New', monospace; color: #aaa; margin-top: 1px; }
+        .et-sep { color: #666; }
+        .et-lote { font-size: 6.5px; font-family: 'Courier New', monospace; color: #333; margin-top: 1px; font-weight: 700; }
 
         @media print {
           .toolbar, .info-bar { display: none !important; }
@@ -330,14 +330,14 @@ export default function EtiquetasPage() {
 
           .et-empresa { font-size: 9pt; letter-spacing: 2px; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .et-seq     { font-size: 7pt; color: #ccc !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .et-lbl     { font-size: 5pt; color: #000 !important; font-weight: 900 !important; }
+          .et-lbl     { font-size: 7pt; color: #000 !important; font-weight: 900 !important; }
           .et-val     { font-size: 8pt; color: #000 !important; font-weight: 900 !important; }
           .et-cliente { font-size: 9pt; color: #000 !important; font-weight: 900 !important; }
           .et-pedido  { font-size: 10pt; color: #000 !important; font-weight: 900 !important; }
           .et-medidas { font-size: 10pt; color: #000 !important; font-weight: 900 !important; }
-          .et-rodape-info { font-size: 6pt; color: #000 !important; font-weight: 700 !important; }
-          .et-lote    { font-size: 5pt; color: #000 !important; }
-          .et-qrlbl   { font-size: 5pt; color: #000 !important; }
+          .et-rodape-info { font-size: 7pt; color: #000 !important; font-weight: 700 !important; }
+          .et-lote    { font-size: 7pt; color: #000 !important; font-weight: 700 !important; }
+          .et-qrlbl   { font-size: 7pt; color: #000 !important; font-weight: 700 !important; }
         }
       `}</style>
 
