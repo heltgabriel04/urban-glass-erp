@@ -2,6 +2,16 @@ import { supabase } from '@/lib/supabase/client';
 import type { NotaFiscal, NotaFiscalInsert, Pedido, Cliente } from "@/types";
 import { registrarLog } from './log.service';
 
+// ─── HELPERS DE DATA ───────────────────────────────────────
+
+/** Gera data/hora atual no fuso -03:00 (Brasília) corretamente. */
+function dtBrasilia(): string {
+  const now = new Date();
+  // Subtrai 3 horas para converter UTC → BRT
+  const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  return brt.toISOString().replace(/\.\d{3}Z$/, "-03:00");
+}
+
 // ─── CRUD ──────────────────────────────────────────────────
 
 export async function getNotas(): Promise<NotaFiscal[]> {
@@ -199,7 +209,7 @@ export async function emitirNFeCompleta(p: PayloadNota): Promise<{ ok: boolean; 
   const ref        = `UG-${form.pedido_id}-${notaId}`;
   const cfopNum    = form.cfop_padrao.replace(".", "");
   const aliqPct    = form.cfop_padrao.startsWith("5") ? 18 : 12;
-  const dtEmissao  = new Date().toISOString().replace(/\.\d{3}Z$/, "-03:00");
+  const dtEmissao  = dtBrasilia();
 
   // Payload no formato flat do FocusNFe — emitente injetado server-side
   const payload: Record<string, unknown> = {
@@ -275,7 +285,6 @@ export async function emitirNFeCompleta(p: PayloadNota): Promise<{ ok: boolean; 
       await supabase.from("notas_fiscais").update({ status: "rejeitada", motivo_rejeicao: motivo } as never).eq("id", notaId);
       return { ok: false, mensagem: json.mensagem_sefaz ?? "Erro no FocusNFe" };
     }
-    // Armazena o ref para consultas de status posteriores
     await supabase.from("notas_fiscais").update({ status: "enviando", nuvem_fiscal_id: ref } as never).eq("id", notaId);
     registrarLog({
       acao: "emitiu", tabela: "notas_fiscais", registro_id: String(notaId),
@@ -306,7 +315,7 @@ export async function emitirNFe(notaId: number, pedido: Pedido): Promise<{ ok: b
   const aliqPct   = nota.cfop.startsWith("5") ? 18 : 12;
   const aliqIcms  = aliqPct / 100;
   const cfopNum   = nota.cfop.replace(".", "");
-  const dtEmissao = new Date().toISOString().replace(/\.\d{3}Z$/, "-03:00");
+  const dtEmissao = dtBrasilia();
 
   const payload: Record<string, unknown> = {
     natureza_operacao:  nota.natureza_op,
