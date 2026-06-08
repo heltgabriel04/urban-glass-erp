@@ -248,7 +248,6 @@ export default function EtiquetasPage() {
           display: flex; flex-direction: column; align-items: center; gap: 20px;
         }
 
-        /* ── Etiqueta tela: proporção 2:1 igual à física 100x50mm ── */
         .etiqueta {
           width: 500px; height: 250px;
           background: white;
@@ -317,7 +316,6 @@ export default function EtiquetasPage() {
           color: #333; margin-top: 2px; font-weight: 700;
         }
 
-        /* ── Impressão ── */
         @media print {
           .toolbar, .info-bar { display: none !important; }
 
@@ -329,24 +327,23 @@ export default function EtiquetasPage() {
           html, body {
             background: white;
             margin: 0; padding: 0;
-            width: 100mm; height: 50mm;
+            width: 95mm; height: 50mm;
           }
 
           .grid-wrapper {
             display: block;
             padding: 0; margin: 0;
-            width: 100mm;
+            width: 95mm;
             background: white;
           }
 
           .etiqueta {
             display: flex; flex-direction: column;
-            width: 105mm; height: 50mm;
+            width: 95mm; height: 50mm;
             box-sizing: border-box;
             border: none; border-radius: 0;
             box-shadow: none; overflow: hidden;
             margin: 0; padding: 0;
-            margin-left: -5mm;
             page-break-after: always; break-after: page;
           }
 
