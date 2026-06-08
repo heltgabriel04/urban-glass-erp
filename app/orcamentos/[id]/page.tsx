@@ -108,6 +108,7 @@ export default function OrcamentoDetalhe() {
           .print-area { display: block !important; }
           .con { padding: 0 !important; }
           @page { margin: 0; size: A4; }
+          .print-area * { font-weight: 700 !important; color: #000 !important; }
         }
         .print-area { display: none; }
         @media print { .print-area { display: block; } }
