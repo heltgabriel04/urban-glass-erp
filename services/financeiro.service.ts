@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
 import type { FinanceiroCliente, FaturamentoMensal, Lancamento, LancamentoInsert } from '@/types';
+import { registrarLog } from './log.service';
 
 export async function getFinanceiroClientes() {
   const { data, error } = await supabase
@@ -118,6 +119,11 @@ export async function criarContaPagar(conta: {
     .select()
     .single();
   if (error) { console.error('criarContaPagar:', error); return null; }
+  registrarLog({
+    acao: "criou", tabela: "lancamentos",
+    descricao: `Criou conta a pagar: ${conta.descricao} · R$ ${conta.valor.toFixed(2)}`,
+    campos_alterados: { descricao: conta.descricao, valor: conta.valor, vencimento: conta.vencimento },
+  });
   return data as Lancamento;
 }
 
@@ -129,6 +135,11 @@ export async function pagarConta(id: number, dtPagamento: string) {
     .select()
     .single();
   if (error) { console.error('pagarConta:', error); return null; }
+  registrarLog({
+    acao: "pagou", tabela: "lancamentos", registro_id: String(id),
+    descricao: `Marcou lançamento #${id} como pago`,
+    campos_alterados: { status: { de: "Pendente", para: "Pago" }, dt_pagamento: dtPagamento },
+  });
   return data as Lancamento;
 }
 
@@ -161,5 +172,10 @@ export async function criarLancamentosParcelados({
   if (inserts.length === 0) return true;
   const { error } = await supabase.from('lancamentos').insert(inserts as never[]);
   if (error) { console.error('criarLancamentosParcelados:', error); return false; }
+  registrarLog({
+    acao: "criou", tabela: "lancamentos", registro_id: pedidoId,
+    descricao: `Criou ${inserts.length} parcela(s) para pedido ${pedidoId}`,
+    campos_alterados: { parcelas: inserts.length, total: inserts.reduce((a, p) => a + p.valor, 0) },
+  });
   return true;
 }

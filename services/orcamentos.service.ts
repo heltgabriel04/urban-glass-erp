@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
 import { criarLancamentosParcelados } from './financeiro.service';
+import { registrarLog } from './log.service';
 
 function addMonthsStr(dateStr: string, months: number): string {
   const d = new Date(dateStr + "T12:00:00");
@@ -79,6 +80,11 @@ export async function createOrcamento(orcamento: OrcamentoInsert, itens: Omit<It
     if (errItens) console.error('createOrcamento itens:', errItens);
   }
 
+  registrarLog({
+    acao: "criou", tabela: "orcamentos", registro_id: (data as any).id,
+    descricao: `Criou orçamento ${(data as any).id}`,
+    campos_alterados: { cliente_id: orcamento.cliente_id, valor_total: orcamento.valor_total },
+  });
   return data;
 }
 
@@ -183,6 +189,11 @@ export async function aprovarOrcamento(orcamentoId: string) {
     pedido_id: pedidoId,
   } as any);
 
+  registrarLog({
+    acao: "aprovou", tabela: "orcamentos", registro_id: orcamentoId,
+    descricao: `Aprovou orçamento ${orcamentoId} → criou pedido ${pedidoId}`,
+    campos_alterados: { status: { de: "Pendente/Enviado", para: "Aprovado" }, pedido_gerado: pedidoId },
+  });
   return pedido;
 }
 
@@ -205,10 +216,13 @@ export async function rejeitarOrcamento(orcamentoId: string) {
   }
 
   // Atualiza orçamento
-  return updateOrcamento(orcamentoId, {
-    status: 'Rejeitado',
-    pedido_id: null,
-  } as any);
+  const res = await updateOrcamento(orcamentoId, { status: 'Rejeitado', pedido_id: null } as any);
+  if (res) registrarLog({
+    acao: "rejeitou", tabela: "orcamentos", registro_id: orcamentoId,
+    descricao: `Rejeitou orçamento ${orcamentoId}`,
+    campos_alterados: { status: { de: "Pendente/Enviado", para: "Rejeitado" } },
+  });
+  return res;
 }
 
 export async function deletarOrcamento(orcamentoId: string): Promise<boolean> {
@@ -230,7 +244,7 @@ export async function deletarOrcamento(orcamentoId: string): Promise<boolean> {
 
   const { error } = await supabase.from('orcamentos').delete().eq('id', orcamentoId);
   if (error) { console.error('deletarOrcamento:', error); return false; }
-
+  registrarLog({ acao: "excluiu", tabela: "orcamentos", registro_id: orcamentoId, descricao: `Excluiu orçamento ${orcamentoId}` });
   return true;
 }
 

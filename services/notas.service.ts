@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
 import type { NotaFiscal, NotaFiscalInsert, Pedido, Cliente } from "@/types";
+import { registrarLog } from './log.service';
 
 // ─── CRUD ──────────────────────────────────────────────────
 
@@ -52,6 +53,7 @@ export async function criarRascunho(pedido: Pedido, cfop: string): Promise<NotaF
 export async function deletarNota(id: number): Promise<boolean> {
   const { error } = await supabase.from("notas_fiscais").delete().eq("id", id);
   if (error) { console.error("deletarNota:", error); return false; }
+  registrarLog({ acao: "excluiu", tabela: "notas_fiscais", registro_id: String(id), descricao: `Excluiu rascunho de NF-e #${id}` });
   return true;
 }
 
@@ -275,6 +277,11 @@ export async function emitirNFeCompleta(p: PayloadNota): Promise<{ ok: boolean; 
     }
     // Armazena o ref para consultas de status posteriores
     await supabase.from("notas_fiscais").update({ status: "enviando", nuvem_fiscal_id: ref } as never).eq("id", notaId);
+    registrarLog({
+      acao: "emitiu", tabela: "notas_fiscais", registro_id: String(notaId),
+      descricao: `Emitiu NF-e #${notaId} para pedido ${p.form.pedido_id}`,
+      campos_alterados: { ref, pedido_id: p.form.pedido_id, valor_nota: p.valorNota },
+    });
     return { ok: true, mensagem: "NF-e enviada para processamento." };
   } catch (err) {
     console.error("emitirNFeCompleta:", err);
@@ -364,6 +371,11 @@ export async function emitirNFe(notaId: number, pedido: Pedido): Promise<{ ok: b
       return { ok: false, mensagem: json.mensagem_sefaz ?? "Erro no FocusNFe" };
     }
     await supabase.from("notas_fiscais").update({ status: "enviando", nuvem_fiscal_id: ref } as never).eq("id", notaId);
+    registrarLog({
+      acao: "emitiu", tabela: "notas_fiscais", registro_id: String(notaId),
+      descricao: `Emitiu NF-e #${notaId} para pedido ${pedido.id}`,
+      campos_alterados: { ref, pedido_id: pedido.id },
+    });
     return { ok: true, mensagem: "NF-e enviada para processamento." };
   } catch(err) { console.error("emitirNFe:", err); return { ok: false, mensagem: "Erro de conexão." }; }
 }

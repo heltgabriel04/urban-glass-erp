@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
 import type { Pedido, PedidoInsert, PedidoUpdate, ItemPedidoInsert, StatusPedido } from '@/types';
+import { registrarLog } from './log.service';
 
 export async function getPedidos(filtroStatus?: StatusPedido) {
   let query = supabase
@@ -33,6 +34,12 @@ export async function createPedido(pedido: PedidoInsert, itens: ItemPedidoInsert
     .single();
 
   if (error) { console.error('createPedido:', error); return null; }
+
+  registrarLog({
+    acao: "criou", tabela: "pedidos", registro_id: (data as Pedido).id,
+    descricao: `Criou pedido ${(data as Pedido).id}`,
+    campos_alterados: { cliente_id: pedido.cliente_id, valor_total: pedido.valor_total, status: pedido.status },
+  });
 
   if (itens.length > 0) {
     const itensComId = itens.map(i => ({ ...i, pedido_id: (data as Pedido).id }));
@@ -81,13 +88,27 @@ const FLUXO: StatusPedido[] = [
 export async function avancarStatusPedido(id: string, statusAtual: StatusPedido) {
   const idx = FLUXO.indexOf(statusAtual);
   if (idx === -1 || idx === FLUXO.length - 1) return null;
-  return updatePedido(id, { status: FLUXO[idx + 1] });
+  const novoStatus = FLUXO[idx + 1];
+  const res = await updatePedido(id, { status: novoStatus });
+  if (res) registrarLog({
+    acao: "avançou", tabela: "pedidos", registro_id: id,
+    descricao: `Avançou status do pedido ${id}: ${statusAtual} → ${novoStatus}`,
+    campos_alterados: { status: { de: statusAtual, para: novoStatus } },
+  });
+  return res;
 }
 
 export async function retrocederStatusPedido(id: string, statusAtual: StatusPedido) {
   const idx = FLUXO.indexOf(statusAtual);
   if (idx <= 0) return null;
-  return updatePedido(id, { status: FLUXO[idx - 1] });
+  const novoStatus = FLUXO[idx - 1];
+  const res = await updatePedido(id, { status: novoStatus });
+  if (res) registrarLog({
+    acao: "retrocedeu", tabela: "pedidos", registro_id: id,
+    descricao: `Retrocedeu status do pedido ${id}: ${statusAtual} → ${novoStatus}`,
+    campos_alterados: { status: { de: statusAtual, para: novoStatus } },
+  });
+  return res;
 }
 
 export async function deletarPedido(pedidoId: string): Promise<boolean> {
@@ -98,6 +119,7 @@ export async function deletarPedido(pedidoId: string): Promise<boolean> {
   await supabase.from('orcamentos').update({ pedido_id: null } as never).eq('pedido_id', pedidoId);
   const { error } = await supabase.from('pedidos').delete().eq('id', pedidoId);
   if (error) { console.error('deletarPedido:', error); return false; }
+  registrarLog({ acao: "excluiu", tabela: "pedidos", registro_id: pedidoId, descricao: `Excluiu pedido ${pedidoId}` });
   return true;
 }
 
@@ -180,6 +202,11 @@ export async function registrarRecebimento(
     } as never);
   }
 
+  registrarLog({
+    acao: "recebeu", tabela: "pedidos", registro_id: pedidoId,
+    descricao: `Registrou recebimento de R$ ${aplicado.toFixed(2)} no pedido ${pedidoId}`,
+    campos_alterados: { valor: aplicado, ...(excedente > 0.005 ? { excedente_para_credito: excedente } : {}) },
+  });
   return { pedido: pedidoAtualizado, excedente };
 }
 
@@ -218,6 +245,11 @@ export async function utilizarCreditoEmPedido(
   const pedidoAtualizado = await recalcularRecebido(pedidoId);
   if (!pedidoAtualizado) return null;
 
+  registrarLog({
+    acao: "editou", tabela: "pedidos", registro_id: pedidoId,
+    descricao: `Utilizou R$ ${valorAplicado.toFixed(2)} de crédito no pedido ${pedidoId}`,
+    campos_alterados: { credito_utilizado: valorAplicado, credito_restante: creditoRestante },
+  });
   return { pedido: pedidoAtualizado, creditoRestante };
 }
 
