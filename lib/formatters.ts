@@ -26,7 +26,7 @@ export function formatPercent(value: number | null | undefined, decimals = 2): s
 export function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—';
   try {
-    return new Date(dateStr + 'T12:00').toLocaleDateString('pt-BR');
+    return new Date(dateStr).toLocaleDateString('pt-BR');
   } catch {
     return dateStr;
   }
