@@ -413,7 +413,7 @@ export default function ClientesPage() {
                   <div className="fr">
                     <div className="fg">
                       <label className="fl">Inscrição Estadual (IE)</label>
-                      <input className="fc" value={form.ie} onChange={e => F("ie", maskIE(e.target.value))} placeholder="000.000.000/0000" maxLength={16} inputMode="numeric" />
+                      <input className="fc" value={form.ie} onChange={e => F("ie", maskIE(e.target.value))} placeholder="000.000.000/0000" maxLength={17} inputMode="numeric" />
                     </div>
                     <div className="fg">
                       <label className="fl">Indicador IE *</label>
