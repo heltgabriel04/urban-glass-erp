@@ -81,7 +81,7 @@ function EtiquetaCard({ et, num }: { et: Etiqueta; num: number }) {
           <div className="et-lote">Lote: {et.loteCorte}</div>
         </div>
         <div className="et-dir">
-          <QRCode url={et.qrUrl} size={48} />
+          <QRCode url={et.qrUrl} size={68} />
           <div className="et-qrlbl">ESCANEAR</div>
         </div>
       </div>
@@ -249,7 +249,7 @@ export default function EtiquetasPage() {
         }
 
         .etiqueta {
-          width: 300px; height: 171px;
+          width: 300px; height: 150px;
           background: white; border: 1.5px solid #888; border-radius: 6px;
           overflow: hidden; display: flex; flex-direction: column;
           box-shadow: 0 2px 8px rgba(0,0,0,0.35);
@@ -294,41 +294,41 @@ export default function EtiquetasPage() {
   html, body {
     background: white;
     margin: 0; padding: 0;
-    width: 70mm; height: 40mm;
+    width: 100mm; height: 50mm;
   }
 
   .grid-wrapper {
     display: block;
     padding: 0; margin: 0;
-    width: 70mm;
+    width: 100mm;
     background: white;
   }
 
   .etiqueta {
     display: flex; flex-direction: column;
-    width: 70mm; height: 40mm;
+    width: 100mm; height: 50mm;
     box-sizing: border-box;
-    border: 0.3pt solid #999; border-radius: 1.5mm;
+    border: 0.3pt solid #999; border-radius: 2mm;
     box-shadow: none; overflow: hidden;
     margin: 0;
     page-break-after: always; break-after: page;
   }
 
-  .et-topo { padding: 2px 5px; }
-  .et-corpo { padding: 3px 5px; }
+  .et-topo { padding: 3px 8px; }
+  .et-corpo { padding: 5px 6px 4px 6px; }
 
-  .et-empresa { font-size: 7pt; letter-spacing: 1.5px; }
-  .et-seq     { font-size: 5.5pt; }
-  .et-lbl     { font-size: 4.5pt; }
-  .et-val     { font-size: 7pt; }
-  .et-cliente { font-size: 7.5pt; }
-  .et-pedido  { font-size: 8pt; }
-  .et-medidas { font-size: 8pt; }
-  .et-rodape-info { font-size: 4.5pt; }
-  .et-lote    { font-size: 4pt; }
-  .et-qrlbl   { font-size: 4pt; }
+  .et-empresa { font-size: 9pt; letter-spacing: 2px; }
+  .et-seq     { font-size: 7pt; }
+  .et-lbl     { font-size: 5pt; }
+  .et-val     { font-size: 8pt; }
+  .et-cliente { font-size: 9pt; }
+  .et-pedido  { font-size: 10pt; }
+  .et-medidas { font-size: 10pt; }
+  .et-rodape-info { font-size: 6pt; }
+  .et-lote    { font-size: 5pt; }
+  .et-qrlbl   { font-size: 5pt; }
 
-  @page { size: 70mm 40mm; margin: 0; }
+  @page { size: 100mm 50mm; margin: 0; }
 }
       `}</style>
 
