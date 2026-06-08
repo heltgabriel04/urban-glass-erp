@@ -308,14 +308,21 @@ export default function EtiquetasPage() {
     display: flex; flex-direction: column;
     width: 100mm; height: 50mm;
     box-sizing: border-box;
-    border: 0.3pt solid #999; border-radius: 2mm;
+    border: 0.3pt solid #000; border-radius: 2mm;
     box-shadow: none; overflow: hidden;
     margin: 0;
     page-break-after: always; break-after: page;
   }
 
+  /* forçar preto em todos os textos sobre fundo branco */
+  .et-lbl, .et-val, .et-cliente, .et-pedido, .et-medidas,
+  .et-rodape-info, .et-sep, .et-lote, .et-qrlbl { color: #000 !important; }
+
   .et-topo { padding: 3px 8px; }
-  .et-corpo { padding: 5px 6px 4px 6px; }
+  .et-corpo { padding: 4px 5px 3px 6px; }
+
+  /* reduz QR em print para dar espaço ao texto sem cortar à direita */
+  .et-dir img { width: 52px !important; height: 52px !important; }
 
   .et-empresa { font-size: 9pt; letter-spacing: 2px; }
   .et-seq     { font-size: 7pt; }
