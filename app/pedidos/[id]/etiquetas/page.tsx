@@ -288,57 +288,54 @@ export default function EtiquetasPage() {
         .et-sep { color: #bbb; }
         .et-lote { font-size: 6.5px; font-family: 'Courier New', monospace; color: #aaa; margin-top: 1px; }
 
-@media print {
-  .toolbar, .info-bar { display: none !important; }
+        @media print {
+          .toolbar, .info-bar { display: none !important; }
 
-  /* margem lateral 5mm + margem superior 3mm — igual ao sistema anterior */
-  @page {
-    size: 100mm 50mm;
-    margin: 3mm 5mm 0mm 5mm;
-  }
+          @page {
+            size: 100mm 50mm;
+            margin: 0mm;
+          }
 
-  html, body {
-    background: white;
-    margin: 0; padding: 0;
-    width: 90mm; height: 47mm;
-  }
+          html, body {
+            background: white;
+            margin: 0; padding: 0;
+            width: 100mm; height: 50mm;
+          }
 
-  .grid-wrapper {
-    display: block;
-    padding: 0; margin: 0;
-    width: 90mm;
-    background: white;
-  }
+          .grid-wrapper {
+            display: block;
+            padding: 0; margin: 0;
+            width: 100mm;
+            background: white;
+          }
 
-  .etiqueta {
-    display: flex; flex-direction: column;
-    width: 90mm; height: 47mm;
-    box-sizing: border-box;
-    border: 0.3pt solid #000; border-radius: 2mm;
-    box-shadow: none; overflow: hidden;
-    margin: 0;
-    page-break-after: always; break-after: page;
-  }
+          .etiqueta {
+            display: flex; flex-direction: column;
+            width: 100mm; height: 50mm;
+            box-sizing: border-box;
+            border: none;
+            border-radius: 0;
+            box-shadow: none;
+            overflow: hidden;
+            margin: 0; padding: 0;
+            page-break-after: always; break-after: page;
+          }
 
-  /* forçar preto em todos os textos sobre fundo branco */
-  .et-lbl, .et-val, .et-cliente, .et-pedido, .et-medidas,
-  .et-rodape-info, .et-sep, .et-lote, .et-qrlbl { color: #000 !important; }
+          .et-topo { padding: 3px 6px; background: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .et-corpo { padding: 4px 5px 3px 6px; }
+          .et-dir img { width: 56px !important; height: 56px !important; }
 
-  .et-topo { padding: 3px 8px; }
-  .et-corpo { padding: 4px 5px 3px 6px; }
-  .et-dir img { width: 52px !important; height: 52px !important; }
-
-  .et-empresa { font-size: 9pt; letter-spacing: 2px; }
-  .et-seq     { font-size: 7pt; }
-  .et-lbl     { font-size: 5pt; }
-  .et-val     { font-size: 8pt; }
-  .et-cliente { font-size: 9pt; }
-  .et-pedido  { font-size: 10pt; }
-  .et-medidas { font-size: 10pt; }
-  .et-rodape-info { font-size: 6pt; }
-  .et-lote    { font-size: 5pt; }
-  .et-qrlbl   { font-size: 5pt; }
-}
+          .et-empresa { font-size: 9pt; letter-spacing: 2px; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .et-seq     { font-size: 7pt; color: #ccc !important; }
+          .et-lbl     { font-size: 5pt; color: #555 !important; }
+          .et-val     { font-size: 8pt; color: #000 !important; }
+          .et-cliente { font-size: 9pt; color: #000 !important; }
+          .et-pedido  { font-size: 10pt; color: #000 !important; }
+          .et-medidas { font-size: 10pt; color: #000 !important; }
+          .et-rodape-info { font-size: 6pt; color: #333 !important; }
+          .et-lote    { font-size: 5pt; color: #555 !important; }
+          .et-qrlbl   { font-size: 5pt; color: #555 !important; }
+        }
       `}</style>
 
       <div className="toolbar">
