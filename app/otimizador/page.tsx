@@ -191,6 +191,7 @@ function OtimizadorContent() {
   const [usarRetalhosEstoque, setUsarRetalhosEstoque] = useState(false);
   const [retalhosDisponiveis, setRetalhosDisponiveis] = useState<Retalho[]>([]);
   const [retalhosUsados, setRetalhosUsados] = useState<string[]>([]);
+  const [comparacaoStats, setComparacaoStats] = useState<{ comRetalhos: { aprov: number; chapas: number }; semRetalhos: { aprov: number; chapas: number } } | null>(null);
 
   const [pedidosSugeridos, setPedidosSugeridos]       = useState<PedidoSugerido[]>([]);
   const [pedidosSelecionados, setPedidosSelecionados] = useState<Set<string>>(new Set());
@@ -249,9 +250,8 @@ function OtimizadorContent() {
   }, [resultado, chapaIdx]);
 
   useEffect(() => {
-    if (!usarRetalhosEstoque) { setRetalhosDisponiveis([]); return; }
     const produtosNomes = [...new Set(pecas.map(p => p.prod).filter(Boolean))];
-    if (produtosNomes.length === 0) return;
+    if (produtosNomes.length === 0) { setRetalhosDisponiveis([]); return; }
     supabase
       .from("retalhos")
       .select("*")
@@ -259,7 +259,7 @@ function OtimizadorContent() {
       .in("produto_nome", produtosNomes)
       .order("m2", { ascending: false })
       .then(({ data }) => setRetalhosDisponiveis((data as Retalho[]) || []));
-  }, [usarRetalhosEstoque, pecas]);
+  }, [pecas]);
 
   // Monta flat de peças sem estado
   function montarFlat(pecasList: Peca[], pedidoId: string | null) {
@@ -416,6 +416,59 @@ function OtimizadorContent() {
     ctx.strokeStyle = "#3d4a6a"; ctx.lineWidth = 1; ctx.strokeRect(ox, oy, dW, dH);
   }
 
+  // Executa o algoritmo de otimização para um cenário (com ou sem retalhos)
+  function computeScenario(
+    flat: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
+    useRetalhos: boolean
+  ): { results: ResultadoChapa[]; aprov: number; chapas: number; retUsados: string[] } {
+    const grupos = new Map<string, typeof flat>();
+    flat.forEach(p => { const g = grupos.get(p.prod) ?? []; g.push(p); grupos.set(p.prod, g); });
+    const results: ResultadoChapa[] = [];
+    const retUsados: string[] = [];
+
+    grupos.forEach((grupo, prodNome) => {
+      const ci2 = PRODUTO_CHAPA[prodNome];
+      const chapa = ci2 !== undefined ? CHAPAS_PADRAO[ci2] : null;
+      const CW = chapa ? chapa.w : chapaW;
+      const CH = chapa ? chapa.h : chapaH;
+      const W = CW - bord * 2;
+      const H = CH - bord * 2;
+      grupo.sort((a, b) => b.l * b.a - a.l * a.a);
+      let rem = [...grupo];
+
+      if (useRetalhos) {
+        const retDoProd = retalhosDisponiveis.filter(r => r.produto_nome === prodNome);
+        for (const ret of retDoProd) {
+          if (rem.length === 0) break;
+          const { placed, usados, free } = empacotar(ret.largura, ret.altura, rem, kerf);
+          if (placed.length === 0) continue;
+          results.push({ W: ret.largura, H: ret.altura, prod: prodNome, placed, free, retalhoId: ret.id });
+          rem = rem.filter((_, i) => !usados.has(i));
+          retUsados.push(ret.id);
+        }
+      }
+
+      let ci = 0;
+      while (rem.length > 0 && ci < 100) {
+        const { placed, usados, free } = empacotar(W, H, rem, kerf);
+        if (placed.length === 0) break;
+        results.push({ W: CW, H: CH, prod: prodNome, placed, free });
+        rem = rem.filter((_, i) => !usados.has(i));
+        ci++;
+      }
+    });
+
+    let totA = 0, usedA = 0;
+    results.forEach(r => {
+      const bordEfetivo = r.retalhoId ? 0 : bord;
+      const W = r.W - bordEfetivo * 2, H = r.H - bordEfetivo * 2;
+      totA += W * H;
+      r.placed.forEach(p => (usedA += p.l * p.a));
+    });
+    const aprov = totA > 0 ? (usedA / totA) * 100 : 0;
+    return { results, aprov, chapas: results.length, retUsados };
+  }
+
   function rodar() {
     const flat: Array<{ l: number; a: number; prod: string; pedidoId?: string }> = [];
     pecas.forEach(p => {
@@ -438,75 +491,43 @@ function OtimizadorContent() {
       return;
     }
 
-    const grupos = new Map<string, typeof flat>();
-    flat.forEach(p => { const g = grupos.get(p.prod) ?? []; g.push(p); grupos.set(p.prod, g); });
-
-    const results: ResultadoChapa[] = [];
-    let totalPlaced = 0;
-    const totalPecas = flat.length;
-    const retalhosUsadosIds: string[] = [];
-
-    grupos.forEach((grupo, prodNome) => {
-      const ci2 = PRODUTO_CHAPA[prodNome];
-      const chapa = ci2 !== undefined ? CHAPAS_PADRAO[ci2] : null;
-      const CW = chapa ? chapa.w : chapaW;
-      const CH = chapa ? chapa.h : chapaH;
-      const W = CW - bord * 2;
-      const H = CH - bord * 2;
-      grupo.sort((a, b) => b.l * b.a - a.l * a.a);
-      let rem = [...grupo];
-
-      // Tenta usar retalhos do estoque antes de abrir chapas novas
-      if (usarRetalhosEstoque) {
-        const retDoProd = retalhosDisponiveis.filter(r => r.produto_nome === prodNome);
-        for (const ret of retDoProd) {
-          if (rem.length === 0) break;
-          const { placed, usados, free } = empacotar(ret.largura, ret.altura, rem, kerf);
-          if (placed.length === 0) continue;
-          results.push({ W: ret.largura, H: ret.altura, prod: prodNome, placed, free, retalhoId: ret.id });
-          totalPlaced += placed.length;
-          rem = rem.filter((_, i) => !usados.has(i));
-          retalhosUsadosIds.push(ret.id);
-        }
-      }
-
-      let ci = 0;
-      while (rem.length > 0 && ci < 100) {
-        const { placed, usados, free } = empacotar(W, H, rem, kerf);
-        if (placed.length === 0) break;
-        results.push({ W: CW, H: CH, prod: prodNome, placed, free });
-        totalPlaced += placed.length;
-        rem = rem.filter((_, i) => !usados.has(i));
-        ci++;
-      }
-    });
-
-    setRetalhosUsados(retalhosUsadosIds);
-
-    setResultado(results);
+    // Cenário principal
+    const main = computeScenario(flat, usarRetalhosEstoque);
+    setResultado(main.results);
     setChapaIdx(0);
-
-    let totA = 0, usedA = 0;
-    results.forEach(r => {
-      const bordEfetivo = r.retalhoId ? 0 : bord;
-      const W = r.W - bordEfetivo * 2, H = r.H - bordEfetivo * 2;
-      totA += W * H;
-      r.placed.forEach(p => (usedA += p.l * p.a));
-    });
-    const aprov = totA > 0 ? (usedA / totA) * 100 : 0;
-    setAprovNum(aprov); setPerdaNum(100 - aprov); setStatChapas(results.length);
+    setAprovNum(main.aprov);
+    setPerdaNum(100 - main.aprov);
+    setStatChapas(main.chapas);
+    setRetalhosUsados(main.retUsados);
 
     const retPend: RetalhoGerado[] = [];
-    results.forEach((r, ri) =>
+    main.results.forEach((r, ri) =>
       r.free.filter(fr => fr.l >= 200 && fr.a >= 200).forEach(fr =>
         retPend.push({ ...fr, chapaIdx: ri, prod: r.prod, m2: parseFloat(((fr.l * fr.a) / 1e6).toFixed(4)) })
       )
     );
     setRetalhosGerados(retPend);
 
+    // Comparação automática com/sem retalhos (quando há retalhos disponíveis)
+    if (retalhosDisponiveis.length > 0) {
+      const alt = computeScenario(flat, !usarRetalhosEstoque);
+      setComparacaoStats({
+        comRetalhos: usarRetalhosEstoque
+          ? { aprov: main.aprov, chapas: main.chapas }
+          : { aprov: alt.aprov,  chapas: alt.chapas  },
+        semRetalhos: usarRetalhosEstoque
+          ? { aprov: alt.aprov,  chapas: alt.chapas  }
+          : { aprov: main.aprov, chapas: main.chapas },
+      });
+    } else {
+      setComparacaoStats(null);
+    }
+
+    const totalPecas = flat.length;
+    const totalPlaced = main.results.reduce((a, r) => a + r.placed.length, 0);
     const naoCouberam = totalPecas - totalPlaced;
     setMsg(
-      `${totalPecas} peças · ${results.length} chapa(s)` +
+      `${totalPecas} peças · ${main.chapas} chapa(s)` +
       (pedidosSelecionados.size > 0 ? ` · ${pedidosSelecionados.size + 1} pedidos agrupados` : "") +
       ` · ${naoCouberam > 0 ? naoCouberam + " não couberam" : "✓ Todas alocadas"}`
     );
@@ -887,7 +908,7 @@ function OtimizadorContent() {
             )}
 
             {/* Usar Retalhos do Estoque */}
-            {pedidoRef && (
+            {pecas.some(p => p.prod) && (
               <div style={{ padding: "10px 14px", background: usarRetalhosEstoque ? "rgba(245,158,11,.1)" : "var(--surf1)", border: `1px solid ${usarRetalhosEstoque ? "rgba(245,158,11,.5)" : "var(--b1)"}`, borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
                 <div>
                   <div style={{ fontSize: "12px", fontWeight: 700, color: usarRetalhosEstoque ? "#f59e0b" : "var(--t2)", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1031,6 +1052,38 @@ function OtimizadorContent() {
                   </div>
                 ))}
               </div>
+
+              {comparacaoStats && resultado && (
+                <div style={{ marginBottom: "14px", padding: "10px 12px", background: "var(--surf2)", border: "1px solid var(--b1)", borderRadius: "8px" }}>
+                  <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px", fontFamily: "'DM Mono',monospace" }}>Comparação de cenários</div>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <div style={{ flex: 1, padding: "8px 10px", borderRadius: "6px", background: usarRetalhosEstoque ? "rgba(61,255,160,.08)" : "var(--surf1)", border: `1px solid ${usarRetalhosEstoque ? "rgba(61,255,160,.3)" : "var(--b2)"}` }}>
+                      <div style={{ fontSize: "9px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", textTransform: "uppercase", marginBottom: "2px" }}>↺ Com Retalhos{usarRetalhosEstoque ? <span style={{ color: "var(--acc)", marginLeft: "4px" }}>← atual</span> : null}</div>
+                      <div style={{ fontSize: "20px", fontWeight: 800, color: "#3dffa0", fontFamily: "'Syne',sans-serif", lineHeight: 1.1 }}>{comparacaoStats.comRetalhos.aprov.toFixed(1)}%</div>
+                      <div style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>{comparacaoStats.comRetalhos.chapas} chapa(s)</div>
+                    </div>
+                    <div style={{ flex: 1, padding: "8px 10px", borderRadius: "6px", background: !usarRetalhosEstoque ? "rgba(0,200,255,.08)" : "var(--surf1)", border: `1px solid ${!usarRetalhosEstoque ? "rgba(0,200,255,.3)" : "var(--b2)"}` }}>
+                      <div style={{ fontSize: "9px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", textTransform: "uppercase", marginBottom: "2px" }}>☐ Sem Retalhos{!usarRetalhosEstoque ? <span style={{ color: "#00c8ff", marginLeft: "4px" }}>← atual</span> : null}</div>
+                      <div style={{ fontSize: "20px", fontWeight: 800, color: "#00c8ff", fontFamily: "'Syne',sans-serif", lineHeight: 1.1 }}>{comparacaoStats.semRetalhos.aprov.toFixed(1)}%</div>
+                      <div style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>{comparacaoStats.semRetalhos.chapas} chapa(s)</div>
+                    </div>
+                  </div>
+                  {(() => {
+                    const delta = comparacaoStats.comRetalhos.aprov - comparacaoStats.semRetalhos.aprov;
+                    const chapDelta = comparacaoStats.semRetalhos.chapas - comparacaoStats.comRetalhos.chapas;
+                    return (
+                      <div style={{ marginTop: "8px", fontSize: "11px", color: delta >= 0 ? "#3dffa0" : "#f43f5e", fontFamily: "'DM Mono',monospace", textAlign: "center" }}>
+                        {delta >= 0 ? `↑ +${delta.toFixed(1)}% com retalhos` : `↓ ${Math.abs(delta).toFixed(1)}% com retalhos`}
+                        {chapDelta !== 0 && (
+                          <span style={{ marginLeft: "8px", color: chapDelta > 0 ? "#3dffa0" : "#f43f5e" }}>
+                            · {chapDelta > 0 ? `-${chapDelta}` : `+${Math.abs(chapDelta)}`} chapa(s)
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
 
               {msg && <div style={{ fontSize: "11px", color: "var(--t2)", fontFamily: "'DM Mono', monospace", marginBottom: "10px", padding: "7px 10px", background: "var(--surf2)", borderRadius: "6px", border: "1px solid var(--b1)" }}>{msg}</div>}
 
