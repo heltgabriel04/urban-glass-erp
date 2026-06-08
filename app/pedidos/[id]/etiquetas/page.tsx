@@ -292,7 +292,7 @@ export default function EtiquetasPage() {
           .toolbar, .info-bar { display: none !important; }
 
           @page {
-            size: 100mm 50mm;
+            size: 100mm 50mm landscape;
             margin: 0mm;
           }
 
@@ -313,28 +313,31 @@ export default function EtiquetasPage() {
             display: flex; flex-direction: column;
             width: 100mm; height: 50mm;
             box-sizing: border-box;
-            border: none;
-            border-radius: 0;
-            box-shadow: none;
-            overflow: hidden;
+            border: none; border-radius: 0;
+            box-shadow: none; overflow: hidden;
             margin: 0; padding: 0;
             page-break-after: always; break-after: page;
           }
 
-          .et-topo { padding: 3px 6px; background: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .et-corpo { padding: 4px 5px 3px 6px; }
-          .et-dir img { width: 56px !important; height: 56px !important; }
+          .et-topo {
+            padding: 3px 6px;
+            background: #000 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .et-corpo { padding: 4px 4px 3px 5px; }
+          .et-dir img { width: 44px !important; height: 44px !important; }
 
           .et-empresa { font-size: 9pt; letter-spacing: 2px; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .et-seq     { font-size: 7pt; color: #ccc !important; }
-          .et-lbl     { font-size: 5pt; color: #555 !important; }
-          .et-val     { font-size: 8pt; color: #000 !important; }
-          .et-cliente { font-size: 9pt; color: #000 !important; }
-          .et-pedido  { font-size: 10pt; color: #000 !important; }
-          .et-medidas { font-size: 10pt; color: #000 !important; }
-          .et-rodape-info { font-size: 6pt; color: #333 !important; }
-          .et-lote    { font-size: 5pt; color: #555 !important; }
-          .et-qrlbl   { font-size: 5pt; color: #555 !important; }
+          .et-seq     { font-size: 7pt; color: #ccc !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .et-lbl     { font-size: 5pt; color: #000 !important; font-weight: 900 !important; }
+          .et-val     { font-size: 8pt; color: #000 !important; font-weight: 900 !important; }
+          .et-cliente { font-size: 9pt; color: #000 !important; font-weight: 900 !important; }
+          .et-pedido  { font-size: 10pt; color: #000 !important; font-weight: 900 !important; }
+          .et-medidas { font-size: 10pt; color: #000 !important; font-weight: 900 !important; }
+          .et-rodape-info { font-size: 6pt; color: #000 !important; font-weight: 700 !important; }
+          .et-lote    { font-size: 5pt; color: #000 !important; }
+          .et-qrlbl   { font-size: 5pt; color: #000 !important; }
         }
       `}</style>
 
