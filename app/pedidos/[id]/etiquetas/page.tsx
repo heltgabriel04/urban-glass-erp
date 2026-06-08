@@ -290,23 +290,32 @@ export default function EtiquetasPage() {
 
 @media print {
   .toolbar, .info-bar { display: none !important; }
-  html, body { background: white; margin: 0; padding: 0; }
-  .grid-wrapper { padding: 0; background: white; gap: 0; align-items: flex-start; }
+
+  html, body {
+    background: white;
+    margin: 0; padding: 0;
+    width: 70mm; height: 40mm;
+  }
+
+  .grid-wrapper {
+    display: block;
+    padding: 0; margin: 0;
+    width: 70mm;
+    background: white;
+  }
 
   .etiqueta {
+    display: flex; flex-direction: column;
     width: 70mm; height: 40mm;
+    box-sizing: border-box;
     border: 0.3pt solid #999; border-radius: 1.5mm;
-    box-shadow: none;
+    box-shadow: none; overflow: hidden;
+    margin: 0;
     page-break-after: always; break-after: page;
-    position: relative;
-    left: 0; top: 0;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: hidden;
   }
 
   .et-topo { padding: 2px 5px; }
-  .et-corpo { padding: 3px 4px 3px 4px; }
+  .et-corpo { padding: 3px 5px; }
 
   .et-empresa { font-size: 7pt; letter-spacing: 1.5px; }
   .et-seq     { font-size: 5.5pt; }
@@ -319,10 +328,7 @@ export default function EtiquetasPage() {
   .et-lote    { font-size: 4pt; }
   .et-qrlbl   { font-size: 4pt; }
 
-  @page {
-    size: 70mm 40mm;
-    margin: 0mm;
-  }
+  @page { size: 70mm 40mm; margin: 0; }
 }
       `}</style>
 
