@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getPedidoById } from "@/services/pedidos.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
+import { isChapaInteira } from "@/lib/chapas";
 import type { Pedido } from "@/types";
 import type { HistoricoOtimizador } from "@/services/otimizador.service";
 
@@ -98,6 +99,7 @@ export default function EtiquetasPage() {
   const [loading, setLoading]         = useState(true);
   const [filtroChapa, setFiltroChapa] = useState<number | "todas">("todas");
   const [totalChapas, setTotalChapas] = useState(0);
+  const [modoChapa, setModoChapa]     = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -137,13 +139,49 @@ export default function EtiquetasPage() {
               totalPecasNaChapa: chapa.placed.length,
               totalPecasGeral:   totalGeral,
               loteCorte:         lote,
-              // QR aponta para a view de produção (sem sidebar, sem financeiro)
               qrUrl: `https://urbanglasserp.vercel.app/pedidos/${pidDaPeca}/producao`,
             });
           });
         });
 
         setEtiquetas(ets);
+      } else {
+        const itens = ped?.itens_pedido ?? [];
+        if (itens.length > 0 && itens.every(i => isChapaInteira(i.largura, i.altura))) {
+          setModoChapa(true);
+          const hoje = new Date();
+          const dd  = String(hoje.getDate()).padStart(2, "0");
+          const mm  = String(hoje.getMonth() + 1).padStart(2, "0");
+          const aa  = String(hoje.getFullYear()).slice(-2);
+          const lote = `${dd}${mm}${aa}-${id}`;
+
+          const totalGeral = itens.reduce((s, i) => s + i.quantidade, 0);
+          setTotalChapas(totalGeral);
+
+          const ets: Etiqueta[] = [];
+          let chapaIdx = 1;
+          itens.forEach((item) => {
+            for (let q = 0; q < item.quantidade; q++) {
+              ets.push({
+                pedidoId:          id,
+                clienteNome:       ped?.clientes?.nome ?? "—",
+                material:          item.produto_nome,
+                largura:           item.largura,
+                altura:            item.altura,
+                chapaNum:          chapaIdx,
+                totalChapas:       totalGeral,
+                pecaNum:           1,
+                totalPecasNaChapa: 1,
+                totalPecasGeral:   totalGeral,
+                loteCorte:         lote,
+                qrUrl: `https://urbanglasserp.vercel.app/pedidos/${id}/producao`,
+              });
+              chapaIdx++;
+            }
+          });
+
+          setEtiquetas(ets);
+        }
       }
       setLoading(false);
     }
@@ -162,7 +200,7 @@ export default function EtiquetasPage() {
       </div>
     );
 
-  if (!pedido || !otim)
+  if (!pedido || (!otim && !modoChapa))
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", gap: "12px", fontFamily: "Arial" }}>
         <div style={{ color: "#c00", fontWeight: 700 }}>Nenhuma otimização encontrada para este pedido.</div>
@@ -313,8 +351,14 @@ export default function EtiquetasPage() {
       <div className="info-bar">
         <div>Pedido: <span>{id}</span></div>
         <div>Cliente: <span>{pedido.clientes?.nome ?? "—"}</span></div>
-        <div>Otimização: <span>{new Date(otim.dt_otim).toLocaleDateString("pt-BR")}</span></div>
-        <div>Aproveitamento: <span>{otim.aproveitamento}%</span></div>
+        {otim ? (
+          <>
+            <div>Otimização: <span>{new Date(otim.dt_otim).toLocaleDateString("pt-BR")}</span></div>
+            <div>Aproveitamento: <span>{otim.aproveitamento}%</span></div>
+          </>
+        ) : (
+          <div>Tipo: <span>Chapas inteiras</span></div>
+        )}
         <div>Total de etiquetas: <span>{etiquetas.length}</span></div>
       </div>
 

@@ -391,7 +391,7 @@ async function handleMarcarPago(lancId: number) {
           {temItens && !todosVidroCliente && !todosChapa && (
             <a href={"/otimizador?pedido=" + pedido.id} className="btn bg sm">◈ Otimizar Corte</a>
           )}
-          {temOtimizacao && (
+          {(temOtimizacao || todosChapa) && (
             <a href={"/pedidos/" + pedido.id + "/etiquetas"} className="btn bg sm" style={{ textDecoration:"none" }}>🏷 Etiquetas</a>
           )}
           <button
