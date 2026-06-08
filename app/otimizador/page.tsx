@@ -9,12 +9,12 @@ import { supabase } from "@/lib/supabase/client";
 import { salvarOtimizacao } from "@/services/otimizador.service";
 import { updatePedido } from "@/services/pedidos.service";
 import { baixarChapasEstoque, salvarRetalhos } from "@/services/estoque.service";
-import type { Produto } from "@/types";
+import type { Produto, Retalho } from "@/types";
 
 interface Peca { l: number; a: number; qtd: number; prod: string; pedidoId?: string; }
 interface PecaPlacada { x: number; y: number; l: number; a: number; idx: number; prod: string; rot: boolean; pedidoId?: string; }
 interface EspacoLivre { x: number; y: number; l: number; a: number; }
-interface ResultadoChapa { placed: PecaPlacada[]; free: EspacoLivre[]; W: number; H: number; prod: string; }
+interface ResultadoChapa { placed: PecaPlacada[]; free: EspacoLivre[]; W: number; H: number; prod: string; retalhoId?: string; }
 interface RetalhoGerado extends EspacoLivre { chapaIdx: number; prod: string; m2: number; }
 interface PedidoSugerido {
   id: string;
@@ -213,6 +213,9 @@ function OtimizadorContent() {
   const [zerando, setZerando]             = useState(false);
   const [modoTeste, setModoTeste]         = useState(false);
   const [simulando, setSimulando]         = useState(false);
+  const [usarRetalhosEstoque, setUsarRetalhosEstoque] = useState(false);
+  const [retalhosDisponiveis, setRetalhosDisponiveis] = useState<Retalho[]>([]);
+  const [retalhosUsados, setRetalhosUsados] = useState<string[]>([]);
 
   const [pedidosSugeridos, setPedidosSugeridos]       = useState<PedidoSugerido[]>([]);
   const [pedidosSelecionados, setPedidosSelecionados] = useState<Set<string>>(new Set());
@@ -260,8 +263,24 @@ function OtimizadorContent() {
   }, [pedidoParam]);
 
   useEffect(() => {
-    if (resultado && resultado[chapaIdx]) drawOpt(resultado[chapaIdx], chapaIdx, bord);
+    if (resultado && resultado[chapaIdx]) {
+      const bordParaDesenho = resultado[chapaIdx].retalhoId ? 0 : bord;
+      drawOpt(resultado[chapaIdx], chapaIdx, bordParaDesenho);
+    }
   }, [resultado, chapaIdx]);
+
+  useEffect(() => {
+    if (!usarRetalhosEstoque) { setRetalhosDisponiveis([]); return; }
+    const produtosNomes = [...new Set(pecas.map(p => p.prod).filter(Boolean))];
+    if (produtosNomes.length === 0) return;
+    supabase
+      .from("retalhos")
+      .select("*")
+      .eq("status", "Disponível")
+      .in("produto_nome", produtosNomes)
+      .order("m2", { ascending: false })
+      .then(({ data }) => setRetalhosDisponiveis((data as Retalho[]) || []));
+  }, [usarRetalhosEstoque, pecas]);
 
   // Monta flat de peças sem estado
   function montarFlat(pecasList: Peca[], pedidoId: string | null) {
@@ -440,6 +459,7 @@ function OtimizadorContent() {
     const results: ResultadoChapa[] = [];
     let totalPlaced = 0;
     const totalPecas = flat.length;
+    const retalhosUsadosIds: string[] = [];
 
     grupos.forEach((grupo, prodNome) => {
       const ci2 = PRODUTO_CHAPA[prodNome];
@@ -450,6 +470,21 @@ function OtimizadorContent() {
       const H = CH - bord * 2;
       grupo.sort((a, b) => b.l * b.a - a.l * a.a);
       let rem = [...grupo];
+
+      // Tenta usar retalhos do estoque antes de abrir chapas novas
+      if (usarRetalhosEstoque) {
+        const retDoProd = retalhosDisponiveis.filter(r => r.produto_nome === prodNome);
+        for (const ret of retDoProd) {
+          if (rem.length === 0) break;
+          const { placed, usados, free } = empacotar(ret.largura, ret.altura, rem, kerf);
+          if (placed.length === 0) continue;
+          results.push({ W: ret.largura, H: ret.altura, prod: prodNome, placed, free, retalhoId: ret.id });
+          totalPlaced += placed.length;
+          rem = rem.filter((_, i) => !usados.has(i));
+          retalhosUsadosIds.push(ret.id);
+        }
+      }
+
       let ci = 0;
       while (rem.length > 0 && ci < 100) {
         const { placed, usados, free } = empacotar(W, H, rem, kerf);
@@ -460,6 +495,8 @@ function OtimizadorContent() {
         ci++;
       }
     });
+
+    setRetalhosUsados(retalhosUsadosIds);
 
     setResultado(results);
     setChapaIdx(0);
@@ -684,7 +721,7 @@ function OtimizadorContent() {
       await supabase.from("otimizacoes").delete().eq("pedido_id", pid);
       await updatePedido(pid, { status: "Aguardando otimização" });
     }
-    setResultado(null); setMsg(""); setRetalhosGerados([]); setPedidosSelecionados(new Set());
+    setResultado(null); setMsg(""); setRetalhosGerados([]); setPedidosSelecionados(new Set()); setRetalhosUsados([]);
     setZerando(false);
     alert("Plano zerado.");
   }
@@ -720,8 +757,14 @@ function OtimizadorContent() {
       })));
       if (!ok) { setSalvando(false); alert("Erro ao salvar retalhos. Tente novamente."); return; }
     }
+    if (retalhosUsados.length > 0) {
+      for (const rid of retalhosUsados) {
+        await supabase.from("retalhos").update({ status: "Em uso" } as never).eq("id", rid);
+      }
+    }
     const consumoPorProd = new Map<string, { chapas: number; m2: number }>();
     resultado.forEach(r => {
+      if (r.retalhoId) return; // retalho do estoque: não baixa chapa nova
       const prev = consumoPorProd.get(r.prod) ?? { chapas: 0, m2: 0 };
       consumoPorProd.set(r.prod, { chapas: prev.chapas + 1, m2: parseFloat((prev.m2 + (r.W * r.H) / 1e6).toFixed(4)) });
     });
@@ -853,6 +896,31 @@ function OtimizadorContent() {
                 </div>
                 <button onClick={() => setModoTeste(v => !v)} style={{ padding: "6px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: 700, cursor: "pointer", border: `1px solid ${modoTeste ? "var(--warn)" : "var(--b2)"}`, background: modoTeste ? "rgba(245,158,11,.2)" : "transparent", color: modoTeste ? "var(--warn)" : "var(--t3)", transition: "all 0.15s" }}>
                   {modoTeste ? "Desativar" : "Ativar"}
+                </button>
+              </div>
+            )}
+
+            {/* Usar Retalhos do Estoque */}
+            {pedidoRef && (
+              <div style={{ padding: "10px 14px", background: usarRetalhosEstoque ? "rgba(245,158,11,.1)" : "var(--surf1)", border: `1px solid ${usarRetalhosEstoque ? "rgba(245,158,11,.5)" : "var(--b1)"}`, borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+                <div>
+                  <div style={{ fontSize: "12px", fontWeight: 700, color: usarRetalhosEstoque ? "#f59e0b" : "var(--t2)", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span>↺ Usar retalhos do estoque</span>
+                    {usarRetalhosEstoque && retalhosDisponiveis.length > 0 && (
+                      <span style={{ fontSize: "10px", padding: "1px 7px", borderRadius: "99px", background: "rgba(245,158,11,.2)", color: "#f59e0b", border: "1px solid rgba(245,158,11,.4)", fontFamily: "'DM Mono',monospace" }}>
+                        {retalhosDisponiveis.length} disponível(is)
+                      </span>
+                    )}
+                    {usarRetalhosEstoque && retalhosDisponiveis.length === 0 && (
+                      <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>nenhum para este produto</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "2px" }}>
+                    {usarRetalhosEstoque ? "Peças serão alocadas nos retalhos antes de abrir chapas novas" : "Aproveitar retalhos disponíveis antes de usar chapas inteiras"}
+                  </div>
+                </div>
+                <button onClick={() => setUsarRetalhosEstoque(v => !v)} style={{ padding: "6px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: 700, cursor: "pointer", border: `1px solid ${usarRetalhosEstoque ? "rgba(245,158,11,.5)" : "var(--b2)"}`, background: usarRetalhosEstoque ? "rgba(245,158,11,.2)" : "transparent", color: usarRetalhosEstoque ? "#f59e0b" : "var(--t3)", transition: "all 0.15s", whiteSpace: "nowrap" }}>
+                  {usarRetalhosEstoque ? "Desativar" : "Ativar"}
                 </button>
               </div>
             )}
@@ -990,8 +1058,10 @@ function OtimizadorContent() {
                 <div style={{ display: "flex", gap: "5px", flexWrap: "wrap", marginBottom: "9px" }}>
                   {resultado.map((r, i) => (
                     <button key={i} className="btn bg sm" onClick={() => setChapaIdx(i)}
-                      style={chapaIdx === i ? { borderColor: "var(--acc2)", color: "var(--acc2)", background: "rgba(0,200,255,.08)" } : {}}>
-                      Chapa {i + 1}{r.prod && <span style={{ fontSize: "9px", opacity: 0.6, marginLeft: "4px" }}>· {r.prod.split(" ").slice(0, 2).join(" ")}</span>}
+                      style={chapaIdx === i
+                        ? { borderColor: r.retalhoId ? "#f59e0b" : "var(--acc2)", color: r.retalhoId ? "#f59e0b" : "var(--acc2)", background: r.retalhoId ? "rgba(245,158,11,.1)" : "rgba(0,200,255,.08)" }
+                        : r.retalhoId ? { borderColor: "rgba(245,158,11,.3)", color: "#f59e0b" } : {}}>
+                      {r.retalhoId ? "↺ " : ""}Chapa {i + 1}{r.prod && <span style={{ fontSize: "9px", opacity: 0.6, marginLeft: "4px" }}>· {r.prod.split(" ").slice(0, 2).join(" ")}</span>}
                     </button>
                   ))}
                 </div>
