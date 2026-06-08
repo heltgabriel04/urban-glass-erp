@@ -7,15 +7,17 @@ import {
   deletarLancamento, updateLancamento, getLancamentos, createLancamento,
 } from "@/services/financeiro.service";
 import { getPedidos, registrarRecebimento } from "@/services/pedidos.service";
-import { formatBRL, formatPercent, formatDate, diffDias } from "@/lib/formatters";
+import { formatBRL, formatDate, diffDias } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import DateInput from "@/components/ui/DateInput";
 import type { FinanceiroCliente, Pedido, Lancamento } from "@/types";
 
-type Aba      = "fluxo" | "receber" | "pagar";
-type Periodo  = "7d" | "30d" | "90d" | "mes";
-type ViewMode = "resumo" | "diadia";
+type Aba     = "fluxo" | "receber" | "pagar";
+type Periodo = "7d" | "30d" | "mes";
+type AddingIn = "fluxo-entrada" | "fluxo-saida" | "pagar" | null;
+
+const CATEGORIAS = ["Fornecedor","Aluguel","Energia","Água","Internet","Salário","Imposto","Manutenção","Transporte","Material","Outros"];
 
 function hoje() { return new Date().toISOString().split("T")[0]; }
 function addDias(date: string, dias: number): string {
@@ -32,20 +34,15 @@ function fimMes(): string {
   const fim = new Date(d.getFullYear(), d.getMonth() + 1, 0);
   return fim.toISOString().split("T")[0];
 }
-function nomeMes(dateStr: string): string {
-  return new Date(dateStr + "T12:00:00").toLocaleDateString("pt-BR", { month: "short", day: "numeric" });
-}
 
-const CATEGORIAS = ["Fornecedor","Aluguel","Energia","Água","Internet","Salário","Imposto","Manutenção","Transporte","Material","Outros"];
-
-function BarH({ value, max, color }: { value: number; max: number; color: string }) {
-  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
-  return (
-    <div style={{ height:"5px", borderRadius:"3px", background:"var(--surf3)", overflow:"hidden", marginTop:"4px" }}>
-      <div style={{ height:"100%", borderRadius:"3px", width:`${pct}%`, background:color, transition:"width .4s" }} />
-    </div>
-  );
-}
+const EMPTY_EDIT = {
+  descricao: "", valor: 0, vencimento: "", categoria: "",
+  fornecedor: "", obs: "", status: "", dt_pagamento: "",
+};
+const EMPTY_NEW = {
+  descricao: "", valor: 0, vencimento: hoje(),
+  categoria: "", fornecedor: "", obs: "",
+};
 
 export default function FinanceiroPage() {
   const { toast } = useToast();
@@ -57,43 +54,23 @@ export default function FinanceiroPage() {
   const [loading, setLoading]         = useState(true);
   const [periodo, setPeriodo]         = useState<Periodo>("mes");
 
-  // Modo de visualização (aba fluxo)
-  const [viewMode, setViewMode]         = useState<ViewMode>("resumo");
-  const [diaExpandido, setDiaExpandido] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm]   = useState({ ...EMPTY_EDIT });
 
-  // Lançamento rápido
-  const [qa, setQa] = useState({
-    tipo: "Saída" as "Entrada" | "Saída",
-    descricao: "", valor: 0, vencimento: hoje(), categoria: "",
-  });
-  const [salvandoQa, setSalvandoQa] = useState(false);
+  const [addingIn, setAddingIn] = useState<AddingIn>(null);
+  const [newForm, setNewForm]   = useState({ ...EMPTY_NEW });
+  const [salvandoAdd, setSalvandoAdd] = useState(false);
 
-  // Edição inline (dia a dia)
-  const [editInlineId, setEditInlineId]     = useState<number | null>(null);
-  const [editInlineForm, setEditInlineForm] = useState({
-    descricao: "", valor: 0, vencimento: "", categoria: "", status: "",
-  });
-
-  // Modal receber
   const [modalReceber, setModalReceber]   = useState(false);
   const [clienteSel, setClienteSel]       = useState<FinanceiroCliente | null>(null);
   const [pedidoSel, setPedidoSel]         = useState<Pedido | null>(null);
   const [valorRec, setValorRec]           = useState(0);
   const [salvando, setSalvando]           = useState(false);
-  const [erro, setErro]                   = useState("");
+  const [erroRec, setErroRec]             = useState("");
 
-  // Modal conta a pagar
-  const [modalPagar, setModalPagar]       = useState(false);
-  const [editandoConta, setEditandoConta] = useState<Lancamento | null>(null);
-  const [formPagar, setFormPagar]         = useState({
-    descricao: "", fornecedor: "", categoria: "",
-    valor: 0, vencimento: "", dt_pagamento: "", status: "Pendente" as "Pendente" | "Pago", obs: "",
-  });
-
-  // Modal confirmar pagamento
-  const [modalConfirmarPgto, setModalConfirmarPgto] = useState(false);
+  const [modalPgto, setModalPgto]                   = useState(false);
   const [contaParaPagar, setContaParaPagar]           = useState<Lancamento | null>(null);
-  const [dtPagamentoConfirm, setDtPagamentoConfirm]   = useState(hoje());
+  const [dtPgto, setDtPgto]                           = useState(hoje());
 
   useEffect(() => { load(); }, []);
 
@@ -109,882 +86,728 @@ export default function FinanceiroPage() {
     setLoading(false);
   }
 
-  // ── Período ───────────────────────────────────────────────────────────────
-
   const { dataInicio, dataFim } = useMemo(() => {
     const hj = hoje();
     if (periodo === "7d")  return { dataInicio: hj, dataFim: addDias(hj, 7) };
     if (periodo === "30d") return { dataInicio: hj, dataFim: addDias(hj, 30) };
-    if (periodo === "90d") return { dataInicio: hj, dataFim: addDias(hj, 90) };
     return { dataInicio: inicioMes(), dataFim: fimMes() };
   }, [periodo]);
 
-  // ── Fluxo de caixa ────────────────────────────────────────────────────────
-
-  const fluxo = useMemo(() => {
-    const hj = hoje();
-    const entradasFuturas    = lancamentos.filter(l => l.tipo === "Entrada" && l.status === "A Receber" && l.vencimento && l.vencimento >= hj && l.vencimento <= dataFim);
-    const saidasFuturas      = contasPagar.filter(c => c.status !== "Pago" && c.vencimento && c.vencimento >= hj && c.vencimento <= dataFim);
-    const entradasRealizadas = lancamentos.filter(l => l.tipo === "Entrada" && l.status === "Pago" && l.vencimento && l.vencimento >= dataInicio && l.vencimento <= dataFim);
-    const saidasRealizadas   = contasPagar.filter(c => c.status === "Pago" && (c as any).dt_pagamento && (c as any).dt_pagamento >= dataInicio && (c as any).dt_pagamento <= dataFim);
-    const atrasadas          = lancamentos.filter(l => l.tipo === "Entrada" && l.status === "A Receber" && l.vencimento && l.vencimento < hj);
-    const contasAtrasadas    = contasPagar.filter(c => c.status !== "Pago" && c.vencimento && c.vencimento < hj);
-
-    const totalEntradFut   = entradasFuturas.reduce((a, l) => a + Number(l.valor), 0);
-    const totalSaidFut     = saidasFuturas.reduce((a, l) => a + Number(l.valor), 0);
-    const totalEntradReal  = entradasRealizadas.reduce((a, l) => a + Number(l.valor), 0);
-    const totalSaidReal    = saidasRealizadas.reduce((a, l) => a + Number(l.valor), 0);
-    const totalAtrasado    = atrasadas.reduce((a, l) => a + Number(l.valor), 0);
-    const totalContasAtras = contasAtrasadas.reduce((a, l) => a + Number(l.valor), 0);
-    const saldoPrevisto    = totalEntradFut - totalSaidFut;
-    const saldoRealizado   = totalEntradReal - totalSaidReal;
-
-    const diasMap = new Map<string, { entradas: number; saidas: number }>();
-    const cursor  = new Date(dataInicio + "T12:00:00");
-    const fim     = new Date(dataFim + "T12:00:00");
-    while (cursor <= fim) {
-      diasMap.set(cursor.toISOString().split("T")[0], { entradas: 0, saidas: 0 });
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    entradasFuturas.forEach(l    => { if (l.vencimento && diasMap.has(l.vencimento)) diasMap.get(l.vencimento)!.entradas += Number(l.valor); });
-    entradasRealizadas.forEach(l => { if (l.vencimento && diasMap.has(l.vencimento)) diasMap.get(l.vencimento)!.entradas += Number(l.valor); });
-    saidasFuturas.forEach(c      => { if (c.vencimento && diasMap.has(c.vencimento)) diasMap.get(c.vencimento)!.saidas   += Number(c.valor); });
-    saidasRealizadas.forEach(c   => { const dt = (c as any).dt_pagamento; if (dt && diasMap.has(dt)) diasMap.get(dt)!.saidas += Number(c.valor); });
-
-    const dias = Array.from(diasMap.entries())
-      .map(([data, vals]) => ({ data, ...vals, saldo: vals.entradas - vals.saidas }))
-      .filter(d => d.entradas > 0 || d.saidas > 0);
-    let acum = 0;
-    const diasAcum = dias.map(d => { acum += d.saldo; return { ...d, acumulado: acum }; });
-
-    return { entradasFuturas, saidasFuturas, entradasRealizadas, saidasRealizadas, atrasadas, contasAtrasadas, totalEntradFut, totalSaidFut, totalEntradReal, totalSaidReal, totalAtrasado, totalContasAtras, saldoPrevisto, saldoRealizado, dias: diasAcum };
+  const todosMovimentos = useMemo(() => {
+    const seen = new Set<number>();
+    const all: Lancamento[] = [];
+    for (const l of lancamentos) { seen.add(l.id); all.push(l); }
+    for (const c of contasPagar)  { if (!seen.has(c.id)) all.push(c); }
+    return all
+      .filter(m => m.vencimento && m.vencimento >= dataInicio && m.vencimento <= dataFim)
+      .sort((a, b) => (a.vencimento ?? "") > (b.vencimento ?? "") ? 1 : -1);
   }, [lancamentos, contasPagar, dataInicio, dataFim]);
 
-  const maxDia = useMemo(() => {
-    const maxE = Math.max(...fluxo.dias.map(d => d.entradas), 1);
-    const maxS = Math.max(...fluxo.dias.map(d => d.saidas), 1);
-    return Math.max(maxE, maxS);
-  }, [fluxo.dias]);
+  const sidebar = useMemo(() => {
+    const hj = hoje();
+    const entradas  = todosMovimentos.filter(m => m.tipo === "Entrada");
+    const saidas    = todosMovimentos.filter(m => m.tipo === "Saída");
+    const atrasRec  = lancamentos.filter(l => l.tipo === "Entrada" && l.status !== "Pago" && l.vencimento && l.vencimento < hj);
+    const atrasSpay = contasPagar.filter(c => c.status !== "Pago" && c.vencimento && c.vencimento < hj);
+    const pendEnt   = entradas.filter(m => m.status !== "Pago").reduce((a, m) => a + Number(m.valor), 0);
+    const pendSaid  = saidas.filter(m => m.status !== "Pago").reduce((a, m) => a + Number(m.valor), 0);
+    return {
+      totalEntradas:  entradas.reduce((a, m) => a + Number(m.valor), 0),
+      totalSaidas:    saidas.reduce((a, m)   => a + Number(m.valor), 0),
+      saldoPrevisto:  pendEnt - pendSaid,
+      atrasRec,
+      atrasSpay,
+      totalAtrasRec:  atrasRec.reduce((a, l)  => a + Number(l.valor), 0),
+      totalAtrasSpay: atrasSpay.reduce((a, c) => a + Number(c.valor), 0),
+    };
+  }, [todosMovimentos, lancamentos, contasPagar]);
 
-  // ── Dia a dia ─────────────────────────────────────────────────────────────
+  const recebiveisIndividuais = useMemo(() =>
+    lancamentos
+      .filter(l => l.tipo === "Entrada")
+      .sort((a, b) => {
+        if (a.status !== "Pago" && b.status === "Pago") return -1;
+        if (a.status === "Pago" && b.status !== "Pago") return 1;
+        return (a.vencimento ?? "") > (b.vencimento ?? "") ? 1 : -1;
+      }),
+    [lancamentos]
+  );
 
-  const diasComMovimentos = useMemo(() => {
-    const porDia = new Map<string, Lancamento[]>();
-    for (const l of lancamentos) {
-      const dt = l.vencimento;
-      if (!dt || dt < dataInicio || dt > dataFim) continue;
-      if (!porDia.has(dt)) porDia.set(dt, []);
-      porDia.get(dt)!.push(l);
-    }
-    return Array.from(porDia.entries())
-      .sort(([a], [b]) => a > b ? 1 : -1)
-      .map(([data, items]) => ({
-        data,
-        items,
-        entradas: items.filter(l => l.tipo === "Entrada").reduce((a, l) => a + Number(l.valor), 0),
-        saidas:   items.filter(l => l.tipo === "Saída").reduce((a, l) => a + Number(l.valor), 0),
-      }));
-  }, [lancamentos, dataInicio, dataFim]);
+  const pgarOrdenado = useMemo(() =>
+    [...contasPagar].sort((a, b) => {
+      if (a.status !== "Pago" && b.status === "Pago") return -1;
+      if (a.status === "Pago" && b.status !== "Pago") return 1;
+      return (a.vencimento ?? "") > (b.vencimento ?? "") ? 1 : -1;
+    }),
+    [contasPagar]
+  );
 
-  // ── Lançamento rápido ─────────────────────────────────────────────────────
+  const tot      = financeiro.reduce((a, f) => ({ fat: a.fat + Number(f.faturado), rec: a.rec + Number(f.recebido) }), { fat: 0, rec: 0 });
+  const aReceber = tot.fat - tot.rec;
+  const totalPagar = contasPagar.filter(c => c.status !== "Pago").reduce((a, c) => a + Number(c.valor), 0);
+  const vencidas   = contasPagar.filter(c => c.status !== "Pago" && c.vencimento && c.vencimento < hoje());
 
-  async function handleQuickAdd() {
-    if (salvandoQa) return;
-    if (!qa.descricao.trim() || qa.valor <= 0 || !qa.vencimento) {
-      toast("Preencha descrição, valor e data", "warn"); return;
-    }
-    setSalvandoQa(true);
-    await createLancamento({
-      tipo: qa.tipo,
-      descricao: qa.descricao,
-      valor: qa.valor,
-      status: qa.tipo === "Entrada" ? "A Receber" : "Pendente",
-      vencimento: qa.vencimento,
-      pedido_id: null,
-      cliente_id: null,
-      ...(qa.categoria ? { categoria: qa.categoria } : {}),
-    } as any);
-    toast(`✓ ${qa.tipo} lançada`);
-    setSalvandoQa(false);
-    setQa(q => ({ ...q, descricao: "", valor: 0 }));
-    load();
-  }
+  const hj = hoje();
 
-  // ── Edição inline ─────────────────────────────────────────────────────────
-
-  function abrirEditInline(l: Lancamento) {
-    setEditInlineId(l.id);
-    setEditInlineForm({
-      descricao: l.descricao,
-      valor: l.valor,
-      vencimento: l.vencimento ?? "",
-      categoria: (l as any).categoria ?? "",
-      status: l.status,
+  function startEdit(row: Lancamento) {
+    if (editingId === row.id) { setEditingId(null); return; }
+    setAddingIn(null);
+    setEditingId(row.id);
+    setEditForm({
+      descricao:    row.descricao,
+      valor:        row.valor,
+      vencimento:   row.vencimento ?? "",
+      categoria:    (row as any).categoria ?? "",
+      fornecedor:   (row as any).fornecedor ?? "",
+      obs:          (row as any).obs ?? "",
+      status:       row.status,
+      dt_pagamento: (row as any).dt_pagamento ?? "",
     });
   }
 
-  async function salvarEditInline() {
-    if (!editInlineId) return;
-    await updateLancamento(editInlineId, {
-      descricao: editInlineForm.descricao,
-      valor: editInlineForm.valor,
-      vencimento: editInlineForm.vencimento || null,
-      status: editInlineForm.status as any,
-      ...(editInlineForm.categoria ? { categoria: editInlineForm.categoria } : {}),
+  function cancelEdit() { setEditingId(null); }
+
+  async function saveEdit() {
+    if (!editingId) return;
+    await updateLancamento(editingId, {
+      descricao:    editForm.descricao,
+      valor:        editForm.valor,
+      vencimento:   editForm.vencimento || null,
+      status:       editForm.status as any,
+      categoria:    editForm.categoria  || null,
+      fornecedor:   editForm.fornecedor || null,
+      obs:          editForm.obs        || null,
+      dt_pagamento: editForm.dt_pagamento || null,
     } as any);
-    toast("✓ Lançamento atualizado");
-    setEditInlineId(null);
+    toast("✓ Salvo");
+    setEditingId(null);
     load();
   }
 
-  // ── Receber ───────────────────────────────────────────────────────────────
+  function startAdd(where: AddingIn) {
+    setAddingIn(where);
+    setEditingId(null);
+    setNewForm({ ...EMPTY_NEW, vencimento: hoje() });
+  }
 
-  function abrirReceber(f: FinanceiroCliente) {
-    setClienteSel(f); setPedidoSel(null); setValorRec(0); setErro(""); setModalReceber(true);
+  function cancelAdd() { setAddingIn(null); }
+
+  async function saveAdd() {
+    if (!newForm.descricao.trim() || newForm.valor <= 0 || !newForm.vencimento) {
+      toast("Preencha descrição, valor e data", "warn"); return;
+    }
+    setSalvandoAdd(true);
+    if (addingIn === "fluxo-entrada") {
+      await createLancamento({
+        tipo: "Entrada", descricao: newForm.descricao, valor: newForm.valor,
+        status: "A Receber", vencimento: newForm.vencimento,
+        pedido_id: null, cliente_id: null,
+        ...(newForm.categoria ? { categoria: newForm.categoria } : {}),
+      } as any);
+    } else {
+      await criarContaPagar({
+        descricao:  newForm.descricao,
+        fornecedor: newForm.fornecedor,
+        categoria:  newForm.categoria,
+        valor:      newForm.valor,
+        vencimento: newForm.vencimento,
+        obs:        newForm.obs,
+        status:     "Pendente",
+      });
+    }
+    toast("✓ Lançamento criado");
+    setSalvandoAdd(false);
+    setAddingIn(null);
+    load();
   }
-  function selecionarPedido(pedidoId: string) {
-    const p = pedidos.find(p => p.id === pedidoId) ?? null;
-    setPedidoSel(p); setValorRec(0); setErro("");
+
+  async function handleDelete(row: Lancamento) {
+    if (!confirm(`Excluir "${row.descricao}"?`)) return;
+    await deletarLancamento(row.id);
+    toast("Removido");
+    if (editingId === row.id) setEditingId(null);
+    load();
   }
-  function preencherTotal() {
-    if (!pedidoSel) return;
-    setValorRec(Number(pedidoSel.valor_total) - Number(pedidoSel.valor_recebido));
-    setErro("");
+
+  function abrirReceber(f?: FinanceiroCliente, preselPedidoId?: string) {
+    setClienteSel(f ?? null);
+    setPedidoSel(preselPedidoId ? pedidos.find(p => p.id === preselPedidoId) ?? null : null);
+    setValorRec(0); setErroRec(""); setModalReceber(true);
   }
+
   async function salvarRecebimento() {
-    if (!pedidoSel) { setErro("Selecione um pedido."); return; }
-    if (!valorRec || valorRec <= 0) { setErro("Informe um valor válido."); return; }
+    if (!pedidoSel) { setErroRec("Selecione um pedido."); return; }
+    if (!valorRec || valorRec <= 0) { setErroRec("Informe um valor válido."); return; }
     setSalvando(true);
     const result = await registrarRecebimento(pedidoSel.id, valorRec);
     setSalvando(false);
     if (!result) { toast("Erro ao registrar recebimento", "err"); return; }
     const { excedente } = result as any;
     if (excedente > 0.005) {
-      toast(`✓ Pedido ${pedidoSel.id} quitado! ${formatBRL(excedente)} viraram crédito do cliente.`);
+      toast(`✓ Pedido ${pedidoSel.id} quitado! ${formatBRL(excedente)} viraram crédito.`);
     } else {
-      toast(`✓ Recebimento de ${formatBRL(valorRec)} registrado`);
+      toast(`✓ ${formatBRL(valorRec)} recebido`);
     }
     setModalReceber(false); load();
   }
 
-  // ── Contas a pagar ────────────────────────────────────────────────────────
+  function abrirPgto(c: Lancamento) {
+    setContaParaPagar(c); setDtPgto(hj); setModalPgto(true);
+  }
 
-  function abrirNovaConta() {
-    setEditandoConta(null);
-    setFormPagar({ descricao:"", fornecedor:"", categoria:"", valor:0, vencimento:"", dt_pagamento:"", status:"Pendente", obs:"" });
-    setModalPagar(true);
-  }
-  function abrirEditarConta(c: Lancamento) {
-    setEditandoConta(c);
-    setFormPagar({
-      descricao:    c.descricao,
-      fornecedor:   (c as any).fornecedor ?? "",
-      categoria:    (c as any).categoria ?? "",
-      valor:        c.valor,
-      vencimento:   c.vencimento ?? "",
-      dt_pagamento: (c as any).dt_pagamento ?? "",
-      status:       c.status === "Pago" ? "Pago" : "Pendente",
-      obs:          (c as any).obs ?? "",
-    });
-    setModalPagar(true);
-  }
-  async function salvarConta() {
-    if (!formPagar.descricao.trim() || formPagar.valor <= 0 || !formPagar.vencimento) {
-      toast("Preencha descrição, valor e vencimento", "warn"); return;
-    }
-    setSalvando(true);
-    if (editandoConta) {
-      await updateLancamento(editandoConta.id, {
-        descricao: formPagar.descricao, valor: formPagar.valor,
-        vencimento: formPagar.vencimento, status: formPagar.status,
-        fornecedor: formPagar.fornecedor, categoria: formPagar.categoria,
-        dt_pagamento: formPagar.dt_pagamento || null, obs: formPagar.obs,
-      } as any);
-      toast("Conta atualizada");
-    } else {
-      await criarContaPagar({
-        descricao: formPagar.descricao, fornecedor: formPagar.fornecedor,
-        categoria: formPagar.categoria, valor: formPagar.valor,
-        vencimento: formPagar.vencimento,
-        dt_pagamento: formPagar.dt_pagamento || undefined,
-        status: formPagar.status, obs: formPagar.obs,
-      });
-      toast("Conta criada");
-    }
-    setSalvando(false); setModalPagar(false); load();
-  }
   async function confirmarPagamento() {
     if (!contaParaPagar) return;
     setSalvando(true);
-    await pagarConta(contaParaPagar.id, dtPagamentoConfirm);
-    toast(`✓ "${contaParaPagar.descricao}" marcada como paga`);
-    setSalvando(false); setModalConfirmarPgto(false); setContaParaPagar(null); load();
-  }
-  async function handleDeletarConta(c: Lancamento) {
-    if (!confirm(`Excluir "${c.descricao}"?`)) return;
-    await deletarLancamento(c.id);
-    toast("Lançamento removido"); load();
+    await pagarConta(contaParaPagar.id, dtPgto);
+    toast(`✓ "${contaParaPagar.descricao}" paga`);
+    setSalvando(false); setModalPgto(false); setContaParaPagar(null); load();
   }
 
-  // ── Cálculos gerais ───────────────────────────────────────────────────────
-
-  const tot          = financeiro.reduce((a, f) => ({ fat: a.fat + Number(f.faturado), rec: a.rec + Number(f.recebido) }), { fat: 0, rec: 0 });
-  const aReceber     = tot.fat - tot.rec;
-  const totalPagar   = contasPagar.filter(c => c.status !== "Pago").reduce((a, c) => a + Number(c.valor), 0);
-  const vencidas     = contasPagar.filter(c => c.status !== "Pago" && c.vencimento && c.vencimento < hoje());
-
-  const pedidosCliente = clienteSel
-    ? pedidos.filter(p => p.cliente_id === clienteSel.cliente_id && Number(p.valor_total) - Number(p.valor_recebido) > 0)
-    : [];
-  const saldoPedido = pedidoSel ? Number(pedidoSel.valor_total) - Number(pedidoSel.valor_recebido) : 0;
-
-  const corStatus = (c: Lancamento) => {
-    if (c.status === "Pago") return "var(--ok)";
-    if (c.vencimento && c.vencimento < hoje()) return "var(--err)";
-    const diff = diffDias(c.vencimento);
-    if (diff !== null && diff < 7) return "var(--warn)";
-    return "var(--t2)";
-  };
-
-  const chipStatus = (c: Lancamento) => {
-    if (c.status === "Pago") return <span className="chip cg">✓ Pago</span>;
-    if (c.vencimento && c.vencimento < hoje()) return <span className="chip cr">Vencido</span>;
-    if (c.status === "A Receber") return <span className="chip cy">A Receber</span>;
+  function chipStatus(row: Lancamento) {
+    if (row.status === "Pago") return <span className="chip cg">Pago</span>;
+    if (row.vencimento && row.vencimento < hj) return <span className="chip cr">Vencido</span>;
+    if (row.status === "A Receber") return <span className="chip cy">A Receber</span>;
     return <span className="chip cy">Pendente</span>;
-  };
+  }
 
-  const periodoLabel: Record<Periodo, string> = {
-    "7d":"7 dias", "30d":"30 dias", "90d":"90 dias", "mes":"Este mês",
-  };
+  const periodoLabel: Record<Periodo, string> = { "7d":"7 dias", "30d":"30 dias", "mes":"Este mês" };
 
-  const hj = hoje();
+  const cellInput: React.CSSProperties = {
+    width: "100%", minWidth: 0, fontSize: "12px", padding: "4px 6px",
+    background: "var(--surf1)", border: "1px solid var(--acc)", borderRadius: "4px",
+    color: "var(--t1)", fontFamily: "inherit", boxSizing: "border-box",
+  };
+  const cellSelect: React.CSSProperties = { ...cellInput, cursor: "pointer" };
+
+  const editActions = (
+    <div style={{ display: "flex", gap: "3px" }}>
+      <button className="btn bp xs" onClick={saveEdit}>✓</button>
+      <button className="btn bg xs" onClick={cancelEdit}>✕</button>
+    </div>
+  );
+
+  const pendentesReceber = recebiveisIndividuais.filter(l => l.status !== "Pago");
+  const totalReceber     = pendentesReceber.reduce((a, l) => a + Number(l.valor), 0);
 
   return (
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Financeiro</div>
-        {aba === "pagar" && (
-          <button className="btn bp sm" onClick={abrirNovaConta}>+ Nova Conta</button>
-        )}
+        <div style={{ display: "flex", gap: "6px" }}>
+          {aba === "fluxo" && <>
+            <button
+              style={{ border: "1px solid var(--ok)", color: "var(--ok)", background: "transparent", fontSize: "12px", padding: "6px 12px", borderRadius: "6px", cursor: "pointer", fontWeight: 600 }}
+              onClick={() => startAdd("fluxo-entrada")}
+            >↑ + Entrada</button>
+            <button
+              style={{ border: "1px solid var(--err)", color: "var(--err)", background: "transparent", fontSize: "12px", padding: "6px 12px", borderRadius: "6px", cursor: "pointer", fontWeight: 600 }}
+              onClick={() => startAdd("fluxo-saida")}
+            >↓ + Saída</button>
+          </>}
+          {aba === "receber" && (
+            <button className="btn bp sm" onClick={() => abrirReceber()}>✓ Registrar Recebimento</button>
+          )}
+          {aba === "pagar" && (
+            <button className="btn bp sm" onClick={() => startAdd("pagar")}>+ Nova Conta</button>
+          )}
+        </div>
       </div>
 
       <div className="con">
-        {/* Cards resumo topo */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:"12px", marginBottom:"20px" }}>
+
+        {/* ── Cards resumo ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px", marginBottom: "20px" }}>
           {[
-            { label:"Faturado",       value: formatBRL(tot.fat),             color:"var(--acc)",  sub:"Total pedidos" },
-            { label:"A Receber",      value: formatBRL(aReceber),            color:"var(--warn)", sub:"Em aberto" },
-            { label:"A Pagar",        value: formatBRL(totalPagar),          color:"var(--err)",  sub:`${vencidas.length} vencida(s)` },
-            { label:"Saldo Previsto", value: formatBRL(fluxo.saldoPrevisto), color: fluxo.saldoPrevisto >= 0 ? "var(--ok)" : "var(--err)", sub:`Próx. ${periodoLabel[periodo]}` },
-          ].map(card => (
-            <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
-              <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
-              <div style={{ fontSize:"22px", fontWeight:700, color:card.color, fontFamily:"'DM Mono', monospace", lineHeight:1.2 }}>{card.value}</div>
-              <div style={{ fontSize:"11px", color:"var(--t3)" }}>{card.sub}</div>
+            { label: "Faturado",       value: tot.fat,              color: "var(--acc)",  sub: "Total pedidos" },
+            { label: "A Receber",      value: aReceber,             color: "var(--warn)", sub: "Em aberto" },
+            { label: "A Pagar",        value: totalPagar,           color: "var(--err)",  sub: `${vencidas.length} vencida(s)` },
+            { label: "Saldo Previsto", value: sidebar.saldoPrevisto, color: sidebar.saldoPrevisto >= 0 ? "var(--ok)" : "var(--err)", sub: `Próx. ${periodoLabel[periodo]}` },
+          ].map(c => (
+            <div key={c.label} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: "4px" }}>
+              <div style={{ fontSize: "11px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{c.label}</div>
+              <div style={{ fontSize: "22px", fontWeight: 700, color: c.color, fontFamily: "'DM Mono',monospace", lineHeight: 1.2 }}>{formatBRL(c.value)}</div>
+              <div style={{ fontSize: "11px", color: "var(--t3)" }}>{c.sub}</div>
             </div>
           ))}
         </div>
 
-        {/* Abas */}
-        <div style={{ display:"flex", gap:"2px", marginBottom:"20px", borderBottom:"1px solid var(--b1)" }}>
-          {([
-            ["fluxo",   "📊 Fluxo de Caixa"],
-            ["receber", "Contas a Receber"],
-            ["pagar",   "Contas a Pagar"],
-          ] as const).map(([key, label]) => (
+        {/* ── Abas ── */}
+        <div style={{ display: "flex", gap: "2px", marginBottom: "20px", borderBottom: "1px solid var(--b1)" }}>
+          {([["fluxo","Fluxo de Caixa"],["receber","Contas a Receber"],["pagar","Contas a Pagar"]] as const).map(([key, label]) => (
             <button key={key} onClick={() => setAba(key)} style={{
-              padding:"10px 20px", fontSize:"13px", fontWeight:600, cursor:"pointer",
-              background:"transparent", border:"none",
-              borderBottom:`2px solid ${aba === key ? "var(--acc)" : "transparent"}`,
-              color: aba === key ? "var(--acc)" : "var(--t3)", transition:"all .15s",
+              padding: "10px 20px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+              background: "transparent", border: "none",
+              borderBottom: `2px solid ${aba === key ? "var(--acc)" : "transparent"}`,
+              color: aba === key ? "var(--acc)" : "var(--t3)", transition: "all .15s",
             }}>{label}</button>
           ))}
         </div>
 
-        {loading ? <div className="loading">Carregando...</div> : (
-          <>
+        {loading ? <div className="loading">Carregando...</div> : (<>
 
-            {/* ══════════════════════════════════════════════════════════════
-                ABA FLUXO DE CAIXA
-            ══════════════════════════════════════════════════════════════ */}
-            {aba === "fluxo" && (
-              <div style={{ display:"flex", flexDirection:"column", gap:"16px" }}>
+          {/* ══════════════════════════════════════════════════════
+              FLUXO DE CAIXA
+          ══════════════════════════════════════════════════════ */}
+          {aba === "fluxo" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 250px", gap: "16px", alignItems: "start" }}>
 
-                {/* ── Barra de lançamento rápido ── */}
-                <div style={{ display:"flex", gap:"6px", alignItems:"center", padding:"12px 14px", background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px" }}>
-                  {/* Tipo toggle */}
-                  <div style={{ display:"flex", borderRadius:"6px", overflow:"hidden", border:"1px solid var(--b2)", flexShrink:0 }}>
-                    {(["Entrada","Saída"] as const).map(t => (
-                      <button key={t} onClick={() => setQa(q => ({ ...q, tipo: t }))} style={{
-                        padding:"6px 11px", fontSize:"11px", fontWeight:700, cursor:"pointer", border:"none",
-                        background: qa.tipo === t
-                          ? (t === "Entrada" ? "rgba(61,255,160,.18)" : "rgba(244,63,94,.18)")
-                          : "transparent",
-                        color: qa.tipo === t
-                          ? (t === "Entrada" ? "var(--ok)" : "var(--err)")
-                          : "var(--t3)",
-                        transition:"all .1s",
-                      }}>
-                        {t === "Entrada" ? "↑ Entrada" : "↓ Saída"}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Descrição */}
-                  <input
-                    className="fc"
-                    style={{ flex:3, fontSize:"13px" }}
-                    placeholder="Descrição..."
-                    value={qa.descricao}
-                    onChange={e => setQa(q => ({ ...q, descricao: e.target.value }))}
-                    onKeyDown={e => e.key === "Enter" && handleQuickAdd()}
-                  />
-
-                  {/* Valor */}
-                  <div style={{ flex:"1 0 120px", maxWidth:"150px" }}>
-                    <CurrencyInput value={qa.valor} onChange={v => setQa(q => ({ ...q, valor: v }))} />
-                  </div>
-
-                  {/* Data */}
-                  <div style={{ flex:"1 0 120px", maxWidth:"140px" }}>
-                    <DateInput value={qa.vencimento} onChange={v => setQa(q => ({ ...q, vencimento: v }))} />
-                  </div>
-
-                  {/* Categoria */}
-                  <select
-                    className="fc"
-                    style={{ flex:"1 0 110px", maxWidth:"140px", fontSize:"12px" }}
-                    value={qa.categoria}
-                    onChange={e => setQa(q => ({ ...q, categoria: e.target.value }))}
-                  >
-                    <option value="">Categoria...</option>
-                    {CATEGORIAS.map(c => <option key={c}>{c}</option>)}
-                  </select>
-
-                  {/* Botão */}
-                  <button
-                    className="btn bp"
-                    onClick={handleQuickAdd}
-                    disabled={salvandoQa}
-                    style={{ flexShrink:0, whiteSpace:"nowrap", fontWeight:700 }}
-                  >
-                    {salvandoQa ? "..." : "+ Lançar"}
-                  </button>
-                </div>
-
-                {/* ── Filtro de período + toggle de visualização ── */}
-                <div style={{ display:"flex", alignItems:"center", gap:"8px", flexWrap:"wrap" }}>
-                  <span style={{ fontSize:"12px", color:"var(--t3)", fontWeight:600 }}>Período:</span>
-                  {(["7d","30d","90d","mes"] as Periodo[]).map(p => (
-                    <button key={p} onClick={() => setPeriodo(p)} style={{
-                      padding:"5px 14px", borderRadius:"6px", fontSize:"12px", fontWeight:600,
-                      cursor:"pointer", transition:"all .15s",
-                      border:`1px solid ${periodo === p ? "var(--acc)" : "var(--b2)"}`,
-                      background: periodo === p ? "rgba(61,255,160,.1)" : "transparent",
-                      color: periodo === p ? "var(--acc)" : "var(--t3)",
-                    }}>{periodoLabel[p]}</button>
-                  ))}
-                  <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>
-                    {new Date(dataInicio + "T12:00:00").toLocaleDateString("pt-BR")} → {new Date(dataFim + "T12:00:00").toLocaleDateString("pt-BR")}
-                  </span>
-
-                  {/* View toggle */}
-                  <div style={{ marginLeft:"auto", display:"flex", gap:"0", borderRadius:"7px", overflow:"hidden", border:"1px solid var(--b2)" }}>
-                    {([["resumo","Resumo"],["diadia","Dia a dia"]] as const).map(([m, label]) => (
-                      <button key={m} onClick={() => setViewMode(m)} style={{
-                        padding:"5px 14px", fontSize:"12px", fontWeight:600, cursor:"pointer", border:"none",
-                        background: viewMode === m ? "var(--surf3)" : "transparent",
-                        color: viewMode === m ? "var(--t1)" : "var(--t3)",
-                        transition:"all .1s",
-                      }}>{label}</button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* ── Alertas ── */}
-                {(fluxo.totalAtrasado > 0 || fluxo.totalContasAtras > 0) && (
-                  <div style={{ display:"grid", gridTemplateColumns: fluxo.totalAtrasado > 0 && fluxo.totalContasAtras > 0 ? "1fr 1fr" : "1fr", gap:"12px" }}>
-                    {fluxo.totalAtrasado > 0 && (
-                      <div style={{ padding:"12px 16px", background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.3)", borderRadius:"10px", display:"flex", alignItems:"center", gap:"12px" }}>
-                        <span style={{ fontSize:"20px" }}>⏰</span>
-                        <div>
-                          <div style={{ fontSize:"12px", fontWeight:700, color:"var(--warn)" }}>Recebimentos atrasados</div>
-                          <div style={{ fontSize:"18px", fontWeight:800, color:"var(--warn)", fontFamily:"'DM Mono',monospace" }}>{formatBRL(fluxo.totalAtrasado)}</div>
-                          <div style={{ fontSize:"11px", color:"var(--t3)" }}>{fluxo.atrasadas.length} lançamento(s) vencido(s)</div>
-                        </div>
-                      </div>
-                    )}
-                    {fluxo.totalContasAtras > 0 && (
-                      <div style={{ padding:"12px 16px", background:"rgba(244,63,94,.08)", border:"1px solid rgba(244,63,94,.3)", borderRadius:"10px", display:"flex", alignItems:"center", gap:"12px" }}>
-                        <span style={{ fontSize:"20px" }}>⚠</span>
-                        <div>
-                          <div style={{ fontSize:"12px", fontWeight:700, color:"var(--err)" }}>Contas vencidas a pagar</div>
-                          <div style={{ fontSize:"18px", fontWeight:800, color:"var(--err)", fontFamily:"'DM Mono',monospace" }}>{formatBRL(fluxo.totalContasAtras)}</div>
-                          <div style={{ fontSize:"11px", color:"var(--t3)" }}>{fluxo.contasAtrasadas.length} conta(s) vencida(s)</div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* ════════════════════════════════════════
-                    MODO RESUMO
-                ════════════════════════════════════════ */}
-                {viewMode === "resumo" && (
-                  <>
-                    {/* Cards fluxo */}
-                    <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"12px" }}>
-                      {[
-                        { label:"Entradas Previstas",   value: fluxo.totalEntradFut,  color:"var(--ok)",   icon:"↑", sub:`${fluxo.entradasFuturas.length} lançamentos` },
-                        { label:"Saídas Previstas",     value: fluxo.totalSaidFut,    color:"var(--err)",  icon:"↓", sub:`${fluxo.saidasFuturas.length} contas` },
-                        { label:"Saldo Previsto",       value: fluxo.saldoPrevisto,   color: fluxo.saldoPrevisto >= 0 ? "var(--ok)" : "var(--err)", icon:"≈", sub:"Entradas − Saídas" },
-                        { label:"Realizado no Período", value: fluxo.saldoRealizado,  color: fluxo.saldoRealizado >= 0 ? "var(--acc)" : "var(--err)", icon:"✓", sub:`${fluxo.entradasRealizadas.length + fluxo.saidasRealizadas.length} movimentos` },
-                      ].map(c => (
-                        <div key={c.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"14px 16px" }}>
-                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"6px" }}>
-                            <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>{c.label}</div>
-                            <div style={{ fontSize:"16px", color:c.color }}>{c.icon}</div>
-                          </div>
-                          <div style={{ fontSize:"20px", fontWeight:800, color:c.color, fontFamily:"'DM Mono',monospace", lineHeight:1.1 }}>{formatBRL(c.value)}</div>
-                          <div style={{ fontSize:"10px", color:"var(--t3)", marginTop:"4px" }}>{c.sub}</div>
-                          <BarH value={Math.abs(c.value)} max={Math.max(fluxo.totalEntradFut, fluxo.totalSaidFut, 1)} color={c.color} />
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Gráfico de barras diário */}
-                    {fluxo.dias.length > 0 && (
-                      <div className="card" style={{ padding:"20px" }}>
-                        <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em", marginBottom:"16px", textTransform:"uppercase" }}>
-                          Fluxo Diário — {periodoLabel[periodo]}
-                        </div>
-                        <div style={{ display:"flex", gap:"3px", alignItems:"flex-end", height:"120px", overflowX:"auto", paddingBottom:"4px" }}>
-                          {fluxo.dias.map((d, i) => {
-                            const hE = maxDia > 0 ? (d.entradas / maxDia) * 100 : 0;
-                            const hS = maxDia > 0 ? (d.saidas   / maxDia) * 100 : 0;
-                            return (
-                              <div key={i} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"2px", minWidth:"32px", flex:"1 0 32px" }}
-                                title={`${new Date(d.data + "T12:00:00").toLocaleDateString("pt-BR")}\nEntradas: ${formatBRL(d.entradas)}\nSaídas: ${formatBRL(d.saidas)}`}>
-                                <div style={{ display:"flex", alignItems:"flex-end", gap:"2px", height:"100px" }}>
-                                  {d.entradas > 0 && <div style={{ width:"12px", height:`${hE}%`, background:"var(--ok)", borderRadius:"2px 2px 0 0", opacity:0.85, minHeight:"3px" }} />}
-                                  {d.saidas   > 0 && <div style={{ width:"12px", height:`${hS}%`, background:"var(--err)", borderRadius:"2px 2px 0 0", opacity:0.75, minHeight:"3px" }} />}
-                                </div>
-                                <div style={{ fontSize:"8px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap", transform:"rotate(-45deg)", transformOrigin:"top left", marginTop:"4px", marginLeft:"8px" }}>
-                                  {nomeMes(d.data)}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        <div style={{ display:"flex", gap:"16px", marginTop:"24px", paddingTop:"12px", borderTop:"1px solid var(--b1)" }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:"6px", fontSize:"11px", color:"var(--t2)" }}>
-                            <div style={{ width:"12px", height:"12px", background:"var(--ok)", borderRadius:"2px" }} /> Entradas
-                          </div>
-                          <div style={{ display:"flex", alignItems:"center", gap:"6px", fontSize:"11px", color:"var(--t2)" }}>
-                            <div style={{ width:"12px", height:"12px", background:"var(--err)", borderRadius:"2px" }} /> Saídas
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Duas colunas */}
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"16px" }}>
-                      <div className="card" style={{ padding:"16px" }}>
-                        <div style={{ fontSize:"11px", color:"var(--ok)", fontWeight:700, letterSpacing:"0.06em", marginBottom:"12px", textTransform:"uppercase" }}>
-                          ↑ Entradas Previstas ({fluxo.entradasFuturas.length})
-                        </div>
-                        {fluxo.entradasFuturas.length === 0 ? (
-                          <div style={{ fontSize:"12px", color:"var(--t3)", textAlign:"center", padding:"16px 0" }}>Nenhuma entrada prevista</div>
-                        ) : (
-                          <div style={{ display:"flex", flexDirection:"column", gap:"6px", maxHeight:"280px", overflowY:"auto" }}>
-                            {[...fluxo.entradasFuturas].sort((a, b) => (a.vencimento ?? "") > (b.vencimento ?? "") ? 1 : -1).map(l => {
-                              const diff = diffDias(l.vencimento);
-                              const corData = diff !== null && diff < 3 ? "var(--warn)" : "var(--t3)";
-                              return (
-                                <div key={l.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"8px 10px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid rgba(61,255,160,.1)" }}>
-                                  <div style={{ flex:1, minWidth:0 }}>
-                                    <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{l.descricao}</div>
-                                    <div style={{ fontSize:"10px", color:corData, fontFamily:"'DM Mono',monospace", marginTop:"1px" }}>
-                                      {formatDate(l.vencimento)} {diff !== null && diff < 3 ? "⚡" : ""}
-                                    </div>
-                                  </div>
-                                  <div style={{ fontSize:"13px", fontWeight:700, color:"var(--ok)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>{formatBRL(l.valor)}</div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                        <div style={{ marginTop:"10px", paddingTop:"8px", borderTop:"1px solid var(--b1)", display:"flex", justifyContent:"space-between", fontSize:"12px" }}>
-                          <span style={{ color:"var(--t3)" }}>Total previsto</span>
-                          <span style={{ color:"var(--ok)", fontWeight:700, fontFamily:"'DM Mono',monospace" }}>{formatBRL(fluxo.totalEntradFut)}</span>
-                        </div>
-                      </div>
-
-                      <div className="card" style={{ padding:"16px" }}>
-                        <div style={{ fontSize:"11px", color:"var(--err)", fontWeight:700, letterSpacing:"0.06em", marginBottom:"12px", textTransform:"uppercase" }}>
-                          ↓ Saídas Previstas ({fluxo.saidasFuturas.length})
-                        </div>
-                        {fluxo.saidasFuturas.length === 0 ? (
-                          <div style={{ fontSize:"12px", color:"var(--t3)", textAlign:"center", padding:"16px 0" }}>Nenhuma saída prevista</div>
-                        ) : (
-                          <div style={{ display:"flex", flexDirection:"column", gap:"6px", maxHeight:"280px", overflowY:"auto" }}>
-                            {[...fluxo.saidasFuturas].sort((a, b) => (a.vencimento ?? "") > (b.vencimento ?? "") ? 1 : -1).map(c => {
-                              const diff = diffDias(c.vencimento);
-                              const corData = diff !== null && diff < 3 ? "var(--err)" : "var(--t3)";
-                              return (
-                                <div key={c.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"8px 10px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid rgba(244,63,94,.1)" }}>
-                                  <div style={{ flex:1, minWidth:0 }}>
-                                    <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.descricao}</div>
-                                    <div style={{ display:"flex", gap:"6px", marginTop:"1px" }}>
-                                      <span style={{ fontSize:"10px", color:corData, fontFamily:"'DM Mono',monospace" }}>
-                                        {formatDate(c.vencimento)} {diff !== null && diff < 3 ? "🔴" : ""}
-                                      </span>
-                                      {(c as any).categoria && (
-                                        <span style={{ fontSize:"9px", color:"var(--t3)", background:"var(--surf3)", padding:"1px 5px", borderRadius:"4px" }}>{(c as any).categoria}</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div style={{ fontSize:"13px", fontWeight:700, color:"var(--err)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>{formatBRL(c.valor)}</div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                        <div style={{ marginTop:"10px", paddingTop:"8px", borderTop:"1px solid var(--b1)", display:"flex", justifyContent:"space-between", fontSize:"12px" }}>
-                          <span style={{ color:"var(--t3)" }}>Total previsto</span>
-                          <span style={{ color:"var(--err)", fontWeight:700, fontFamily:"'DM Mono',monospace" }}>{formatBRL(fluxo.totalSaidFut)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Resumo do período */}
-                    <div className="card" style={{ padding:"20px" }}>
-                      <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em", marginBottom:"16px", textTransform:"uppercase" }}>
-                        Resumo do Período — {periodoLabel[periodo]}
-                      </div>
-                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"16px" }}>
-                        {[
-                          { label:"Total entradas previstas", value: fluxo.totalEntradFut,  color:"var(--ok)" },
-                          { label:"Total saídas previstas",   value: fluxo.totalSaidFut,    color:"var(--err)" },
-                          { label:"Saldo líquido previsto",   value: fluxo.saldoPrevisto,   color: fluxo.saldoPrevisto >= 0 ? "var(--ok)" : "var(--err)" },
-                          { label:"Entradas realizadas",      value: fluxo.totalEntradReal, color:"var(--acc)" },
-                          { label:"Saídas realizadas",        value: fluxo.totalSaidReal,   color:"var(--warn)" },
-                          { label:"Saldo realizado",          value: fluxo.saldoRealizado,  color: fluxo.saldoRealizado >= 0 ? "var(--acc)" : "var(--err)" },
-                        ].map(item => (
-                          <div key={item.label} style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", padding:"10px 0", borderBottom:"1px solid var(--b1)" }}>
-                            <span style={{ fontSize:"12px", color:"var(--t3)" }}>{item.label}</span>
-                            <span style={{ fontSize:"14px", fontWeight:700, color:item.color, fontFamily:"'DM Mono',monospace" }}>{formatBRL(item.value)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {/* ════════════════════════════════════════
-                    MODO DIA A DIA
-                ════════════════════════════════════════ */}
-                {viewMode === "diadia" && (
-                  <div className="card" style={{ padding:0, overflow:"hidden" }}>
-                    <div style={{ padding:"14px 20px", borderBottom:"1px solid var(--b1)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                      <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>
-                        Lançamentos por dia — {periodoLabel[periodo]}
-                      </div>
-                      <div style={{ display:"flex", gap:"16px", fontSize:"11px" }}>
-                        <span style={{ color:"var(--ok)", display:"flex", alignItems:"center", gap:"5px" }}>
-                          <span style={{ width:"8px", height:"8px", background:"var(--ok)", borderRadius:"50%", display:"inline-block" }} /> Entradas
-                        </span>
-                        <span style={{ color:"var(--err)", display:"flex", alignItems:"center", gap:"5px" }}>
-                          <span style={{ width:"8px", height:"8px", background:"var(--err)", borderRadius:"50%", display:"inline-block" }} /> Saídas
-                        </span>
-                      </div>
-                    </div>
-
-                    {diasComMovimentos.length === 0 ? (
-                      <div style={{ padding:"40px", textAlign:"center", fontSize:"13px", color:"var(--t3)" }}>
-                        Nenhum lançamento no período selecionado.<br />
-                        <span style={{ fontSize:"11px" }}>Use a barra acima para adicionar entradas e saídas.</span>
-                      </div>
-                    ) : (
-                      <div>
-                        {diasComMovimentos.map((dia) => {
-                          const isExpanded = diaExpandido === dia.data;
-                          const saldo      = dia.entradas - dia.saidas;
-                          const isHoje     = dia.data === hj;
-
-                          return (
-                            <div key={dia.data} style={{ borderBottom:"1px solid var(--b1)" }}>
-                              {/* Linha do dia */}
-                              <div
-                                onClick={() => setDiaExpandido(prev => prev === dia.data ? null : dia.data)}
-                                style={{
-                                  display:"flex", alignItems:"center", gap:"12px", padding:"11px 20px",
-                                  cursor:"pointer",
-                                  background: isHoje ? "rgba(61,255,160,.03)" : "transparent",
-                                }}
-                              >
-                                <div style={{ minWidth:"150px", fontSize:"13px", fontWeight:700, fontFamily:"'DM Mono',monospace", color: isHoje ? "var(--acc)" : "var(--t1)", display:"flex", alignItems:"center", gap:"6px" }}>
-                                  {new Date(dia.data + "T12:00:00").toLocaleDateString("pt-BR", { weekday:"short", day:"2-digit", month:"short" })}
-                                  {isHoje && (
-                                    <span style={{ fontSize:"9px", background:"var(--acc)", color:"#090b10", padding:"1px 5px", borderRadius:"3px", fontFamily:"sans-serif", fontWeight:800 }}>HOJE</span>
-                                  )}
-                                </div>
-                                <div style={{ display:"flex", gap:"14px", flex:1 }}>
-                                  {dia.entradas > 0 && (
-                                    <span style={{ fontSize:"12px", color:"var(--ok)", fontFamily:"'DM Mono',monospace" }}>↑ {formatBRL(dia.entradas)}</span>
-                                  )}
-                                  {dia.saidas > 0 && (
-                                    <span style={{ fontSize:"12px", color:"var(--err)", fontFamily:"'DM Mono',monospace" }}>↓ {formatBRL(dia.saidas)}</span>
-                                  )}
-                                </div>
-                                <div style={{ fontSize:"13px", fontWeight:700, fontFamily:"'DM Mono',monospace", color: saldo >= 0 ? "var(--ok)" : "var(--err)", flexShrink:0 }}>
-                                  {saldo >= 0 ? "+" : ""}{formatBRL(saldo)}
-                                </div>
-                                <div style={{ fontSize:"11px", color:"var(--t3)", flexShrink:0 }}>{dia.items.length} lanç.</div>
-                                <div style={{ fontSize:"11px", color:"var(--t3)", flexShrink:0 }}>{isExpanded ? "▲" : "▼"}</div>
-                              </div>
-
-                              {/* Lançamentos expandidos */}
-                              {isExpanded && (
-                                <div style={{ padding:"6px 20px 12px", display:"flex", flexDirection:"column", gap:"4px" }}>
-                                  {dia.items.map(l => (
-                                    editInlineId === l.id ? (
-                                      /* ── Formulário inline de edição ── */
-                                      <div key={l.id} style={{ display:"flex", gap:"6px", alignItems:"center", padding:"8px 10px", background:"var(--surf1)", borderRadius:"8px", border:"1px solid var(--acc)" }}>
-                                        <select
-                                          className="fc"
-                                          value={editInlineForm.status}
-                                          onChange={e => setEditInlineForm(f => ({ ...f, status: e.target.value }))}
-                                          style={{ width:"110px", fontSize:"11px", padding:"5px 7px", flexShrink:0 }}
-                                        >
-                                          <option value="A Receber">A Receber</option>
-                                          <option value="Pago">Pago</option>
-                                          <option value="Pendente">Pendente</option>
-                                        </select>
-                                        <input
-                                          className="fc"
-                                          value={editInlineForm.descricao}
-                                          onChange={e => setEditInlineForm(f => ({ ...f, descricao: e.target.value }))}
-                                          style={{ flex:2, fontSize:"12px" }}
-                                        />
-                                        <div style={{ minWidth:"130px", flexShrink:0 }}>
-                                          <CurrencyInput value={editInlineForm.valor} onChange={v => setEditInlineForm(f => ({ ...f, valor: v }))} />
-                                        </div>
-                                        <div style={{ minWidth:"120px", flexShrink:0 }}>
-                                          <DateInput value={editInlineForm.vencimento} onChange={v => setEditInlineForm(f => ({ ...f, vencimento: v }))} />
-                                        </div>
-                                        <select
-                                          className="fc"
-                                          value={editInlineForm.categoria}
-                                          onChange={e => setEditInlineForm(f => ({ ...f, categoria: e.target.value }))}
-                                          style={{ minWidth:"110px", flexShrink:0, fontSize:"11px", padding:"5px 7px" }}
-                                        >
-                                          <option value="">Categoria</option>
-                                          {CATEGORIAS.map(c => <option key={c}>{c}</option>)}
-                                        </select>
-                                        <button className="btn bp xs" onClick={salvarEditInline} style={{ flexShrink:0 }}>✓ Salvar</button>
-                                        <button className="btn bg xs" onClick={() => setEditInlineId(null)} style={{ flexShrink:0 }}>✕</button>
-                                      </div>
-                                    ) : (
-                                      /* ── Linha normal ── */
-                                      <div key={l.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"8px 10px", background:"var(--surf2)", borderRadius:"8px", border:`1px solid ${l.tipo === "Entrada" ? "rgba(61,255,160,.1)" : "rgba(244,63,94,.08)"}` }}>
-                                        <div style={{ fontSize:"14px", color: l.tipo === "Entrada" ? "var(--ok)" : "var(--err)", fontWeight:700, flexShrink:0, width:"14px", textAlign:"center" }}>
-                                          {l.tipo === "Entrada" ? "↑" : "↓"}
-                                        </div>
-                                        <div style={{ flex:1, minWidth:0 }}>
-                                          <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                                            {l.descricao}
-                                          </div>
-                                          <div style={{ display:"flex", gap:"5px", marginTop:"2px", alignItems:"center" }}>
-                                            {(l as any).categoria && (
-                                              <span style={{ fontSize:"9px", color:"var(--t3)", background:"var(--surf3)", padding:"1px 5px", borderRadius:"3px" }}>
-                                                {(l as any).categoria}
-                                              </span>
-                                            )}
-                                            {l.clientes?.nome && (
-                                              <span style={{ fontSize:"10px", color:"var(--t3)" }}>{l.clientes.nome}</span>
-                                            )}
-                                          </div>
-                                        </div>
-                                        {chipStatus(l)}
-                                        <div style={{ fontSize:"13px", fontWeight:700, color: l.tipo === "Entrada" ? "var(--ok)" : "var(--err)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>
-                                          {formatBRL(l.valor)}
-                                        </div>
-                                        <div style={{ display:"flex", gap:"3px", flexShrink:0 }}>
-                                          {l.tipo === "Saída" && l.status !== "Pago" && (
-                                            <button
-                                              className="btn bp xs"
-                                              title="Marcar como pago"
-                                              onClick={() => { setContaParaPagar(l); setDtPagamentoConfirm(hj); setModalConfirmarPgto(true); }}
-                                            >✓</button>
-                                          )}
-                                          <button className="btn bg xs" title="Editar" onClick={() => abrirEditInline(l)}>✏</button>
-                                          <button
-                                            className="btn bg xs"
-                                            style={{ color:"var(--err)", borderColor:"rgba(244,63,94,.3)" }}
-                                            title="Excluir"
-                                            onClick={() => handleDeletarConta(l)}
-                                          >🗑</button>
-                                        </div>
-                                      </div>
-                                    )
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-              </div>
-            )}
-
-            {/* ══════════════════════════════════════════════════════════════
-                ABA RECEBER
-            ══════════════════════════════════════════════════════════════ */}
-            {aba === "receber" && (
+              {/* Tabela de movimentos */}
               <div className="tw">
                 <table>
                   <thead>
                     <tr>
-                      <th>Cliente</th><th>Pedidos</th><th>Faturado</th><th>Recebido</th>
-                      <th>A Receber</th><th>% Rec.</th><th>Status</th><th>Ação</th>
+                      <th style={{ width: "95px" }}>Data</th>
+                      <th style={{ width: "44px", textAlign: "center" }}>Tipo</th>
+                      <th>Descrição</th>
+                      <th style={{ width: "110px" }}>Categoria</th>
+                      <th style={{ width: "115px", textAlign: "right" }}>Valor</th>
+                      <th style={{ width: "90px" }}>Status</th>
+                      <th style={{ width: "72px" }}>Ações</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {[...financeiro].sort((a, b) => Number(b.faturado) - Number(a.faturado)).map(f => {
-                      const ab  = Number(f.a_receber);
-                      const pct = Number(f.pct_recebido);
-                      const st  = ab <= 0
-                        ? <span className="chip cg">✓ Quitado</span>
-                        : pct > 0 ? <span className="chip cy">Parcial</span>
-                        : <span className="chip cr">Aberto</span>;
-                      return (
-                        <tr key={f.cliente_id}>
-                          <td><strong>{f.cliente_nome}</strong></td>
-                          <td className="mono">{f.total_pedidos}</td>
-                          <td className="mono">{formatBRL(f.faturado)}</td>
-                          <td className="mono" style={{ color:"var(--acc)" }}>{formatBRL(f.recebido)}</td>
-                          <td className="mono" style={{ color: ab > 0 ? "var(--warn)" : "var(--t2)" }}>{formatBRL(ab)}</td>
-                          <td>
-                            <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
-                              <div className="prg" style={{ width:"55px", height:"5px" }}>
-                                <div className="prg-f" style={{ width:`${pct}%`, background: pct < 50 ? "var(--err)" : pct < 100 ? "var(--warn)" : "var(--ok)" }} />
-                              </div>
-                              <span className="mono">{formatPercent(pct)}</span>
-                            </div>
-                          </td>
-                          <td>{st}</td>
-                          <td>{ab > 0 && <button className="btn bp xs" onClick={() => abrirReceber(f)}>✓ Receber</button>}</td>
-                        </tr>
-                      );
-                    })}
+
+                    {/* Nova linha */}
+                    {(addingIn === "fluxo-entrada" || addingIn === "fluxo-saida") && (
+                      <tr style={{ background: addingIn === "fluxo-entrada" ? "rgba(61,255,160,.06)" : "rgba(244,63,94,.04)", outline: "1px solid var(--acc)" }}>
+                        <td><DateInput value={newForm.vencimento} onChange={v => setNewForm(f => ({ ...f, vencimento: v }))} /></td>
+                        <td style={{ textAlign: "center", fontWeight: 800, fontSize: "15px", color: addingIn === "fluxo-entrada" ? "var(--ok)" : "var(--err)" }}>
+                          {addingIn === "fluxo-entrada" ? "↑" : "↓"}
+                        </td>
+                        <td>
+                          <input
+                            style={cellInput}
+                            value={newForm.descricao}
+                            onChange={e => setNewForm(f => ({ ...f, descricao: e.target.value }))}
+                            placeholder="Descrição..."
+                            autoFocus
+                            onKeyDown={e => e.key === "Enter" && saveAdd()}
+                          />
+                        </td>
+                        <td>
+                          <select style={cellSelect} value={newForm.categoria} onChange={e => setNewForm(f => ({ ...f, categoria: e.target.value }))}>
+                            <option value="">—</option>
+                            {CATEGORIAS.map(c => <option key={c}>{c}</option>)}
+                          </select>
+                        </td>
+                        <td><CurrencyInput value={newForm.valor} onChange={v => setNewForm(f => ({ ...f, valor: v }))} /></td>
+                        <td></td>
+                        <td>
+                          <div style={{ display: "flex", gap: "3px" }}>
+                            <button className="btn bp xs" onClick={saveAdd} disabled={salvandoAdd}>✓</button>
+                            <button className="btn bg xs" onClick={cancelAdd}>✕</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+
+                    {todosMovimentos.length === 0 && !addingIn && (
+                      <tr><td colSpan={7} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>
+                        Nenhum lançamento no período. Use os botões "+ Entrada" ou "+ Saída" para adicionar.
+                      </td></tr>
+                    )}
+
+                    {todosMovimentos.map(m => editingId === m.id ? (
+                      <tr key={m.id} style={{ background: "var(--surf2)", outline: "1px solid var(--acc)" }}>
+                        <td><DateInput value={editForm.vencimento} onChange={v => setEditForm(f => ({ ...f, vencimento: v }))} /></td>
+                        <td style={{ textAlign: "center", fontWeight: 800, fontSize: "15px", color: m.tipo === "Entrada" ? "var(--ok)" : "var(--err)" }}>
+                          {m.tipo === "Entrada" ? "↑" : "↓"}
+                        </td>
+                        <td><input style={cellInput} value={editForm.descricao} onChange={e => setEditForm(f => ({ ...f, descricao: e.target.value }))} onKeyDown={e => e.key === "Enter" && saveEdit()} /></td>
+                        <td>
+                          <select style={cellSelect} value={editForm.categoria} onChange={e => setEditForm(f => ({ ...f, categoria: e.target.value }))}>
+                            <option value="">—</option>
+                            {CATEGORIAS.map(c => <option key={c}>{c}</option>)}
+                          </select>
+                        </td>
+                        <td><CurrencyInput value={editForm.valor} onChange={v => setEditForm(f => ({ ...f, valor: v }))} /></td>
+                        <td>
+                          <select style={{ ...cellSelect, fontSize: "10px" }} value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>
+                            <option value="A Receber">A Receber</option>
+                            <option value="Pago">Pago</option>
+                            <option value="Pendente">Pendente</option>
+                          </select>
+                        </td>
+                        <td>{editActions}</td>
+                      </tr>
+                    ) : (
+                      <tr key={m.id} onClick={() => startEdit(m)} style={{ cursor: "pointer" }}
+                        onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = "var(--surf2)"}
+                        onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = ""}
+                      >
+                        <td className="mono" style={{ fontSize: "12px" }}>{formatDate(m.vencimento)}</td>
+                        <td style={{ textAlign: "center", fontWeight: 800, fontSize: "15px", color: m.tipo === "Entrada" ? "var(--ok)" : "var(--err)" }}>
+                          {m.tipo === "Entrada" ? "↑" : "↓"}
+                        </td>
+                        <td>
+                          <div style={{ fontSize: "13px", fontWeight: 500 }}>{m.descricao}</div>
+                          {m.clientes?.nome && <div className="tdim">{m.clientes.nome}</div>}
+                        </td>
+                        <td>
+                          {(m as any).categoria
+                            ? <span className="chip cgr" style={{ fontSize: "10px" }}>{(m as any).categoria}</span>
+                            : <span style={{ color: "var(--t3)" }}>—</span>}
+                        </td>
+                        <td className="mono" style={{ textAlign: "right", fontWeight: 700, color: m.tipo === "Entrada" ? "var(--ok)" : "var(--err)" }}>
+                          {formatBRL(m.valor)}
+                        </td>
+                        <td>{chipStatus(m)}</td>
+                        <td onClick={e => e.stopPropagation()}>
+                          <div style={{ display: "flex", gap: "3px" }}>
+                            {m.tipo === "Saída" && m.status !== "Pago" && (
+                              <button className="btn bp xs" title="Confirmar pagamento" onClick={() => abrirPgto(m)}>✓</button>
+                            )}
+                            <button
+                              className="btn bg xs"
+                              style={{ color: "var(--err)", borderColor: "rgba(244,63,94,.3)" }}
+                              onClick={() => handleDelete(m)}
+                            >🗑</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
-            )}
 
-            {/* ══════════════════════════════════════════════════════════════
-                ABA PAGAR
-            ══════════════════════════════════════════════════════════════ */}
-            {aba === "pagar" && (
-              <>
-                {vencidas.length > 0 && (
-                  <div style={{ marginBottom:"14px", padding:"12px 16px", background:"rgba(244,63,94,.08)", border:"1px solid var(--err)", borderRadius:"10px", display:"flex", alignItems:"center", gap:"10px" }}>
-                    <span style={{ fontSize:"18px" }}>⚠</span>
-                    <div>
-                      <div style={{ fontSize:"13px", fontWeight:700, color:"var(--err)" }}>{vencidas.length} conta(s) vencida(s)</div>
-                      <div style={{ fontSize:"12px", color:"var(--t3)" }}>Total: {formatBRL(vencidas.reduce((a, c) => a + Number(c.valor), 0))}</div>
+              {/* Sidebar */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+
+                {/* Período */}
+                <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "14px" }}>
+                  <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "10px" }}>Período</div>
+                  <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                    {(["7d","30d","mes"] as Periodo[]).map(p => (
+                      <button key={p} onClick={() => setPeriodo(p)} style={{
+                        padding: "4px 10px", borderRadius: "5px", fontSize: "11px", fontWeight: 600,
+                        cursor: "pointer", border: `1px solid ${periodo === p ? "var(--acc)" : "var(--b2)"}`,
+                        background: periodo === p ? "rgba(61,255,160,.12)" : "transparent",
+                        color: periodo === p ? "var(--acc)" : "var(--t3)", transition: "all .1s",
+                      }}>{periodoLabel[p]}</button>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", marginTop: "8px" }}>
+                    {new Date(dataInicio + "T12:00:00").toLocaleDateString("pt-BR")} → {new Date(dataFim + "T12:00:00").toLocaleDateString("pt-BR")}
+                  </div>
+                </div>
+
+                {/* Saldo */}
+                <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "14px" }}>
+                  <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "8px" }}>Saldo Previsto</div>
+                  <div style={{ fontSize: "26px", fontWeight: 800, color: sidebar.saldoPrevisto >= 0 ? "var(--ok)" : "var(--err)", fontFamily: "'DM Mono',monospace", lineHeight: 1 }}>
+                    {sidebar.saldoPrevisto >= 0 ? "+" : ""}{formatBRL(sidebar.saldoPrevisto)}
+                  </div>
+                  <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "4px" }}>Entradas − Saídas pendentes</div>
+                  <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px solid var(--b1)", display: "flex", flexDirection: "column", gap: "7px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "11px", color: "var(--t3)", display: "flex", alignItems: "center", gap: "5px" }}>
+                        <span style={{ width: "8px", height: "8px", background: "var(--ok)", borderRadius: "50%", display: "inline-block" }} />Entradas
+                      </span>
+                      <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--ok)", fontFamily: "'DM Mono',monospace" }}>{formatBRL(sidebar.totalEntradas)}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "11px", color: "var(--t3)", display: "flex", alignItems: "center", gap: "5px" }}>
+                        <span style={{ width: "8px", height: "8px", background: "var(--err)", borderRadius: "50%", display: "inline-block" }} />Saídas
+                      </span>
+                      <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--err)", fontFamily: "'DM Mono',monospace" }}>{formatBRL(sidebar.totalSaidas)}</span>
                     </div>
                   </div>
-                )}
-                <div className="tw">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Descrição</th><th>Fornecedor</th><th>Categoria</th>
-                        <th>Vencimento</th><th>Valor</th><th>Status</th>
-                        <th>Dt. Pagamento</th><th>Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {contasPagar.length === 0 && (
-                        <tr><td colSpan={8} style={{ textAlign:"center", color:"var(--t3)", padding:"32px" }}>Nenhuma conta a pagar cadastrada</td></tr>
-                      )}
-                      {[...contasPagar].sort((a, b) => (a.vencimento ?? "") > (b.vencimento ?? "") ? 1 : -1).map(c => (
-                        <tr key={c.id}>
-                          <td>
-                            <strong>{c.descricao}</strong>
-                            {(c as any).obs && <div className="tdim">{(c as any).obs}</div>}
-                          </td>
-                          <td>{(c as any).fornecedor || <span style={{ color:"var(--t3)" }}>—</span>}</td>
-                          <td>{(c as any).categoria ? <span className="chip cgr" style={{ fontSize:"10px" }}>{(c as any).categoria}</span> : <span style={{ color:"var(--t3)" }}>—</span>}</td>
-                          <td className="mono" style={{ color: corStatus(c) }}>{formatDate(c.vencimento)}</td>
-                          <td className="mono" style={{ color:"var(--err)", fontWeight:600 }}>{formatBRL(c.valor)}</td>
-                          <td>{chipStatus(c)}</td>
-                          <td className="mono" style={{ color:"var(--t3)" }}>{(c as any).dt_pagamento ? formatDate((c as any).dt_pagamento) : "—"}</td>
-                          <td>
-                            <div style={{ display:"flex", gap:"4px" }}>
-                              {c.status !== "Pago" && (
-                                <button className="btn bp xs" onClick={() => { setContaParaPagar(c); setDtPagamentoConfirm(hj); setModalConfirmarPgto(true); }}>✓ Pagar</button>
-                              )}
-                              <button className="btn bg xs" onClick={() => abrirEditarConta(c)}>✏</button>
-                              <button className="btn bg xs" style={{ color:"var(--err)", borderColor:"var(--err)" }} onClick={() => handleDeletarConta(c)}>🗑</button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
                 </div>
-              </>
+
+                {sidebar.atrasRec.length > 0 && (
+                  <div style={{ padding: "12px 14px", background: "rgba(245,158,11,.08)", border: "1px solid rgba(245,158,11,.3)", borderRadius: "10px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--warn)", marginBottom: "4px" }}>⏰ Recebimentos atrasados</div>
+                    <div style={{ fontSize: "20px", fontWeight: 800, color: "var(--warn)", fontFamily: "'DM Mono',monospace" }}>{formatBRL(sidebar.totalAtrasRec)}</div>
+                    <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "2px" }}>{sidebar.atrasRec.length} lançamento(s)</div>
+                  </div>
+                )}
+                {sidebar.atrasSpay.length > 0 && (
+                  <div style={{ padding: "12px 14px", background: "rgba(244,63,94,.08)", border: "1px solid rgba(244,63,94,.3)", borderRadius: "10px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--err)", marginBottom: "4px" }}>⚠ Contas vencidas</div>
+                    <div style={{ fontSize: "20px", fontWeight: 800, color: "var(--err)", fontFamily: "'DM Mono',monospace" }}>{formatBRL(sidebar.totalAtrasSpay)}</div>
+                    <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "2px" }}>{sidebar.atrasSpay.length} conta(s)</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════
+              CONTAS A RECEBER
+          ══════════════════════════════════════════════════════ */}
+          {aba === "receber" && (
+            <div className="tw">
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: "100px" }}>Vencimento</th>
+                    <th>Descrição</th>
+                    <th style={{ width: "100px" }}>Pedido</th>
+                    <th style={{ width: "150px" }}>Cliente</th>
+                    <th style={{ width: "120px", textAlign: "right" }}>Valor</th>
+                    <th style={{ width: "100px" }}>Status</th>
+                    <th style={{ width: "120px" }}>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recebiveisIndividuais.length === 0 && (
+                    <tr><td colSpan={7} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>Nenhum recebível cadastrado</td></tr>
+                  )}
+                  {recebiveisIndividuais.map(l => editingId === l.id ? (
+                    <tr key={l.id} style={{ background: "var(--surf2)", outline: "1px solid var(--acc)" }}>
+                      <td><DateInput value={editForm.vencimento} onChange={v => setEditForm(f => ({ ...f, vencimento: v }))} /></td>
+                      <td><input style={cellInput} value={editForm.descricao} onChange={e => setEditForm(f => ({ ...f, descricao: e.target.value }))} onKeyDown={e => e.key === "Enter" && saveEdit()} /></td>
+                      <td><span style={{ fontSize: "11px", color: "var(--t3)" }}>{(l as any).pedido_id ?? "—"}</span></td>
+                      <td><span style={{ fontSize: "11px", color: "var(--t3)" }}>{l.clientes?.nome ?? "—"}</span></td>
+                      <td><CurrencyInput value={editForm.valor} onChange={v => setEditForm(f => ({ ...f, valor: v }))} /></td>
+                      <td>
+                        <select style={{ ...cellSelect, fontSize: "11px" }} value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>
+                          <option value="A Receber">A Receber</option>
+                          <option value="Pago">Pago</option>
+                        </select>
+                      </td>
+                      <td>{editActions}</td>
+                    </tr>
+                  ) : (
+                    <tr key={l.id} onClick={() => startEdit(l)} style={{ cursor: "pointer" }}
+                      onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = "var(--surf2)"}
+                      onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = ""}
+                    >
+                      <td className="mono" style={{ fontSize: "12px", color: l.vencimento && l.vencimento < hj && l.status !== "Pago" ? "var(--err)" : "var(--t2)" }}>
+                        {formatDate(l.vencimento)}
+                      </td>
+                      <td style={{ fontSize: "13px", fontWeight: 500 }}>{l.descricao}</td>
+                      <td>
+                        {(l as any).pedido_id
+                          ? <a href={`/pedidos/${(l as any).pedido_id}`} onClick={e => e.stopPropagation()} className="mono" style={{ color: "var(--acc2)", fontSize: "12px" }}>{(l as any).pedido_id}</a>
+                          : <span style={{ color: "var(--t3)" }}>—</span>}
+                      </td>
+                      <td style={{ fontSize: "12px" }}>{l.clientes?.nome ?? <span style={{ color: "var(--t3)" }}>—</span>}</td>
+                      <td className="mono" style={{ textAlign: "right", fontWeight: 700, color: "var(--ok)" }}>{formatBRL(l.valor)}</td>
+                      <td>{chipStatus(l)}</td>
+                      <td onClick={e => e.stopPropagation()}>
+                        <div style={{ display: "flex", gap: "3px" }}>
+                          {l.status !== "Pago" && (
+                            <button className="btn bp xs" onClick={() => abrirReceber(undefined, (l as any).pedido_id)}>✓ Receber</button>
+                          )}
+                          <button
+                            className="btn bg xs"
+                            style={{ color: "var(--err)", borderColor: "rgba(244,63,94,.3)" }}
+                            onClick={() => handleDelete(l)}
+                          >🗑</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: "var(--surf1)" }}>
+                    <td colSpan={4} style={{ padding: "10px 12px", fontSize: "12px", color: "var(--t3)", fontWeight: 600 }}>
+                      {recebiveisIndividuais.length} lançamentos · {pendentesReceber.length} em aberto
+                    </td>
+                    <td className="mono" style={{ textAlign: "right", color: "var(--ok)", fontWeight: 700, padding: "10px 12px" }}>
+                      {formatBRL(totalReceber)}
+                    </td>
+                    <td colSpan={2} style={{ fontSize: "11px", color: "var(--t3)", padding: "10px 12px" }}>a receber</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════
+              CONTAS A PAGAR
+          ══════════════════════════════════════════════════════ */}
+          {aba === "pagar" && (<>
+            {vencidas.length > 0 && (
+              <div style={{ marginBottom: "14px", padding: "12px 16px", background: "rgba(244,63,94,.08)", border: "1px solid var(--err)", borderRadius: "10px", display: "flex", alignItems: "center", gap: "10px" }}>
+                <span style={{ fontSize: "18px" }}>⚠</span>
+                <div>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--err)" }}>{vencidas.length} conta(s) vencida(s)</div>
+                  <div style={{ fontSize: "12px", color: "var(--t3)" }}>Total: {formatBRL(vencidas.reduce((a, c) => a + Number(c.valor), 0))}</div>
+                </div>
+              </div>
             )}
-          </>
-        )}
+            <div className="tw">
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: "100px" }}>Vencimento</th>
+                    <th>Descrição</th>
+                    <th style={{ width: "130px" }}>Fornecedor</th>
+                    <th style={{ width: "110px" }}>Categoria</th>
+                    <th style={{ width: "115px", textAlign: "right" }}>Valor</th>
+                    <th style={{ width: "90px" }}>Status</th>
+                    <th style={{ width: "100px" }}>Dt. Pgto</th>
+                    <th style={{ width: "100px" }}>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+
+                  {/* Nova linha */}
+                  {addingIn === "pagar" && (
+                    <tr style={{ background: "rgba(244,63,94,.04)", outline: "1px solid rgba(244,63,94,.4)" }}>
+                      <td><DateInput value={newForm.vencimento} onChange={v => setNewForm(f => ({ ...f, vencimento: v }))} /></td>
+                      <td>
+                        <input style={cellInput} value={newForm.descricao} onChange={e => setNewForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Descrição..." autoFocus onKeyDown={e => e.key === "Enter" && saveAdd()} />
+                        <input style={{ ...cellInput, marginTop: "2px", fontSize: "11px" }} value={newForm.obs} onChange={e => setNewForm(f => ({ ...f, obs: e.target.value }))} placeholder="Obs..." />
+                      </td>
+                      <td><input style={cellInput} value={newForm.fornecedor} onChange={e => setNewForm(f => ({ ...f, fornecedor: e.target.value }))} placeholder="Fornecedor" /></td>
+                      <td>
+                        <select style={cellSelect} value={newForm.categoria} onChange={e => setNewForm(f => ({ ...f, categoria: e.target.value }))}>
+                          <option value="">—</option>
+                          {CATEGORIAS.map(c => <option key={c}>{c}</option>)}
+                        </select>
+                      </td>
+                      <td><CurrencyInput value={newForm.valor} onChange={v => setNewForm(f => ({ ...f, valor: v }))} /></td>
+                      <td></td>
+                      <td></td>
+                      <td>
+                        <div style={{ display: "flex", gap: "3px" }}>
+                          <button className="btn bp xs" onClick={saveAdd} disabled={salvandoAdd}>✓</button>
+                          <button className="btn bg xs" onClick={cancelAdd}>✕</button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+
+                  {pgarOrdenado.length === 0 && !addingIn && (
+                    <tr><td colSpan={8} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>
+                      Nenhuma conta a pagar. Clique em "+ Nova Conta" para adicionar.
+                    </td></tr>
+                  )}
+
+                  {pgarOrdenado.map(c => editingId === c.id ? (
+                    <tr key={c.id} style={{ background: "var(--surf2)", outline: "1px solid var(--acc)" }}>
+                      <td><DateInput value={editForm.vencimento} onChange={v => setEditForm(f => ({ ...f, vencimento: v }))} /></td>
+                      <td>
+                        <input style={cellInput} value={editForm.descricao} onChange={e => setEditForm(f => ({ ...f, descricao: e.target.value }))} onKeyDown={e => e.key === "Enter" && saveEdit()} />
+                        <input style={{ ...cellInput, marginTop: "2px", fontSize: "11px" }} value={editForm.obs} onChange={e => setEditForm(f => ({ ...f, obs: e.target.value }))} placeholder="Obs..." />
+                      </td>
+                      <td><input style={cellInput} value={editForm.fornecedor} onChange={e => setEditForm(f => ({ ...f, fornecedor: e.target.value }))} /></td>
+                      <td>
+                        <select style={cellSelect} value={editForm.categoria} onChange={e => setEditForm(f => ({ ...f, categoria: e.target.value }))}>
+                          <option value="">—</option>
+                          {CATEGORIAS.map(cat => <option key={cat}>{cat}</option>)}
+                        </select>
+                      </td>
+                      <td><CurrencyInput value={editForm.valor} onChange={v => setEditForm(f => ({ ...f, valor: v }))} /></td>
+                      <td>
+                        <select style={{ ...cellSelect, fontSize: "11px" }} value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>
+                          <option value="Pendente">Pendente</option>
+                          <option value="Pago">Pago</option>
+                        </select>
+                      </td>
+                      <td><DateInput value={editForm.dt_pagamento} onChange={v => setEditForm(f => ({ ...f, dt_pagamento: v }))} /></td>
+                      <td>{editActions}</td>
+                    </tr>
+                  ) : (
+                    <tr key={c.id} onClick={() => startEdit(c)} style={{ cursor: "pointer" }}
+                      onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = "var(--surf2)"}
+                      onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = ""}
+                    >
+                      <td className="mono" style={{ fontSize: "12px", color: c.vencimento && c.vencimento < hj && c.status !== "Pago" ? "var(--err)" : "var(--t2)" }}>
+                        {formatDate(c.vencimento)}
+                      </td>
+                      <td>
+                        <div style={{ fontSize: "13px", fontWeight: 500 }}>{c.descricao}</div>
+                        {(c as any).obs && <div className="tdim">{(c as any).obs}</div>}
+                      </td>
+                      <td style={{ fontSize: "12px" }}>{(c as any).fornecedor || <span style={{ color: "var(--t3)" }}>—</span>}</td>
+                      <td>
+                        {(c as any).categoria
+                          ? <span className="chip cgr" style={{ fontSize: "10px" }}>{(c as any).categoria}</span>
+                          : <span style={{ color: "var(--t3)" }}>—</span>}
+                      </td>
+                      <td className="mono" style={{ textAlign: "right", fontWeight: 700, color: "var(--err)" }}>{formatBRL(c.valor)}</td>
+                      <td>{chipStatus(c)}</td>
+                      <td className="mono" style={{ fontSize: "12px", color: "var(--t3)" }}>
+                        {(c as any).dt_pagamento ? formatDate((c as any).dt_pagamento) : "—"}
+                      </td>
+                      <td onClick={e => e.stopPropagation()}>
+                        <div style={{ display: "flex", gap: "3px" }}>
+                          {c.status !== "Pago" && (
+                            <button className="btn bp xs" onClick={() => abrirPgto(c)}>✓ Pagar</button>
+                          )}
+                          <button
+                            className="btn bg xs"
+                            style={{ color: "var(--err)", borderColor: "rgba(244,63,94,.3)" }}
+                            onClick={() => handleDelete(c)}
+                          >🗑</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: "var(--surf1)" }}>
+                    <td colSpan={4} style={{ padding: "10px 12px", fontSize: "12px", color: "var(--t3)", fontWeight: 600 }}>
+                      {pgarOrdenado.length} contas · {vencidas.length} vencida(s)
+                    </td>
+                    <td className="mono" style={{ textAlign: "right", color: "var(--err)", fontWeight: 700, padding: "10px 12px" }}>
+                      {formatBRL(totalPagar)}
+                    </td>
+                    <td colSpan={3} style={{ fontSize: "11px", color: "var(--t3)", padding: "10px 12px" }}>pendente</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </>)}
+
+        </>)}
       </div>
 
-      {/* ── Modal Receber ── */}
-      {modalReceber && clienteSel && (
+      {/* ── Modal Registrar Recebimento ── */}
+      {modalReceber && (
         <div className="mov open" onClick={e => e.target === e.currentTarget && setModalReceber(false)}>
-          <div className="mod" style={{ width:"480px" }}>
+          <div className="mod" style={{ width: "480px" }}>
             <div className="mhd">
               <div className="mtit">Registrar Recebimento</div>
               <button className="mcl" onClick={() => setModalReceber(false)}>✕</button>
             </div>
-            <div style={{ marginBottom:"14px" }}>
-              <strong>{clienteSel.cliente_nome}</strong>
-              <div style={{ fontSize:"12px", color:"var(--t3)", marginTop:"2px" }}>Em aberto: <strong>{formatBRL(clienteSel.a_receber)}</strong></div>
-            </div>
-            <div className="fg" style={{ marginBottom:"14px" }}>
+            {clienteSel && (
+              <div style={{ marginBottom: "14px" }}>
+                <strong>{clienteSel.cliente_nome}</strong>
+                <div style={{ fontSize: "12px", color: "var(--t3)", marginTop: "2px" }}>Em aberto: <strong>{formatBRL(clienteSel.a_receber)}</strong></div>
+              </div>
+            )}
+            <div className="fg" style={{ marginBottom: "14px" }}>
               <label className="fl">Pedido *</label>
-              <select className="fc" value={pedidoSel?.id ?? ""} onChange={e => selecionarPedido(e.target.value)}>
+              <select className="fc" value={pedidoSel?.id ?? ""} onChange={e => {
+                const p = pedidos.find(x => x.id === e.target.value) ?? null;
+                setPedidoSel(p); setValorRec(0); setErroRec("");
+              }}>
                 <option value="">Selecione um pedido...</option>
-                {pedidosCliente.map(p => {
+                {(clienteSel
+                  ? pedidos.filter(p => p.cliente_id === clienteSel.cliente_id && Number(p.valor_total) - Number(p.valor_recebido) > 0)
+                  : pedidos.filter(p => Number(p.valor_total) - Number(p.valor_recebido) > 0)
+                ).map(p => {
                   const saldo = Number(p.valor_total) - Number(p.valor_recebido);
-                  return <option key={p.id} value={p.id}>{p.id} — {formatBRL(saldo)} em aberto</option>;
+                  return <option key={p.id} value={p.id}>{p.id} — {p.clientes?.nome ?? "?"} — {formatBRL(saldo)} em aberto</option>;
                 })}
               </select>
             </div>
             {pedidoSel && (
-              <div style={{ background:"var(--surf2)", border:"1px solid var(--b1)", borderRadius:"8px", padding:"12px", marginBottom:"14px" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"6px" }}><span style={{ fontSize:"11px", color:"var(--t3)" }}>Total</span><span className="mono">{formatBRL(pedidoSel.valor_total)}</span></div>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"6px" }}><span style={{ fontSize:"11px", color:"var(--t3)" }}>Recebido</span><span className="mono" style={{ color:"var(--ok)" }}>{formatBRL(pedidoSel.valor_recebido)}</span></div>
-                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ fontSize:"11px", color:"var(--t3)" }}>Saldo</span><span className="mono" style={{ color:"var(--warn)", fontWeight:700 }}>{formatBRL(saldoPedido)}</span></div>
+              <div style={{ background: "var(--surf2)", border: "1px solid var(--b1)", borderRadius: "8px", padding: "12px", marginBottom: "14px", display: "flex", flexDirection: "column", gap: "5px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: "11px", color: "var(--t3)" }}>Total</span><span className="mono">{formatBRL(pedidoSel.valor_total)}</span></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: "11px", color: "var(--t3)" }}>Recebido</span><span className="mono" style={{ color: "var(--ok)" }}>{formatBRL(pedidoSel.valor_recebido)}</span></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: "11px", color: "var(--t3)" }}>Saldo</span><span className="mono" style={{ color: "var(--warn)", fontWeight: 700 }}>{formatBRL(Number(pedidoSel.valor_total) - Number(pedidoSel.valor_recebido))}</span></div>
               </div>
             )}
-            <div className="fg" style={{ marginBottom:"6px" }}>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"4px" }}>
+            <div className="fg" style={{ marginBottom: "6px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                 <label className="fl">Valor *</label>
-                {pedidoSel && <button className="btn bg xs" onClick={preencherTotal} style={{ fontSize:"10px" }}>Preencher total</button>}
+                {pedidoSel && (
+                  <button className="btn bg xs" style={{ fontSize: "10px" }} onClick={() => setValorRec(Number(pedidoSel.valor_total) - Number(pedidoSel.valor_recebido))}>
+                    Preencher total
+                  </button>
+                )}
               </div>
-              <CurrencyInput value={valorRec} onChange={v => { setValorRec(v); setErro(""); }} placeholder="R$ 0,00" disabled={!pedidoSel} />
-              <div style={{ fontSize:"11px", color:"var(--t3)", marginTop:"4px" }}>Pode ser maior que o saldo — excedente vira crédito do cliente</div>
+              <CurrencyInput value={valorRec} onChange={v => { setValorRec(v); setErroRec(""); }} placeholder="R$ 0,00" disabled={!pedidoSel} />
+              <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "4px" }}>Excedente vira crédito do cliente</div>
             </div>
-            {erro && <div className="al al-e" style={{ marginBottom:"12px" }}>{erro}</div>}
-            <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end" }}>
+            {erroRec && <div className="al al-e" style={{ marginBottom: "12px" }}>{erroRec}</div>}
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
               <button className="btn bg" onClick={() => setModalReceber(false)}>Cancelar</button>
               <button className="btn bp" onClick={salvarRecebimento} disabled={salvando || valorRec <= 0 || !pedidoSel}>
                 {salvando ? "Salvando..." : "✓ Confirmar"}
@@ -994,88 +817,24 @@ export default function FinanceiroPage() {
         </div>
       )}
 
-      {/* ── Modal Nova/Editar Conta a Pagar ── */}
-      {modalPagar && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && setModalPagar(false)}>
-          <div className="mod" style={{ width:"520px" }}>
-            <div className="mhd">
-              <div className="mtit">{editandoConta ? "Editar Conta" : "Nova Conta a Pagar"}</div>
-              <button className="mcl" onClick={() => setModalPagar(false)}>✕</button>
-            </div>
-            <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
-              <div className="fg">
-                <label className="fl">Descrição *</label>
-                <input className="fc" value={formPagar.descricao} onChange={e => setFormPagar(f => ({ ...f, descricao: e.target.value }))} placeholder="Ex: Conta de energia, aluguel..." />
-              </div>
-              <div className="fr">
-                <div className="fg">
-                  <label className="fl">Fornecedor</label>
-                  <input className="fc" value={formPagar.fornecedor} onChange={e => setFormPagar(f => ({ ...f, fornecedor: e.target.value }))} placeholder="Nome do fornecedor" />
-                </div>
-                <div className="fg">
-                  <label className="fl">Categoria</label>
-                  <select className="fc" value={formPagar.categoria} onChange={e => setFormPagar(f => ({ ...f, categoria: e.target.value }))}>
-                    <option value="">Selecione...</option>
-                    {CATEGORIAS.map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="fr">
-                <div className="fg">
-                  <label className="fl">Valor *</label>
-                  <CurrencyInput value={formPagar.valor} onChange={v => setFormPagar(f => ({ ...f, valor: v }))} placeholder="R$ 0,00" />
-                </div>
-                <div className="fg">
-                  <label className="fl">Status</label>
-                  <select className="fc" value={formPagar.status} onChange={e => setFormPagar(f => ({ ...f, status: e.target.value as "Pendente" | "Pago" }))}>
-                    <option value="Pendente">Pendente</option>
-                    <option value="Pago">Pago</option>
-                  </select>
-                </div>
-              </div>
-              <div className="fr">
-                <div className="fg">
-                  <label className="fl">Vencimento *</label>
-                  <DateInput value={formPagar.vencimento} onChange={v => setFormPagar(f => ({ ...f, vencimento: v }))} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Data de Pagamento</label>
-                  <DateInput value={formPagar.dt_pagamento} onChange={v => setFormPagar(f => ({ ...f, dt_pagamento: v }))} />
-                </div>
-              </div>
-              <div className="fg">
-                <label className="fl">Observações</label>
-                <textarea className="fc" value={formPagar.obs} onChange={e => setFormPagar(f => ({ ...f, obs: e.target.value }))} placeholder="Observações..." rows={2} style={{ resize:"vertical" }} />
-              </div>
-              <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end" }}>
-                <button className="btn bg" onClick={() => setModalPagar(false)}>Cancelar</button>
-                <button className="btn bp" onClick={salvarConta} disabled={salvando}>
-                  {salvando ? "Salvando..." : editandoConta ? "Salvar Alterações" : "Criar Conta"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ── Modal Confirmar Pagamento ── */}
-      {modalConfirmarPgto && contaParaPagar && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && setModalConfirmarPgto(false)}>
-          <div className="mod" style={{ width:"380px" }}>
+      {modalPgto && contaParaPagar && (
+        <div className="mov open" onClick={e => e.target === e.currentTarget && setModalPgto(false)}>
+          <div className="mod" style={{ width: "380px" }}>
             <div className="mhd">
               <div className="mtit">Confirmar Pagamento</div>
-              <button className="mcl" onClick={() => setModalConfirmarPgto(false)}>✕</button>
+              <button className="mcl" onClick={() => setModalPgto(false)}>✕</button>
             </div>
-            <div style={{ marginBottom:"16px" }}>
-              <div style={{ fontSize:"14px", fontWeight:700, color:"var(--t1)", marginBottom:"4px" }}>{contaParaPagar.descricao}</div>
-              <div style={{ fontSize:"22px", fontWeight:800, color:"var(--err)", fontFamily:"'DM Mono', monospace" }}>{formatBRL(contaParaPagar.valor)}</div>
+            <div style={{ marginBottom: "16px" }}>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--t1)", marginBottom: "4px" }}>{contaParaPagar.descricao}</div>
+              <div style={{ fontSize: "22px", fontWeight: 800, color: "var(--err)", fontFamily: "'DM Mono',monospace" }}>{formatBRL(contaParaPagar.valor)}</div>
             </div>
-            <div className="fg" style={{ marginBottom:"16px" }}>
+            <div className="fg" style={{ marginBottom: "16px" }}>
               <label className="fl">Data do Pagamento</label>
-              <DateInput value={dtPagamentoConfirm} onChange={setDtPagamentoConfirm} />
+              <DateInput value={dtPgto} onChange={setDtPgto} />
             </div>
-            <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end" }}>
-              <button className="btn bg" onClick={() => setModalConfirmarPgto(false)}>Cancelar</button>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button className="btn bg" onClick={() => setModalPgto(false)}>Cancelar</button>
               <button className="btn bp" onClick={confirmarPagamento} disabled={salvando}>
                 {salvando ? "Salvando..." : "✓ Confirmar Pagamento"}
               </button>
