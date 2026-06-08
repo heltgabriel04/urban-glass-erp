@@ -288,30 +288,42 @@ export default function EtiquetasPage() {
         .et-sep { color: #bbb; }
         .et-lote { font-size: 6.5px; font-family: 'Courier New', monospace; color: #aaa; margin-top: 1px; }
 
-        @media print {
-          .toolbar, .info-bar { display: none !important; }
-          html, body { background: white; margin: 0; padding: 0; }
-          .grid-wrapper { padding: 0; background: white; gap: 0; align-items: flex-start; }
+@media print {
+  .toolbar, .info-bar { display: none !important; }
+  html, body { background: white; margin: 0; padding: 0; }
+  .grid-wrapper { padding: 0; background: white; gap: 0; align-items: flex-start; }
 
-          .etiqueta {
-            width: 70mm; height: 40mm;
-            border: 0.3pt solid #999; border-radius: 1.5mm;
-            box-shadow: none;
-            page-break-after: always; break-after: page;
-          }
-          .et-empresa { font-size: 6pt; }
-          .et-seq     { font-size: 5pt; }
-          .et-lbl     { font-size: 4pt; }
-          .et-val     { font-size: 6pt; }
-          .et-cliente { font-size: 6.5pt; }
-          .et-pedido  { font-size: 7pt; }
-          .et-medidas { font-size: 7pt; }
-          .et-rodape-info { font-size: 4pt; }
-          .et-lote    { font-size: 4pt; }
-          .et-qrlbl   { font-size: 4pt; }
+  .etiqueta {
+    width: 70mm; height: 40mm;
+    border: 0.3pt solid #999; border-radius: 1.5mm;
+    box-shadow: none;
+    page-break-after: always; break-after: page;
+    position: relative;
+    left: 0; top: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden;
+  }
 
-          @page { size: 70mm 40mm; margin: 0; }
-        }
+  .et-topo { padding: 2px 5px; }
+  .et-corpo { padding: 3px 4px 3px 4px; }
+
+  .et-empresa { font-size: 7pt; letter-spacing: 1.5px; }
+  .et-seq     { font-size: 5.5pt; }
+  .et-lbl     { font-size: 4.5pt; }
+  .et-val     { font-size: 7pt; }
+  .et-cliente { font-size: 7.5pt; }
+  .et-pedido  { font-size: 8pt; }
+  .et-medidas { font-size: 8pt; }
+  .et-rodape-info { font-size: 4.5pt; }
+  .et-lote    { font-size: 4pt; }
+  .et-qrlbl   { font-size: 4pt; }
+
+  @page {
+    size: 70mm 40mm;
+    margin: 0mm;
+  }
+}
       `}</style>
 
       <div className="toolbar">
