@@ -713,11 +713,12 @@ function OtimizadorContent() {
     }
     for (const pid of todosPedidos) await updatePedido(pid, { status: "Em Produção – Corte" });
     if (retalhosGerados.length > 0) {
-      await salvarRetalhos(retalhosGerados.map(fr => ({
+      const ok = await salvarRetalhos(retalhosGerados.map(fr => ({
         produto_nome: fr.prod, largura: fr.l, altura: fr.a, m2: fr.m2,
         chapa_origem: `CHAPA ${fr.chapaIdx + 1}`, pedido_origem: pedidoRef,
         status: "Disponível", dt_gerado: hoje,
       })));
+      if (!ok) { setSalvando(false); alert("Erro ao salvar retalhos. Tente novamente."); return; }
     }
     const consumoPorProd = new Map<string, { chapas: number; m2: number }>();
     resultado.forEach(r => {
