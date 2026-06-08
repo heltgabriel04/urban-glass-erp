@@ -203,12 +203,12 @@ export default function OrcamentoDetalhe() {
                 <thead>
                   <tr>
                     <th>#</th><th>Produto</th><th>Dimensão</th>
-                    <th>m²</th><th>Qtd</th><th>R$/m²</th><th>Lapidação</th><th>Subtotal</th>
+                    <th>m²</th><th>Qtd</th><th>R$/m²</th><th>Subtotal</th>
                   </tr>
                 </thead>
                 <tbody>
                   {itens.length === 0 && (
-                    <tr><td colSpan={8} style={{ textAlign: "center", color: "var(--t3)", padding: "24px" }}>Nenhum item neste orçamento</td></tr>
+                    <tr><td colSpan={7} style={{ textAlign: "center", color: "var(--t3)", padding: "24px" }}>Nenhum item neste orçamento</td></tr>
                   )}
                   {itens.map((item: any, i: number) => (
                     <tr key={item.id}>
@@ -218,7 +218,6 @@ export default function OrcamentoDetalhe() {
                       <td className="mono">{Number(item.m2).toFixed(3)}</td>
                       <td className="mono">{item.quantidade}</td>
                       <td className="mono">{formatBRL(item.valor_m2)}</td>
-                      <td className="mono">{item.lapidacao > 0 ? formatBRL(item.lapidacao) : <span style={{ color: "var(--t3)" }}>—</span>}</td>
                       <td className="mono" style={{ color: "var(--acc)", fontWeight: 600 }}>{formatBRL(item.subtotal)}</td>
                     </tr>
                   ))}
@@ -304,7 +303,7 @@ export default function OrcamentoDetalhe() {
           <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "16px", fontSize: "11px" }}>
             <thead>
               <tr style={{ background: "#2d5fa6" }}>
-                {["#","Produto","Dimensão (mm)","m²","Qtd","R$/m²","Lapidação","Subtotal"].map((h, i) => (
+                {["#","Produto","Dimensão (mm)","m²","Qtd","R$/m²","Subtotal"].map((h, i) => (
                   <th key={i} style={{
                     padding: "8px", color: "white", fontWeight: 800, fontSize: "10px",
                     textAlign: i === 0 || i === 4 ? "center" : i >= 5 ? "right" : "left",
@@ -322,7 +321,6 @@ export default function OrcamentoDetalhe() {
                   <td style={{ padding: "7px 8px", borderBottom: "1px solid #e0e6f5", fontFamily: "monospace", fontSize: "10px", fontWeight: 700, color: "#222" }}>{Number(item.m2).toFixed(3)}</td>
                   <td style={{ padding: "7px 8px", borderBottom: "1px solid #e0e6f5", textAlign: "center", fontWeight: 700 }}>{item.quantidade}</td>
                   <td style={{ padding: "7px 8px", borderBottom: "1px solid #e0e6f5", textAlign: "right", fontFamily: "monospace", fontSize: "10px", fontWeight: 700, color: "#222" }}>{formatBRL(item.valor_m2)}</td>
-                  <td style={{ padding: "7px 8px", borderBottom: "1px solid #e0e6f5", textAlign: "right", fontFamily: "monospace", fontSize: "10px", fontWeight: 700, color: "#222" }}>{item.lapidacao > 0 ? formatBRL(item.lapidacao) : "—"}</td>
                   <td style={{ padding: "7px 8px", borderBottom: "1px solid #e0e6f5", textAlign: "right", fontFamily: "monospace", fontWeight: 800, color: "#2d5fa6", fontSize: "11px" }}>{formatBRL(item.subtotal)}</td>
                 </tr>
               ))}

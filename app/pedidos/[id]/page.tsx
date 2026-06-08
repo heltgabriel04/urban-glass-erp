@@ -635,7 +635,7 @@ async function handleMarcarPago(lancId: number) {
               <div className="tw">
                 <table>
                   <thead>
-                    <tr><th>#</th><th>Produto</th><th>Dimensão</th><th>m²</th><th>Qtd</th><th>R$/m²</th><th>Lapidação</th><th>V.Cliente</th><th>Subtotal</th></tr>
+                    <tr><th>#</th><th>Produto</th><th>Dimensão</th><th>m²</th><th>Qtd</th><th>R$/m²</th><th>V.Cliente</th><th>Subtotal</th></tr>
                   </thead>
                   <tbody>
                     {pedido.itens_pedido!.map((item, i) => (
@@ -646,7 +646,6 @@ async function handleMarcarPago(lancId: number) {
                         <td className="mono">{Number(item.m2).toFixed(3)}</td>
                         <td className="mono">{item.quantidade}</td>
                         <td className="mono">{formatBRL(item.valor_m2)}</td>
-                        <td className="mono">{item.lapidacao > 0 ? formatBRL(item.lapidacao) : <span style={{ color:"var(--t3)" }}>—</span>}</td>
                         <td style={{ textAlign:"center" }}>{(item as any).vidro_cliente ? <span style={{ color:"var(--warn)" }}>📦</span> : <span style={{ color:"var(--t3)" }}>—</span>}</td>
                         <td className="mono" style={{ color:"var(--acc)", fontWeight:600 }}>{formatBRL(item.subtotal)}</td>
                       </tr>
@@ -718,8 +717,8 @@ async function handleMarcarPago(lancId: number) {
                 {/* Itens */}
                 <div style={{ padding:"12px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)" }}>
                   <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"12px", textTransform:"uppercase" }}>Itens do Pedido</div>
-                  <div style={{ display:"grid", gridTemplateColumns:"2fr 70px 70px 50px 100px 90px 90px", gap:"6px", marginBottom:"6px", paddingBottom:"6px", borderBottom:"1px solid var(--b1)" }}>
-                    {["Produto","Larg.","Alt.","Qtd","R$/m²","Lap./m²","Subtotal"].map(h => (
+                  <div style={{ display:"grid", gridTemplateColumns:"2fr 70px 70px 50px 100px 90px", gap:"6px", marginBottom:"6px", paddingBottom:"6px", borderBottom:"1px solid var(--b1)" }}>
+                    {["Produto","Larg.","Alt.","Qtd","R$/m²","Subtotal"].map(h => (
                       <div key={h} style={{ fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px", fontFamily:"'DM Mono',monospace" }}>{h}</div>
                     ))}
                   </div>
@@ -728,7 +727,7 @@ async function handleMarcarPago(lancId: number) {
                     const sub = calcSubtotalItem(item);
                     return (
                       <div key={item.id} style={{ marginBottom:"10px" }}>
-                        <div style={{ display:"grid", gridTemplateColumns:"2fr 70px 70px 50px 100px 90px 90px", gap:"6px", alignItems:"center" }}>
+                        <div style={{ display:"grid", gridTemplateColumns:"2fr 70px 70px 50px 100px 90px", gap:"6px", alignItems:"center" }}>
                           <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", padding:"7px 10px", background:"var(--surf1)", borderRadius:"6px", border:"1px solid var(--b1)" }}>
                             {item.produto_nome}
                           </div>
@@ -736,7 +735,6 @@ async function handleMarcarPago(lancId: number) {
                           <input style={fcSm} type="number" value={item.altura || ""} onChange={e => updEditItem(idx, "altura", parseInt(e.target.value) || 0)} placeholder="0" />
                           <input style={fcSm} type="number" value={item.quantidade} onChange={e => updEditItem(idx, "quantidade", parseInt(e.target.value) || 1)} min={1} />
                           <CurrencyInput value={item.valor_m2} onChange={v => updEditItem(idx, "valor_m2", v)} placeholder="R$/m²" style={{ margin:0, padding:"7px 10px", fontSize:"12px" }} />
-                          <CurrencyInput value={item.lapidacao} onChange={v => updEditItem(idx, "lapidacao", v)} placeholder="0" style={{ margin:0, padding:"7px 10px", fontSize:"12px" }} />
                           <div style={{ fontSize:"12px", color:"var(--acc)", fontWeight:700, fontFamily:"'DM Mono',monospace", padding:"7px 0" }}>{formatBRL(sub)}</div>
                         </div>
                         {m2 > 0 && (
@@ -810,7 +808,7 @@ async function handleMarcarPago(lancId: number) {
           <table style={{ width:"100%", borderCollapse:"collapse", marginBottom:"16px", fontSize:"11px" }}>
             <thead>
               <tr style={{ background:"#2d5fa6" }}>
-                {["#","Produto","Dimensão (mm)","m²","Qtd","R$/m²","Lapidação","Subtotal"].map((h, i) => (
+                {["#","Produto","Dimensão (mm)","m²","Qtd","R$/m²","Subtotal"].map((h, i) => (
                   <th key={i} style={{ padding:"8px", color:"white", fontWeight:700, fontSize:"9px", textAlign: i === 0 || i === 4 ? "center" : i >= 5 ? "right" : "left", letterSpacing:"0.5px" }}>{h}</th>
                 ))}
               </tr>
@@ -824,7 +822,6 @@ async function handleMarcarPago(lancId: number) {
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontFamily:"monospace", fontSize:"10px", fontWeight:700, color:"#000" }}>{Number(item.m2).toFixed(3)}</td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"center", fontWeight:700, color:"#000" }}>{item.quantidade}</td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"right", fontFamily:"monospace", fontSize:"10px", fontWeight:700, color:"#000" }}>{formatBRL(item.valor_m2)}</td>
-                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"right", fontFamily:"monospace", fontSize:"10px", fontWeight:700, color:"#000" }}>{item.lapidacao > 0 ? formatBRL(item.lapidacao) : "—"}</td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"right", fontFamily:"monospace", fontWeight:700, color:"#2d5fa6" }}>{formatBRL(item.subtotal)}</td>
                 </tr>
               ))}

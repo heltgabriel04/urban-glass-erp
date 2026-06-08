@@ -321,7 +321,7 @@ export default function NovoPedidoPage() {
   const toggleBase: React.CSSProperties = { padding: "5px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer", border: "1px solid var(--b2)", transition: "all 0.15s", fontFamily: "'DM Mono', monospace" };
   const toggleAtivo: React.CSSProperties   = { ...toggleBase, background: "var(--acc)", color: "#000", borderColor: "var(--acc)" };
   const toggleInativo: React.CSSProperties = { ...toggleBase, background: "transparent", color: "var(--t3)" };
-  const colsM2 = "2fr 70px 70px 50px 90px 90px 90px 90px 90px 36px";
+  const colsM2 = "2fr 70px 70px 50px 90px 90px 90px 90px 36px";
   const colsMl = "2fr 90px 90px 50px 90px 90px 90px 36px";
 
   return (
@@ -455,7 +455,7 @@ export default function NovoPedidoPage() {
           <div style={{ display: "grid", gridTemplateColumns: isMl ? colsMl : colsM2, gap: "6px", padding: "6px 0", borderBottom: "1px solid var(--b1)", marginBottom: "8px", alignItems: "center" }}>
             {(isMl
               ? ["Produto","Larg. (mm)","Alt. (mm)","Qtd","R$/ml","Total(R$)",""]
-              : ["Produto","Larg.","Alt.","Qtd","R$/m²","Unit.(R$)","Total(R$)","Lap./m²",""]
+              : ["Produto","Larg.","Alt.","Qtd","R$/m²","Unit.(R$)","Total(R$)",""]
             ).map((h, i) => (
               <div key={i} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>{h}</div>
             ))}
@@ -535,7 +535,6 @@ export default function NovoPedidoPage() {
                       <CurrencyInput value={item.valor_m2} onChange={v => updItem(i, "valor_m2", v)} placeholder="R$/m²" />
                       <CurrencyInput value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(unitVal.toFixed(2)) : 0} onChange={v => updUnitItem(i, v)} placeholder="por peça" />
                       <CurrencyInput value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : 0} onChange={v => updTotalItem(i, v)} placeholder="total" />
-                      <CurrencyInput value={item.lapidacao} onChange={v => updItem(i, "lapidacao", v)} placeholder="0" />
                       <button className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1}>✕</button>
                       {checkboxVC}
                     </div>
