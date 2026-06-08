@@ -122,12 +122,12 @@ export async function salvarNotaCompleta(p: PayloadNota): Promise<boolean> {
 
 // ─── HELPERS ───────────────────────────────────────────────
 
-/** Chama a API route server-side para emitir uma NF-e. */
-async function chamarEmitirNFe(payload: Record<string, unknown>): Promise<Response> {
+/** Chama a API route server-side para emitir uma NF-e via FocusNFe. */
+async function chamarEmitirNFe(ref: string, payload: Record<string, unknown>): Promise<Response> {
   return fetch("/api/notas/emitir", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ref, payload }),
   });
 }
 
@@ -149,23 +149,26 @@ function validarCliente(c: Cliente): string | null {
   return null;
 }
 
-function montarDestinatario(c: Cliente) {
+/** Retorna os campos de destinatário no formato flat do FocusNFe. */
+function montarCamposDestFlat(c: Cliente): Record<string, unknown> {
   const docRaw = (c.tipo_pessoa === "PF" ? c.cpf : c.cnpj).replace(/\D/g, "");
-  const dest: Record<string, unknown> = {
-    cpf_cnpj: docRaw, nome: c.nome,
-    indicador_ie: Number(c.ind_ie ?? "9"),
-    consumidor_final: c.consumidor_final ? 1 : 0,
-    endereco: {
-      logradouro: c.logradouro || c.endereco, numero: c.numero || "S/N",
-      complemento: c.complemento || undefined, bairro: c.bairro || "Centro",
-      nome_municipio: c.cidade, codigo_municipio: c.cod_ibge,
-      uf: c.uf.toUpperCase(), cep: c.cep.replace(/\D/g, ""),
-      codigo_pais: "1058", nome_pais: "Brasil",
-    },
+  return {
+    ...(c.tipo_pessoa === "PF" ? { cpf_destinatario: docRaw } : { cnpj_destinatario: docRaw }),
+    nome_destinatario:                         c.nome,
+    indicador_inscricao_estadual_destinatario: String(c.ind_ie ?? "9"),
+    indicador_consumidor_final:                c.consumidor_final ? "1" : "0",
+    ...(c.ie && c.ind_ie === "1" ? { inscricao_estadual_destinatario: c.ie.replace(/\D/g, "") } : {}),
+    ...(c.email ? { email_destinatario: c.email } : {}),
+    logradouro_destinatario:       c.logradouro || c.endereco,
+    numero_destinatario:           c.numero     || "S/N",
+    ...(c.complemento ? { complemento_destinatario: c.complemento } : {}),
+    bairro_destinatario:           c.bairro     || "Centro",
+    municipio_destinatario:        c.cidade,
+    uf_destinatario:               c.uf.toUpperCase(),
+    pais_destinatario:             "Brasil",
+    cep_destinatario:              c.cep.replace(/\D/g, ""),
+    codigo_municipio_destinatario: c.cod_ibge,
   };
-  if (c.ie && c.ind_ie === "1") dest.ie = c.ie.replace(/\D/g, "");
-  if (c.email) dest.email = c.email;
-  return dest;
 }
 
 // ─── EMISSÃO COMPLETA ──────────────────────────────────────
@@ -191,72 +194,91 @@ export async function emitirNFeCompleta(p: PayloadNota): Promise<{ ok: boolean; 
   if (!notaData) return { ok: false, mensagem: "Rascunho não encontrado após salvar." };
   const notaId = (notaData as any).id as number;
 
-  const cfopNum  = form.cfop_padrao.replace(".", "");
-  const aliqIcms = form.cfop_padrao.startsWith("5") ? 0.18 : 0.12;
+  const ref        = `UG-${form.pedido_id}-${notaId}`;
+  const cfopNum    = form.cfop_padrao.replace(".", "");
+  const aliqPct    = form.cfop_padrao.startsWith("5") ? 18 : 12;
+  const dtEmissao  = new Date().toISOString().replace(/\.\d{3}Z$/, "-03:00");
 
-  // ambiente e emitente.cpf_cnpj são injetados server-side na API route
+  // Payload no formato flat do FocusNFe — emitente injetado server-side
   const payload: Record<string, unknown> = {
-    referencia: `UG-${form.pedido_id}-${notaId}`,
-    destinatario: montarDestinatario(cliente),
-    itens: form.itens.map((item, i) => ({
-      numero_item:               i + 1,
-      codigo_produto:            `ITEM-${String(i+1).padStart(3,"0")}`,
-      descricao:                 item.produto_nome,
-      ncm:                       item.ncm,
-      cfop:                      item.cfop || cfopNum,
-      unidade_comercial:         item.unidade,
-      quantidade_comercial:      Number(item.quantidade.toFixed(4)),
-      valor_unitario_comercial:  Number(item.valor_unitario.toFixed(4)),
-      valor_bruto:               Number(item.valor_bruto.toFixed(2)),
-      ...(item.lapidacao > 0 ? { valor_outras_despesas: Number(item.lapidacao.toFixed(2)) } : {}),
-      icms: {
-        origem: 0, cst: "00", modalidade_base_calculo: 3,
-        valor_base_calculo: Number(item.valor_bruto.toFixed(2)),
-        aliquota: form.cfop_padrao.startsWith("5") ? 18 : 12,
-        valor: Number(item.valor_icms.toFixed(2)),
-      },
-      pis: { cst:"01", valor_base_calculo:Number(item.valor_bruto.toFixed(2)), aliquota_porcentual:1.65, valor:Number(item.valor_pis.toFixed(2)) },
-      cofins: { cst:"01", valor_base_calculo:Number(item.valor_bruto.toFixed(2)), aliquota_porcentual:7.6, valor:Number(item.valor_cofins.toFixed(2)) },
-      ...(item.ipi_pct > 0 ? { ipi: { cst:"50", aliquota:item.ipi_pct, valor:Number(item.valor_ipi.toFixed(2)) } } : {}),
+    natureza_operacao:  form.natureza_op,
+    data_emissao:       dtEmissao,
+    tipo_documento:     "1",
+    finalidade_emissao: form.finalidade || "1",
+    ...(form.dt_saida ? { data_entrada_saida: `${form.dt_saida}T${form.hora_saida || "00:00"}:00-03:00` } : {}),
+    // Destinatário (campos flat)
+    ...montarCamposDestFlat(cliente),
+    // Itens
+    items: form.itens.map((item, i) => ({
+      numero_item:                  String(i + 1),
+      codigo_produto:               `ITEM-${String(i+1).padStart(3,"0")}`,
+      descricao:                    item.produto_nome,
+      codigo_ncm:                   item.ncm || "70031200",
+      cfop:                         (item.cfop || cfopNum).replace(".", ""),
+      unidade_comercial:            item.unidade,
+      quantidade_comercial:         String(Number(item.quantidade.toFixed(4))),
+      valor_unitario_comercial:     String(Number(item.valor_unitario.toFixed(4))),
+      valor_unitario_tributavel:    String(Number(item.valor_unitario.toFixed(4))),
+      unidade_tributavel:           item.unidade,
+      quantidade_tributavel:        String(Number(item.quantidade.toFixed(4))),
+      valor_bruto:                  String(Number(item.valor_bruto.toFixed(2))),
+      ...(item.lapidacao > 0 ? { outras_despesas: String(Number(item.lapidacao.toFixed(2))) } : {}),
+      icms_situacao_tributaria:     "00",
+      icms_origem:                  "0",
+      icms_modalidade_base_calculo: "3",
+      icms_base_calculo:            String(Number(item.valor_bruto.toFixed(2))),
+      icms_aliquota:                String(aliqPct),
+      icms_valor:                   String(Number(item.valor_icms.toFixed(2))),
+      pis_situacao_tributaria:      "01",
+      pis_base_calculo:             String(Number(item.valor_bruto.toFixed(2))),
+      pis_aliquota_porcentual:      "1.65",
+      pis_valor:                    String(Number(item.valor_pis.toFixed(2))),
+      cofins_situacao_tributaria:   "01",
+      cofins_base_calculo:          String(Number(item.valor_bruto.toFixed(2))),
+      cofins_aliquota_porcentual:   "7.60",
+      cofins_valor:                 String(Number(item.valor_cofins.toFixed(2))),
+      ...(item.ipi_pct > 0 ? {
+        ipi_situacao_tributaria: "50",
+        ipi_aliquota:            String(item.ipi_pct),
+        ipi_valor:               String(Number(item.valor_ipi.toFixed(2))),
+      } : {}),
     })),
-    total: {
-      icms_total: {
-        valor_bc_icms:  Number(valorProdutos.toFixed(2)),
-        valor_icms:     Number(valorIcms.toFixed(2)),
-        valor_pis:      Number(valorPis.toFixed(2)),
-        valor_cofins:   Number(valorCofins.toFixed(2)),
-        valor_ipi:      Number(valorIpi.toFixed(2)),
-        valor_produtos: Number(valorProdutos.toFixed(2)),
-        valor_desconto: Number(form.valor_desconto.toFixed(2)),
-        valor_frete:    Number(form.valor_frete.toFixed(2)),
-        valor_seguro:   Number(form.valor_seguro.toFixed(2)),
-        outras_despesas: Number(form.valor_outros.toFixed(2)),
-        valor_nota:     Number(valorNota.toFixed(2)),
-      },
-    },
-    transportador: {
-      modalidade_frete: form.modalidade_frete,
-      ...(form.transportadora ? { transportadora: { nome: form.transportadora } } : {}),
-      ...(form.placa_veiculo  ? { veiculo: { placa: form.placa_veiculo, uf: form.uf_veiculo, rntc: form.rntc || undefined } } : {}),
-      ...(form.volumes ? { volumes: [{ especie: form.especie_volume || "UN", quantidade: Number(form.volumes), peso_bruto: Number(form.peso_bruto) || 0, peso_liquido: Number(form.peso_liquido) || 0 }] } : {}),
-    },
-    pagamentos: [{ forma_pagamento: form.forma_pgto, valor: Number(valorNota.toFixed(2)) }],
-    ...(form.obs_contribuinte ? { informacoes_adicionais_contribuinte: form.obs_contribuinte } : {}),
-    ...(form.dt_saida ? { data_saida_entrada: `${form.dt_saida}T${form.hora_saida || "00:00"}:00-03:00` } : {}),
+    // Totais
+    valor_produtos:  String(Number(valorProdutos.toFixed(2))),
+    valor_desconto:  String(Number(form.valor_desconto.toFixed(2))),
+    valor_frete:     String(Number(form.valor_frete.toFixed(2))),
+    valor_seguro:    String(Number(form.valor_seguro.toFixed(2))),
+    outras_despesas: String(Number(form.valor_outros.toFixed(2))),
+    valor_total:     String(Number(valorNota.toFixed(2))),
+    // Transporte
+    modalidade_frete: String(form.modalidade_frete),
+    ...(form.transportadora ? { nome_transportadora: form.transportadora } : {}),
+    ...(form.placa_veiculo  ? { placa_veiculo: form.placa_veiculo, uf_veiculo: form.uf_veiculo || undefined, rntc: form.rntc || undefined } : {}),
+    ...(form.volumes ? {
+      quantidade_volumes: form.volumes,
+      especie_volumes:    form.especie_volume || "UN",
+      peso_bruto:         form.peso_bruto   || "0",
+      peso_liquido:       form.peso_liquido || "0",
+    } : {}),
+    // Pagamento
+    forma_pagamento: form.forma_pgto || "99",
+    ...(form.obs_contribuinte ? { informacoes_adicionais: form.obs_contribuinte } : {}),
   };
 
   try {
-    const res = await chamarEmitirNFe(payload);
+    const res  = await chamarEmitirNFe(ref, payload);
     const json = await res.json();
     if (!res.ok) {
-      await supabase.from("notas_fiscais").update({ status:"rejeitada", motivo_rejeicao: json.message ?? JSON.stringify(json.errors ?? json) } as never).eq("id", notaId);
-      return { ok:false, mensagem: json.message ?? "Erro na Nuvem Fiscal" };
+      const motivo = json.mensagem_sefaz ?? json.mensagens_erro?.[0]?.mensagem ?? JSON.stringify(json);
+      await supabase.from("notas_fiscais").update({ status: "rejeitada", motivo_rejeicao: motivo } as never).eq("id", notaId);
+      return { ok: false, mensagem: json.mensagem_sefaz ?? "Erro no FocusNFe" };
     }
-    await supabase.from("notas_fiscais").update({ status:"enviando", nuvem_fiscal_id: json.id } as never).eq("id", notaId);
-    return { ok:true, mensagem:"NF-e enviada para processamento." };
+    // Armazena o ref para consultas de status posteriores
+    await supabase.from("notas_fiscais").update({ status: "enviando", nuvem_fiscal_id: ref } as never).eq("id", notaId);
+    return { ok: true, mensagem: "NF-e enviada para processamento." };
   } catch (err) {
     console.error("emitirNFeCompleta:", err);
-    return { ok:false, mensagem:"Erro de conexão com Nuvem Fiscal." };
+    return { ok: false, mensagem: "Erro de conexão com FocusNFe." };
   }
 }
 
@@ -273,44 +295,77 @@ export async function emitirNFe(notaId: number, pedido: Pedido): Promise<{ ok: b
     if (data) pedidoCompleto = data as Pedido;
   }
 
-  const aliqIcms = nota.cfop.startsWith("5") ? 0.18 : 0.12;
-  const cfopNum  = nota.cfop.replace(".", "");
+  const ref       = `UG-${pedido.id}-${notaId}`;
+  const aliqPct   = nota.cfop.startsWith("5") ? 18 : 12;
+  const aliqIcms  = aliqPct / 100;
+  const cfopNum   = nota.cfop.replace(".", "");
+  const dtEmissao = new Date().toISOString().replace(/\.\d{3}Z$/, "-03:00");
 
-  // ambiente e emitente.cpf_cnpj são injetados server-side na API route
-  const payload = {
-    referencia:`UG-${pedido.id}-${notaId}`,
-    destinatario: montarDestinatario(cliente),
-    itens: (pedidoCompleto.itens_pedido ?? []).map((item, i) => {
+  const payload: Record<string, unknown> = {
+    natureza_operacao:  nota.natureza_op,
+    data_emissao:       dtEmissao,
+    tipo_documento:     "1",
+    finalidade_emissao: "1",
+    // Destinatário
+    ...montarCamposDestFlat(cliente),
+    // Itens
+    items: (pedidoCompleto.itens_pedido ?? []).map((item, i) => {
       const vItem = Number(item.subtotal);
       const qtd   = Number(item.m2) * item.quantidade;
       const vUnit = qtd > 0 ? vItem / qtd : Number(item.valor_m2);
       return {
-        numero_item:i+1, codigo_produto:item.produto_id?.toString() ?? `ITEM-${String(i+1).padStart(3,"0")}`,
-        descricao:item.produto_nome, ncm:"70031200", cfop:cfopNum,
-        unidade_comercial:"M2", quantidade_comercial:Number(qtd.toFixed(4)),
-        valor_unitario_comercial:Number(vUnit.toFixed(4)), valor_bruto:Number(vItem.toFixed(2)),
-        ...(item.lapidacao > 0 ? { valor_outras_despesas:Number(item.lapidacao.toFixed(2)) } : {}),
-        icms:{ origem:0, cst:"00", modalidade_base_calculo:3, valor_base_calculo:Number(vItem.toFixed(2)), aliquota:nota.cfop.startsWith("5")?18:12, valor:Number((vItem*aliqIcms).toFixed(2)) },
-        pis:{ cst:"01", valor_base_calculo:Number(vItem.toFixed(2)), aliquota_porcentual:1.65, valor:Number((vItem*0.0165).toFixed(2)) },
-        cofins:{ cst:"01", valor_base_calculo:Number(vItem.toFixed(2)), aliquota_porcentual:7.6, valor:Number((vItem*0.076).toFixed(2)) },
+        numero_item:                  String(i + 1),
+        codigo_produto:               item.produto_id?.toString() ?? `ITEM-${String(i+1).padStart(3,"0")}`,
+        descricao:                    item.produto_nome,
+        codigo_ncm:                   "70031200",
+        cfop:                         cfopNum,
+        unidade_comercial:            "M2",
+        quantidade_comercial:         String(Number(qtd.toFixed(4))),
+        valor_unitario_comercial:     String(Number(vUnit.toFixed(4))),
+        valor_unitario_tributavel:    String(Number(vUnit.toFixed(4))),
+        unidade_tributavel:           "M2",
+        quantidade_tributavel:        String(Number(qtd.toFixed(4))),
+        valor_bruto:                  String(Number(vItem.toFixed(2))),
+        ...(item.lapidacao > 0 ? { outras_despesas: String(Number(item.lapidacao.toFixed(2))) } : {}),
+        icms_situacao_tributaria:     "00",
+        icms_origem:                  "0",
+        icms_modalidade_base_calculo: "3",
+        icms_base_calculo:            String(Number(vItem.toFixed(2))),
+        icms_aliquota:                String(aliqPct),
+        icms_valor:                   String(Number((vItem * aliqIcms).toFixed(2))),
+        pis_situacao_tributaria:      "01",
+        pis_base_calculo:             String(Number(vItem.toFixed(2))),
+        pis_aliquota_porcentual:      "1.65",
+        pis_valor:                    String(Number((vItem * 0.0165).toFixed(2))),
+        cofins_situacao_tributaria:   "01",
+        cofins_base_calculo:          String(Number(vItem.toFixed(2))),
+        cofins_aliquota_porcentual:   "7.60",
+        cofins_valor:                 String(Number((vItem * 0.076).toFixed(2))),
       };
     }),
-    total:{ icms_total:{ valor_bc_icms:Number(nota.valor_produtos.toFixed(2)), valor_icms:Number(nota.valor_icms.toFixed(2)), valor_pis:Number(nota.valor_pis.toFixed(2)), valor_cofins:Number(nota.valor_cofins.toFixed(2)), valor_produtos:Number(nota.valor_produtos.toFixed(2)), valor_nota:Number(nota.valor_total.toFixed(2)) } },
-    transportador:{ modalidade_frete:9 },
-    pagamentos:[{ forma_pagamento:"01", valor:Number(nota.valor_total.toFixed(2)) }],
-    ...(cliente.obs_nfe ? { informacoes_adicionais_contribuinte:cliente.obs_nfe } : {}),
+    // Totais
+    valor_produtos:  String(Number(nota.valor_produtos.toFixed(2))),
+    valor_desconto:  "0.00",
+    valor_frete:     "0.00",
+    valor_seguro:    "0.00",
+    outras_despesas: "0.00",
+    valor_total:     String(Number(nota.valor_total.toFixed(2))),
+    modalidade_frete: "9",
+    forma_pagamento:  "01",
+    ...(cliente.obs_nfe ? { informacoes_adicionais: cliente.obs_nfe } : {}),
   };
 
   try {
-    const res = await chamarEmitirNFe(payload as Record<string, unknown>);
+    const res  = await chamarEmitirNFe(ref, payload);
     const json = await res.json();
     if (!res.ok) {
-      await supabase.from("notas_fiscais").update({ status:"rejeitada", motivo_rejeicao:json.message ?? JSON.stringify(json.errors ?? json) } as never).eq("id", notaId);
-      return { ok:false, mensagem:json.message ?? "Erro na Nuvem Fiscal" };
+      const motivo = json.mensagem_sefaz ?? json.mensagens_erro?.[0]?.mensagem ?? JSON.stringify(json);
+      await supabase.from("notas_fiscais").update({ status: "rejeitada", motivo_rejeicao: motivo } as never).eq("id", notaId);
+      return { ok: false, mensagem: json.mensagem_sefaz ?? "Erro no FocusNFe" };
     }
-    await supabase.from("notas_fiscais").update({ status:"enviando", nuvem_fiscal_id:json.id } as never).eq("id", notaId);
-    return { ok:true, mensagem:"NF-e enviada para processamento." };
-  } catch(err) { console.error("emitirNFe:",err); return { ok:false, mensagem:"Erro de conexão." }; }
+    await supabase.from("notas_fiscais").update({ status: "enviando", nuvem_fiscal_id: ref } as never).eq("id", notaId);
+    return { ok: true, mensagem: "NF-e enviada para processamento." };
+  } catch(err) { console.error("emitirNFe:", err); return { ok: false, mensagem: "Erro de conexão." }; }
 }
 
 export async function consultarStatusNFe(notaId: number): Promise<void> {
@@ -322,11 +377,18 @@ export async function consultarStatusNFe(notaId: number): Promise<void> {
     if (!res.ok) return;
     const updates: Record<string, unknown> = {};
     if (json.status === "autorizado") {
-      updates.status="autorizada"; updates.numero=json.numero?.toString(); updates.chave=json.chave_acesso;
-      updates.protocolo=json.protocolo; updates.danfe_url=json.danfe_url; updates.xml_url=json.xml_url;
-      updates.dt_autorizacao=new Date().toISOString();
-    } else if (json.status === "rejeitado") {
-      updates.status="rejeitada"; updates.motivo_rejeicao=json.motivo;
+      updates.status         = "autorizada";
+      updates.numero         = json.numero?.toString();
+      updates.chave          = json.chave_nfe;
+      updates.protocolo      = json.protocolo;
+      updates.danfe_url      = json.caminho_danfe;
+      updates.xml_url        = json.caminho_xml_nota_fiscal;
+      updates.dt_autorizacao = new Date().toISOString();
+    } else if (json.status === "erro_autorizacao" || json.status === "denegado") {
+      updates.status          = "rejeitada";
+      updates.motivo_rejeicao = json.mensagem_sefaz ?? json.mensagens_erro?.[0]?.mensagem ?? json.status;
+    } else if (json.status === "cancelado") {
+      updates.status = "cancelada";
     }
     if (Object.keys(updates).length > 0) await supabase.from("notas_fiscais").update(updates as never).eq("id", notaId);
   } catch(err) { console.error("consultarStatusNFe:",err); }

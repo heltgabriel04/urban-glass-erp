@@ -1,22 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const NF_API = "https://api.nuvemfiscal.com.br";
+function getBaseUrl(): string {
+  return (process.env.FOCUSNFE_AMBIENTE ?? "homologacao") === "producao"
+    ? "https://api.focusnfe.com.br"
+    : "https://homologacao.focusnfe.com.br";
+}
+
+function basicAuth(token: string): string {
+  return "Basic " + Buffer.from(token + ":").toString("base64");
+}
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const token = process.env.NUVEM_FISCAL_TOKEN ?? "";
+  const token = process.env.FOCUSNFE_TOKEN ?? "";
 
   try {
-    const res = await fetch(`${NF_API}/nfe/${id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    // id é o "ref" usado na emissão — FocusNFe usa o mesmo para consulta
+    const res = await fetch(
+      `${getBaseUrl()}/v2/nfe/${encodeURIComponent(id)}?completa=1`,
+      { headers: { Authorization: basicAuth(token) } }
+    );
     const json = await res.json();
     return NextResponse.json(json, { status: res.status });
   } catch (err) {
     console.error("api/notas/consultar:", err);
-    return NextResponse.json({ message: "Erro de conexão com Nuvem Fiscal" }, { status: 500 });
+    return NextResponse.json({ message: "Erro de conexão com FocusNFe" }, { status: 500 });
   }
 }
