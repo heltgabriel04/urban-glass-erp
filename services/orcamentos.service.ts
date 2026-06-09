@@ -197,8 +197,11 @@ export async function aprovarOrcamento(orcamentoId: string) {
   return pedido;
 }
 
-export async function rejeitarOrcamento(orcamentoId: string) {
-  // Busca pedido_id atual do banco
+export async function rejeitarOrcamento(
+  orcamentoId: string,
+  motivo?: string | null,
+  obsRejeicao?: string | null,
+) {
   const { data: orc, error } = await supabase
     .from('orcamentos')
     .select('id, pedido_id')
@@ -215,12 +218,15 @@ export async function rejeitarOrcamento(orcamentoId: string) {
     await supabase.from('pedidos').delete().eq('id', pedidoId);
   }
 
-  // Atualiza orçamento
-  const res = await updateOrcamento(orcamentoId, { status: 'Rejeitado', pedido_id: null } as any);
+  const updates: Record<string, unknown> = { status: 'Rejeitado', pedido_id: null };
+  if (motivo)       updates.motivo_rejeicao = motivo;
+  if (obsRejeicao)  updates.obs_rejeicao    = obsRejeicao;
+
+  const res = await updateOrcamento(orcamentoId, updates as any);
   if (res) registrarLog({
     acao: "rejeitou", tabela: "orcamentos", registro_id: orcamentoId,
-    descricao: `Rejeitou orçamento ${orcamentoId}`,
-    campos_alterados: { status: { de: "Pendente/Enviado", para: "Rejeitado" } },
+    descricao: `Rejeitou orçamento ${orcamentoId}${motivo ? ` — ${motivo}` : ""}`,
+    campos_alterados: { status: { de: "Pendente/Enviado", para: "Rejeitado" }, motivo },
   });
   return res;
 }

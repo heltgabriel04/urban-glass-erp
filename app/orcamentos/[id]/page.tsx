@@ -24,6 +24,11 @@ export default function OrcamentoDetalhe() {
   const [orc, setOrc] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
+  const [modalRejeitar, setModalRejeitar] = useState(false);
+  const [motivoRejeicao, setMotivoRejeicao] = useState("");
+  const [obsRejeicao, setObsRejeicao] = useState("");
+
+  const MOTIVOS = ["Preço", "Prazo de entrega", "Prazo de pagamento", "Transporte", "Desistência"];
 
   useEffect(() => { load(); }, [id]);
 
@@ -72,10 +77,16 @@ export default function OrcamentoDetalhe() {
     else toast("Erro ao aprovar orçamento", "err");
   }
 
-  async function handleRejeitar() {
-    if (!confirm("Rejeitar orçamento? O pedido vinculado será removido.")) return;
+  function handleRejeitar() {
+    setMotivoRejeicao("");
+    setObsRejeicao("");
+    setModalRejeitar(true);
+  }
+
+  async function confirmarRejeicao() {
+    setModalRejeitar(false);
     setSalvando(true);
-    const result = await rejeitarOrcamento(id);
+    const result = await rejeitarOrcamento(id, motivoRejeicao || null, obsRejeicao || null);
     setSalvando(false);
     if (result) { toast("Orçamento rejeitado", "warn"); load(); }
     else toast("Erro ao rejeitar", "err");
@@ -188,8 +199,18 @@ export default function OrcamentoDetalhe() {
                 </div>
               )}
               {orc.status === "Rejeitado" && (
-                <div style={{ marginTop: "20px", padding: "12px", background: "rgba(244,63,94,.08)", borderRadius: "8px", color: "var(--err)", fontSize: "13px", textAlign: "center" }}>
-                  ✕ Orçamento rejeitado
+                <div style={{ marginTop: "20px", padding: "14px 16px", background: "rgba(244,63,94,.08)", borderRadius: "8px", border: "1px solid rgba(244,63,94,.2)", display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <div style={{ color: "var(--err)", fontSize: "13px", fontWeight: 700 }}>✕ Orçamento rejeitado</div>
+                  {orc.motivo_rejeicao && (
+                    <div style={{ fontSize: "12px", color: "var(--t2)" }}>
+                      <span style={{ color: "var(--t3)" }}>Motivo: </span>{orc.motivo_rejeicao}
+                    </div>
+                  )}
+                  {orc.obs_rejeicao && (
+                    <div style={{ fontSize: "12px", color: "var(--t2)" }}>
+                      <span style={{ color: "var(--t3)" }}>Obs: </span>{orc.obs_rejeicao}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -227,6 +248,42 @@ export default function OrcamentoDetalhe() {
             </div>
           </div>
         </div>
+
+        {/* Modal de Rejeição */}
+        {modalRejeitar && (
+          <div className="no-print" style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.55)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:999 }}
+            onClick={() => setModalRejeitar(false)}>
+            <div style={{ background:"var(--surf1)", border:"1px solid var(--b2)", borderRadius:"12px", padding:"28px 32px", width:"420px", maxWidth:"92vw", display:"flex", flexDirection:"column", gap:"16px" }}
+              onClick={e => e.stopPropagation()}>
+              <div style={{ fontSize:"15px", fontWeight:700, color:"var(--t1)" }}>Rejeitar orçamento <span style={{ color:"var(--acc)" }}>{id}</span></div>
+
+              <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
+                <label style={{ fontSize:"12px", color:"var(--t3)", fontWeight:600 }}>Motivo</label>
+                <select className="fc" value={motivoRejeicao} onChange={e => setMotivoRejeicao(e.target.value)} style={{ margin:0 }}>
+                  <option value="">Selecione o motivo...</option>
+                  {MOTIVOS.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+
+              <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
+                <label style={{ fontSize:"12px", color:"var(--t3)", fontWeight:600 }}>Observações <span style={{ fontWeight:400 }}>(opcional)</span></label>
+                <textarea
+                  className="fc"
+                  value={obsRejeicao}
+                  onChange={e => setObsRejeicao(e.target.value)}
+                  placeholder="Detalhe o motivo da rejeição..."
+                  rows={3}
+                  style={{ margin:0, resize:"vertical" }}
+                />
+              </div>
+
+              <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end", marginTop:"4px" }}>
+                <button className="btn bg sm" onClick={() => setModalRejeitar(false)}>Cancelar</button>
+                <button className="btn bw sm" onClick={confirmarRejeicao}>✕ Confirmar Rejeição</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ─── PDF ─── */}
         <div className="print-area" style={{

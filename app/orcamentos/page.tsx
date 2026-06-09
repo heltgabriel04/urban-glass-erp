@@ -15,6 +15,7 @@ const CHIP: Record<string, string> = {
 };
 
 const FILTROS = ["Todos", "Rascunho", "Enviado", "Aprovado", "Rejeitado"];
+const MOTIVOS = ["Preço", "Prazo de entrega", "Prazo de pagamento", "Transporte", "Desistência"];
 
 export default function OrcamentosPage() {
   const { toast } = useToast();
@@ -23,6 +24,9 @@ export default function OrcamentosPage() {
   const [loading, setLoading]       = useState(true);
   const [busca, setBusca]           = useState("");
   const [filtroStatus, setFiltroStatus] = useState("Todos");
+  const [modalRejeicao, setModalRejeicao] = useState<string | null>(null);
+  const [motivoRejeicao, setMotivoRejeicao] = useState("");
+  const [obsRejeicao, setObsRejeicao] = useState("");
 
   useEffect(() => { load(); }, []);
 
@@ -33,20 +37,31 @@ export default function OrcamentosPage() {
     setLoading(false);
   }
 
-  async function handleStatus(id: string, status: "Enviado" | "Aprovado" | "Rejeitado") {
+  async function handleStatus(id: string, status: "Enviado" | "Aprovado") {
     if (status === "Aprovado") {
       const result = await aprovarOrcamento(id);
       if (result) { toast(`Orçamento ${id} aprovado — pedido gerado`); load(); }
       else toast("Erro ao aprovar orçamento", "err");
-    } else if (status === "Rejeitado") {
-      const result = await rejeitarOrcamento(id);
-      if (result) { toast(`Orçamento ${id} rejeitado`); load(); }
-      else toast("Erro ao rejeitar orçamento", "err");
     } else {
       const result = await updateOrcamento(id, { status } as any);
       if (result) { toast(`Orçamento ${id} marcado como ${status}`); load(); }
       else toast("Erro ao atualizar status", "err");
     }
+  }
+
+  function abrirModalRejeicao(id: string) {
+    setModalRejeicao(id);
+    setMotivoRejeicao("");
+    setObsRejeicao("");
+  }
+
+  async function confirmarRejeicao() {
+    if (!modalRejeicao) return;
+    const id = modalRejeicao;
+    setModalRejeicao(null);
+    const result = await rejeitarOrcamento(id, motivoRejeicao || null, obsRejeicao || null);
+    if (result) { toast(`Orçamento ${id} rejeitado`); load(); }
+    else toast("Erro ao rejeitar orçamento", "err");
   }
 
   async function handleDeletar(id: string) {
@@ -233,7 +248,7 @@ export default function OrcamentosPage() {
                         </button>
                         {btnAcao("var(--warn)", "rgba(245,158,11,.15)",  "Marcar como Enviado",  "✉", () => handleStatus(o.id, "Enviado"))}
                         {btnAcao("var(--ok)",   "rgba(16,185,129,.15)",  "Aprovar orçamento",    "✓", () => handleStatus(o.id, "Aprovado"))}
-                        {btnAcao("var(--err)",  "rgba(244,63,94,.15)",   "Rejeitar orçamento",   "✕", () => handleStatus(o.id, "Rejeitado"))}
+                        {btnAcao("var(--err)",  "rgba(244,63,94,.15)",   "Rejeitar orçamento",   "✕", () => abrirModalRejeicao(o.id))}
                       </div>
                     </td>
                     <td style={{ width:"40px", textAlign:"center" }}>
@@ -254,6 +269,42 @@ export default function OrcamentosPage() {
           </div>
         )}
       </div>
+
+      {/* Modal de Rejeição */}
+      {modalRejeicao && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.55)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:999 }}
+          onClick={() => setModalRejeicao(null)}>
+          <div style={{ background:"var(--surf1)", border:"1px solid var(--b2)", borderRadius:"12px", padding:"28px 32px", width:"420px", maxWidth:"92vw", display:"flex", flexDirection:"column", gap:"16px" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize:"15px", fontWeight:700, color:"var(--t1)" }}>Rejeitar orçamento <span style={{ color:"var(--acc)" }}>{modalRejeicao}</span></div>
+
+            <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
+              <label style={{ fontSize:"12px", color:"var(--t3)", fontWeight:600 }}>Motivo</label>
+              <select className="fc" value={motivoRejeicao} onChange={e => setMotivoRejeicao(e.target.value)} style={{ margin:0 }}>
+                <option value="">Selecione o motivo...</option>
+                {MOTIVOS.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+
+            <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
+              <label style={{ fontSize:"12px", color:"var(--t3)", fontWeight:600 }}>Observações <span style={{ fontWeight:400 }}>(opcional)</span></label>
+              <textarea
+                className="fc"
+                value={obsRejeicao}
+                onChange={e => setObsRejeicao(e.target.value)}
+                placeholder="Detalhe o motivo da rejeição..."
+                rows={3}
+                style={{ margin:0, resize:"vertical" }}
+              />
+            </div>
+
+            <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end", marginTop:"4px" }}>
+              <button className="btn bg sm" onClick={() => setModalRejeicao(null)}>Cancelar</button>
+              <button className="btn bw sm" onClick={confirmarRejeicao}>✕ Confirmar Rejeição</button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }
