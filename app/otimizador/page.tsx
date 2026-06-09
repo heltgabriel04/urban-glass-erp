@@ -812,11 +812,11 @@ function OtimizadorContent() {
         tbody tr:nth-child(even) td { background: #f7f9ff; }
       </style>
     </head><body>
+      <div class="noprint" style="position:sticky;top:0;z-index:99;background:#2d5fa6;padding:8px 0;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.25)">
+        <button onclick="window.print()" style="padding:7px 28px;background:white;color:#2d5fa6;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.3px">🖨 Imprimir / Salvar PDF</button>
+      </div>
       ${page1}
       ${chapasHtml}
-      <div class="noprint" style="width:794px;margin:0 auto;padding:16px 0;text-align:center">
-        <button onclick="window.print()" style="padding:10px 32px;background:#2d5fa6;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:0.3px">🖨 Imprimir / Salvar PDF</button>
-      </div>
     </body></html>`);
     win.document.close();
   }
