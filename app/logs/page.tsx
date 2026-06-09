@@ -81,13 +81,24 @@ export default function LogsPage() {
   const [busca, setBusca]             = useState("");
   const [carregando, setCarregando]   = useState(true);
   const [expandido, setExpandido]     = useState<string | null>(null);
+  const [ultimaAt, setUltimaAt]       = useState<Date | null>(null);
 
-  useEffect(() => {
-    setCarregando(true);
+  function carregar(silencioso = false) {
+    if (!silencioso) setCarregando(true);
     fetch("/api/logs")
       .then(r => r.json())
-      .then(data => { setTodos(Array.isArray(data) ? data : []); setCarregando(false); })
-      .catch(() => setCarregando(false));
+      .then(data => {
+        setTodos(Array.isArray(data) ? data : []);
+        setUltimaAt(new Date());
+        if (!silencioso) setCarregando(false);
+      })
+      .catch(() => { if (!silencioso) setCarregando(false); });
+  }
+
+  useEffect(() => {
+    carregar();
+    const intervalo = setInterval(() => carregar(true), 30_000);
+    return () => clearInterval(intervalo);
   }, []);
 
   useEffect(() => {
@@ -113,9 +124,24 @@ export default function LogsPage() {
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Histórico de Atividades</div>
-        <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>
-          {carregando ? "Carregando..." : `${logs.length} registro(s)`}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>
+            {carregando ? "Carregando..." : `${logs.length} registro(s)`}
+            {ultimaAt && !carregando && (
+              <span style={{ marginLeft: "8px", color: "var(--t3)", opacity: 0.6 }}>
+                · atualizado {ultimaAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              </span>
+            )}
+          </span>
+          <button
+            className="btn bg sm"
+            onClick={() => carregar()}
+            disabled={carregando}
+            style={{ display: "flex", alignItems: "center", gap: "5px" }}
+          >
+            {carregando ? "⟳ Atualizando..." : "⟳ Atualizar"}
+          </button>
+        </div>
       </div>
 
       <div className="con">
