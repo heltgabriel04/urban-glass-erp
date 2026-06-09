@@ -5,169 +5,265 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
 import CurrencyInput from "@/components/ui/CurrencyInput";
-import type { TabelaPreco } from "@/types";
+import type { Produto, TabelaPreco } from "@/types";
 
-const VAZIO = {
-  nome: "", tipo: "", lam: 110.20, ref: 160, ver: 130,
-  lap: 8.50, fur: 12, min: 50, desco: 0, ativo: true,
-};
+interface PrecoEdit {
+  valor: number;
+  margem: number;
+}
 
 export default function TabelasPage() {
-  const [tabelas, setTabelas] = useState<TabelaPreco[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState(false);
-  const [form, setForm] = useState(VAZIO);
-  const [editId, setEditId] = useState<number | null>(null);
-  const [salvando, setSalvando] = useState(false);
+  const [produtos, setProdutos]   = useState<Produto[]>([]);
+  const [tabelas, setTabelas]     = useState<TabelaPreco[]>([]);
+  const [edits, setEdits]         = useState<Record<number, PrecoEdit>>({});
+  const [loading, setLoading]     = useState(true);
+  const [salvando, setSalvando]   = useState(false);
+  const [filtro, setFiltro]       = useState("");
+  const [filtroTipo, setFiltroTipo] = useState("Todos");
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     setLoading(true);
-    const { data } = await supabase.from("tabelas_preco").select("*").order("id");
-    setTabelas(data as TabelaPreco[] || []);
+    const [{ data: prods }, { data: tabs }] = await Promise.all([
+      supabase.from("produtos").select("*").order("tipo").order("nome"),
+      supabase.from("tabelas_preco").select("*").order("id"),
+    ]);
+    setProdutos(prods as Produto[] || []);
+    setTabelas(tabs as TabelaPreco[] || []);
+    setEdits({});
     setLoading(false);
   }
 
-  function abrirNovo() { setForm(VAZIO); setEditId(null); setModal(true); }
-
-  function abrirEdit(t: TabelaPreco) {
-    setForm({
-      nome: t.nome, tipo: t.tipo, lam: t.lam, ref: t.ref, ver: t.ver,
-      lap: t.lap, fur: t.fur, min: t.min, desco: (t as any).desco ?? 0, ativo: t.ativo,
-    });
-    setEditId(t.id);
-    setModal(true);
+  function getCurrent(id: number): PrecoEdit {
+    if (edits[id]) return edits[id];
+    const p = produtos.find(x => x.id === id)!;
+    return { valor: p.valor, margem: p.margem ?? 0 };
   }
+
+  function setValor(id: number, valor: number) {
+    setEdits(e => ({ ...e, [id]: { ...getCurrent(id), valor } }));
+  }
+
+  function setMargem(id: number, margem: number) {
+    setEdits(e => ({ ...e, [id]: { ...getCurrent(id), margem } }));
+  }
+
+  const modificados = produtos
+    .filter(p => {
+      if (!edits[p.id]) return false;
+      const e = edits[p.id];
+      return e.valor !== p.valor || e.margem !== (p.margem ?? 0);
+    })
+    .map(p => p.id);
 
   async function salvar() {
-    if (!form.nome) return;
+    if (modificados.length === 0) return;
     setSalvando(true);
-    if (editId) {
-      await supabase.from("tabelas_preco").update(form as never).eq("id", editId);
-    } else {
-      await supabase.from("tabelas_preco").insert([form as never]);
-    }
-    setSalvando(false); setModal(false); load();
+    await Promise.all(
+      modificados.map(id =>
+        supabase.from("produtos").update({
+          valor: edits[id].valor,
+          margem: edits[id].margem,
+        } as never).eq("id", id)
+      )
+    );
+    setSalvando(false);
+    load();
   }
+
+  const tipos = ["Todos", ...Array.from(new Set(produtos.map(p => p.tipo).filter(Boolean)))];
+
+  const prodFiltrados = produtos.filter(p => {
+    const matchFiltro = !filtro ||
+      p.nome.toLowerCase().includes(filtro.toLowerCase()) ||
+      p.cod.toLowerCase().includes(filtro.toLowerCase());
+    const matchTipo = filtroTipo === "Todos" || p.tipo === filtroTipo;
+    return matchFiltro && matchTipo;
+  });
 
   return (
     <AppLayout>
       <div className="tb">
-        <div className="tb-title">Tabelas de Preço</div>
-        <button className="btn bp sm" onClick={abrirNovo}>+ Nova Tabela</button>
+        <div className="tb-title">Tabela de Preços</div>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          {modificados.length > 0 && (
+            <span style={{ fontSize: "12px", color: "var(--warn)", fontFamily: "'DM Mono',monospace" }}>
+              {modificados.length} produto(s) alterado(s)
+            </span>
+          )}
+          <button
+            className="btn bp sm"
+            onClick={salvar}
+            disabled={salvando || modificados.length === 0}
+          >
+            {salvando ? "Salvando..." : "Salvar Alterações"}
+          </button>
+        </div>
       </div>
 
       <div className="con">
-        {loading ? (
-          <div className="loading">Carregando tabelas...</div>
-        ) : (
-          <>
-            <div className="g3 mb14">
-              {tabelas.map(t => (
-                <div key={t.id} className="card">
-                  <div className="ct">
-                    {t.nome}
-                    <span className={`chip ${t.ativo ? "cg" : "cr"}`}>{t.ativo ? "Ativa" : "Inativa"}</span>
-                  </div>
-                  <div className="sr"><div className="sl">Laminado</div><div className="sv" style={{ color:"var(--acc)" }}>{formatBRL(t.lam)}/m²</div></div>
-                  <div className="sr"><div className="sl">Reflecta</div><div className="sv" style={{ color:"var(--acc)" }}>{formatBRL(t.ref)}/m²</div></div>
-                  <div className="sr"><div className="sl">Verde</div><div className="sv" style={{ color:"var(--acc)" }}>{formatBRL(t.ver)}/m²</div></div>
-                  <div className="sr"><div className="sl">Lapidação</div><div className="sv">{formatBRL(t.lap)}/m²</div></div>
-                  <div className="sr"><div className="sl">Furo</div><div className="sv">{formatBRL(t.fur)}/un</div></div>
-                  <div className="sr"><div className="sl">Mínimo</div><div className="sv">{formatBRL(t.min)}</div></div>
-                  <div className="sr"><div className="sl">Desconto</div><div className="sv">{(t as any).desco ?? 0}%</div></div>
-                  <button className="btn bg sm" style={{ width:"100%", marginTop:"10px" }} onClick={() => abrirEdit(t)}>Editar Tabela</button>
-                </div>
-              ))}
-            </div>
+        <div className="al al-i" style={{ marginBottom: "14px", fontSize: "12px" }}>
+          Defina o preço e a margem de negociação de cada produto. A margem é o % máximo de desconto ou acréscimo permitido ao criar orçamentos e pedidos.
+        </div>
 
-            <div className="card">
-              <div className="ct">Comparativo de Tabelas</div>
-              <div className="tw" style={{ border:"none", borderRadius:0 }}>
-                <table>
-                  <thead>
-                    <tr><th>Tabela</th><th>Laminado/m²</th><th>Reflecta/m²</th><th>Verde/m²</th><th>Lapidação/m²</th><th>Furo/un</th><th>Mínimo</th><th>Desconto</th><th>Status</th></tr>
-                  </thead>
-                  <tbody>
-                    {tabelas.map(t => (
-                      <tr key={t.id}>
-                        <td><strong>{t.nome}</strong></td>
-                        <td className="mono" style={{ color:"var(--acc)" }}>{formatBRL(t.lam)}</td>
-                        <td className="mono" style={{ color:"var(--acc)" }}>{formatBRL(t.ref)}</td>
-                        <td className="mono" style={{ color:"var(--acc)" }}>{formatBRL(t.ver)}</td>
-                        <td className="mono">{formatBRL(t.lap)}</td>
-                        <td className="mono">{formatBRL(t.fur)}</td>
-                        <td className="mono">{formatBRL(t.min)}</td>
-                        <td className="mono">{(t as any).desco ?? 0}%</td>
-                        <td><span className={t.ativo ? "chip cg" : "chip cr"}>{t.ativo ? "Ativa" : "Inativa"}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-
-      {modal && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && setModal(false)}>
-          <div className="mod" style={{ width:"520px" }}>
-            <div className="mhd">
-              <div className="mtit">{editId ? "Editar Tabela" : "Nova Tabela"}</div>
-              <button className="mcl" onClick={() => setModal(false)}>✕</button>
-            </div>
-
-            <div className="fr mb14" style={{ marginBottom:"10px" }}>
-              <div className="fg">
-                <label className="fl">Nome *</label>
-                <input className="fc" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Ex: Padrão" />
-              </div>
-              <div className="fg">
-                <label className="fl">Tipo</label>
-                <select className="fc" value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}>
-                  <option value="">Selecione...</option>
-                  <option>Padrão</option>
-                  <option>Grandes Clientes</option>
-                  <option>Promocional</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="fr3">
-              <div className="fg"><label className="fl">Laminado (R$/m²)</label><CurrencyInput value={form.lam} onChange={v => setForm(f => ({ ...f, lam: v }))} /></div>
-              <div className="fg"><label className="fl">Reflecta (R$/m²)</label><CurrencyInput value={form.ref} onChange={v => setForm(f => ({ ...f, ref: v }))} /></div>
-              <div className="fg"><label className="fl">Verde (R$/m²)</label><CurrencyInput value={form.ver} onChange={v => setForm(f => ({ ...f, ver: v }))} /></div>
-            </div>
-
-            <div className="fr3">
-              <div className="fg"><label className="fl">Lapidação (R$/m²)</label><CurrencyInput value={form.lap} onChange={v => setForm(f => ({ ...f, lap: v }))} /></div>
-              <div className="fg"><label className="fl">Furo (R$/un)</label><CurrencyInput value={form.fur} onChange={v => setForm(f => ({ ...f, fur: v }))} /></div>
-              <div className="fg"><label className="fl">Mínimo (R$)</label><CurrencyInput value={form.min} onChange={v => setForm(f => ({ ...f, min: v }))} /></div>
-            </div>
-
-            <div className="fr" style={{ marginBottom:"14px" }}>
-              <div className="fg">
-                <label className="fl">Desconto (%)</label>
-                <input className="fc" type="number" min="0" max="100" step="0.5" value={form.desco || ""} onChange={e => setForm(f => ({ ...f, desco: parseFloat(e.target.value) || 0 }))} placeholder="0" />
-              </div>
-              <div className="fg">
-                <label className="fl">Status</label>
-                <select className="fc" value={form.ativo ? "1" : "0"} onChange={e => setForm(f => ({ ...f, ativo: e.target.value === "1" }))}>
-                  <option value="1">Ativa</option>
-                  <option value="0">Inativa</option>
-                </select>
-              </div>
-            </div>
-
-            <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end" }}>
-              <button className="btn bg" onClick={() => setModal(false)}>Cancelar</button>
-              <button className="btn bp" onClick={salvar} disabled={salvando}>{salvando ? "Salvando..." : "Salvar Tabela"}</button>
-            </div>
+        {/* Filtros */}
+        <div style={{ display: "flex", gap: "10px", marginBottom: "14px", flexWrap: "wrap" }}>
+          <div className="tb-search" style={{ flex: 1, minWidth: "200px" }}>
+            <span className="tb-search-ic">⌕</span>
+            <input
+              placeholder="Buscar produto ou código..."
+              value={filtro}
+              onChange={e => setFiltro(e.target.value)}
+            />
+          </div>
+          <div style={{ display: "flex", gap: "4px" }}>
+            {tipos.map(t => (
+              <button
+                key={t}
+                onClick={() => setFiltroTipo(t)}
+                style={{
+                  padding: "5px 12px",
+                  borderRadius: "6px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  border: "1px solid var(--b2)",
+                  background: filtroTipo === t ? "var(--acc)" : "transparent",
+                  color: filtroTipo === t ? "#000" : "var(--t3)",
+                  transition: "all 0.15s",
+                }}
+              >
+                {t}
+              </button>
+            ))}
           </div>
         </div>
-      )}
+
+        {loading ? (
+          <div className="loading">Carregando...</div>
+        ) : (
+          <div className="card">
+            <div className="ct">
+              Preços por Produto
+              <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", fontWeight: 400 }}>
+                {prodFiltrados.length} produto(s)
+              </span>
+            </div>
+
+            <div className="tw" style={{ border: "none", borderRadius: 0 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: "80px" }}>Código</th>
+                    <th>Produto</th>
+                    <th style={{ width: "100px" }}>Tipo</th>
+                    <th style={{ width: "80px" }}>Espessura</th>
+                    <th style={{ width: "140px" }}>Preço (R$/m²)</th>
+                    <th style={{ width: "160px" }}>Margem negociação</th>
+                    <th style={{ width: "70px" }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {prodFiltrados.length === 0 && (
+                    <tr><td colSpan={7} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>Nenhum produto encontrado</td></tr>
+                  )}
+                  {prodFiltrados.map(p => {
+                    const edit = getCurrent(p.id);
+                    const alterado = modificados.includes(p.id);
+                    const min = edit.margem > 0 ? edit.valor * (1 - edit.margem / 100) : null;
+                    const max = edit.margem > 0 ? edit.valor * (1 + edit.margem / 100) : null;
+
+                    return (
+                      <tr
+                        key={p.id}
+                        style={{
+                          opacity: p.ativo ? 1 : 0.5,
+                          background: alterado ? "rgba(16,185,129,.04)" : undefined,
+                        }}
+                      >
+                        <td>
+                          <span className="mono" style={{ fontSize: "11px", color: "var(--acc)" }}>{p.cod}</span>
+                        </td>
+                        <td>
+                          <strong>{p.nome}</strong>
+                          {p.cor && <span style={{ fontSize: "11px", color: "var(--t3)", marginLeft: "6px" }}>{p.cor}</span>}
+                          {alterado && <span style={{ marginLeft: "6px", fontSize: "10px", color: "var(--ok)", fontFamily: "'DM Mono',monospace" }}>● editado</span>}
+                        </td>
+                        <td>
+                          <span className="chip">{p.tipo || "—"}</span>
+                        </td>
+                        <td className="mono" style={{ fontSize: "12px" }}>{p.espessura || "—"}</td>
+                        <td>
+                          <CurrencyInput
+                            value={edit.valor}
+                            onChange={v => setValor(p.id, v)}
+                          />
+                        </td>
+                        <td>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <input
+                              className="fc"
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={edit.margem || ""}
+                              onChange={e => setMargem(p.id, parseFloat(e.target.value) || 0)}
+                              placeholder="0"
+                              style={{ width: "60px", margin: 0 }}
+                            />
+                            <span style={{ fontSize: "12px", color: "var(--t3)" }}>%</span>
+                            {min !== null && (
+                              <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>
+                                {formatBRL(min)} – {formatBRL(max!)}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`chip ${p.ativo ? "cg" : "cr"}`}>
+                            {p.ativo ? "Ativo" : "Inativo"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Seção de mínimos por tabela */}
+        {tabelas.length > 0 && (
+          <div className="card" style={{ marginTop: "16px" }}>
+            <div className="ct">Pedido Mínimo por Tabela</div>
+            <div className="tw" style={{ border: "none", borderRadius: 0 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Tabela</th>
+                    <th>Tipo</th>
+                    <th>Mínimo</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tabelas.map(t => (
+                    <tr key={t.id}>
+                      <td><strong>{t.nome}</strong></td>
+                      <td><span className="chip">{t.tipo}</span></td>
+                      <td className="mono" style={{ color: "var(--acc)" }}>{formatBRL(t.min)}</td>
+                      <td><span className={`chip ${t.ativo ? "cg" : "cr"}`}>{t.ativo ? "Ativa" : "Inativa"}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
     </AppLayout>
   );
 }

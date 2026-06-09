@@ -26,6 +26,8 @@ interface ItemForm {
   ml_larg: boolean;
   ml_alt: boolean;
   vidro_cliente: boolean;
+  preco_base: number;
+  margem_prod: number;
 }
 
 interface ParcelaForm {
@@ -40,6 +42,7 @@ const ITEM_VAZIO: ItemForm = {
   valor_m2: 0, lapidacao: 0,
   ml_larg: true, ml_alt: true,
   vidro_cliente: false,
+  preco_base: 0, margem_prod: 0,
 };
 
 const CHAPAS_DIMS = [
@@ -207,8 +210,17 @@ export default function NovoPedidoPage() {
       const novo = { ...item, [field]: value };
       if (field === "produto_id") {
         const prod = produtos.find(p => p.id === Number(value));
-        if (prod) { novo.produto_nome = prod.nome; novo.valor_m2 = prod.valor; }
-        else { novo.produto_nome = ""; novo.valor_m2 = 0; }
+        if (prod) {
+          novo.produto_nome = prod.nome;
+          novo.valor_m2 = prod.valor;
+          novo.preco_base = prod.valor;
+          novo.margem_prod = prod.margem ?? 0;
+        } else {
+          novo.produto_nome = "";
+          novo.valor_m2 = 0;
+          novo.preco_base = 0;
+          novo.margem_prod = 0;
+        }
       }
       return novo;
     }));
@@ -218,7 +230,14 @@ export default function NovoPedidoPage() {
     const prod = produtos.find(p => p.id === id);
     setItens(items => items.map((item, idx) => {
       if (idx !== i) return item;
-      return { ...item, produto_id: id, produto_nome: label, valor_m2: prod?.valor ?? item.valor_m2 };
+      return {
+        ...item,
+        produto_id: id,
+        produto_nome: label,
+        valor_m2: prod?.valor ?? item.valor_m2,
+        preco_base: prod?.valor ?? 0,
+        margem_prod: prod?.margem ?? 0,
+      };
     }));
   }
 
@@ -486,12 +505,29 @@ export default function NovoPedidoPage() {
             const aArred = arredondarParaMultiplo50(item.altura);
             const mostrarArred = item.largura > 0 && item.altura > 0 && (lArred !== item.largura || aArred !== item.altura);
 
+            const margemMin = item.preco_base > 0 && item.margem_prod > 0
+              ? item.preco_base * (1 - item.margem_prod / 100) : null;
+            const margemMax = item.preco_base > 0 && item.margem_prod > 0
+              ? item.preco_base * (1 + item.margem_prod / 100) : null;
+            const foraAbaixo = margemMin !== null && item.valor_m2 < margemMin - 0.005;
+            const foraAcima  = margemMax !== null && item.valor_m2 > margemMax + 0.005;
+            const foraMarjem = foraAbaixo || foraAcima;
+
             const checkboxVC = (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <input type="checkbox" checked={item.vidro_cliente} onChange={e => updItem(i, "vidro_cliente", e.target.checked)}
                   style={{ width: "14px", height: "14px", accentColor: "var(--warn)", cursor: "pointer" }} />
               </div>
             );
+
+            const avisoMarjem = foraMarjem ? (
+              <div style={{ fontSize: "11px", color: "var(--err)", fontFamily: "'DM Mono',monospace", padding: "3px 4px", marginTop: "2px" }}>
+                ⚠ Preço {foraAbaixo
+                  ? `abaixo da margem — mínimo ${formatBRL(margemMin!)}/m²`
+                  : `acima da margem — máximo ${formatBRL(margemMax!)}/m²`
+                } (±{item.margem_prod}%)
+              </div>
+            ) : null;
 
             return (
               <div key={i} style={{ marginBottom: "10px" }}>
@@ -517,7 +553,12 @@ export default function NovoPedidoPage() {
                         </label>
                       </div>
                       <input className="fc" type="number" value={item.quantidade} onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
-                      <CurrencyInput value={item.valor_m2} onChange={v => updItem(i, "valor_m2", v)} placeholder="R$/ml" />
+                      <CurrencyInput
+                        value={item.valor_m2}
+                        onChange={v => updItem(i, "valor_m2", v)}
+                        placeholder="R$/ml"
+                        style={foraMarjem ? { border: "1px solid var(--err)", color: "var(--err)" } : undefined}
+                      />
                       <CurrencyInput value={ml > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : 0} onChange={v => updTotalItem(i, v)} placeholder="total" />
                       <button className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1}>✕</button>
                       {checkboxVC}
@@ -528,6 +569,7 @@ export default function NovoPedidoPage() {
                         {sub > 0 && <span style={{ fontSize: "11px", color: "var(--acc)", fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>{formatBRL(sub)}</span>}
                       </div>
                     )}
+                    {avisoMarjem}
                   </div>
                 ) : (
                   <div>
@@ -536,7 +578,13 @@ export default function NovoPedidoPage() {
                       <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
                       <input className="fc" type="number" value={item.altura  || ""} onChange={e => updItem(i, "altura",  parseInt(e.target.value) || 0)} placeholder="0" />
                       <input className="fc" type="number" value={item.quantidade} onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
-                      <CurrencyInput value={item.valor_m2} onChange={v => updItem(i, "valor_m2", v)} placeholder="R$/m²" />
+                      <CurrencyInput
+                        value={item.valor_m2}
+                        onChange={v => updItem(i, "valor_m2", v)}
+                        placeholder="R$/m²"
+                        title={item.margem_prod > 0 ? `Base: ${formatBRL(item.preco_base)}/m² · Margem ±${item.margem_prod}%` : "Valor por m²"}
+                        style={foraMarjem ? { border: "1px solid var(--err)", color: "var(--err)" } : undefined}
+                      />
                       <CurrencyInput value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(unitVal.toFixed(2)) : 0} onChange={v => updUnitItem(i, v)} placeholder="por peça" />
                       <CurrencyInput value={m2 > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : 0} onChange={v => updTotalItem(i, v)} placeholder="total" />
                       <button className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1}>✕</button>
@@ -549,6 +597,7 @@ export default function NovoPedidoPage() {
                         {mostrarArred && <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", opacity: 0.7 }}>cobrado: {lArred}×{aArred}</span>}
                       </div>
                     )}
+                    {avisoMarjem}
                   </div>
                 )}
               </div>

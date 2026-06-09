@@ -17,7 +17,7 @@ const TIPOS = ["Laminado", "Chapa", "Reflecta", "Monolítico"];
 
 const VAZIO: ProdutoInsert = {
   cod: "", nome: "", tipo: "", espessura: "", cor: "",
-  categoria: "Chapas", valor: 0, unidade: "m²", ativo: true, obs: "",
+  categoria: "Chapas", valor: 0, margem: 0, unidade: "m²", ativo: true, obs: "",
 };
 
 export default function ProdutosPage() {
@@ -70,7 +70,7 @@ export default function ProdutosPage() {
     setForm({
       cod: p.cod, nome: p.nome, tipo: p.tipo, espessura: p.espessura,
       cor: p.cor, categoria: p.categoria, valor: p.valor,
-      unidade: p.unidade, ativo: p.ativo, obs: p.obs,
+      margem: p.margem ?? 0, unidade: p.unidade, ativo: p.ativo, obs: p.obs,
     });
     setEditId(p.id);
     setModal(true);
@@ -258,13 +258,26 @@ export default function ProdutosPage() {
               </div>
             </div>
 
-            <div className="fr">
+            <div className="fr3">
               <div className="fg">
                 <label className="fl">Valor (R$/m²) *</label>
                 <CurrencyInput
                   value={form.valor}
                   onChange={v => setForm(f => ({ ...f, valor: v }))}
                   placeholder="R$ 0,00"
+                />
+              </div>
+              <div className="fg">
+                <label className="fl">Margem negociação (%)</label>
+                <input
+                  className="fc"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.5"
+                  value={(form as any).margem || ""}
+                  onChange={e => setForm(f => ({ ...f, margem: parseFloat(e.target.value) || 0 }))}
+                  placeholder="0"
                 />
               </div>
               <div className="fg">

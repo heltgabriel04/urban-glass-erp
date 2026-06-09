@@ -20,12 +20,15 @@ interface ItemForm {
   quantidade: number;
   valor_m2: number;
   lapidacao: number;
+  preco_base: number;
+  margem_prod: number;
 }
 
 const ITEM_VAZIO: ItemForm = {
   produto_id: null, produto_nome: "",
   largura: 0, altura: 0, quantidade: 1,
   valor_m2: 0, lapidacao: 0,
+  preco_base: 0, margem_prod: 0,
 };
 
 function arredondarParaMultiplo50(v: number): number {
@@ -106,6 +109,8 @@ export default function NovoOrcamentoPage() {
       produto_id: atual.produto_id,
       produto_nome: atual.produto_nome,
       valor_m2: atual.valor_m2,
+      preco_base: atual.preco_base,
+      margem_prod: atual.margem_prod,
     };
     focarLinha.current = i + 1;
     setItens(items => [
@@ -122,6 +127,8 @@ export default function NovoOrcamentoPage() {
       produto_id: ultimo?.produto_id ?? null,
       produto_nome: ultimo?.produto_nome ?? "",
       valor_m2: ultimo?.valor_m2 ?? 0,
+      preco_base: ultimo?.preco_base ?? 0,
+      margem_prod: ultimo?.margem_prod ?? 0,
     };
     focarLinha.current = itens.length;
     setItens(i => [...i, novo]);
@@ -146,6 +153,8 @@ export default function NovoOrcamentoPage() {
       produto_id: id,
       produto_nome: label,
       valor_m2: prod?.valor ?? item.valor_m2,
+      preco_base: prod?.valor ?? 0,
+      margem_prod: prod?.margem ?? 0,
     }));
   }
 
@@ -367,6 +376,14 @@ export default function NovoOrcamentoPage() {
             const aArred  = arredondarParaMultiplo50(item.altura);
             const mostrarArred = item.largura > 0 && item.altura > 0 && (lArred !== item.largura || aArred !== item.altura);
 
+            const margemMin = item.preco_base > 0 && item.margem_prod > 0
+              ? item.preco_base * (1 - item.margem_prod / 100) : null;
+            const margemMax = item.preco_base > 0 && item.margem_prod > 0
+              ? item.preco_base * (1 + item.margem_prod / 100) : null;
+            const foraAbaixo = margemMin !== null && item.valor_m2 < margemMin - 0.005;
+            const foraAcima  = margemMax !== null && item.valor_m2 > margemMax + 0.005;
+            const foraMarjem = foraAbaixo || foraAcima;
+
             return (
               <div key={i} style={{ marginBottom: "10px" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "2fr 70px 70px 50px 90px 90px 90px 36px", gap: "6px", alignItems: "center" }}>
@@ -407,7 +424,14 @@ export default function NovoOrcamentoPage() {
                     tabIndex={i * 4 + 4}
                     min={1}
                   />
-                  <CurrencyInput tabIndex={-1} value={item.valor_m2} onChange={v => updItem(i, "valor_m2", v)} placeholder="R$/m²" title="Valor por m²" />
+                  <CurrencyInput
+                    tabIndex={-1}
+                    value={item.valor_m2}
+                    onChange={v => updItem(i, "valor_m2", v)}
+                    placeholder="R$/m²"
+                    title={item.margem_prod > 0 ? `Base: ${formatBRL(item.preco_base)}/m² · Margem ±${item.margem_prod}%` : "Valor por m²"}
+                    style={foraMarjem ? { border: "1px solid var(--err)", color: "var(--err)" } : undefined}
+                  />
                   <CurrencyInput tabIndex={-1} value={m2 > 0 ? parseFloat(unitVal.toFixed(2)) : 0} onChange={v => updUnitItem(i, v)} placeholder="por peça" title="Valor por peça" />
                   <CurrencyInput tabIndex={-1} value={m2 > 0 ? parseFloat(sub.toFixed(2)) : 0} onChange={v => updTotalItem(i, v)} placeholder="total" title="Total do item" />
                   <button tabIndex={-1} className="btn bw xs" onClick={() => remItem(i)} disabled={itens.length === 1}>✕</button>
@@ -419,6 +443,14 @@ export default function NovoOrcamentoPage() {
                     {mostrarArred && (
                       <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", opacity: 0.7 }}>cobrado: {lArred}×{aArred}</span>
                     )}
+                  </div>
+                )}
+                {foraMarjem && (
+                  <div style={{ fontSize: "11px", color: "var(--err)", fontFamily: "'DM Mono',monospace", padding: "3px 4px", marginTop: "2px" }}>
+                    ⚠ Preço {foraAbaixo
+                      ? `abaixo da margem — mínimo ${formatBRL(margemMin!)}/m²`
+                      : `acima da margem — máximo ${formatBRL(margemMax!)}/m²`
+                    } (±{item.margem_prod}%)
                   </div>
                 )}
               </div>

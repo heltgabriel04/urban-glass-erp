@@ -85,6 +85,7 @@ export interface Produto {
   cor: string;
   categoria: string;
   valor: number;
+  margem: number;  // % máx de desconto/acréscimo permitido na negociação
   unidade: string;
   ativo: boolean;
   obs: string;
