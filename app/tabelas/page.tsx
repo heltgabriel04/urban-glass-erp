@@ -13,15 +13,16 @@ interface PrecoEdit {
 }
 
 export default function TabelasPage() {
-  const [produtos, setProdutos]         = useState<Produto[]>([]);
-  const [tabelas, setTabelas]           = useState<TabelaPreco[]>([]);
-  const [tabelaItens, setTabelaItens]   = useState<TabelaPrecoItem[]>([]);
-  const [tabelaAtiva, setTabelaAtiva]   = useState<TabelaPreco | null>(null);
-  const [edits, setEdits]               = useState<Record<number, PrecoEdit>>({});
-  const [loading, setLoading]           = useState(true);
-  const [salvando, setSalvando]         = useState(false);
-  const [filtro, setFiltro]             = useState("");
-  const [filtroTipo, setFiltroTipo]     = useState("Todos");
+  const [produtos, setProdutos]       = useState<Produto[]>([]);
+  const [tabelas, setTabelas]         = useState<TabelaPreco[]>([]);
+  const [tabelaItens, setTabelaItens] = useState<TabelaPrecoItem[]>([]);
+  const [tabelaAtiva, setTabelaAtiva] = useState<TabelaPreco | null>(null);
+  const [edits, setEdits]             = useState<Record<number, PrecoEdit>>({});
+  const [loading, setLoading]         = useState(true);
+  const [salvando, setSalvando]       = useState(false);
+  const [filtro, setFiltro]           = useState("");
+  const [filtroTipo, setFiltroTipo]   = useState("Todos");
+  const [erroSalvar, setErroSalvar]   = useState<string | null>(null);
   const [precisaMigracao, setPrecisaMigracao] = useState(false);
 
   useEffect(() => { load(); }, []);
@@ -33,37 +34,43 @@ export default function TabelasPage() {
       supabase.from("tabelas_preco").select("*").order("id"),
       supabase.from("tabela_preco_itens").select("*"),
     ]);
-    const listaProds   = (prods  as Produto[]         || []);
-    const listaTabelas = (tabs   as TabelaPreco[]      || []);
-    const listaItens   = (itens  as TabelaPrecoItem[]  || []);
+    const listaProds   = (prods as Produto[]        || []);
+    const listaTabelas = (tabs  as TabelaPreco[]     || []);
+    const listaItens   = (itens as TabelaPrecoItem[] || []);
     setProdutos(listaProds);
     setTabelas(listaTabelas);
     setTabelaItens(listaItens);
-    setPrecisaMigracao(!!erroItens);
-    setTabelaAtiva(prev => prev ? (listaTabelas.find(t => t.id === prev.id) ?? listaTabelas[0] ?? null) : (listaTabelas[0] ?? null));
+    // coluna não existe se o erro menciona a relação
+    setPrecisaMigracao(!!(erroItens && String(erroItens.message).includes("tabela_preco_itens")));
+    setTabelaAtiva(prev =>
+      prev ? (listaTabelas.find(t => t.id === prev.id) ?? listaTabelas[0] ?? null)
+           : (listaTabelas[0] ?? null)
+    );
     setEdits({});
     setLoading(false);
   }
 
-  // Valor/margem salvo para produto na tabela ativa (sem edits locais)
-  function getSaved(produtoId: number): PrecoEdit {
-    if (!tabelaAtiva) return { valor: 0, margem: 0 };
-    const item = tabelaItens.find(i => i.tabela_id === tabelaAtiva.id && i.produto_id === produtoId);
+  function getSaved(produtoId: number, tab: TabelaPreco | null = tabelaAtiva): PrecoEdit {
+    if (!tab) return { valor: 0, margem: 0 };
+    const item = tabelaItens.find(i => i.tabela_id === tab.id && i.produto_id === produtoId);
     if (item) return { valor: item.valor, margem: item.margem };
     const prod = produtos.find(p => p.id === produtoId);
     return { valor: prod?.valor ?? 0, margem: prod?.margem ?? 0 };
   }
 
-  function getCurrent(produtoId: number): PrecoEdit {
-    return edits[produtoId] ?? getSaved(produtoId);
-  }
-
+  // Usa o estado atual do updater (e) para evitar closure stale
   function setValor(id: number, valor: number) {
-    setEdits(e => ({ ...e, [id]: { ...getCurrent(id), valor } }));
+    setEdits(e => {
+      const current = e[id] ?? getSaved(id);
+      return { ...e, [id]: { ...current, valor } };
+    });
   }
 
   function setMargem(id: number, margem: number) {
-    setEdits(e => ({ ...e, [id]: { ...getCurrent(id), margem } }));
+    setEdits(e => {
+      const current = e[id] ?? getSaved(id);
+      return { ...e, [id]: { ...current, margem } };
+    });
   }
 
   const modificados = Object.keys(edits).map(Number).filter(prodId => {
@@ -76,23 +83,34 @@ export default function TabelasPage() {
     if (modificados.length > 0 && !confirm("Há alterações não salvas. Deseja descartá-las?")) return;
     setTabelaAtiva(tab);
     setEdits({});
+    setErroSalvar(null);
   }
 
   async function salvar() {
     if (!tabelaAtiva || modificados.length === 0) return;
     setSalvando(true);
+    setErroSalvar(null);
 
     const results = await Promise.all(
       modificados.map(prodId =>
         supabase.from("tabela_preco_itens").upsert(
-          { tabela_id: tabelaAtiva.id, produto_id: prodId, valor: edits[prodId].valor, margem: edits[prodId].margem },
+          {
+            tabela_id:  tabelaAtiva.id,
+            produto_id: prodId,
+            valor:      edits[prodId].valor,
+            margem:     edits[prodId].margem,
+          },
           { onConflict: "tabela_id,produto_id" } as never
         )
       )
     );
 
-    const temErro = results.some((r: any) => r.error);
-    if (temErro) setPrecisaMigracao(true);
+    const erros = results.filter((r: any) => r.error);
+    if (erros.length > 0) {
+      const msg = (erros[0] as any).error?.message ?? "Erro desconhecido";
+      setErroSalvar(msg);
+      if (msg.includes("tabela_preco_itens")) setPrecisaMigracao(true);
+    }
 
     setSalvando(false);
     load();
@@ -116,7 +134,11 @@ export default function TabelasPage() {
               {modificados.length} produto(s) alterado(s)
             </span>
           )}
-          <button className="btn bp sm" onClick={salvar} disabled={salvando || modificados.length === 0 || precisaMigracao}>
+          <button
+            className="btn bp sm"
+            onClick={salvar}
+            disabled={salvando || modificados.length === 0}
+          >
             {salvando ? "Salvando..." : "Salvar Alterações"}
           </button>
         </div>
@@ -125,10 +147,16 @@ export default function TabelasPage() {
       <div className="con">
         {precisaMigracao && (
           <div className="al al-w" style={{ marginBottom: "14px", fontSize: "12px" }}>
-            <strong>⚠ Execute este SQL no Supabase SQL Editor para ativar preços por tabela:</strong>
+            <strong>⚠ Execute este SQL no Supabase SQL Editor:</strong>
             <code style={{ display: "block", marginTop: "8px", padding: "10px 14px", background: "rgba(0,0,0,.3)", borderRadius: "6px", fontFamily: "'DM Mono',monospace", fontSize: "12px", userSelect: "all", lineHeight: 1.7 }}>
               {`CREATE TABLE IF NOT EXISTS tabela_preco_itens (\n  id serial PRIMARY KEY,\n  tabela_id integer NOT NULL REFERENCES tabelas_preco(id) ON DELETE CASCADE,\n  produto_id integer NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,\n  valor numeric(10,2) NOT NULL DEFAULT 0,\n  margem numeric(5,2) NOT NULL DEFAULT 0,\n  UNIQUE(tabela_id, produto_id)\n);\n\nALTER TABLE produtos ADD COLUMN IF NOT EXISTS margem numeric(5,2) DEFAULT 0;`}
             </code>
+          </div>
+        )}
+
+        {erroSalvar && !precisaMigracao && (
+          <div className="al al-w" style={{ marginBottom: "14px", fontSize: "12px" }}>
+            ⚠ Erro ao salvar: {erroSalvar}
           </div>
         )}
 
@@ -203,7 +231,7 @@ export default function TabelasPage() {
                     <tr><td colSpan={6} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>Nenhum produto encontrado</td></tr>
                   )}
                   {prodFiltrados.map(p => {
-                    const edit     = getCurrent(p.id);
+                    const edit      = edits[p.id] ?? getSaved(p.id);
                     const temCustom = tabelaItens.some(i => i.tabela_id === tabelaAtiva.id && i.produto_id === p.id);
                     const alterado  = modificados.includes(p.id);
                     const min = edit.margem > 0 ? edit.valor * (1 - edit.margem / 100) : null;
@@ -246,27 +274,6 @@ export default function TabelasPage() {
                       </tr>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {tabelas.length > 0 && (
-          <div className="card" style={{ marginTop: "16px" }}>
-            <div className="ct">Pedido Mínimo por Tabela</div>
-            <div className="tw" style={{ border: "none", borderRadius: 0 }}>
-              <table>
-                <thead><tr><th>Tabela</th><th>Tipo</th><th>Mínimo</th><th>Status</th></tr></thead>
-                <tbody>
-                  {tabelas.map(t => (
-                    <tr key={t.id}>
-                      <td><strong>{t.nome}</strong></td>
-                      <td><span className="chip">{t.tipo}</span></td>
-                      <td className="mono" style={{ color: "var(--acc)" }}>{formatBRL(t.min)}</td>
-                      <td><span className={`chip ${t.ativo ? "cg" : "cr"}`}>{t.ativo ? "Ativa" : "Inativa"}</span></td>
-                    </tr>
-                  ))}
                 </tbody>
               </table>
             </div>
