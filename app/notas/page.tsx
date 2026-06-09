@@ -153,8 +153,8 @@ export default function NotasPage() {
                         </>)}
                         {nota.status === "enviando" && <button className="btn bg xs" onClick={() => handleConsultar(nota)} disabled={salvando}>↻ Consultar</button>}
                         {nota.status === "autorizada" && (<div style={{ display:"flex", gap:"5px" }}>
-                          {nota.danfe_url && <a href={nota.danfe_url} target="_blank" className="btn bg xs" style={{ textDecoration:"none" }}>DANFE</a>}
-                          {nota.xml_url   && <a href={nota.xml_url}   target="_blank" className="btn bg xs" style={{ textDecoration:"none" }}>XML</a>}
+                          <a href={`/api/notas/download/${nota.id}?tipo=danfe`} className="btn bg xs" style={{ textDecoration:"none" }}>⬇ DANFE</a>
+                          <a href={`/api/notas/download/${nota.id}?tipo=xml`}   className="btn bg xs" style={{ textDecoration:"none" }}>⬇ XML</a>
                         </div>)}
                         {nota.status === "rejeitada" && <button className="btn bg xs" onClick={() => handleDeletar(nota)} disabled={salvando}>Remover</button>}
                       </div>

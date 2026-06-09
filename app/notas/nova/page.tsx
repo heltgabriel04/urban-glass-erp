@@ -6,6 +6,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { getPedidos } from "@/services/pedidos.service";
 import { salvarNotaCompleta, emitirNFeCompleta } from "@/services/notas.service";
+import EspelhoModal from "@/components/notas/EspelhoModal";
 import { formatBRL } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import type { Pedido, Cliente } from "@/types";
@@ -74,9 +75,10 @@ function NovaNFeInner() {
   const [aba, setAba]           = useState<"cabecalho"|"itens"|"totais"|"pgto"|"transporte"|"detalhes">("cabecalho");
   const [pedidos, setPedidos]   = useState<Pedido[]>([]);
   const [cliente, setCliente]   = useState<Cliente|null>(null);
-  const [salvando, setSalvando] = useState(false);
-  const [emitindo, setEmitindo] = useState(false);
-  const [loading, setLoading]   = useState(true);
+  const [salvando, setSalvando]     = useState(false);
+  const [emitindo, setEmitindo]     = useState(false);
+  const [loading, setLoading]       = useState(true);
+  const [espelho, setEspelho]       = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -179,8 +181,20 @@ function NovaNFeInner() {
           background:"rgba(245,158,11,.1)", border:"1px solid rgba(245,158,11,.3)",
           borderRadius:"6px", padding:"4px 10px" }}>⚠ HOMOLOGAÇÃO</div>
         <button className="btn bg sm" onClick={handleSalvar} disabled={salvando}>{salvando ? "Salvando..." : "Salvar Rascunho"}</button>
+        <button className="btn bg sm" onClick={() => setEspelho(true)} disabled={!form.pedido_id || !form.itens.length}>Ver Espelho</button>
         <button className="btn bp sm" onClick={handleSalvarEmitir} disabled={emitindo||salvando}>{emitindo ? "Enviando..." : "Salvar e Emitir →"}</button>
       </div>
+
+      {espelho && cliente && (
+        <EspelhoModal
+          form={form}
+          cliente={cliente}
+          totais={{ valorProdutos, valorIcms, valorPis, valorCofins, valorIpi, valorNota }}
+          onClose={() => setEspelho(false)}
+          onEmitir={() => { setEspelho(false); handleSalvarEmitir(); }}
+          emitindo={emitindo}
+        />
+      )}
 
       <div className="con">
         <div style={{ display:"flex", gap:"2px", borderBottom:"1px solid var(--b1)", marginBottom:"20px" }}>
@@ -388,6 +402,7 @@ function NovaNFeInner() {
           <div style={{ display:"flex", gap:"10px" }}>
             <button className="btn bg sm" onClick={() => router.push("/notas")}>Cancelar</button>
             <button className="btn bg sm" onClick={handleSalvar} disabled={salvando}>{salvando ? "Salvando..." : "Salvar Rascunho"}</button>
+            <button className="btn bg sm" onClick={() => setEspelho(true)} disabled={!form.pedido_id || !form.itens.length}>Ver Espelho</button>
             <button className="btn bp sm" onClick={handleSalvarEmitir} disabled={emitindo||salvando}>{emitindo ? "Enviando..." : "Salvar e Emitir →"}</button>
           </div>
         </div>
