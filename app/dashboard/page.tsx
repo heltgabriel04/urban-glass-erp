@@ -49,13 +49,15 @@ export default function DashboardPage() {
   const maxBar = Math.max(...barras.map(b => b.faturado), 1);
 
   // ── Pedidos filtrados pelo mês selecionado ─────────────────
+  const anoAtual = new Date().getFullYear();
+
   const pedidosFiltrados = useMemo(() => {
     if (!mesSel) return pedidos;
     return pedidos.filter(p => {
       const d = new Date(p.dt_pedido);
-      return d.getMonth() + 1 === mesSel;
+      return d.getFullYear() === anoAtual && d.getMonth() + 1 === mesSel;
     });
-  }, [pedidos, mesSel]);
+  }, [pedidos, mesSel, anoAtual]);
 
   // ── KPIs: mês selecionado vs ano todo ─────────────────────
   const fatTotal  = financeiro.reduce((a, f) => a + Number(f.faturado), 0);
@@ -108,7 +110,6 @@ export default function DashboardPage() {
 
   const maxTop = Math.max(...topCli.map(c => Number(c.faturado)), 1);
 
-  const anoAtual = new Date().getFullYear();
   const mesLabel = mesSel ? MESES_ABREV[mesSel - 1] + "/" + anoAtual : anoAtual + " completo";
 
   return (
