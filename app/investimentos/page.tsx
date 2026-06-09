@@ -48,7 +48,7 @@ export default function InvestimentosPage() {
   const [newForm, setNewForm]             = useState<RowState>({ ...EMPTY });
   const [salvando, setSalvando]           = useState(false);
   const [busca, setBusca]                 = useState("");
-  const [filtroEmpresa, setFiltroEmpresa] = useState("");
+  const [filtroBanco, setFiltroBanco]     = useState("");
   const [filtroAno, setFiltroAno]         = useState("");
 
   useEffect(() => { load(); }, []);
@@ -59,8 +59,6 @@ export default function InvestimentosPage() {
     setInvestimentos((data ?? []) as Investimento[]);
     setLoading(false);
   }
-
-  // ─── inline edit ──────────────────────────────────────────────────────────
 
   function startEdit(inv: Investimento) {
     if (editingId === inv.id) { setEditingId(null); return; }
@@ -94,8 +92,6 @@ export default function InvestimentosPage() {
     setEditingId(null);
     load();
   }
-
-  // ─── new row ──────────────────────────────────────────────────────────────
 
   function startAdd() {
     setEditingId(null);
@@ -138,7 +134,7 @@ export default function InvestimentosPage() {
   const filtered = investimentos.filter(inv => {
     const q = busca.toLowerCase();
     if (q && !inv.empresa.toLowerCase().includes(q) && !inv.descricao.toLowerCase().includes(q)) return false;
-    if (filtroEmpresa && inv.empresa !== filtroEmpresa) return false;
+    if (filtroBanco && inv.empresa !== filtroBanco) return false;
     if (filtroAno && !inv.data.startsWith(filtroAno)) return false;
     return true;
   });
@@ -147,9 +143,9 @@ export default function InvestimentosPage() {
   const totalFiltrado = filtered.reduce((s, i) => s + Number(i.valor), 0);
   const maiorAporte   = investimentos.length ? Math.max(...investimentos.map(i => Number(i.valor))) : 0;
   const mediaAporte   = investimentos.length ? totalGeral / investimentos.length : 0;
-  const empresas      = [...new Set(investimentos.map(i => i.empresa))].sort();
+  const bancos        = [...new Set(investimentos.map(i => i.empresa))].sort();
   const anos          = [...new Set(investimentos.map(i => i.data.substring(0, 4)))].sort().reverse();
-  const temFiltro     = !!(busca || filtroEmpresa || filtroAno);
+  const temFiltro     = !!(busca || filtroBanco || filtroAno);
 
   function handlePDF() {
     const orig = document.title;
@@ -178,6 +174,7 @@ export default function InvestimentosPage() {
     </div>
   );
 
+  // Columns: Data | Descrição | Banco | Valor | Categoria | Observação | Link | Ações
   const editRow = (
     form: RowState,
     set: React.Dispatch<React.SetStateAction<RowState>>,
@@ -191,10 +188,18 @@ export default function InvestimentosPage() {
         <DateInput value={form.data} onChange={v => set(f => ({ ...f, data: v }))} />
       </td>
       <td>
-        <input style={ci} value={form.empresa} placeholder="Empresa *"
+        <input style={ci} value={form.descricao} placeholder="Descrição *"
           autoFocus={isNew}
+          onChange={e => set(f => ({ ...f, descricao: e.target.value }))}
+          onKeyDown={e => e.key === "Enter" && onSave()} />
+      </td>
+      <td>
+        <input style={ci} value={form.empresa} placeholder="Banco *"
           onChange={e => set(f => ({ ...f, empresa: e.target.value }))}
           onKeyDown={e => e.key === "Enter" && onSave()} />
+      </td>
+      <td>
+        <CurrencyInput value={form.valor} onChange={v => set(f => ({ ...f, valor: v }))} />
       </td>
       <td>
         <select style={cs} value={form.categoria} onChange={e => set(f => ({ ...f, categoria: e.target.value }))}>
@@ -203,15 +208,8 @@ export default function InvestimentosPage() {
         </select>
       </td>
       <td>
-        <input style={ci} value={form.descricao} placeholder="Descrição *"
-          onChange={e => set(f => ({ ...f, descricao: e.target.value }))}
-          onKeyDown={e => e.key === "Enter" && onSave()} />
-        <input style={{ ...ci, marginTop: "2px", fontSize: "11px" }} value={form.observacoes}
-          placeholder="Observações..."
+        <input style={ci} value={form.observacoes} placeholder="Observação..."
           onChange={e => set(f => ({ ...f, observacoes: e.target.value }))} />
-      </td>
-      <td>
-        <CurrencyInput value={form.valor} onChange={v => set(f => ({ ...f, valor: v }))} />
       </td>
       <td>
         <input style={ci} value={form.comprovante_url} placeholder="https://..."
@@ -234,7 +232,6 @@ export default function InvestimentosPage() {
             position: fixed !important; inset: 0 !important;
             background: #fff !important; color: #111 !important;
             padding: 36px 44px !important; z-index: 9999 !important;
-            font-family: 'Inter', sans-serif !important;
           }
           .inv-print * { visibility: visible !important; }
         }
@@ -251,45 +248,45 @@ export default function InvestimentosPage() {
 
       <div className="con">
 
-        {/* Stats */}
+        {/* Stats — same card pattern as every other page */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px", marginBottom: "22px" }}>
           {[
-            { label: "Total Investido",      val: formatBRL(totalGeral),   sub: `${investimentos.length} aporte(s)`, c: G },
-            { label: "Maior Aporte",          val: formatBRL(maiorAporte),  sub: "individual",                        c: G },
-            { label: "Média por Aporte",      val: formatBRL(mediaAporte),  sub: "por registro",                      c: "var(--acc)" },
-            { label: "Empresas Investidoras", val: String(empresas.length), sub: "registradas",                       c: "var(--acc2)" },
+            { label: "Total Investido",    val: formatBRL(totalGeral),   sub: `${investimentos.length} aporte(s)`, c: G },
+            { label: "Maior Aporte",       val: formatBRL(maiorAporte),  sub: "individual",                        c: G },
+            { label: "Média por Aporte",   val: formatBRL(mediaAporte),  sub: "por registro",                      c: "var(--acc)" },
+            { label: "Bancos / Origens",   val: String(bancos.length),   sub: "registrados",                       c: "var(--acc2)" },
           ].map(s => (
-            <div key={s.label} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "16px 18px" }}>
-              <div style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px" }}>{s.label}</div>
-              <div style={{ fontSize: "22px", fontWeight: 800, color: s.c, fontFamily: "'DM Mono',monospace", lineHeight: 1.2 }}>{s.val}</div>
-              <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "4px", fontFamily: "'DM Mono',monospace" }}>{s.sub}</div>
+            <div key={s.label} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: "4px" }}>
+              <div style={{ fontSize: "11px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{s.label}</div>
+              <div style={{ fontSize: "22px", fontWeight: 700, color: s.c, fontFamily: "'DM Mono', monospace", lineHeight: 1.2 }}>{s.val}</div>
+              <div style={{ fontSize: "11px", color: "var(--t3)" }}>{s.sub}</div>
             </div>
           ))}
         </div>
 
         {/* Filters */}
         <div style={{ display: "flex", gap: "10px", marginBottom: "18px", flexWrap: "wrap", alignItems: "center" }}>
-          <input className="fc" placeholder="Buscar empresa ou descrição..." value={busca}
+          <input className="fc" placeholder="Buscar banco ou descrição..." value={busca}
             onChange={e => setBusca(e.target.value)} style={{ flex: 1, minWidth: "200px" }} />
-          <select className="fc" style={{ minWidth: "180px" }} value={filtroEmpresa} onChange={e => setFiltroEmpresa(e.target.value)}>
-            <option value="">Todas as empresas</option>
-            {empresas.map(e => <option key={e} value={e}>{e}</option>)}
+          <select className="fc" style={{ minWidth: "160px" }} value={filtroBanco} onChange={e => setFiltroBanco(e.target.value)}>
+            <option value="">Todos os bancos</option>
+            {bancos.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
           <select className="fc" style={{ minWidth: "100px" }} value={filtroAno} onChange={e => setFiltroAno(e.target.value)}>
             <option value="">Todos os anos</option>
             {anos.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
           {temFiltro && (
-            <button className="btn bg sm" onClick={() => { setBusca(""); setFiltroEmpresa(""); setFiltroAno(""); }}>
+            <button className="btn bg sm" onClick={() => { setBusca(""); setFiltroBanco(""); setFiltroAno(""); }}>
               ✕ Limpar
             </button>
           )}
         </div>
 
         {temFiltro && filtered.length > 0 && (
-          <div style={{ marginBottom: "14px", padding: "9px 14px", background: GB, border: `1px solid ${GBR}`, borderRadius: "8px", display: "flex", justifyContent: "space-between", fontSize: "12px", color: G, fontFamily: "'DM Mono',monospace" }}>
+          <div style={{ marginBottom: "14px", padding: "9px 14px", background: GB, border: `1px solid ${GBR}`, borderRadius: "8px", display: "flex", justifyContent: "space-between", fontSize: "12px", color: G }}>
             <span>{filtered.length} resultado(s)</span>
-            <span style={{ fontWeight: 700 }}>{formatBRL(totalFiltrado)}</span>
+            <span style={{ fontWeight: 700, fontFamily: "'DM Mono', monospace" }}>{formatBRL(totalFiltrado)}</span>
           </div>
         )}
 
@@ -301,22 +298,22 @@ export default function InvestimentosPage() {
               <thead>
                 <tr>
                   <th style={{ width: "90px" }}>Data</th>
-                  <th style={{ width: "160px" }}>Empresa</th>
-                  <th style={{ width: "150px" }}>Categoria</th>
                   <th>Descrição</th>
+                  <th style={{ width: "140px" }}>Banco</th>
                   <th style={{ width: "120px", textAlign: "right" }}>Valor</th>
-                  <th style={{ width: "110px" }}>Comprovante</th>
+                  <th style={{ width: "150px" }}>Categoria</th>
+                  <th style={{ width: "160px" }}>Observação</th>
+                  <th style={{ width: "70px" }}>Link</th>
                   <th style={{ width: "72px" }}>Ações</th>
                 </tr>
               </thead>
               <tbody>
 
-                {/* New row */}
                 {addingNew && editRow(newForm, setNewForm, saveAdd, cancelAdd, true, "__new__")}
 
                 {filtered.length === 0 && !addingNew && (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>
+                    <td colSpan={8} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>
                       {investimentos.length === 0
                         ? 'Nenhum aporte registrado. Clique em "+ Novo Aporte" para começar.'
                         : "Nenhum resultado para os filtros selecionados."}
@@ -334,29 +331,25 @@ export default function InvestimentosPage() {
                       onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = ""}
                     >
                       <td className="mono" style={{ fontSize: "12px" }}>{fmtData(inv.data)}</td>
-                      <td>
-                        <div style={{ fontSize: "13px", fontWeight: 600 }}>{inv.empresa}</div>
-                      </td>
-                      <td>
-                        {inv.categoria
-                          ? <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "99px", background: GB, color: G, border: `1px solid ${GBR}`, fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>{inv.categoria}</span>
-                          : <span style={{ color: "var(--t3)" }}>—</span>}
-                      </td>
-                      <td>
-                        <div style={{ fontSize: "13px", fontWeight: 500 }}>{inv.descricao}</div>
-                        {inv.observacoes && <div className="tdim">{inv.observacoes}</div>}
-                      </td>
+                      <td style={{ fontSize: "13px", fontWeight: 500 }}>{inv.descricao}</td>
+                      <td style={{ fontSize: "13px", fontWeight: 600 }}>{inv.empresa}</td>
                       <td className="mono" style={{ textAlign: "right", fontWeight: 700, color: G, fontSize: "14px" }}>
                         {formatBRL(Number(inv.valor))}
                       </td>
+                      <td>
+                        {inv.categoria
+                          ? <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "99px", background: GB, color: G, border: `1px solid ${GBR}`, whiteSpace: "nowrap" }}>{inv.categoria}</span>
+                          : <span style={{ color: "var(--t3)" }}>—</span>}
+                      </td>
+                      <td style={{ fontSize: "12px", color: "var(--t3)" }}>{inv.observacoes || "—"}</td>
                       <td onClick={e => e.stopPropagation()}>
                         {inv.comprovante_url && inv.comprovante_url.startsWith("http") ? (
                           <a href={inv.comprovante_url} target="_blank" rel="noopener noreferrer"
-                            style={{ fontSize: "12px", color: "var(--acc2)", textDecoration: "none", display: "flex", alignItems: "center", gap: "4px" }}>
+                            style={{ fontSize: "12px", color: "var(--acc2)", textDecoration: "none" }}>
                             📎 Ver
                           </a>
                         ) : inv.comprovante_url ? (
-                          <span className="tdim">{inv.comprovante_url}</span>
+                          <span style={{ fontSize: "11px", color: "var(--t3)" }}>{inv.comprovante_url}</span>
                         ) : (
                           <span style={{ color: "var(--t3)" }}>—</span>
                         )}
@@ -378,13 +371,13 @@ export default function InvestimentosPage() {
               {investimentos.length > 0 && (
                 <tfoot>
                   <tr style={{ background: "var(--surf1)" }}>
-                    <td colSpan={4} style={{ padding: "10px 12px", fontSize: "12px", color: "var(--t3)", fontWeight: 600 }}>
+                    <td colSpan={3} style={{ padding: "10px 12px", fontSize: "12px", color: "var(--t3)", fontWeight: 600 }}>
                       {temFiltro ? `${filtered.length} de ${investimentos.length} aporte(s)` : `${investimentos.length} aporte(s)`}
                     </td>
                     <td className="mono" style={{ textAlign: "right", color: G, fontWeight: 700, padding: "10px 12px", fontSize: "14px" }}>
                       {formatBRL(temFiltro ? totalFiltrado : totalGeral)}
                     </td>
-                    <td colSpan={2} style={{ fontSize: "11px", color: "var(--t3)", padding: "10px 12px" }}>total investido</td>
+                    <td colSpan={4} style={{ fontSize: "11px", color: "var(--t3)", padding: "10px 12px" }}>total investido</td>
                   </tr>
                 </tfoot>
               )}
@@ -399,35 +392,35 @@ export default function InvestimentosPage() {
           <div style={{ fontSize: "24px", fontWeight: 800, color: "#111", letterSpacing: "-0.5px" }}>
             Urban Glass — Relatório de Investimentos
           </div>
-          <div style={{ fontSize: "12px", color: "#666", marginTop: "6px", fontFamily: "monospace" }}>
+          <div style={{ fontSize: "12px", color: "#666", marginTop: "6px" }}>
             Gerado em {new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
-            {" · "}Total investido: <strong style={{ color: "#d97706" }}>{formatBRL(totalGeral)}</strong>
-            {" · "}{investimentos.length} aporte(s) · {empresas.length} empresa(s)
+            {" · "}Total investido: <strong style={{ color: "#d97706", fontFamily: "monospace" }}>{formatBRL(totalGeral)}</strong>
+            {" · "}{investimentos.length} aporte(s) · {bancos.length} banco(s)
           </div>
         </div>
 
-        {empresas.length > 0 && (
+        {bancos.length > 0 && (
           <div style={{ marginBottom: "28px" }}>
-            <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#888", marginBottom: "8px", fontFamily: "monospace" }}>
-              Resumo por Empresa Investidora
+            <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#888", marginBottom: "8px" }}>
+              Resumo por Banco / Origem
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
               <thead>
                 <tr style={{ background: "#f9f9f9" }}>
-                  {["Empresa", "Aportes", "Total"].map((h, i) => (
+                  {["Banco", "Aportes", "Total"].map((h, i) => (
                     <th key={h} style={{ padding: "7px 10px", textAlign: i === 2 ? "right" : i === 1 ? "center" : "left", color: "#555", fontWeight: 600, fontSize: "10px", textTransform: "uppercase", borderBottom: "2px solid #e5e7eb" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {empresas.map(emp => {
-                  const its = investimentos.filter(i => i.empresa === emp);
+                {bancos.map(b => {
+                  const its = investimentos.filter(i => i.empresa === b);
                   const tot = its.reduce((s, i) => s + Number(i.valor), 0);
                   return (
-                    <tr key={emp}>
-                      <td style={{ padding: "7px 10px", color: "#111", fontWeight: 600, borderBottom: "1px solid #f0f0f0" }}>{emp}</td>
+                    <tr key={b}>
+                      <td style={{ padding: "7px 10px", color: "#111", fontWeight: 600, borderBottom: "1px solid #f0f0f0" }}>{b}</td>
                       <td style={{ padding: "7px 10px", color: "#555", textAlign: "center", borderBottom: "1px solid #f0f0f0" }}>{its.length}</td>
-                      <td style={{ padding: "7px 10px", color: "#d97706", fontWeight: 700, textAlign: "right", borderBottom: "1px solid #f0f0f0" }}>{formatBRL(tot)}</td>
+                      <td style={{ padding: "7px 10px", color: "#d97706", fontWeight: 700, textAlign: "right", fontFamily: "monospace", borderBottom: "1px solid #f0f0f0" }}>{formatBRL(tot)}</td>
                     </tr>
                   );
                 })}
@@ -436,13 +429,13 @@ export default function InvestimentosPage() {
           </div>
         )}
 
-        <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#888", marginBottom: "10px", fontFamily: "monospace" }}>
+        <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#888", marginBottom: "10px" }}>
           Detalhamento
         </div>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px", fontFamily: "monospace" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
           <thead>
             <tr style={{ background: "#fafafa" }}>
-              {["Data", "Empresa", "Categoria", "Descrição", "Observações", "Comprovante", "Valor"].map(h => (
+              {["Data", "Descrição", "Banco", "Valor", "Categoria", "Observação", "Link"].map(h => (
                 <th key={h} style={{ padding: "6px 8px", textAlign: h === "Valor" ? "right" : "left", color: "#555", fontWeight: 600, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: "1px solid #e5e7eb" }}>{h}</th>
               ))}
             </tr>
@@ -450,20 +443,21 @@ export default function InvestimentosPage() {
           <tbody>
             {investimentos.map((inv, idx) => (
               <tr key={inv.id} style={{ background: idx % 2 === 0 ? "#fff" : "#fafafa" }}>
-                <td style={{ padding: "7px 8px", color: "#444", borderBottom: "1px solid #f0f0f0", whiteSpace: "nowrap" }}>{fmtData(inv.data)}</td>
-                <td style={{ padding: "7px 8px", color: "#111", fontWeight: 600, borderBottom: "1px solid #f0f0f0" }}>{inv.empresa}</td>
-                <td style={{ padding: "7px 8px", color: "#d97706", borderBottom: "1px solid #f0f0f0" }}>{inv.categoria ?? "—"}</td>
+                <td style={{ padding: "7px 8px", color: "#444", borderBottom: "1px solid #f0f0f0", whiteSpace: "nowrap", fontFamily: "monospace" }}>{fmtData(inv.data)}</td>
                 <td style={{ padding: "7px 8px", color: "#333", borderBottom: "1px solid #f0f0f0" }}>{inv.descricao}</td>
+                <td style={{ padding: "7px 8px", color: "#111", fontWeight: 600, borderBottom: "1px solid #f0f0f0" }}>{inv.empresa}</td>
+                <td style={{ padding: "7px 8px", color: "#d97706", fontWeight: 700, textAlign: "right", borderBottom: "1px solid #f0f0f0", whiteSpace: "nowrap", fontFamily: "monospace" }}>{formatBRL(Number(inv.valor))}</td>
+                <td style={{ padding: "7px 8px", color: "#d97706", borderBottom: "1px solid #f0f0f0" }}>{inv.categoria ?? "—"}</td>
                 <td style={{ padding: "7px 8px", color: "#666", borderBottom: "1px solid #f0f0f0" }}>{inv.observacoes ?? "—"}</td>
                 <td style={{ padding: "7px 8px", borderBottom: "1px solid #f0f0f0", color: inv.comprovante_url ? "#2563eb" : "#bbb" }}>{inv.comprovante_url ? "Anexo" : "—"}</td>
-                <td style={{ padding: "7px 8px", color: "#d97706", fontWeight: 700, textAlign: "right", borderBottom: "1px solid #f0f0f0", whiteSpace: "nowrap" }}>{formatBRL(Number(inv.valor))}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr style={{ background: "#fff8e6" }}>
-              <td colSpan={6} style={{ padding: "7px 8px", fontWeight: 700, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#888" }}>Total Geral</td>
-              <td style={{ padding: "7px 8px", fontWeight: 900, color: "#d97706", textAlign: "right" }}>{formatBRL(totalGeral)}</td>
+              <td colSpan={3} style={{ padding: "7px 8px", fontWeight: 700, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#888" }}>Total Geral</td>
+              <td style={{ padding: "7px 8px", fontWeight: 900, color: "#d97706", textAlign: "right", fontFamily: "monospace" }}>{formatBRL(totalGeral)}</td>
+              <td colSpan={3} />
             </tr>
           </tfoot>
         </table>
