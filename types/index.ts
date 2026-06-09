@@ -175,6 +175,8 @@ export interface Orcamento {
   status: StatusOrcamento;
   obs: string;
   envio: string;
+  motivo_rejeicao: string | null;
+  obs_rejeicao: string | null;
   created_at: string;
   clientes?: Cliente;
 }

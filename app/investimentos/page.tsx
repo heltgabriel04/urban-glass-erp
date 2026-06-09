@@ -144,13 +144,19 @@ export default function InvestimentosPage() {
 
   async function addOpcao(tipo: "banco" | "categoria", valor: string) {
     if (!valor.trim()) return;
-    await supabase.from("inv_opcoes").insert([{ tipo, valor: valor.trim() }] as never);
+    if (semTabela) {
+      alert("A tabela inv_opcoes ainda não existe no banco de dados.\nExecute o SQL de migração exibido na página principal primeiro.");
+      return;
+    }
+    const { error } = await supabase.from("inv_opcoes").insert([{ tipo, valor: valor.trim() }] as never);
+    if (error) { alert("Erro ao adicionar: " + error.message); return; }
     if (tipo === "banco") setNovoBanco(""); else setNovaCat("");
     load();
   }
 
   async function removeOpcao(id: number) {
-    await supabase.from("inv_opcoes").delete().eq("id", id);
+    const { error } = await supabase.from("inv_opcoes").delete().eq("id", id);
+    if (error) { alert("Erro ao remover: " + error.message); return; }
     load();
   }
 
@@ -429,14 +435,20 @@ export default function InvestimentosPage() {
 
       {/* ── Modal Gerenciar Listas ── */}
       {modalListas && (
-        <div style={{ position: "fixed", inset: 0, background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }}
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }}
           onClick={() => setModalListas(false)}>
-          <div style={{ background: "var(--surf1)", border: "1px solid var(--b2)", borderRadius: "12px", padding: "28px 32px", width: "520px", maxWidth: "94vw" }}
+          <div style={{ background: "var(--surf1)", border: "2px solid var(--b2)", borderRadius: "12px", padding: "28px 32px", width: "520px", maxWidth: "94vw", boxShadow: "0 8px 32px rgba(0,0,0,.5)" }}
             onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
               <span style={{ fontSize: "15px", fontWeight: 700 }}>Gerenciar Listas</span>
               <button className="btn bg sm" onClick={() => setModalListas(false)}>✕ Fechar</button>
             </div>
+
+            {semTabela && (
+              <div style={{ background: "rgba(245,158,11,.12)", border: "1px solid var(--warn)", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "12px", color: "var(--warn)" }}>
+                ⚠ A tabela <code style={{ fontFamily: "'DM Mono',monospace" }}>inv_opcoes</code> não existe ainda. Execute o SQL de migração mostrado na página para habilitar listas personalizadas.
+              </div>
+            )}
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
 
