@@ -8,7 +8,10 @@ import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import { registrarLog } from "@/services/log.service";
 
-const CATEGORIAS = ["Manutenção", "Equipamentos e Material"] as const;
+const BANCOS_DEFAULT    = ["Itaú Maxibuild", "ZRS"];
+const CATS_DEFAULT      = ["Manutenção", "Equipamentos e Material"];
+
+interface OpcaoLista { id: number; tipo: string; valor: string; }
 
 interface Investimento {
   id: string;
@@ -50,13 +53,23 @@ export default function InvestimentosPage() {
   const [busca, setBusca]                 = useState("");
   const [filtroBanco, setFiltroBanco]     = useState("");
   const [filtroAno, setFiltroAno]         = useState("");
+  const [opcoesDB, setOpcoesDB]           = useState<OpcaoLista[]>([]);
+  const [semTabela, setSemTabela]         = useState(false);
+  const [modalListas, setModalListas]     = useState(false);
+  const [novoBanco, setNovoBanco]         = useState("");
+  const [novaCat, setNovaCat]             = useState("");
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     setLoading(true);
-    const { data } = await supabase.from("investimentos").select("*").order("data", { ascending: false });
+    const [{ data }, { data: opts, error: erroOpts }] = await Promise.all([
+      supabase.from("investimentos").select("*").order("data", { ascending: false }),
+      supabase.from("inv_opcoes").select("*").order("valor"),
+    ]);
     setInvestimentos((data ?? []) as Investimento[]);
+    if (erroOpts) { setSemTabela(true); }
+    else          { setSemTabela(false); setOpcoesDB((opts ?? []) as OpcaoLista[]); }
     setLoading(false);
   }
 
@@ -129,6 +142,18 @@ export default function InvestimentosPage() {
     load();
   }
 
+  async function addOpcao(tipo: "banco" | "categoria", valor: string) {
+    if (!valor.trim()) return;
+    await supabase.from("inv_opcoes").insert([{ tipo, valor: valor.trim() }] as never);
+    if (tipo === "banco") setNovoBanco(""); else setNovaCat("");
+    load();
+  }
+
+  async function removeOpcao(id: number) {
+    await supabase.from("inv_opcoes").delete().eq("id", id);
+    load();
+  }
+
   // ─── derived ──────────────────────────────────────────────────────────────
 
   const filtered = investimentos.filter(inv => {
@@ -138,6 +163,13 @@ export default function InvestimentosPage() {
     if (filtroAno && !inv.data.startsWith(filtroAno)) return false;
     return true;
   });
+
+  const listaBancos = opcoesDB.filter(o => o.tipo === "banco").map(o => o.valor).length
+    ? opcoesDB.filter(o => o.tipo === "banco").map(o => o.valor)
+    : BANCOS_DEFAULT;
+  const listaCats   = opcoesDB.filter(o => o.tipo === "categoria").map(o => o.valor).length
+    ? opcoesDB.filter(o => o.tipo === "categoria").map(o => o.valor)
+    : CATS_DEFAULT;
 
   const totalGeral    = investimentos.reduce((s, i) => s + Number(i.valor), 0);
   const totalFiltrado = filtered.reduce((s, i) => s + Number(i.valor), 0);
@@ -194,9 +226,10 @@ export default function InvestimentosPage() {
           onKeyDown={e => e.key === "Enter" && onSave()} />
       </td>
       <td>
-        <input style={ci} value={form.empresa} placeholder="Banco *"
-          onChange={e => set(f => ({ ...f, empresa: e.target.value }))}
-          onKeyDown={e => e.key === "Enter" && onSave()} />
+        <select style={cs} value={form.empresa} onChange={e => set(f => ({ ...f, empresa: e.target.value }))}>
+          <option value="">Selecione...</option>
+          {listaBancos.map(b => <option key={b} value={b}>{b}</option>)}
+        </select>
       </td>
       <td style={{ minWidth: "150px" }}>
         <CurrencyInput value={form.valor} onChange={v => set(f => ({ ...f, valor: v }))} />
@@ -204,7 +237,7 @@ export default function InvestimentosPage() {
       <td>
         <select style={cs} value={form.categoria} onChange={e => set(f => ({ ...f, categoria: e.target.value }))}>
           <option value="">—</option>
-          {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+          {listaCats.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
       </td>
       <td>
@@ -242,11 +275,19 @@ export default function InvestimentosPage() {
         <div className="tb-title">Investimentos</div>
         <div style={{ display: "flex", gap: "8px" }}>
           <button className="btn bg sm" onClick={handlePDF} disabled={!investimentos.length}>⬡ Exportar PDF</button>
+          <button className="btn bg sm" onClick={() => setModalListas(true)}>⚙ Listas</button>
           <button className="btn bp sm" onClick={startAdd}>+ Novo Aporte</button>
         </div>
       </div>
 
       <div className="con no-print">
+
+        {semTabela && (
+          <div className="al al-w" style={{ marginBottom: "16px", fontSize: "12px" }}>
+            <strong>⚠ Execute este SQL no Supabase para habilitar listas personalizadas:</strong>
+            <code style={{ display: "block", marginTop: "8px", padding: "10px 14px", background: "rgba(0,0,0,.3)", borderRadius: "6px", fontFamily: "'DM Mono',monospace", fontSize: "11px", userSelect: "all", lineHeight: 1.8, whiteSpace: "pre" }}>{`CREATE TABLE IF NOT EXISTS inv_opcoes (\n  id serial PRIMARY KEY,\n  tipo text NOT NULL,\n  valor text NOT NULL,\n  UNIQUE(tipo, valor)\n);\n\nINSERT INTO inv_opcoes (tipo, valor) VALUES\n  ('banco', 'Itaú Maxibuild'),\n  ('banco', 'ZRS'),\n  ('categoria', 'Manutenção'),\n  ('categoria', 'Equipamentos e Material')\nON CONFLICT DO NOTHING;`}</code>
+          </div>
+        )}
 
         {/* Stats — same card pattern as every other page */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px", marginBottom: "22px" }}>
@@ -385,6 +426,76 @@ export default function InvestimentosPage() {
           </div>
         )}
       </div>
+
+      {/* ── Modal Gerenciar Listas ── */}
+      {modalListas && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }}
+          onClick={() => setModalListas(false)}>
+          <div style={{ background: "var(--surf1)", border: "1px solid var(--b2)", borderRadius: "12px", padding: "28px 32px", width: "520px", maxWidth: "94vw" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <span style={{ fontSize: "15px", fontWeight: 700 }}>Gerenciar Listas</span>
+              <button className="btn bg sm" onClick={() => setModalListas(false)}>✕ Fechar</button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
+
+              {/* Bancos */}
+              <div>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "10px" }}>Bancos / Origens</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginBottom: "10px" }}>
+                  {(opcoesDB.filter(o => o.tipo === "banco").length ? opcoesDB.filter(o => o.tipo === "banco") : BANCOS_DEFAULT.map((v, i) => ({ id: -i - 1, tipo: "banco", valor: v }))).map(o => (
+                    <div key={o.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", background: "var(--surf2)", borderRadius: "6px", border: "1px solid var(--b1)" }}>
+                      <span style={{ fontSize: "13px" }}>{o.valor}</span>
+                      {o.id > 0 && (
+                        <button
+                          style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "12px", padding: "0 2px" }}
+                          onMouseEnter={e => (e.currentTarget.style.color = "var(--err)")}
+                          onMouseLeave={e => (e.currentTarget.style.color = "var(--t3)")}
+                          onClick={() => removeOpcao(o.id)}
+                        >✕</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  <input className="fc" value={novoBanco} onChange={e => setNovoBanco(e.target.value)}
+                    placeholder="Novo banco..." style={{ margin: 0, flex: 1 }}
+                    onKeyDown={e => e.key === "Enter" && addOpcao("banco", novoBanco)} />
+                  <button className="btn bp sm" onClick={() => addOpcao("banco", novoBanco)} disabled={!novoBanco.trim()}>+</button>
+                </div>
+              </div>
+
+              {/* Categorias */}
+              <div>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "10px" }}>Categorias</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginBottom: "10px" }}>
+                  {(opcoesDB.filter(o => o.tipo === "categoria").length ? opcoesDB.filter(o => o.tipo === "categoria") : CATS_DEFAULT.map((v, i) => ({ id: -i - 1, tipo: "categoria", valor: v }))).map(o => (
+                    <div key={o.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", background: "var(--surf2)", borderRadius: "6px", border: "1px solid var(--b1)" }}>
+                      <span style={{ fontSize: "13px" }}>{o.valor}</span>
+                      {o.id > 0 && (
+                        <button
+                          style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "12px", padding: "0 2px" }}
+                          onMouseEnter={e => (e.currentTarget.style.color = "var(--err)")}
+                          onMouseLeave={e => (e.currentTarget.style.color = "var(--t3)")}
+                          onClick={() => removeOpcao(o.id)}
+                        >✕</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  <input className="fc" value={novaCat} onChange={e => setNovaCat(e.target.value)}
+                    placeholder="Nova categoria..." style={{ margin: 0, flex: 1 }}
+                    onKeyDown={e => e.key === "Enter" && addOpcao("categoria", novaCat)} />
+                  <button className="btn bp sm" onClick={() => addOpcao("categoria", novaCat)} disabled={!novaCat.trim()}>+</button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── PDF / Print area ── */}
       <div className="inv-print" style={{ fontFamily: "Arial, sans-serif", color: "#111", background: "white", padding: "0" }}>
