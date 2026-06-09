@@ -10,10 +10,13 @@ import { registrarLog } from "@/services/log.service";
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
+const CATEGORIAS = ["Manutenção", "Equipamentos e Material"] as const;
+
 interface Investimento {
   id: string;
   data: string;
   empresa: string;
+  categoria: string | null;
   descricao: string;
   valor: number;
   observacoes: string | null;
@@ -24,6 +27,7 @@ interface Investimento {
 interface FormState {
   data: string;
   empresa: string;
+  categoria: string;
   descricao: string;
   valor: number;
   observacoes: string;
@@ -67,7 +71,7 @@ function agruparPorMes(items: Investimento[]): Grupo[] {
 }
 
 const FORM_VAZIO: FormState = {
-  data: hoje(), empresa: "", descricao: "", valor: 0, observacoes: "", comprovante_url: "",
+  data: hoje(), empresa: "", categoria: "", descricao: "", valor: 0, observacoes: "", comprovante_url: "",
 };
 
 // ─── component ───────────────────────────────────────────────────────────────
@@ -106,6 +110,7 @@ export default function InvestimentosPage() {
     setForm({
       data: inv.data,
       empresa: inv.empresa,
+      categoria: inv.categoria ?? "",
       descricao: inv.descricao,
       valor: Number(inv.valor),
       observacoes: inv.observacoes ?? "",
@@ -128,6 +133,7 @@ export default function InvestimentosPage() {
     const payload = {
       data:            form.data,
       empresa:         form.empresa.trim(),
+      categoria:       form.categoria || null,
       descricao:       form.descricao.trim(),
       valor:           form.valor,
       observacoes:     form.observacoes.trim() || null,
@@ -261,8 +267,8 @@ export default function InvestimentosPage() {
               {editingId ? `EDITANDO APORTE · ${form.empresa || "—"}` : "NOVO APORTE DE CAPITAL"}
             </div>
 
-            {/* Row 1: Data | Empresa | Descrição | Valor */}
-            <div style={{ display: "grid", gridTemplateColumns: "130px 1fr 1fr 180px", gap: "12px", marginBottom: "12px" }}>
+            {/* Row 1: Data | Empresa | Categoria | Descrição | Valor */}
+            <div style={{ display: "grid", gridTemplateColumns: "110px 1fr 200px 1fr 180px", gap: "12px", marginBottom: "12px" }}>
               <div>
                 <label style={lbl}>Data *</label>
                 <DateInput
@@ -280,6 +286,17 @@ export default function InvestimentosPage() {
                   value={form.empresa}
                   onChange={e => setForm(f => ({ ...f, empresa: e.target.value }))}
                 />
+              </div>
+              <div>
+                <label style={lbl}>Categoria</label>
+                <select
+                  style={{ ...inp, cursor: "pointer" }}
+                  value={form.categoria}
+                  onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}
+                >
+                  <option value="">Selecione...</option>
+                  {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
               </div>
               <div>
                 <label style={lbl}>Descrição *</label>
@@ -503,12 +520,24 @@ export default function InvestimentosPage() {
                     {fmtData(inv.data)}
                   </div>
 
-                  {/* Empresa */}
-                  <div style={{
-                    fontSize: "13px", color: "var(--t1)", fontWeight: 600,
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  }}>
-                    {inv.empresa}
+                  {/* Empresa + Categoria */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "3px", minWidth: 0 }}>
+                    <span style={{
+                      fontSize: "13px", color: "var(--t1)", fontWeight: 600,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>
+                      {inv.empresa}
+                    </span>
+                    {inv.categoria && (
+                      <span style={{
+                        fontSize: "10px", fontWeight: 600, padding: "1px 7px", borderRadius: "99px",
+                        background: GB, color: G, border: `1px solid ${GBR}`,
+                        fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap",
+                        width: "fit-content",
+                      }}>
+                        {inv.categoria}
+                      </span>
+                    )}
                   </div>
 
                   {/* Descrição + obs */}
@@ -652,7 +681,7 @@ export default function InvestimentosPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px", fontFamily: "monospace" }}>
               <thead>
                 <tr style={{ background: "#fafafa" }}>
-                  {["Data", "Empresa", "Descrição", "Observações", "Comprovante", "Valor"].map(h => (
+                  {["Data", "Empresa", "Categoria", "Descrição", "Observações", "Comprovante", "Valor"].map(h => (
                     <th key={h} style={{
                       padding: "6px 8px", textAlign: h === "Valor" ? "right" : "left",
                       color: "#555", fontWeight: 600, fontSize: "9px",
@@ -671,6 +700,9 @@ export default function InvestimentosPage() {
                     <td style={{ padding: "7px 8px", color: "#111", fontWeight: 600, borderBottom: "1px solid #f0f0f0" }}>
                       {inv.empresa}
                     </td>
+                    <td style={{ padding: "7px 8px", color: "#d97706", borderBottom: "1px solid #f0f0f0" }}>
+                      {inv.categoria ?? "—"}
+                    </td>
                     <td style={{ padding: "7px 8px", color: "#333", borderBottom: "1px solid #f0f0f0" }}>
                       {inv.descricao}
                     </td>
@@ -688,7 +720,7 @@ export default function InvestimentosPage() {
               </tbody>
               <tfoot>
                 <tr style={{ background: "#fff8e6" }}>
-                  <td colSpan={5} style={{ padding: "7px 8px", fontWeight: 700, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#888" }}>
+                  <td colSpan={6} style={{ padding: "7px 8px", fontWeight: 700, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#888" }}>
                     Subtotal {grupo.label}
                   </td>
                   <td style={{ padding: "7px 8px", fontWeight: 800, color: "#d97706", textAlign: "right" }}>
