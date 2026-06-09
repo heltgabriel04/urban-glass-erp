@@ -31,7 +31,7 @@ const NAV = [
   {
     grupo: "FINANCEIRO",
     items: [
-      { href: "/financeiro", label: "Contas a Receber",    icon: "◉" },
+      { href: "/financeiro", label: "Gestão de Contas",     icon: "◉" },
       { href: "/fluxo",      label: "Fluxo de Caixa",      icon: "◈" },
       { href: "/notas",      label: "Notas Fiscais",        icon: "◧" },
     ],

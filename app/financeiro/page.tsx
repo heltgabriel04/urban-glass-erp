@@ -292,7 +292,7 @@ export default function FinanceiroPage() {
   return (
     <AppLayout>
       <div className="tb">
-        <div className="tb-title">Financeiro</div>
+        <div className="tb-title">Gestão de Contas</div>
         <div style={{ display: "flex", gap: "6px" }}>
           {aba === "fluxo" && <>
             <button
