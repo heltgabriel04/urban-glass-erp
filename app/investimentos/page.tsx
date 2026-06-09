@@ -226,7 +226,7 @@ export default function InvestimentosPage() {
           onKeyDown={e => e.key === "Enter" && onSave()} />
       </td>
       <td>
-        <select style={cs} value={form.empresa} onChange={e => set(f => ({ ...f, empresa: e.target.value }))}>
+        <select className="fc" style={{ margin: 0, width: "100%" }} value={form.empresa} onChange={e => set(f => ({ ...f, empresa: e.target.value }))}>
           <option value="">Selecione...</option>
           {listaBancos.map(b => <option key={b} value={b}>{b}</option>)}
         </select>
@@ -235,7 +235,7 @@ export default function InvestimentosPage() {
         <CurrencyInput value={form.valor} onChange={v => set(f => ({ ...f, valor: v }))} />
       </td>
       <td>
-        <select style={cs} value={form.categoria} onChange={e => set(f => ({ ...f, categoria: e.target.value }))}>
+        <select className="fc" style={{ margin: 0, width: "100%" }} value={form.categoria} onChange={e => set(f => ({ ...f, categoria: e.target.value }))}>
           <option value="">—</option>
           {listaCats.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -429,7 +429,7 @@ export default function InvestimentosPage() {
 
       {/* ── Modal Gerenciar Listas ── */}
       {modalListas && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }}
+        <div style={{ position: "fixed", inset: 0, background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }}
           onClick={() => setModalListas(false)}>
           <div style={{ background: "var(--surf1)", border: "1px solid var(--b2)", borderRadius: "12px", padding: "28px 32px", width: "520px", maxWidth: "94vw" }}
             onClick={e => e.stopPropagation()}>
