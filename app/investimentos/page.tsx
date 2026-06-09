@@ -75,7 +75,7 @@ const FORM_VAZIO: FormState = {
 export default function InvestimentosPage() {
   const [investimentos, setInvestimentos] = useState<Investimento[]>([]);
   const [loading, setLoading]             = useState(true);
-  const [panelOpen, setPanelOpen]         = useState(false);
+  const [showForm, setShowForm]           = useState(false);
   const [editingId, setEditingId]         = useState<string | null>(null);
   const [form, setForm]                   = useState<FormState>(FORM_VAZIO);
   const [salvando, setSalvando]           = useState(false);
@@ -98,7 +98,8 @@ export default function InvestimentosPage() {
   function abrirNovo() {
     setForm({ ...FORM_VAZIO, data: hoje() });
     setEditingId(null);
-    setPanelOpen(true);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function abrirEditar(inv: Investimento) {
@@ -111,10 +112,11 @@ export default function InvestimentosPage() {
       comprovante_url: inv.comprovante_url ?? "",
     });
     setEditingId(inv.id);
-    setPanelOpen(true);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function fecharPanel() { setPanelOpen(false); setEditingId(null); }
+  function fecharForm() { setShowForm(false); setEditingId(null); setForm(FORM_VAZIO); }
 
   async function salvar() {
     if (!form.empresa.trim())  { alert("Informe a empresa investidora."); return; }
@@ -144,7 +146,7 @@ export default function InvestimentosPage() {
     }
 
     setSalvando(false);
-    fecharPanel();
+    fecharForm();
     load();
   }
 
@@ -190,6 +192,16 @@ export default function InvestimentosPage() {
   const GBR  = "rgba(245,158,11,.22)";
   const COLS = "90px 170px 1fr 140px 38px 64px";
 
+  const lbl: React.CSSProperties = {
+    fontSize: "11px", color: "var(--t3)", fontWeight: 600,
+    textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px", display: "block",
+  };
+  const inp: React.CSSProperties = {
+    background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: "6px",
+    padding: "9px 12px", color: "var(--t1)", fontSize: "13px",
+    fontFamily: "'Inter', sans-serif", outline: "none", width: "100%", boxSizing: "border-box",
+  };
+
   const btnAct: React.CSSProperties = {
     width: "28px", height: "28px", borderRadius: "6px",
     background: "transparent", border: "1px solid var(--b2)",
@@ -225,19 +237,131 @@ export default function InvestimentosPage() {
             ⬡ Exportar PDF
           </button>
           <button
-            style={{
-              padding: "7px 14px", borderRadius: "8px", border: "none",
-              background: G, color: "#000", fontWeight: 700, fontSize: "12px",
-              cursor: "pointer", fontFamily: "'DM Mono', monospace", transition: "opacity 0.1s",
-            }}
-            onClick={abrirNovo}
+            className={showForm ? "btn bg sm" : "btn bp sm"}
+            onClick={() => { if (showForm) fecharForm(); else abrirNovo(); }}
           >
-            + Novo Aporte
+            {showForm ? "✕ Cancelar" : "+ Novo Aporte"}
           </button>
         </div>
       </div>
 
       <div className="con">
+
+        {/* ── Form inline ── */}
+        {showForm && (
+          <div style={{
+            background: "var(--surf1)", border: `1px solid ${GBR}`,
+            borderRadius: "10px", padding: "20px 24px", marginBottom: "20px",
+          }}>
+            <div style={{
+              fontSize: "11px", color: G, fontWeight: 700,
+              letterSpacing: "0.08em", textTransform: "uppercase",
+              marginBottom: "16px", fontFamily: "'DM Mono', monospace",
+            }}>
+              {editingId ? `EDITANDO APORTE · ${form.empresa || "—"}` : "NOVO APORTE DE CAPITAL"}
+            </div>
+
+            {/* Row 1: Data | Empresa | Descrição | Valor */}
+            <div style={{ display: "grid", gridTemplateColumns: "130px 1fr 1fr 180px", gap: "12px", marginBottom: "12px" }}>
+              <div>
+                <label style={lbl}>Data *</label>
+                <DateInput
+                  style={inp}
+                  className=""
+                  value={form.data}
+                  onChange={v => setForm(f => ({ ...f, data: v }))}
+                />
+              </div>
+              <div>
+                <label style={lbl}>Empresa Investidora *</label>
+                <input
+                  style={inp}
+                  placeholder="Nome da empresa ou investidor"
+                  value={form.empresa}
+                  onChange={e => setForm(f => ({ ...f, empresa: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label style={lbl}>Descrição *</label>
+                <input
+                  style={inp}
+                  placeholder="Ex: Aporte inicial, Capital de giro..."
+                  value={form.descricao}
+                  onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label style={lbl}>Valor do Aporte *</label>
+                <CurrencyInput
+                  style={inp}
+                  className=""
+                  value={form.valor}
+                  onChange={v => setForm(f => ({ ...f, valor: v }))}
+                />
+              </div>
+            </div>
+
+            {/* Row 2: Observações | Comprovante */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+              <div>
+                <label style={lbl}>Observações</label>
+                <textarea
+                  style={{ ...inp, resize: "vertical", minHeight: "68px", fontFamily: "'Inter', sans-serif" }}
+                  placeholder="Condições, prazo de retorno, taxa, notas relevantes..."
+                  value={form.observacoes}
+                  onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label style={lbl}>Comprovante / NFe (link)</label>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  <input
+                    style={{ ...inp, flex: 1 }}
+                    placeholder="https://drive.google.com/... ou referência da NFe"
+                    value={form.comprovante_url}
+                    onChange={e => setForm(f => ({ ...f, comprovante_url: e.target.value }))}
+                  />
+                  {form.comprovante_url && form.comprovante_url.startsWith("http") && (
+                    <a
+                      href={form.comprovante_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        width: "40px", height: "40px", borderRadius: "6px",
+                        background: GB, border: `1px solid ${GBR}`,
+                        color: G, textDecoration: "none", fontSize: "15px", flexShrink: 0,
+                      }}
+                      title="Abrir link"
+                    >📎</a>
+                  )}
+                </div>
+                <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "4px", fontFamily: "'DM Mono', monospace" }}>
+                  Cole o link do Google Drive, Dropbox, OneDrive ou número de referência
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button className="btn bg sm" onClick={fecharForm}>Cancelar</button>
+              <button
+                disabled={salvando}
+                onClick={salvar}
+                style={{
+                  padding: "7px 18px", borderRadius: "7px", border: "none",
+                  background: salvando ? "rgba(245,158,11,.5)" : G,
+                  color: "#000", fontWeight: 800, fontSize: "12px",
+                  cursor: salvando ? "not-allowed" : "pointer",
+                  fontFamily: "'DM Mono', monospace", transition: "background 0.1s",
+                }}
+              >
+                {salvando ? "Salvando..." : (editingId ? "✓ Salvar Alterações" : "✓ Registrar Aporte")}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Stats ── */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px", marginBottom: "22px" }}>
           {[
@@ -457,155 +581,6 @@ export default function InvestimentosPage() {
         ))}
       </div>
 
-      {/* ── Overlay ── */}
-      {panelOpen && (
-        <div
-          onClick={fecharPanel}
-          style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,.55)",
-            zIndex: 40, backdropFilter: "blur(2px)",
-          }}
-        />
-      )}
-
-      {/* ── Side Panel ── */}
-      <div style={{
-        position: "fixed", top: 0, right: 0, bottom: 0, width: "400px",
-        background: "var(--surf0)", borderLeft: `2px solid ${GBR}`,
-        zIndex: 50,
-        transform: panelOpen ? "translateX(0)" : "translateX(100%)",
-        transition: "transform 0.24s cubic-bezier(0.4,0,0.2,1)",
-        display: "flex", flexDirection: "column", overflow: "hidden",
-      }}>
-        {/* Panel header */}
-        <div style={{
-          padding: "22px 24px 16px",
-          borderBottom: "1px solid var(--b1)",
-          display: "flex", alignItems: "flex-start", justifyContent: "space-between",
-        }}>
-          <div>
-            <div style={{
-              fontSize: "16px", fontWeight: 800, color: "var(--t1)",
-              fontFamily: "'Syne',sans-serif", letterSpacing: "-0.3px",
-            }}>
-              {editingId ? "Editar Aporte" : "Novo Aporte"}
-            </div>
-            <div style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", marginTop: "3px" }}>
-              {editingId ? "Altere os dados do investimento" : "Registre um novo aporte de capital"}
-            </div>
-          </div>
-          <button
-            onClick={fecharPanel}
-            style={{
-              width: "30px", height: "30px", borderRadius: "8px",
-              background: "transparent", border: "1px solid var(--b2)",
-              color: "var(--t3)", cursor: "pointer", fontSize: "13px", flexShrink: 0,
-            }}
-          >✕</button>
-        </div>
-
-        {/* Panel body */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
-          <div className="fg">
-            <label className="fl">Data do Aporte</label>
-            <DateInput className="fc" value={form.data} onChange={v => setForm(f => ({ ...f, data: v }))} />
-          </div>
-
-          <div className="fg">
-            <label className="fl">Empresa Investidora</label>
-            <input
-              className="fc"
-              placeholder="Nome da empresa ou investidor"
-              value={form.empresa}
-              onChange={e => setForm(f => ({ ...f, empresa: e.target.value }))}
-            />
-          </div>
-
-          <div className="fg">
-            <label className="fl">Descrição</label>
-            <input
-              className="fc"
-              placeholder="Ex: Aporte inicial, Capital de giro, Expansão..."
-              value={form.descricao}
-              onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
-            />
-          </div>
-
-          <div className="fg">
-            <label className="fl">Valor do Aporte</label>
-            <CurrencyInput
-              value={form.valor}
-              onChange={v => setForm(f => ({ ...f, valor: v }))}
-              placeholder="R$ 0,00"
-            />
-          </div>
-
-          <div className="fg">
-            <label className="fl">Observações</label>
-            <textarea
-              className="fc"
-              placeholder="Condições, prazo de retorno, taxa, notas relevantes..."
-              rows={3}
-              value={form.observacoes}
-              onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
-              style={{ resize: "vertical", minHeight: "72px" }}
-            />
-          </div>
-
-          <div className="fg">
-            <label className="fl">Comprovante / NFe (link)</label>
-            <div style={{ display: "flex", gap: "6px" }}>
-              <input
-                className="fc"
-                placeholder="https://drive.google.com/... ou número da NFe"
-                value={form.comprovante_url}
-                onChange={e => setForm(f => ({ ...f, comprovante_url: e.target.value }))}
-                style={{ flex: 1 }}
-              />
-              {form.comprovante_url && (
-                <a
-                  href={form.comprovante_url.startsWith("http") ? form.comprovante_url : "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    width: "40px", height: "40px", borderRadius: "7px",
-                    background: GB, border: `1px solid ${GBR}`,
-                    color: G, textDecoration: "none", fontSize: "15px", flexShrink: 0,
-                  }}
-                  title="Abrir link"
-                >📎</a>
-              )}
-            </div>
-            <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "4px", fontFamily: "'DM Mono',monospace" }}>
-              Cole o link do Google Drive, Dropbox, OneDrive ou número de referência da NFe
-            </div>
-          </div>
-        </div>
-
-        {/* Panel footer */}
-        <div style={{
-          padding: "16px 24px", borderTop: "1px solid var(--b1)",
-          display: "flex", gap: "8px",
-        }}>
-          <button className="btn bg" style={{ flex: 1 }} onClick={fecharPanel}>
-            Cancelar
-          </button>
-          <button
-            onClick={salvar}
-            disabled={salvando}
-            style={{
-              flex: 2, padding: "10px 16px", borderRadius: "8px",
-              background: salvando ? "rgba(245,158,11,.5)" : G,
-              border: "none", color: "#000", fontWeight: 800,
-              fontSize: "13px", cursor: salvando ? "not-allowed" : "pointer",
-              fontFamily: "'DM Mono',monospace", transition: "background 0.1s",
-            }}
-          >
-            {salvando ? "Salvando..." : (editingId ? "✓ Salvar Alterações" : "✓ Registrar Aporte")}
-          </button>
-        </div>
-      </div>
 
       {/* ── Print / PDF ── */}
       <div className="inv-print">
