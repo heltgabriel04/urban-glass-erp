@@ -50,7 +50,7 @@ export default function OrcamentoDetalhe() {
       ? new Date(orc.dt_orcamento + "T00:00:00").toLocaleDateString("pt-BR").replace(/\//g, "-")
       : "";
     const tituloOriginal = document.title;
-    document.title = `Orçamento - ${cliente} - ${data}`;
+    document.title = `${cliente} - ${data}`;
     window.print();
     setTimeout(() => { document.title = tituloOriginal; }, 2000);
   }

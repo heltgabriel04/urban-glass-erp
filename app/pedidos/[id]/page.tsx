@@ -113,9 +113,21 @@ export default function PedidoDetalhe() {
 
   useEffect(() => { load(); }, [id]);
 
+  function handlePrintRomaneio() {
+    if (!pedido) return;
+    const cliente = pedido.clientes?.nome ?? "Cliente";
+    const data = pedido.dt_pedido
+      ? new Date(pedido.dt_pedido + "T00:00:00").toLocaleDateString("pt-BR").replace(/\//g, "-")
+      : "";
+    const tituloOriginal = document.title;
+    document.title = `${cliente} - ${data}`;
+    window.print();
+    setTimeout(() => { document.title = tituloOriginal; }, 2000);
+  }
+
   useEffect(() => {
     if (autoPrint && !loading && pedido) {
-      const timer = setTimeout(() => { window.print(); }, 800);
+      const timer = setTimeout(() => { handlePrintRomaneio(); }, 800);
       return () => clearTimeout(timer);
     }
   }, [autoPrint, loading, pedido]);
@@ -396,7 +408,7 @@ async function handleMarcarPago(lancId: number) {
           )}
           <button
             className="btn sm"
-            onClick={() => podeRomaneio && window.print()}
+            onClick={() => podeRomaneio && handlePrintRomaneio()}
             style={{ background: podeRomaneio ? "rgba(16,185,129,.15)" : "transparent", border: "1px solid " + (podeRomaneio ? "var(--ok)" : "var(--b2)"), color: podeRomaneio ? "var(--ok)" : "var(--t3)", fontWeight:700, cursor: podeRomaneio ? "pointer" : "default", opacity: podeRomaneio ? 1 : 0.35, transition:"all 0.2s" }}
           >R</button>
           {podeAvancar && (
