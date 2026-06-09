@@ -4,12 +4,15 @@ import { useEffect, useState, useMemo } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { getFinanceiroClientes, getFaturamentoMensal, getLancamentos } from "@/services/financeiro.service";
 import { getPedidos } from "@/services/pedidos.service";
+import { getEstoque } from "@/services/estoque.service";
+import { getOrcamentos } from "@/services/orcamentos.service";
+import { getAllHistoricoOtimizador } from "@/services/otimizador.service";
 import { formatBRL, formatPercent } from "@/lib/formatters";
 import type { FinanceiroCliente, FaturamentoMensal, Pedido, Lancamento } from "@/types";
 
 const MESES_ABREV    = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MESES_COMPLETOS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-const TABS = ["Faturamento","Clientes","Pedidos"];
+const TABS = ["Faturamento","Clientes","Pedidos","Eficiência","Fluxo de Caixa","Estoque","Orçamentos"];
 
 const STATUS_COR: Record<string, string> = {
   "Aguardando otimização":   "var(--warn)",
@@ -79,6 +82,9 @@ export default function RelatoriosPage() {
   const [loading, setLoading]       = useState(true);
   const [mesSel, setMesSel]         = useState<number | null>(null);
   const [reporteAtivo, setReporteAtivo] = useState<TipoRelatorio>(null);
+  const [otimHistorico, setOtimHistorico] = useState<Array<{ dt_otim: string; aproveitamento: number; perda: number; chapas_usadas: number; retalhos_gerados: number; total_pecas: number }>>([]);
+  const [estoque, setEstoque]             = useState<any[]>([]);
+  const [orcamentos, setOrcamentos]       = useState<any[]>([]);
 
   const hoje     = new Date().toISOString().split("T")[0];
   const dtEmissao = new Date().toLocaleDateString("pt-BR");
@@ -87,14 +93,20 @@ export default function RelatoriosPage() {
 
   async function load() {
     setLoading(true);
-    const [fin, fat, peds, lancs] = await Promise.all([
+    const [fin, fat, peds, lancs, otimHist, estq, orcs] = await Promise.all([
       getFinanceiroClientes(),
       getFaturamentoMensal(2026),
       getPedidos(),
       getLancamentos(),
+      getAllHistoricoOtimizador(),
+      getEstoque(),
+      getOrcamentos(),
     ]);
     setFinanceiro(fin); setFatMensal(fat); setPedidos(peds);
     setLancamentos(lancs as Lancamento[]);
+    setOtimHistorico(otimHist as any);
+    setEstoque(estq);
+    setOrcamentos(orcs as any[]);
     setLoading(false);
     setMesSel(new Date().getMonth() + 1);
   }
@@ -154,6 +166,84 @@ export default function RelatoriosPage() {
   const melhorMes = meses.reduce((best, m) => m.faturado > best.faturado ? m : best, meses[0]);
   const ticketMedio = pedidos.length > 0 ? fatTotal / pedidos.length : 0;
   const m2Total     = pedidos.reduce((a, p) => a + Number(p.m2_total), 0);
+
+  // ── Eficiência do otimizador ─────────────────────────────────────────────
+  const eficienciaMensal = useMemo(() => {
+    const map = new Map<string, { aprovs: number[]; perdas: number[]; retalhos: number; count: number }>();
+    otimHistorico.forEach(h => {
+      const key = (h.dt_otim ?? '').substring(0, 7);
+      if (!key) return;
+      const prev = map.get(key) ?? { aprovs: [], perdas: [], retalhos: 0, count: 0 };
+      prev.aprovs.push(Number(h.aproveitamento));
+      prev.perdas.push(Number(h.perda));
+      prev.retalhos += Number(h.retalhos_gerados);
+      prev.count++;
+      map.set(key, prev);
+    });
+    return Array.from(map.entries()).map(([key, v]) => {
+      const [y, m] = key.split('-').map(Number);
+      const lbl = new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      return {
+        key,
+        label: lbl.charAt(0).toUpperCase() + lbl.slice(1),
+        aprovMedia: v.aprovs.reduce((a, b) => a + b, 0) / v.aprovs.length,
+        perdaMedia:  v.perdas.reduce((a, b) => a + b, 0) / v.perdas.length,
+        retalhos: v.retalhos,
+        count: v.count,
+      };
+    }).sort((a, b) => a.key.localeCompare(b.key));
+  }, [otimHistorico]);
+
+  const aprovGeral  = eficienciaMensal.length ? eficienciaMensal.reduce((a, m) => a + m.aprovMedia, 0) / eficienciaMensal.length : 0;
+  const perdaGeral  = eficienciaMensal.length ? eficienciaMensal.reduce((a, m) => a + m.perdaMedia, 0) / eficienciaMensal.length : 0;
+  const totalOtims  = otimHistorico.length;
+  const totalRetalh = otimHistorico.reduce((a, h) => a + Number(h.retalhos_gerados), 0);
+
+  // ── Fluxo de caixa – próximas 8 semanas ─────────────────────────────────
+  const fluxoSemanas = useMemo(() => {
+    const base = new Date(hoje + 'T12:00:00');
+    return Array.from({ length: 8 }, (_, i) => {
+      const ini = new Date(base.getTime() + i * 7 * 86400000);
+      const fim = new Date(base.getTime() + (i + 1) * 7 * 86400000);
+      const label = ini.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      let entradas = 0, saidas = 0;
+      (lancamentos as Lancamento[]).forEach(l => {
+        if (!l.vencimento) return;
+        const venc = new Date(l.vencimento + 'T12:00:00');
+        if (venc < ini || venc >= fim) return;
+        if (l.tipo === 'Entrada' && l.status === 'A Receber') entradas += Number(l.valor);
+        if (l.tipo === 'Saída'   && (l.status === 'Pendente' || (l.status as string) === 'Vencido')) saidas += Number(l.valor);
+      });
+      return { ini, fim, label, entradas, saidas, saldo: entradas - saidas };
+    });
+  }, [lancamentos, hoje]);
+
+  const totalEntradas60d = fluxoSemanas.reduce((a, s) => a + s.entradas, 0);
+  const totalSaidas60d   = fluxoSemanas.reduce((a, s) => a + s.saidas, 0);
+  const saldoLiquido60d  = totalEntradas60d - totalSaidas60d;
+  const maxFluxo         = Math.max(...fluxoSemanas.map(s => Math.max(s.entradas, s.saidas)), 1);
+
+  // ── Estoque ───────────────────────────────────────────────────────────────
+  const estoqueOrdenado = useMemo(() =>
+    [...estoque].sort((a: any, b: any) => {
+      const pctA = Number(a.m2_entrada) > 0 ? Number(a.m2_saldo) / Number(a.m2_entrada) : 1;
+      const pctB = Number(b.m2_entrada) > 0 ? Number(b.m2_saldo) / Number(b.m2_entrada) : 1;
+      return pctA - pctB;
+    }), [estoque]);
+  const valorTotalEstoque = estoque.reduce((a: number, e: any) => a + Number(e.m2_saldo) * Number(e.custo_m2), 0);
+  const m2TotalEstoque    = estoque.reduce((a: number, e: any) => a + Number(e.m2_saldo), 0);
+
+  // ── Orçamentos ────────────────────────────────────────────────────────────
+  const orcsAprovados  = orcamentos.filter((o: any) => o.status === 'Aprovado');
+  const orcsRejeitados = orcamentos.filter((o: any) => o.status === 'Rejeitado');
+  const orcsPendentes  = orcamentos.filter((o: any) => ['Rascunho', 'Enviado'].includes(o.status));
+  const taxaConversao  = (orcsAprovados.length + orcsRejeitados.length) > 0
+    ? orcsAprovados.length / (orcsAprovados.length + orcsRejeitados.length) * 100 : 0;
+  const valorPendente  = orcsPendentes.reduce((a: number, o: any) => a + Number(o.valor_total), 0);
+  const valorAprovado  = orcsAprovados.reduce((a: number, o: any) => a + Number(o.valor_total), 0);
+  const orcsRecentes   = useMemo(() =>
+    [...orcamentos].sort((a: any, b: any) => (b.dt_orcamento ?? '').localeCompare(a.dt_orcamento ?? '')).slice(0, 10),
+    [orcamentos]);
 
   // ── Meses com dados para relatório de faturamento ────────────────────────
   const mesesComDados = meses.filter(m => m.faturado > 0);
@@ -449,6 +539,268 @@ export default function RelatoriosPage() {
                   </div>
                 </div>
               )}
+              {/* ══ TAB 3: EFICIÊNCIA ══ */}
+              {tabIdx === 3 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px" }}>
+                    {[
+                      { label: "Aproveitamento Médio", value: aprovGeral.toFixed(1) + "%",  color: "var(--ok)",   sub: `${eficienciaMensal.length} mes(es) com dados` },
+                      { label: "Perda Média",          value: perdaGeral.toFixed(1) + "%",   color: "var(--err)",  sub: "média de desperdício" },
+                      { label: "Otimizações Salvas",   value: String(totalOtims),             color: "var(--acc2)", sub: "total de execuções" },
+                      { label: "Retalhos Gerados",     value: String(totalRetalh),            color: "var(--warn)", sub: "total aproveitável" },
+                    ].map(card => (
+                      <div key={card.label} style={{ background: "var(--surf)", border: "1px solid var(--b1)", borderRadius: "12px", padding: "18px 20px" }}>
+                        <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600, marginBottom: "8px" }}>{card.label}</div>
+                        <div style={{ fontSize: "24px", fontWeight: 700, color: card.color, fontFamily: "'DM Mono', monospace", lineHeight: 1.1, marginBottom: "6px" }}>{card.value}</div>
+                        <div style={{ fontSize: "11px", color: "var(--t3)" }}>{card.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {eficienciaMensal.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "60px", background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "12px", color: "var(--t3)", fontSize: "13px" }}>
+                      Nenhum dado de otimização. Salve pelo menos uma otimização no Otimizador.
+                    </div>
+                  ) : (
+                    <div className="card">
+                      <div className="ct">Aproveitamento por Mês</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+                        <div>
+                          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+                            {[{ color: "rgba(61,255,160,.6)", label: "Aproveitamento" }, { color: "rgba(244,63,94,.5)", label: "Perda" }].map(l => (
+                              <div key={l.label} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "10px", color: "var(--t2)" }}>
+                                <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: l.color }} />{l.label}
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{ height: "140px", display: "flex", alignItems: "flex-end", gap: "8px" }}>
+                            {eficienciaMensal.map((m, i) => {
+                              const hAprov = Math.max((m.aprovMedia / 100) * 130, 4);
+                              const hPerda = Math.max((m.perdaMedia / 100) * 130, 2);
+                              return (
+                                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px" }}>
+                                  <div style={{ width: "100%", display: "flex", alignItems: "flex-end", gap: "2px" }}>
+                                    <div style={{ flex: 1, height: `${hAprov}px`, borderRadius: "2px 2px 0 0", background: "rgba(61,255,160,.5)" }} />
+                                    <div style={{ flex: 1, height: `${hPerda}px`, borderRadius: "2px 2px 0 0", background: "rgba(244,63,94,.45)" }} />
+                                  </div>
+                                  <div style={{ fontSize: "8px", fontFamily: "'DM Mono', monospace", color: "var(--t3)" }}>{m.key.substring(5)}</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 60px 70px", gap: "6px", padding: "6px 8px", fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontFamily: "'DM Mono', monospace", borderBottom: "1px solid var(--b1)" }}>
+                            <div>Mês</div><div style={{ textAlign: "right" }}>Aproveit.</div><div style={{ textAlign: "right" }}>Perda</div><div style={{ textAlign: "right" }}>Otim.</div><div style={{ textAlign: "right" }}>Retalhos</div>
+                          </div>
+                          {eficienciaMensal.map((m, i) => (
+                            <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 60px 70px", gap: "6px", padding: "8px 8px", background: i % 2 === 0 ? "var(--surf2)" : "transparent", borderRadius: "5px" }}>
+                              <div style={{ fontSize: "12px", color: "var(--t1)", fontWeight: 600 }}>{m.label}</div>
+                              <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--ok)", fontWeight: 700, textAlign: "right" }}>{m.aprovMedia.toFixed(1)}%</div>
+                              <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--err)", textAlign: "right" }}>{m.perdaMedia.toFixed(1)}%</div>
+                              <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--t2)", textAlign: "right" }}>{m.count}</div>
+                              <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--warn)", textAlign: "right" }}>{m.retalhos}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ══ TAB 4: FLUXO DE CAIXA ══ */}
+              {tabIdx === 4 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px" }}>
+                    {[
+                      { label: "Entradas Previstas (56d)",  value: formatBRL(totalEntradas60d), color: "var(--ok)",  sub: "A Receber próximas 8 semanas" },
+                      { label: "Saídas Previstas (56d)",    value: formatBRL(totalSaidas60d),   color: "var(--err)", sub: "Contas a pagar próximas 8 semanas" },
+                      { label: "Saldo Líquido Projetado",   value: formatBRL(saldoLiquido60d),  color: saldoLiquido60d >= 0 ? "var(--acc)" : "var(--err)", sub: saldoLiquido60d >= 0 ? "Posição favorável" : "Atenção: posição negativa" },
+                    ].map(card => (
+                      <div key={card.label} style={{ background: "var(--surf)", border: "1px solid var(--b1)", borderRadius: "12px", padding: "18px 20px" }}>
+                        <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600, marginBottom: "8px" }}>{card.label}</div>
+                        <div style={{ fontSize: "24px", fontWeight: 700, color: card.color, fontFamily: "'DM Mono', monospace", lineHeight: 1.1, marginBottom: "6px" }}>{card.value}</div>
+                        <div style={{ fontSize: "11px", color: "var(--t3)" }}>{card.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="card">
+                    <div className="ct">Entradas vs Saídas por Semana <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>próximas 8 semanas</span></div>
+                    <div style={{ display: "flex", gap: "10px", marginBottom: "12px" }}>
+                      {[{ color: "rgba(16,185,129,.5)", label: "Entradas previstas" }, { color: "rgba(244,63,94,.45)", label: "Saídas previstas" }].map(l => (
+                        <div key={l.label} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "10px", color: "var(--t2)" }}>
+                          <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: l.color }} />{l.label}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", height: "140px", marginBottom: "16px" }}>
+                      {fluxoSemanas.map((s, i) => {
+                        const hEnt = s.entradas > 0 ? Math.max((s.entradas / maxFluxo) * 120, 4) : 4;
+                        const hSai = s.saidas > 0 ? Math.max((s.saidas / maxFluxo) * 120, 2) : 0;
+                        return (
+                          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px" }}>
+                            <div style={{ width: "100%", display: "flex", alignItems: "flex-end", gap: "2px" }}>
+                              <div style={{ flex: 1, height: `${hEnt}px`, borderRadius: "2px 2px 0 0", background: s.entradas > 0 ? "rgba(16,185,129,.5)" : "var(--surf2)" }} />
+                              <div style={{ flex: 1, height: `${hSai}px`, borderRadius: "2px 2px 0 0", background: s.saidas > 0 ? "rgba(244,63,94,.45)" : "transparent" }} />
+                            </div>
+                            <div style={{ fontSize: "8px", fontFamily: "'DM Mono', monospace", color: "var(--t3)", whiteSpace: "nowrap" }}>{s.label}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "110px 1fr 1fr 1fr", gap: "8px", padding: "6px 10px", fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontFamily: "'DM Mono', monospace", borderBottom: "1px solid var(--b1)" }}>
+                        <div>Semana</div><div style={{ textAlign: "right" }}>Entradas</div><div style={{ textAlign: "right" }}>Saídas</div><div style={{ textAlign: "right" }}>Saldo Semana</div>
+                      </div>
+                      {fluxoSemanas.map((s, i) => {
+                        const endLabel = new Date(s.fim.getTime() - 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                        return (
+                          <div key={i} style={{ display: "grid", gridTemplateColumns: "110px 1fr 1fr 1fr", gap: "8px", padding: "8px 10px", borderRadius: "6px", background: i % 2 === 0 ? "var(--surf2)" : "transparent" }}>
+                            <div style={{ fontSize: "11px", fontFamily: "'DM Mono', monospace", color: "var(--t2)" }}>{s.label} – {endLabel}</div>
+                            <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: s.entradas > 0 ? "var(--ok)" : "var(--t3)", fontWeight: 600, textAlign: "right" }}>{s.entradas > 0 ? formatBRL(s.entradas) : "—"}</div>
+                            <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: s.saidas > 0 ? "var(--err)" : "var(--t3)", textAlign: "right" }}>{s.saidas > 0 ? formatBRL(s.saidas) : "—"}</div>
+                            <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: (s.entradas > 0 || s.saidas > 0) ? (s.saldo >= 0 ? "var(--ok)" : "var(--err)") : "var(--t3)", fontWeight: 700, textAlign: "right" }}>
+                              {(s.entradas > 0 || s.saidas > 0) ? (s.saldo >= 0 ? "+" : "") + formatBRL(s.saldo) : "—"}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ══ TAB 5: ESTOQUE ══ */}
+              {tabIdx === 5 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px" }}>
+                    {[
+                      { label: "Valor em Estoque",   value: formatBRL(valorTotalEstoque),  color: "var(--acc)",  sub: `${estoque.length} produto(s) cadastrado(s)` },
+                      { label: "m² em Estoque",      value: m2TotalEstoque.toFixed(2) + " m²", color: "var(--acc2)", sub: "saldo total disponível" },
+                      { label: "Chapas em Estoque",  value: String(estoque.reduce((a: number, e: any) => a + Number(e.chapas_saldo), 0)), color: "var(--acc4)", sub: "chapas inteiras restantes" },
+                    ].map(card => (
+                      <div key={card.label} style={{ background: "var(--surf)", border: "1px solid var(--b1)", borderRadius: "12px", padding: "18px 20px" }}>
+                        <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600, marginBottom: "8px" }}>{card.label}</div>
+                        <div style={{ fontSize: "24px", fontWeight: 700, color: card.color, fontFamily: "'DM Mono', monospace", lineHeight: 1.1, marginBottom: "6px" }}>{card.value}</div>
+                        <div style={{ fontSize: "11px", color: "var(--t3)" }}>{card.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {estoque.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "60px", background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "12px", color: "var(--t3)", fontSize: "13px" }}>
+                      Nenhum produto em estoque.
+                    </div>
+                  ) : (
+                    <div className="card">
+                      <div className="ct">Saúde do Estoque por Produto <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>ordenado por criticidade</span></div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 90px 110px 110px 90px 70px", gap: "8px", padding: "6px 12px", fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontFamily: "'DM Mono', monospace", borderBottom: "1px solid var(--b1)" }}>
+                        <div>Produto</div><div style={{ textAlign: "right" }}>Chapas</div><div style={{ textAlign: "right" }}>m² Saldo</div><div style={{ textAlign: "right" }}>m² Consumido</div><div style={{ textAlign: "right" }}>Valor</div><div style={{ textAlign: "right" }}>% Restante</div><div style={{ textAlign: "center" }}>Status</div>
+                      </div>
+                      {estoqueOrdenado.map((e: any, i: number) => {
+                        const pctRest = Number(e.m2_entrada) > 0 ? Number(e.m2_saldo) / Number(e.m2_entrada) * 100 : 0;
+                        const valor   = Number(e.m2_saldo) * Number(e.custo_m2);
+                        const status  = pctRest <= 20 ? "Crítico" : pctRest <= 50 ? "Atenção" : "Ok";
+                        const sCor    = pctRest <= 20 ? "var(--err)" : pctRest <= 50 ? "var(--warn)" : "var(--ok)";
+                        const sBg     = pctRest <= 20 ? "rgba(244,63,94,.1)" : pctRest <= 50 ? "rgba(245,158,11,.1)" : "rgba(16,185,129,.1)";
+                        return (
+                          <div key={e.id} style={{ display: "flex", flexDirection: "column", gap: "5px", padding: "10px 12px", background: i % 2 === 0 ? "var(--surf2)" : "transparent", borderRadius: "7px" }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 90px 110px 110px 90px 70px", gap: "8px", alignItems: "center" }}>
+                              <div>
+                                <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--t1)" }}>{e.produtos?.nome ?? e.cod ?? "—"}</div>
+                                <div style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>{e.cod}</div>
+                              </div>
+                              <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--t2)", textAlign: "right" }}>{Number(e.chapas_saldo)}</div>
+                              <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--t1)", fontWeight: 600, textAlign: "right" }}>{Number(e.m2_saldo).toFixed(2)}</div>
+                              <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--t3)", textAlign: "right" }}>{Number(e.m2_consumido).toFixed(2)}</div>
+                              <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--acc)", fontWeight: 700, textAlign: "right" }}>{formatBRL(valor)}</div>
+                              <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: sCor, fontWeight: 700, textAlign: "right" }}>{pctRest.toFixed(1)}%</div>
+                              <div style={{ textAlign: "center" }}>
+                                <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 7px", borderRadius: "5px", background: sBg, color: sCor, fontFamily: "'DM Mono', monospace" }}>{status}</span>
+                              </div>
+                            </div>
+                            <div style={{ height: "4px", borderRadius: "2px", background: "var(--surf3)", overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: `${Math.min(pctRest, 100)}%`, background: sCor, borderRadius: "2px", opacity: 0.7, transition: "width 0.4s" }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ══ TAB 6: ORÇAMENTOS ══ */}
+              {tabIdx === 6 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px" }}>
+                    {[
+                      { label: "Total de Orçamentos", value: String(orcamentos.length), color: "var(--acc2)", sub: "criados no sistema" },
+                      { label: "Taxa de Conversão",   value: taxaConversao.toFixed(1) + "%", color: taxaConversao >= 50 ? "var(--ok)" : taxaConversao >= 30 ? "var(--warn)" : "var(--err)", sub: `${orcsAprovados.length} de ${orcsAprovados.length + orcsRejeitados.length} decididos` },
+                      { label: "Em Negociação",       value: formatBRL(valorPendente),  color: "var(--warn)", sub: `${orcsPendentes.length} orçamento(s) em aberto` },
+                      { label: "Volume Convertido",   value: formatBRL(valorAprovado),  color: "var(--ok)",  sub: `${orcsAprovados.length} aprovado(s)` },
+                    ].map(card => (
+                      <div key={card.label} style={{ background: "var(--surf)", border: "1px solid var(--b1)", borderRadius: "12px", padding: "18px 20px" }}>
+                        <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600, marginBottom: "8px" }}>{card.label}</div>
+                        <div style={{ fontSize: "24px", fontWeight: 700, color: card.color, fontFamily: "'DM Mono', monospace", lineHeight: 1.1, marginBottom: "6px" }}>{card.value}</div>
+                        <div style={{ fontSize: "11px", color: "var(--t3)" }}>{card.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                    <div className="card">
+                      <div className="ct">Distribuição por Status</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        {[
+                          { label: "Aprovados",  count: orcsAprovados.length,  value: valorAprovado,  cor: "var(--ok)",   bg: "rgba(16,185,129,.1)" },
+                          { label: "Pendentes",  count: orcsPendentes.length,  value: valorPendente,  cor: "var(--warn)", bg: "rgba(245,158,11,.1)" },
+                          { label: "Rejeitados", count: orcsRejeitados.length, value: orcsRejeitados.reduce((a: number, o: any) => a + Number(o.valor_total), 0), cor: "var(--err)", bg: "rgba(244,63,94,.1)" },
+                        ].map(row => {
+                          const pct = orcamentos.length > 0 ? row.count / orcamentos.length * 100 : 0;
+                          return (
+                            <div key={row.label} style={{ padding: "10px 12px", background: "var(--surf2)", borderRadius: "9px", border: "1px solid var(--b1)" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                                <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--t1)" }}>{row.label}</span>
+                                <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                                  <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>{formatBRL(row.value)}</span>
+                                  <span style={{ fontSize: "18px", fontWeight: 800, color: row.cor, fontFamily: "'DM Mono', monospace" }}>{row.count}</span>
+                                </div>
+                              </div>
+                              <div style={{ height: "4px", borderRadius: "2px", background: "var(--surf3)", overflow: "hidden" }}>
+                                <div style={{ height: "100%", width: `${pct}%`, background: row.cor, borderRadius: "2px", opacity: 0.7 }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="card">
+                      <div className="ct">Orçamentos Recentes <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>últimos 10</span></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "80px 1fr 90px 90px", gap: "8px", padding: "5px 8px", fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontFamily: "'DM Mono', monospace", borderBottom: "1px solid var(--b1)" }}>
+                          <div>#</div><div>Cliente</div><div style={{ textAlign: "right" }}>Valor</div><div style={{ textAlign: "center" }}>Status</div>
+                        </div>
+                        {orcsRecentes.length === 0 ? (
+                          <div style={{ textAlign: "center", padding: "30px", color: "var(--t3)", fontSize: "12px" }}>Nenhum orçamento encontrado.</div>
+                        ) : orcsRecentes.map((o: any, i: number) => {
+                          const sCor = o.status === 'Aprovado' ? "var(--ok)" : o.status === 'Rejeitado' ? "var(--err)" : "var(--warn)";
+                          const sBg  = o.status === 'Aprovado' ? "rgba(16,185,129,.1)" : o.status === 'Rejeitado' ? "rgba(244,63,94,.1)" : "rgba(245,158,11,.1)";
+                          return (
+                            <div key={o.id} style={{ display: "grid", gridTemplateColumns: "80px 1fr 90px 90px", gap: "8px", padding: "8px 8px", borderRadius: "6px", background: i % 2 === 0 ? "var(--surf2)" : "transparent", alignItems: "center" }}>
+                              <div style={{ fontSize: "11px", fontFamily: "'DM Mono', monospace", color: "var(--acc)", fontWeight: 700 }}>{o.id}</div>
+                              <div style={{ fontSize: "12px", color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.clientes?.nome ?? "—"}</div>
+                              <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--t1)", fontWeight: 700, textAlign: "right" }}>{formatBRL(o.valor_total)}</div>
+                              <div style={{ textAlign: "center" }}>
+                                <span style={{ fontSize: "9px", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: sBg, color: sCor, fontFamily: "'DM Mono', monospace" }}>{o.status}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
             </>
           )}
         </div>

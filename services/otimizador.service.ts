@@ -39,6 +39,19 @@ export async function getOtimizacoesPorPedido(pedidoId: string) {
   return data as HistoricoOtimizador[];
 }
 
+export async function getAllHistoricoOtimizador() {
+  const { data, error } = await supabase
+    .from('historico_otimizador')
+    .select('id, pedido_id, dt_otim, aproveitamento, perda, chapas_usadas, retalhos_gerados, total_pecas')
+    .order('dt_otim', { ascending: true });
+  if (error) { console.error('getAllHistoricoOtimizador:', error); return []; }
+  return (data ?? []) as Array<{
+    id: number; pedido_id: string; dt_otim: string;
+    aproveitamento: number; perda: number;
+    chapas_usadas: number; retalhos_gerados: number; total_pecas: number;
+  }>;
+}
+
 export async function pedidoTemOtimizacao(pedidoId: string): Promise<boolean> {
   const { count, error } = await supabase
     .from('historico_otimizador')
