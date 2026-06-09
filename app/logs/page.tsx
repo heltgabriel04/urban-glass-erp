@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
-import { supabase } from "@/lib/supabase/client";
+
 import DateInput from "@/components/ui/DateInput";
 
 interface LogAtividade {
@@ -84,15 +84,10 @@ export default function LogsPage() {
 
   useEffect(() => {
     setCarregando(true);
-    supabase
-      .from("log_atividades")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(1000)
-      .then(({ data }) => {
-        setTodos((data as LogAtividade[]) ?? []);
-        setCarregando(false);
-      });
+    fetch("/api/logs")
+      .then(r => r.json())
+      .then(data => { setTodos(Array.isArray(data) ? data : []); setCarregando(false); })
+      .catch(() => setCarregando(false));
   }, []);
 
   useEffect(() => {
