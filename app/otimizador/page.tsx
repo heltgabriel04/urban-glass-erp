@@ -635,7 +635,7 @@ function OtimizadorContent() {
 
     // ── PAGE 1: summary ──────────────────────────────────────────────────────
     const page1 = `
-      <div style="padding:0">
+      <div class="page">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:12px;border-bottom:3px solid #2d5fa6;margin-bottom:20px">
           <div>
             <div style="font-size:28px;font-weight:900;color:#2d5fa6;letter-spacing:-1px">urbanglass</div>
@@ -725,7 +725,7 @@ function OtimizadorContent() {
       const apChapa   = areaUtil > 0 ? (areaUsada / areaUtil) * 100 : 0;
       const apStr     = apChapa.toFixed(1);
       return `
-        <div style="page-break-before:always">
+        <div class="page">
           ${runningHdr}
 
           <div style="background:#2d5fa6;border-radius:8px 8px 0 0;padding:10px 16px;display:flex;justify-content:space-between;align-items:center">
@@ -796,9 +796,15 @@ function OtimizadorContent() {
       <meta charset="utf-8">
       <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: Arial, Helvetica, sans-serif; color: #1a1a2e; background: white; font-size: 12px; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #1a1a2e; background: #b0b4bb; font-size: 12px; padding: 24px 0 36px; }
+        .page { width: 794px; background: white; margin: 0 auto 20px; padding: 42px 50px; box-shadow: 0 4px 28px rgba(0,0,0,0.22); }
         @page { size: A4 portrait; margin: 12mm 14mm; }
-        @media print { .noprint { display: none !important; } }
+        @media print {
+          body { background: white; padding: 0; }
+          .page { width: 100%; box-shadow: none; margin: 0; padding: 0; }
+          .page + .page { page-break-before: always; }
+          .noprint { display: none !important; }
+        }
         table { width: 100%; border-collapse: collapse; }
         thead tr { background: #2d5fa6; color: white; }
         th { padding: 6px 8px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -808,7 +814,7 @@ function OtimizadorContent() {
     </head><body>
       ${page1}
       ${chapasHtml}
-      <div class="noprint" style="text-align:center;margin:28px auto;padding:16px;border-top:1px solid #e2e8f0">
+      <div class="noprint" style="width:794px;margin:0 auto;padding:16px 0;text-align:center">
         <button onclick="window.print()" style="padding:10px 32px;background:#2d5fa6;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:0.3px">🖨 Imprimir / Salvar PDF</button>
       </div>
     </body></html>`);
