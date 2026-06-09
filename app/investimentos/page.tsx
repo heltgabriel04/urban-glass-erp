@@ -226,19 +226,19 @@ export default function InvestimentosPage() {
       <style>{`
         .inv-print { display: none; }
         @media print {
-          body * { visibility: hidden !important; }
-          .inv-print {
-            display: block !important; visibility: visible !important;
-            position: fixed !important; inset: 0 !important;
-            background: #fff !important; color: #111 !important;
-            padding: 36px 44px !important; z-index: 9999 !important;
-          }
-          .inv-print * { visibility: visible !important; }
+          .no-print, .sb { display: none !important; }
+          body { background: white !important; overflow: auto !important; }
+          .erp-layout { display: block !important; }
+          .erp-content, .erp-main { overflow: visible !important; }
+          .inv-print { display: block !important; }
+          @page { margin: 12mm 14mm; size: A4 portrait; }
+          thead { display: table-header-group; }
+          tr { page-break-inside: avoid; }
         }
       `}</style>
 
       {/* Top bar */}
-      <div className="tb">
+      <div className="tb no-print">
         <div className="tb-title">Investimentos</div>
         <div style={{ display: "flex", gap: "8px" }}>
           <button className="btn bg sm" onClick={handlePDF} disabled={!investimentos.length}>⬡ Exportar PDF</button>
@@ -246,7 +246,7 @@ export default function InvestimentosPage() {
         </div>
       </div>
 
-      <div className="con">
+      <div className="con no-print">
 
         {/* Stats — same card pattern as every other page */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px", marginBottom: "22px" }}>
@@ -386,81 +386,132 @@ export default function InvestimentosPage() {
         )}
       </div>
 
-      {/* ── PDF / Print ── */}
-      <div className="inv-print">
-        <div style={{ borderBottom: "3px solid #f59e0b", paddingBottom: "18px", marginBottom: "28px" }}>
-          <div style={{ fontSize: "24px", fontWeight: 800, color: "#111", letterSpacing: "-0.5px" }}>
-            Urban Glass — Relatório de Investimentos
+      {/* ── PDF / Print area ── */}
+      <div className="inv-print" style={{ fontFamily: "Arial, sans-serif", color: "#111", background: "white", padding: "0" }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "22px", paddingBottom: "16px", borderBottom: "3px solid #2d5fa6" }}>
+          <div>
+            <div style={{ fontSize: "26px", fontWeight: 900, color: "#2d5fa6", letterSpacing: "-1px" }}>urbanglass</div>
+            <div style={{ fontSize: "9px", fontWeight: 700, color: "#444", textTransform: "uppercase", letterSpacing: "1.5px", marginTop: "2px" }}>Urban Glass Comércio Ltda</div>
+            <div style={{ fontSize: "9px", color: "#555", marginTop: "1px" }}>CNPJ: 65.668.970/0001-05</div>
+            <div style={{ fontSize: "9px", color: "#555" }}>Av. Vereador Raymundo Hargreaves, 1250 – Fontesville – Juiz de Fora/MG</div>
           </div>
-          <div style={{ fontSize: "12px", color: "#666", marginTop: "6px" }}>
-            Gerado em {new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
-            {" · "}Total investido: <strong style={{ color: "#d97706", fontFamily: "monospace" }}>{formatBRL(totalGeral)}</strong>
-            {" · "}{investimentos.length} aporte(s) · {bancos.length} banco(s)
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: "10px", fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: "2px", marginBottom: "4px" }}>Relatório de</div>
+            <div style={{ fontSize: "22px", fontWeight: 900, color: "#2d5fa6", letterSpacing: "-0.5px", lineHeight: 1 }}>Investimentos</div>
+            <div style={{ fontSize: "10px", color: "#555", marginTop: "6px" }}>
+              Gerado em {new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
+            </div>
           </div>
         </div>
 
+        {/* KPI strip */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "22px" }}>
+          {[
+            { label: "Total Investido",  value: formatBRL(totalGeral),              color: "#2d5fa6" },
+            { label: "Nº de Aportes",    value: String(investimentos.length),        color: "#2d5fa6" },
+            { label: "Média por Aporte", value: formatBRL(mediaAporte),             color: "#444" },
+            { label: "Bancos / Origens", value: String(bancos.length),              color: "#444" },
+          ].map(k => (
+            <div key={k.label} style={{ background: "#f0f4ff", borderRadius: "8px", padding: "12px 14px", borderLeft: "3px solid #2d5fa6" }}>
+              <div style={{ fontSize: "8px", fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "5px" }}>{k.label}</div>
+              <div style={{ fontSize: "16px", fontWeight: 900, color: k.color, fontFamily: "monospace", lineHeight: 1 }}>{k.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Per-bank summary */}
         {bancos.length > 0 && (
-          <div style={{ marginBottom: "28px" }}>
-            <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#888", marginBottom: "8px" }}>
+          <div style={{ marginBottom: "22px", pageBreakInside: "avoid" }}>
+            <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "1px", color: "#2d5fa6", marginBottom: "8px", borderBottom: "1px solid #d0daf0", paddingBottom: "4px" }}>
               Resumo por Banco / Origem
             </div>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
               <thead>
-                <tr style={{ background: "#f9f9f9" }}>
-                  {["Banco", "Aportes", "Total"].map((h, i) => (
-                    <th key={h} style={{ padding: "7px 10px", textAlign: i === 2 ? "right" : i === 1 ? "center" : "left", color: "#555", fontWeight: 600, fontSize: "10px", textTransform: "uppercase", borderBottom: "2px solid #e5e7eb" }}>{h}</th>
-                  ))}
+                <tr style={{ background: "#2d5fa6" }}>
+                  <th style={{ padding: "7px 10px", textAlign: "left",   color: "white", fontWeight: 700, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Banco / Origem</th>
+                  <th style={{ padding: "7px 10px", textAlign: "center", color: "white", fontWeight: 700, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Aportes</th>
+                  <th style={{ padding: "7px 10px", textAlign: "right",  color: "white", fontWeight: 700, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Total Investido</th>
+                  <th style={{ padding: "7px 10px", textAlign: "right",  color: "white", fontWeight: 700, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.5px" }}>% do Total</th>
                 </tr>
               </thead>
               <tbody>
-                {bancos.map(b => {
+                {bancos.map((b, idx) => {
                   const its = investimentos.filter(i => i.empresa === b);
                   const tot = its.reduce((s, i) => s + Number(i.valor), 0);
+                  const pct = totalGeral > 0 ? (tot / totalGeral * 100).toFixed(1) : "0.0";
                   return (
-                    <tr key={b}>
-                      <td style={{ padding: "7px 10px", color: "#111", fontWeight: 600, borderBottom: "1px solid #f0f0f0" }}>{b}</td>
-                      <td style={{ padding: "7px 10px", color: "#555", textAlign: "center", borderBottom: "1px solid #f0f0f0" }}>{its.length}</td>
-                      <td style={{ padding: "7px 10px", color: "#d97706", fontWeight: 700, textAlign: "right", fontFamily: "monospace", borderBottom: "1px solid #f0f0f0" }}>{formatBRL(tot)}</td>
+                    <tr key={b} style={{ background: idx % 2 === 0 ? "#fff" : "#f7f9ff" }}>
+                      <td style={{ padding: "8px 10px", fontWeight: 700, borderBottom: "1px solid #e8edf8" }}>{b}</td>
+                      <td style={{ padding: "8px 10px", textAlign: "center", color: "#555", borderBottom: "1px solid #e8edf8" }}>{its.length}</td>
+                      <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: "#2d5fa6", fontFamily: "monospace", borderBottom: "1px solid #e8edf8" }}>{formatBRL(tot)}</td>
+                      <td style={{ padding: "8px 10px", textAlign: "right", color: "#666", borderBottom: "1px solid #e8edf8" }}>{pct}%</td>
                     </tr>
                   );
                 })}
               </tbody>
+              <tfoot>
+                <tr style={{ background: "#f0f4ff" }}>
+                  <td style={{ padding: "8px 10px", fontWeight: 800, fontSize: "10px" }}>Total</td>
+                  <td style={{ padding: "8px 10px", textAlign: "center", fontWeight: 700 }}>{investimentos.length}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 900, color: "#2d5fa6", fontFamily: "monospace", fontSize: "12px" }}>{formatBRL(totalGeral)}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700 }}>100%</td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}
 
-        <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#888", marginBottom: "10px" }}>
-          Detalhamento
+        {/* Detail table */}
+        <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "1px", color: "#2d5fa6", marginBottom: "8px", borderBottom: "1px solid #d0daf0", paddingBottom: "4px" }}>
+          Detalhamento de Aportes
         </div>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px" }}>
           <thead>
-            <tr style={{ background: "#fafafa" }}>
-              {["Data", "Descrição", "Banco", "Valor", "Categoria", "Observação", "Link"].map(h => (
-                <th key={h} style={{ padding: "6px 8px", textAlign: h === "Valor" ? "right" : "left", color: "#555", fontWeight: 600, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: "1px solid #e5e7eb" }}>{h}</th>
+            <tr style={{ background: "#2d5fa6" }}>
+              {[
+                { h: "Data",       align: "left"  },
+                { h: "Descrição",  align: "left"  },
+                { h: "Banco",      align: "left"  },
+                { h: "Valor",      align: "right" },
+                { h: "Categoria",  align: "left"  },
+                { h: "Observação", align: "left"  },
+              ].map(({ h, align }) => (
+                <th key={h} style={{ padding: "7px 8px", textAlign: align as "left" | "right", color: "white", fontWeight: 700, fontSize: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {investimentos.map((inv, idx) => (
-              <tr key={inv.id} style={{ background: idx % 2 === 0 ? "#fff" : "#fafafa" }}>
-                <td style={{ padding: "7px 8px", color: "#444", borderBottom: "1px solid #f0f0f0", whiteSpace: "nowrap", fontFamily: "monospace" }}>{fmtData(inv.data)}</td>
-                <td style={{ padding: "7px 8px", color: "#333", borderBottom: "1px solid #f0f0f0" }}>{inv.descricao}</td>
-                <td style={{ padding: "7px 8px", color: "#111", fontWeight: 600, borderBottom: "1px solid #f0f0f0" }}>{inv.empresa}</td>
-                <td style={{ padding: "7px 8px", color: "#d97706", fontWeight: 700, textAlign: "right", borderBottom: "1px solid #f0f0f0", whiteSpace: "nowrap", fontFamily: "monospace" }}>{formatBRL(Number(inv.valor))}</td>
-                <td style={{ padding: "7px 8px", color: "#d97706", borderBottom: "1px solid #f0f0f0" }}>{inv.categoria ?? "—"}</td>
-                <td style={{ padding: "7px 8px", color: "#666", borderBottom: "1px solid #f0f0f0" }}>{inv.observacoes ?? "—"}</td>
-                <td style={{ padding: "7px 8px", borderBottom: "1px solid #f0f0f0", color: inv.comprovante_url ? "#2563eb" : "#bbb" }}>{inv.comprovante_url ? "Anexo" : "—"}</td>
+              <tr key={inv.id} style={{ background: idx % 2 === 0 ? "#fff" : "#f7f9ff" }}>
+                <td style={{ padding: "7px 8px", color: "#444", borderBottom: "1px solid #e8edf8", whiteSpace: "nowrap", fontFamily: "monospace", fontSize: "10px" }}>{fmtData(inv.data)}</td>
+                <td style={{ padding: "7px 8px", color: "#222", fontWeight: 600, borderBottom: "1px solid #e8edf8" }}>{inv.descricao}</td>
+                <td style={{ padding: "7px 8px", color: "#333", borderBottom: "1px solid #e8edf8" }}>{inv.empresa}</td>
+                <td style={{ padding: "7px 8px", color: "#2d5fa6", fontWeight: 700, textAlign: "right", borderBottom: "1px solid #e8edf8", whiteSpace: "nowrap", fontFamily: "monospace" }}>{formatBRL(Number(inv.valor))}</td>
+                <td style={{ padding: "7px 8px", color: "#d97706", borderBottom: "1px solid #e8edf8" }}>{inv.categoria ?? "—"}</td>
+                <td style={{ padding: "7px 8px", color: "#666", borderBottom: "1px solid #e8edf8" }}>{inv.observacoes ?? "—"}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
-            <tr style={{ background: "#fff8e6" }}>
-              <td colSpan={3} style={{ padding: "7px 8px", fontWeight: 700, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#888" }}>Total Geral</td>
-              <td style={{ padding: "7px 8px", fontWeight: 900, color: "#d97706", textAlign: "right", fontFamily: "monospace" }}>{formatBRL(totalGeral)}</td>
-              <td colSpan={3} />
+            <tr style={{ background: "#f0f4ff", borderTop: "2px solid #2d5fa6" }}>
+              <td colSpan={3} style={{ padding: "9px 8px", fontWeight: 800, fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.5px", color: "#2d5fa6" }}>
+                Total Geral Investido
+              </td>
+              <td style={{ padding: "9px 8px", fontWeight: 900, color: "#2d5fa6", textAlign: "right", fontFamily: "monospace", fontSize: "13px" }}>
+                {formatBRL(totalGeral)}
+              </td>
+              <td colSpan={2} />
             </tr>
           </tfoot>
         </table>
+
+        {/* Footer */}
+        <div style={{ marginTop: "24px", paddingTop: "8px", borderTop: "2px solid #2d5fa6", display: "flex", justifyContent: "space-between", fontSize: "8px", color: "#666", fontWeight: 600 }}>
+          <div>Urban Glass Comércio Ltda · CNPJ 65.668.970/0001-05 · Av. Vereador Raymundo Hargreaves, 1250 – Fontesville – Juiz de Fora/MG</div>
+          <div style={{ color: "#888", fontStyle: "italic" }}>Documento interno · não substitui NFe</div>
+        </div>
       </div>
     </AppLayout>
   );
