@@ -22,7 +22,8 @@ const STROKE_COLORS = [
 ];
 
 function ChapaSVG({ chapa, bord, escala = 1 }: { chapa: ChapaData; bord: number; escala?: number }) {
-  const VW = Math.round(520 * escala);
+  const BASE = 580;
+  const VW = Math.round(BASE * escala);
   const VH = Math.round(VW * chapa.H / chapa.W);
   const sx = VW / chapa.W;
   const sy = VH / chapa.H;
@@ -39,7 +40,8 @@ function ChapaSVG({ chapa, bord, escala = 1 }: { chapa: ChapaData; bord: number;
   return (
     <svg
       viewBox={`0 0 ${VW} ${VH}`}
-      width="100%"
+      width={VW}
+      height={VH}
       style={{ display: "block", borderRadius: "4px", boxShadow: "0 1px 4px rgba(0,0,0,0.15)" }}
     >
       {/* Fundo da chapa */}
@@ -174,6 +176,7 @@ export default function PlanoCorte() {
   const [chapas, setChapas]         = useState<ChapaData[]>([]);
   const [loading, setLoading]       = useState(true);
   const [chapaAtiva, setChapaAtiva] = useState(0);
+  const [escala, setEscala]         = useState(1);
 
   useEffect(() => {
     async function load() {
@@ -389,19 +392,40 @@ export default function PlanoCorte() {
 
                 {/* Diagrama */}
                 <div className="card" style={{ padding: "12px" }}>
-                  <div style={{ fontSize: "10px", color: "#6b7280", fontWeight: 600, marginBottom: "10px", display: "flex", alignItems: "center", gap: "16px" }}>
-                    <span style={{ textTransform: "uppercase", letterSpacing: "0.06em" }}>Diagrama de Corte</span>
-                    <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "10px", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "10px", color: "#6b7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Diagrama de Corte</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "10px" }}>
                       <span style={{ width: "10px", height: "10px", background: "#bbf7d0", border: "1px dashed #16a34a", display: "inline-block", borderRadius: "2px" }} />
                       <span style={{ color: "#16a34a" }}>Retalho aproveitável</span>
                     </span>
-                    <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "10px" }}>
                       <span style={{ width: "10px", height: "10px", background: "rgba(249,115,22,0.3)", border: "1px dashed #f97316", display: "inline-block", borderRadius: "2px" }} />
                       <span style={{ color: "#f97316" }}>Borda lapidação</span>
                     </span>
+                    {/* Controles de zoom */}
+                    <div className="no-print" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <button
+                        onClick={() => setEscala(e => Math.max(0.25, parseFloat((e - 0.25).toFixed(2))))}
+                        style={{ width: "26px", height: "26px", borderRadius: "5px", border: "1px solid #374151", background: "#1f2937", color: "#e2e8f0", fontSize: "16px", lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                        title="Diminuir"
+                      >−</button>
+                      <span style={{ fontSize: "11px", fontFamily: "monospace", color: "#9ca3af", minWidth: "38px", textAlign: "center" }}>
+                        {Math.round(escala * 100)}%
+                      </span>
+                      <button
+                        onClick={() => setEscala(e => Math.min(3, parseFloat((e + 0.25).toFixed(2))))}
+                        style={{ width: "26px", height: "26px", borderRadius: "5px", border: "1px solid #374151", background: "#1f2937", color: "#e2e8f0", fontSize: "16px", lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                        title="Ampliar"
+                      >+</button>
+                      <button
+                        onClick={() => setEscala(1)}
+                        style={{ padding: "0 8px", height: "26px", borderRadius: "5px", border: "1px solid #374151", background: "transparent", color: "#6b7280", fontSize: "10px", cursor: "pointer" }}
+                        title="Resetar zoom"
+                      >↺</button>
+                    </div>
                   </div>
-                  <div style={{ maxWidth: "620px" }}>
-                    <ChapaSVG chapa={c} bord={bord} />
+                  <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "520px" }}>
+                    <ChapaSVG chapa={c} bord={bord} escala={escala} />
                   </div>
                 </div>
 
