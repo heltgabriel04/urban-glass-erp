@@ -738,7 +738,7 @@ function OtimizadorContent() {
     setSalvando(true);
     const hoje = new Date().toISOString().split("T")[0];
     const todosPedidos = [pedidoRef, ...Array.from(pedidosSelecionados)];
-    const chapasJson = resultado.map(r => ({ W: r.W, H: r.H, prod: r.prod, placed: r.placed, free: r.free }));
+    const chapasJson = resultado.map(r => ({ W: r.W, H: r.H, prod: r.prod, placed: r.placed, free: r.free, retalhoId: r.retalhoId ?? null }));
     for (const pid of todosPedidos) {
       const pecasDoPedido = pid === pedidoRef
         ? pecas.filter(p => !p.pedidoId || p.pedidoId === pedidoRef)
