@@ -13,13 +13,14 @@ interface PrecoEdit {
 }
 
 export default function TabelasPage() {
-  const [produtos, setProdutos]   = useState<Produto[]>([]);
-  const [tabelas, setTabelas]     = useState<TabelaPreco[]>([]);
-  const [edits, setEdits]         = useState<Record<number, PrecoEdit>>({});
-  const [loading, setLoading]     = useState(true);
-  const [salvando, setSalvando]   = useState(false);
-  const [filtro, setFiltro]       = useState("");
-  const [filtroTipo, setFiltroTipo] = useState("Todos");
+  const [produtos, setProdutos]       = useState<Produto[]>([]);
+  const [tabelas, setTabelas]         = useState<TabelaPreco[]>([]);
+  const [edits, setEdits]             = useState<Record<number, PrecoEdit>>({});
+  const [loading, setLoading]         = useState(true);
+  const [salvando, setSalvando]       = useState(false);
+  const [filtro, setFiltro]           = useState("");
+  const [filtroTipo, setFiltroTipo]   = useState("Todos");
+  const [margemPendente, setMargemPendente] = useState(false); // coluna margem não existe ainda no DB
 
   useEffect(() => { load(); }, []);
 
@@ -29,9 +30,14 @@ export default function TabelasPage() {
       supabase.from("produtos").select("*").order("tipo").order("nome"),
       supabase.from("tabelas_preco").select("*").order("id"),
     ]);
-    setProdutos(prods as Produto[] || []);
+    const lista = (prods as Produto[] || []);
+    setProdutos(lista);
     setTabelas(tabs as TabelaPreco[] || []);
     setEdits({});
+    // detecta se coluna margem já existe (primeiro produto sem ela → undefined)
+    if (lista.length > 0 && (lista[0] as any).margem === undefined) {
+      setMargemPendente(true);
+    }
     setLoading(false);
   }
 
@@ -60,14 +66,32 @@ export default function TabelasPage() {
   async function salvar() {
     if (modificados.length === 0) return;
     setSalvando(true);
+
+    // 1. Salva sempre o valor (coluna garantida)
     await Promise.all(
       modificados.map(id =>
-        supabase.from("produtos").update({
-          valor: edits[id].valor,
-          margem: edits[id].margem,
-        } as never).eq("id", id)
+        supabase.from("produtos").update({ valor: edits[id].valor } as never).eq("id", id)
       )
     );
+
+    // 2. Tenta salvar margem; se a coluna não existir ainda, apenas sinaliza
+    const { error: erroMargem } = await supabase
+      .from("produtos")
+      .update({ margem: edits[modificados[0]].margem } as never)
+      .eq("id", modificados[0]);
+
+    if (erroMargem) {
+      setMargemPendente(true);
+    } else {
+      setMargemPendente(false);
+      // coluna existe — salva margem de todos os modificados
+      await Promise.all(
+        modificados.slice(1).map(id =>
+          supabase.from("produtos").update({ margem: edits[id].margem } as never).eq("id", id)
+        )
+      );
+    }
+
     setSalvando(false);
     load();
   }
@@ -106,6 +130,15 @@ export default function TabelasPage() {
         <div className="al al-i" style={{ marginBottom: "14px", fontSize: "12px" }}>
           Defina o preço e a margem de negociação de cada produto. A margem é o % máximo de desconto ou acréscimo permitido ao criar orçamentos e pedidos.
         </div>
+
+        {margemPendente && (
+          <div className="al al-w" style={{ marginBottom: "14px", fontSize: "12px" }}>
+            <strong>⚠ Coluna de margem ainda não existe no banco.</strong> Os preços são salvos normalmente, mas as margens só funcionarão após executar no <strong>Supabase SQL Editor</strong>:
+            <code style={{ display: "block", marginTop: "6px", padding: "8px 12px", background: "rgba(0,0,0,.3)", borderRadius: "6px", fontFamily: "'DM Mono',monospace", fontSize: "12px", userSelect: "all" }}>
+              ALTER TABLE produtos ADD COLUMN IF NOT EXISTS margem numeric(5,2) DEFAULT 0;
+            </code>
+          </div>
+        )}
 
         {/* Filtros */}
         <div style={{ display: "flex", gap: "10px", marginBottom: "14px", flexWrap: "wrap" }}>
