@@ -400,7 +400,9 @@ export default function PlanoCorte() {
                       <span style={{ color: "#f97316" }}>Borda lapidação</span>
                     </span>
                   </div>
-                  <ChapaSVG chapa={c} bord={bord} />
+                  <div style={{ maxWidth: "620px" }}>
+                    <ChapaSVG chapa={c} bord={bord} />
+                  </div>
                 </div>
 
                 {/* Lista de peças + retalhos */}
