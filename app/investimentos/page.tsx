@@ -298,7 +298,7 @@ export default function InvestimentosPage() {
               <thead>
                 <tr>
                   <th style={{ width: "90px" }}>Data</th>
-                  <th>Descrição</th>
+                  <th style={{ width: "200px" }}>Descrição</th>
                   <th style={{ width: "140px" }}>Banco</th>
                   <th style={{ width: "120px", textAlign: "right" }}>Valor</th>
                   <th style={{ width: "150px" }}>Categoria</th>
