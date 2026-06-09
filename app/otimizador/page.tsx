@@ -538,181 +538,278 @@ function OtimizadorContent() {
     const win = window.open("", "_blank");
     if (!win) return;
 
-    // Paleta de cores por pedido
-    const CORES_PEDIDO = ["#2d5fa6","#16a34a","#dc2626","#9333ea","#ea580c","#0891b2","#b45309","#be185d","#15803d","#1e40af"];
+    const CORES_PEDIDO = ["#1e5fa6","#16a34a","#dc2626","#7c3aed","#ea580c","#0891b2","#b45309","#be185d","#15803d","#1e40af"];
     const pedidoList = Array.from(new Set(resultado.flatMap(r => r.placed.map(p => p.pedidoId ?? pedidoRef ?? "?"))));
-    const corPedido = (pid: string) => CORES_PEDIDO[pedidoList.indexOf(pid) % CORES_PEDIDO.length];
+    const corPedido  = (pid: string) => CORES_PEDIDO[pedidoList.indexOf(pid) % CORES_PEDIDO.length];
+    const emissao    = new Date().toLocaleDateString("pt-BR");
+    const todasPecas = resultado.flatMap((r, ri) => r.placed.map(p => ({ ...p, prod: r.prod, chapaIdx: ri })));
+    const m2Total    = todasPecas.reduce((a, p) => a + (p.l * p.a) / 1e6, 0);
+    const retalhosCount = resultado.filter(r => r.retalhoId).length;
 
-    // Gera SVG proporcional da chapa com as peças posicionadas
-    function svgChapa(r: ResultadoChapa): string {
-      const MAX_W = 580, MAX_H = 270;
-      const sc = Math.min(MAX_W / r.W, MAX_H / r.H);
+    function svgChapa(r: ResultadoChapa, maxW: number, maxH: number): string {
+      const sc = Math.min(maxW / r.W, maxH / r.H);
       const sw = Math.round(r.W * sc), sh = Math.round(r.H * sc);
       const bp = bord * sc;
-      let s = `<rect width="${sw}" height="${sh}" fill="#dce8f7" stroke="#2d5fa6" stroke-width="1.5" rx="2"/>`;
+      const PAD = 22; // space for dimension labels
+
+      let s = `<rect width="${sw}" height="${sh}" fill="#e8f0fb" stroke="#2d5fa6" stroke-width="1.5" rx="3"/>`;
+
       if (bord > 0) {
-        s += `<rect width="${sw}" height="${bp}" fill="rgba(220,80,30,0.12)"/>`;
-        s += `<rect y="${sh - bp}" width="${sw}" height="${bp}" fill="rgba(220,80,30,0.12)"/>`;
-        s += `<rect width="${bp}" height="${sh}" fill="rgba(220,80,30,0.12)"/>`;
-        s += `<rect x="${sw - bp}" width="${bp}" height="${sh}" fill="rgba(220,80,30,0.12)"/>`;
-        s += `<rect x="${bp}" y="${bp}" width="${sw - bp * 2}" height="${sh - bp * 2}" fill="none" stroke="rgba(220,80,30,0.45)" stroke-width="0.8" stroke-dasharray="4,3"/>`;
+        s += `<rect width="${sw}" height="${bp}" fill="rgba(220,80,30,0.09)"/>`;
+        s += `<rect y="${sh - bp}" width="${sw}" height="${bp}" fill="rgba(220,80,30,0.09)"/>`;
+        s += `<rect width="${bp}" height="${sh}" fill="rgba(220,80,30,0.09)"/>`;
+        s += `<rect x="${sw - bp}" width="${bp}" height="${sh}" fill="rgba(220,80,30,0.09)"/>`;
+        s += `<rect x="${bp}" y="${bp}" width="${sw - bp * 2}" height="${sh - bp * 2}" fill="none" stroke="rgba(220,80,30,0.35)" stroke-width="0.7" stroke-dasharray="5,4"/>`;
       }
+
       r.placed.forEach((p, j) => {
         const pid = p.pedidoId ?? pedidoRef ?? "?";
         const cor = corPedido(pid);
         const px = Math.round(bp + p.x * sc), py = Math.round(bp + p.y * sc);
         const pw = Math.round(p.l * sc), ph = Math.round(p.a * sc);
-        const fs = Math.max(7, Math.min(11, pw / 7));
-        s += `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="${cor}" fill-opacity="0.72" stroke="${cor}" stroke-width="0.9"/>`;
-        s += `<rect x="${px}" y="${py}" width="${pw}" height="${Math.round(ph * 0.28)}" fill="white" fill-opacity="0.18"/>`;
-        if (pw > 22 && ph > 14) {
-          s += `<text x="${px + 3}" y="${py + fs + 1}" font-size="${fs}" font-family="monospace" font-weight="bold" fill="white">${j + 1}· ${p.l}×${p.a}${p.rot ? " ↺" : ""}</text>`;
-          if (ph > 26 && pw > 55) s += `<text x="${px + 3}" y="${py + fs + 12}" font-size="7" font-family="monospace" fill="rgba(255,255,255,0.65)">${pid}</text>`;
+        const fs = Math.max(6, Math.min(10, Math.min(pw, ph) / 5.5));
+
+        s += `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="${cor}" fill-opacity="0.78" stroke="white" stroke-width="0.7"/>`;
+        s += `<rect x="${px}" y="${py}" width="${pw}" height="${Math.max(2, Math.round(ph * 0.22))}" fill="white" fill-opacity="0.18"/>`;
+
+        if (pw > 20 && ph > 13) {
+          const cr = Math.min(9, Math.max(5, fs + 0.5));
+          s += `<circle cx="${px + cr + 2}" cy="${py + cr + 2}" r="${cr}" fill="white" fill-opacity="0.88"/>`;
+          s += `<text x="${px + cr + 2}" y="${py + cr + 2 + fs * 0.38}" font-size="${fs}" font-family="Arial,sans-serif" font-weight="700" fill="${cor}" text-anchor="middle">${j + 1}</text>`;
+          if (pw > 50 && ph > 22)
+            s += `<text x="${px + cr * 2 + 5}" y="${py + fs + 3}" font-size="${Math.max(5, fs - 1)}" font-family="monospace" font-weight="600" fill="white">${p.l}×${p.a}${p.rot ? " ↺" : ""}</text>`;
+          if (ph > 34 && pw > 60 && pedidoList.length > 1)
+            s += `<text x="${px + 3}" y="${py + ph - 4}" font-size="7" font-family="monospace" fill="rgba(255,255,255,0.75)">${pid}</text>`;
         }
       });
+
       r.free.filter(f => f.l >= 200 && f.a >= 200).forEach(f => {
         const fx = Math.round(bp + f.x * sc), fy = Math.round(bp + f.y * sc);
         const fw = Math.round(f.l * sc), fh = Math.round(f.a * sc);
-        s += `<rect x="${fx}" y="${fy}" width="${fw}" height="${fh}" fill="rgba(0,180,220,0.10)" stroke="#0891b2" stroke-width="0.8" stroke-dasharray="4,3"/>`;
-        if (fw > 26 && fh > 13) s += `<text x="${fx + 3}" y="${fy + 10}" font-size="8" font-family="monospace" fill="#0070a0">↺ ${f.l}×${f.a}</text>`;
+        s += `<rect x="${fx}" y="${fy}" width="${fw}" height="${fh}" fill="rgba(8,145,178,0.07)" stroke="#0891b2" stroke-width="0.8" stroke-dasharray="5,4"/>`;
+        if (fw > 28 && fh > 14)
+          s += `<text x="${fx + fw / 2}" y="${fy + fh / 2 + 4}" font-size="8" font-family="monospace" fill="#0070a0" text-anchor="middle">↺ ${f.l}×${f.a}</text>`;
       });
-      return `<svg width="${sw}" height="${sh}" viewBox="0 0 ${sw} ${sh}" style="display:block;max-width:100%;height:auto">${s}</svg>`;
+
+      // Dimension arrows
+      s += `<line x1="0" y1="${sh + 10}" x2="${sw}" y2="${sh + 10}" stroke="#666" stroke-width="0.8"/>`;
+      s += `<line x1="0" y1="${sh + 7}" x2="0" y2="${sh + 13}" stroke="#666" stroke-width="0.8"/>`;
+      s += `<line x1="${sw}" y1="${sh + 7}" x2="${sw}" y2="${sh + 13}" stroke="#666" stroke-width="0.8"/>`;
+      s += `<text x="${sw / 2}" y="${sh + 19}" font-size="9" font-family="monospace" fill="#444" text-anchor="middle">${r.W} mm</text>`;
+
+      s += `<line x1="${sw + 10}" y1="0" x2="${sw + 10}" y2="${sh}" stroke="#666" stroke-width="0.8"/>`;
+      s += `<line x1="${sw + 7}" y1="0" x2="${sw + 13}" y2="0" stroke="#666" stroke-width="0.8"/>`;
+      s += `<line x1="${sw + 7}" y1="${sh}" x2="${sw + 13}" y2="${sh}" stroke="#666" stroke-width="0.8"/>`;
+      s += `<text x="${sw + PAD - 2}" y="${sh / 2}" font-size="9" font-family="monospace" fill="#444" text-anchor="middle" transform="rotate(90,${sw + PAD - 2},${sh / 2})">${r.H} mm</text>`;
+
+      return `<svg width="${sw + PAD}" height="${sh + PAD}" viewBox="0 0 ${sw + PAD} ${sh + PAD}" style="display:block;max-width:100%;height:auto">${s}</svg>`;
     }
 
-    // Lista global de todas as peças
-    const todasPecas = resultado.flatMap(r => r.placed.map(p => ({ ...p, prod: r.prod })));
-
-    const legendaPedidos = pedidoList.length > 1 ? `
-      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
-        ${pedidoList.map(pid => `<div style="display:flex;align-items:center;gap:5px;font-size:11px">
-          <div style="width:12px;height:12px;border-radius:3px;background:${corPedido(pid)}"></div>
-          <span>${pid}</span>
-        </div>`).join("")}
-      </div>` : "";
-
-    const resumoPecas = `
-      <div style="margin-bottom:28px">
-        <div style="font-size:12px;font-weight:700;color:#2d5fa6;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #2d5fa6;padding-bottom:5px;margin-bottom:10px">
-          Lista de Peças · ${todasPecas.length} peças
-        </div>
-        <table style="width:100%;border-collapse:collapse;font-size:11px">
-          <thead><tr style="background:#2d5fa6;color:white">
-            <th style="padding:5px 7px;text-align:left">#</th>
-            <th style="padding:5px 7px;text-align:left">Material</th>
-            <th style="padding:5px 7px;text-align:center">Dimensão (mm)</th>
-            <th style="padding:5px 7px;text-align:center">m²</th>
-            <th style="padding:5px 7px;text-align:center">Pedido</th>
-            <th style="padding:5px 7px;text-align:center">Chapa</th>
-          </tr></thead>
-          <tbody>${todasPecas.map((p, i) => {
-            const chapaIdx = resultado.findIndex(r => r.placed.includes(p as PecaPlacada));
-            return `<tr style="background:${i % 2 === 0 ? "#fff" : "#f4f7ff"}">
-              <td style="padding:4px 7px;font-weight:700">${i + 1}</td>
-              <td style="padding:4px 7px">${p.prod}</td>
-              <td style="padding:4px 7px;text-align:center;font-family:monospace">${p.l} × ${p.a}${p.rot ? " ↺" : ""}</td>
-              <td style="padding:4px 7px;text-align:center;font-family:monospace">${((p.l * p.a) / 1e6).toFixed(4)}</td>
-              <td style="padding:4px 7px;text-align:center;font-family:monospace">${p.pedidoId ?? pedidoRef ?? "—"}</td>
-              <td style="padding:4px 7px;text-align:center;font-weight:700;color:#2d5fa6">${chapaIdx + 1}</td>
-            </tr>`;
-          }).join("")}</tbody>
-        </table>
+    const footer = `
+      <div style="border-top:1.5px solid #2d5fa6;padding-top:7px;display:flex;justify-content:space-between;font-size:8px;color:#888;margin-top:18px">
+        <span>Urban Glass Comércio Ltda · CNPJ 65.668.970/0001-05 · Av. Vereador Raymundo Hargreaves, 1250 – Fontesville – JF/MG</span>
+        <span style="color:#c0392b;font-style:italic">Documento confidencial · ${emissao}</span>
       </div>`;
 
+    const runningHdr = `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;border-bottom:1px solid #d0daf0;margin-bottom:14px">
+        <div style="font-size:17px;font-weight:900;color:#2d5fa6;letter-spacing:-0.5px">urbanglass</div>
+        <div style="font-size:9px;color:#888;text-align:right">
+          <strong style="color:#2d5fa6">${pedidoRef ?? "AVULSO"}</strong> · Plano de Corte · ${emissao}
+          <span style="margin-left:8px;padding:1px 7px;background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:99px;font-size:8px;font-weight:700">⚠ SIMULAÇÃO</span>
+        </div>
+      </div>`;
+
+    const legendaHtml = pedidoList.length > 1 ? `
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:8px 12px;background:#f0f4ff;border-radius:7px;border:1px solid #d0daf0;margin-bottom:16px">
+        <span style="font-size:9px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:1px">Pedidos:</span>
+        ${pedidoList.map(pid => `
+          <div style="display:flex;align-items:center;gap:5px">
+            <div style="width:12px;height:12px;border-radius:3px;background:${corPedido(pid)};opacity:0.82"></div>
+            <span style="font-size:10px;font-weight:600">${pid}</span>
+          </div>`).join("")}
+      </div>` : "";
+
+    const apColor = (v: number) => v >= 80 ? "#155724" : v >= 60 ? "#856404" : "#721c24";
+    const apBg    = (v: number) => v >= 80 ? "#d4edda" : v >= 60 ? "#fff3cd" : "#f8d7da";
+
+    // ── PAGE 1: summary ──────────────────────────────────────────────────────
+    const page1 = `
+      <div style="padding:0">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:12px;border-bottom:3px solid #2d5fa6;margin-bottom:20px">
+          <div>
+            <div style="font-size:28px;font-weight:900;color:#2d5fa6;letter-spacing:-1px">urbanglass</div>
+            <div style="font-size:9px;color:#666;text-transform:uppercase;letter-spacing:1.5px;margin-top:3px">Urban Glass Comércio Ltda</div>
+            <div style="font-size:9px;color:#666;text-transform:uppercase;letter-spacing:1.5px;margin-top:1px">CNPJ: 65.668.970/0001-05</div>
+            <div style="font-size:9px;color:#666;text-transform:uppercase;letter-spacing:1.5px;margin-top:1px">Av. Vereador Raymundo Hargreaves, 1250 – Fontesville – JF/MG</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:2px">Plano de Corte</div>
+            <div style="font-size:24px;font-weight:900;color:#2d5fa6;margin-top:2px">${pedidoRef ?? "AVULSO"}</div>
+            <div style="margin-top:5px">
+              <span style="display:inline-block;padding:2px 10px;background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:99px;font-size:9px;font-weight:700">⚠ SIMULAÇÃO — não salvo</span>
+            </div>
+            <div style="font-size:9px;color:#888;margin-top:5px">Emissão: <strong>${emissao}</strong></div>
+          </div>
+        </div>
+
+        <div style="font-size:9px;font-weight:800;color:#2d5fa6;text-transform:uppercase;letter-spacing:1.5px;padding-bottom:5px;border-bottom:2px solid #d0daf0;margin-bottom:14px">Resumo Executivo</div>
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:20px">
+          <div style="background:#f0f4ff;border-radius:8px;padding:11px 12px;border:1px solid #d0daf0">
+            <div style="font-size:8px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Aproveitamento</div>
+            <div style="font-size:21px;font-weight:900;color:${apColor(aprovNum)};font-family:monospace">${aprovNum.toFixed(1)}%</div>
+            <div style="font-size:8px;color:#6b7280;margin-top:2px">${aprovNum >= 80 ? "Excelente" : aprovNum >= 60 ? "Regular" : "Baixo"}</div>
+          </div>
+          <div style="background:#fff5f5;border-radius:8px;padding:11px 12px;border:1px solid #fcd4d4">
+            <div style="font-size:8px;font-weight:700;color:#9b5563;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Perda</div>
+            <div style="font-size:21px;font-weight:900;color:#c0392b;font-family:monospace">${perdaNum.toFixed(1)}%</div>
+            <div style="font-size:8px;color:#6b7280;margin-top:2px">de material</div>
+          </div>
+          <div style="background:#f0fdff;border-radius:8px;padding:11px 12px;border:1px solid #bde8f5">
+            <div style="font-size:8px;font-weight:700;color:#0e7490;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Chapas Usadas</div>
+            <div style="font-size:21px;font-weight:900;color:#0891b2;font-family:monospace">${statChapas}</div>
+            <div style="font-size:8px;color:#6b7280;margin-top:2px">${retalhosCount > 0 ? retalhosCount + " retalho(s)" : "chapas novas"}</div>
+          </div>
+          <div style="background:#fffbeb;border-radius:8px;padding:11px 12px;border:1px solid #fde68a">
+            <div style="font-size:8px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Retalhos</div>
+            <div style="font-size:21px;font-weight:900;color:#d97706;font-family:monospace">${retalhosGerados.length}</div>
+            <div style="font-size:8px;color:#6b7280;margin-top:2px">aproveitáveis ≥200mm</div>
+          </div>
+          <div style="background:#f0f4ff;border-radius:8px;padding:11px 12px;border:1px solid #d0daf0">
+            <div style="font-size:8px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Total Peças</div>
+            <div style="font-size:21px;font-weight:900;color:#2d5fa6;font-family:monospace">${todasPecas.length}</div>
+            <div style="font-size:8px;color:#6b7280;margin-top:2px">${m2Total.toFixed(3)} m²</div>
+          </div>
+          <div style="background:#f0f4ff;border-radius:8px;padding:11px 12px;border:1px solid #d0daf0">
+            <div style="font-size:8px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Parâmetros</div>
+            <div style="font-size:11px;font-weight:700;color:#2d5fa6;font-family:monospace;margin-top:4px">Kerf: ${kerf} mm</div>
+            <div style="font-size:11px;font-weight:700;color:#2d5fa6;font-family:monospace">Borda: ${bord} mm</div>
+          </div>
+        </div>
+
+        ${legendaHtml}
+
+        <div style="font-size:9px;font-weight:800;color:#2d5fa6;text-transform:uppercase;letter-spacing:1.5px;padding-bottom:5px;border-bottom:2px solid #d0daf0;margin-bottom:10px">
+          Lista de Peças · ${todasPecas.length} peças · ${m2Total.toFixed(4)} m² total
+        </div>
+        <table>
+          <thead><tr>
+            <th style="width:28px;text-align:center">#</th>
+            <th>Material</th>
+            <th>Dimensão (mm)</th>
+            <th style="text-align:right">m²</th>
+            ${pedidoList.length > 1 ? "<th>Pedido</th>" : ""}
+            <th style="text-align:center">Chapa</th>
+            <th style="text-align:center">Girada</th>
+          </tr></thead>
+          <tbody>${todasPecas.map((p, i) => `
+            <tr>
+              <td style="font-weight:800;color:#2d5fa6;text-align:center">${i + 1}</td>
+              <td style="font-weight:600">${p.prod}</td>
+              <td style="font-family:monospace;font-weight:600">${p.l} × ${p.a}</td>
+              <td style="text-align:right;font-family:monospace">${((p.l * p.a) / 1e6).toFixed(4)}</td>
+              ${pedidoList.length > 1 ? `<td style="font-family:monospace;font-weight:600;color:${corPedido(p.pedidoId ?? pedidoRef ?? "?")}">${p.pedidoId ?? pedidoRef ?? "—"}</td>` : ""}
+              <td style="text-align:center;font-weight:700;color:#2d5fa6">${p.chapaIdx + 1}</td>
+              <td style="text-align:center;color:${p.rot ? "#7c3aed" : "#aaa"};font-weight:600">${p.rot ? "↺ Sim" : "—"}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+        ${footer}
+      </div>`;
+
+    // ── PAGES 2+: one page per chapa ─────────────────────────────────────────
     const chapasHtml = resultado.map((r, i) => {
       const retalhos = r.free.filter(f => f.l >= 200 && f.a >= 200);
-      const areaUtil = r.retalhoId ? r.W * r.H : (r.W - bord * 2) * (r.H - bord * 2);
+      const areaUtil  = r.retalhoId ? r.W * r.H : (r.W - bord * 2) * (r.H - bord * 2);
       const areaUsada = r.placed.reduce((a, p) => a + p.l * p.a, 0);
-      const apChapa = areaUtil > 0 ? ((areaUsada / areaUtil) * 100).toFixed(1) : "0";
+      const apChapa   = areaUtil > 0 ? (areaUsada / areaUtil) * 100 : 0;
+      const apStr     = apChapa.toFixed(1);
       return `
-        <div style="margin-bottom:28px;border:1px solid #d1daf0;border-radius:10px;${i > 0 ? "page-break-before:always;" : ""}">
-          <div style="background:#2d5fa6;color:white;padding:9px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
-            <div style="font-size:13px;font-weight:700">CHAPA ${i + 1} · ${r.prod}</div>
-            <div style="display:flex;gap:18px;font-size:11px;opacity:.93">
-              <span>${r.W} × ${r.H} mm</span>
-              <span>Aproveit.: <strong>${apChapa}%</strong></span>
-              <span>${r.placed.length} peça(s)</span>
-              ${retalhos.length > 0 ? `<span>${retalhos.length} retalho(s)</span>` : ""}
+        <div style="page-break-before:always">
+          ${runningHdr}
+
+          <div style="background:#2d5fa6;border-radius:8px 8px 0 0;padding:10px 16px;display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="color:rgba(255,255,255,0.65);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px">Chapa ${i + 1} de ${resultado.length}${r.retalhoId ? " · retalho de estoque" : ""}</div>
+              <div style="font-size:16px;font-weight:900;color:white;margin-top:2px">${r.prod}</div>
+            </div>
+            <div style="display:flex;gap:22px;align-items:center">
+              <div style="text-align:center">
+                <div style="font-size:8px;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:1px">Dimensão</div>
+                <div style="font-size:12px;font-weight:700;color:white;font-family:monospace;margin-top:2px">${r.W} × ${r.H} mm</div>
+              </div>
+              <div style="text-align:center">
+                <div style="font-size:8px;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:1px">Peças</div>
+                <div style="font-size:20px;font-weight:900;color:white;font-family:monospace">${r.placed.length}</div>
+              </div>
+              <div style="text-align:center">
+                <div style="font-size:8px;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:1px">Aproveit.</div>
+                <div style="font-size:18px;font-weight:900;font-family:monospace;padding:2px 10px;border-radius:6px;background:${apBg(apChapa)};color:${apColor(apChapa)};margin-top:2px">${apStr}%</div>
+              </div>
+              ${retalhos.length > 0 ? `
+              <div style="text-align:center">
+                <div style="font-size:8px;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:1px">Retalhos</div>
+                <div style="font-size:20px;font-weight:900;color:#fde68a;font-family:monospace">${retalhos.length}</div>
+              </div>` : ""}
             </div>
           </div>
-          <div style="padding:14px 16px;background:#f8faff">
-            <div style="margin-bottom:12px;text-align:center">${svgChapa(r)}</div>
-            <table style="width:100%;border-collapse:collapse;font-size:11px">
-              <thead><tr style="background:#e8eef8;color:#2d5fa6">
-                <th style="padding:5px 7px;text-align:left">#</th>
-                <th style="padding:5px 7px">Dimensão (mm)</th>
-                <th style="padding:5px 7px">Pedido</th>
-                <th style="padding:5px 7px">Posição X · Y</th>
-                <th style="padding:5px 7px">Girada</th>
+
+          <div style="border:1px solid #d0daf0;border-top:none;border-radius:0 0 8px 8px;background:white;padding:14px 16px">
+            <div style="text-align:center;background:#f8faff;border:1px solid #e2e8f0;border-radius:6px;padding:14px;margin-bottom:14px">
+              ${svgChapa(r, 640, 290)}
+            </div>
+
+            <div style="font-size:9px;font-weight:700;color:#2d5fa6;text-transform:uppercase;letter-spacing:1px;margin-bottom:7px">Peças nesta chapa</div>
+            <table>
+              <thead><tr>
+                <th style="width:28px;text-align:center">#</th>
+                <th>Dimensão (mm)</th>
+                ${pedidoList.length > 1 ? "<th>Pedido</th>" : ""}
+                <th style="text-align:right">m²</th>
+                <th style="text-align:center">Posição (X · Y)</th>
+                <th style="text-align:center">Girada</th>
               </tr></thead>
               <tbody>${r.placed.map((p, j) => `
-                <tr style="background:${j % 2 === 0 ? "#fff" : "#f4f7ff"}">
-                  <td style="padding:4px 7px;font-weight:700;color:#2d5fa6">${j + 1}</td>
-                  <td style="padding:4px 7px;text-align:center;font-family:monospace">${p.l} × ${p.a}</td>
-                  <td style="padding:4px 7px;text-align:center;font-family:monospace">${p.pedidoId ?? pedidoRef ?? "—"}</td>
-                  <td style="padding:4px 7px;text-align:center;font-family:monospace">${p.x} · ${p.y}</td>
-                  <td style="padding:4px 7px;text-align:center">${p.rot ? "↺ Sim" : "—"}</td>
-                </tr>`).join("")}</tbody>
+                <tr>
+                  <td style="font-weight:800;color:#2d5fa6;text-align:center">${j + 1}</td>
+                  <td style="font-family:monospace;font-weight:600">${p.l} × ${p.a}</td>
+                  ${pedidoList.length > 1 ? `<td style="font-family:monospace;font-weight:600;color:${corPedido(p.pedidoId ?? pedidoRef ?? "?")}">${p.pedidoId ?? pedidoRef ?? "—"}</td>` : ""}
+                  <td style="text-align:right;font-family:monospace">${((p.l * p.a) / 1e6).toFixed(4)}</td>
+                  <td style="text-align:center;font-family:monospace;color:#555">${p.x} · ${p.y}</td>
+                  <td style="text-align:center;font-weight:600;color:${p.rot ? "#7c3aed" : "#aaa"}">${p.rot ? "↺ Sim" : "—"}</td>
+                </tr>`).join("")}
+              </tbody>
             </table>
+
             ${retalhos.length > 0 ? `
-              <div style="margin-top:10px;padding:7px 10px;background:#e0f4ff;border-radius:6px;font-size:11px;border-left:3px solid #0891b2">
-                <span style="font-weight:700;color:#0070a0">Retalhos aproveitáveis:</span>
-                <span style="margin-left:6px;font-family:monospace;color:#0070a0">${retalhos.map(f => `${f.l}×${f.a} mm (${((f.l * f.a) / 1e6).toFixed(4)} m²)`).join(" · ")}</span>
+              <div style="margin-top:10px;padding:8px 12px;background:#e0f4ff;border-radius:6px;border-left:3px solid #0891b2;font-size:10px">
+                <strong style="color:#0070a0">↺ Retalhos aproveitáveis (≥200×200 mm):</strong>
+                <span style="margin-left:6px;font-family:monospace;color:#0070a0">${retalhos.map(f => `${f.l}×${f.a} mm (${((f.l * f.a) / 1e6).toFixed(4)} m²)`).join(" &nbsp;·&nbsp; ")}</span>
               </div>` : ""}
           </div>
+          ${footer}
         </div>`;
     }).join("");
 
-    win.document.write(`<!DOCTYPE html><html><head>
-      <title>Plano de Corte · ${pedidoRef ?? "—"}</title>
+    win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head>
+      <title>Plano de Corte · ${pedidoRef ?? "AVULSO"}</title>
       <meta charset="utf-8">
       <style>
-        body{font-family:Arial,sans-serif;padding:20px;color:#1a1a2e;font-size:13px}
-        @page{margin:12mm}
-        @media print{.noprint{display:none!important}}
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #1a1a2e; background: white; font-size: 12px; }
+        @page { size: A4 portrait; margin: 12mm 14mm; }
+        @media print { .noprint { display: none !important; } }
+        table { width: 100%; border-collapse: collapse; }
+        thead tr { background: #2d5fa6; color: white; }
+        th { padding: 6px 8px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+        td { padding: 5px 8px; border-bottom: 1px solid #eef0f5; font-size: 10px; }
+        tbody tr:nth-child(even) td { background: #f7f9ff; }
       </style>
     </head><body>
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:12px;border-bottom:3px solid #2d5fa6">
-        <div>
-          <div style="font-size:26px;font-weight:900;color:#2d5fa6;letter-spacing:-1px">urbanglass</div>
-          <div style="font-size:10px;color:#888">Urban Glass Comércio Ltda</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:2px">Plano de Corte</div>
-          <div style="font-size:22px;font-weight:900;color:#2d5fa6">${pedidoRef ?? "AVULSO"}</div>
-          <div style="margin-top:4px;display:inline-block;padding:2px 10px;background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:99px;font-size:10px;font-weight:700">⚠ SIMULAÇÃO</div>
-          <div style="font-size:10px;color:#888;margin-top:4px">Emissão: ${new Date().toLocaleDateString("pt-BR")}</div>
-        </div>
-      </div>
-
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px">
-        <div style="padding:12px;background:#f0f4ff;border-radius:8px;border-left:4px solid #2d5fa6">
-          <div style="font-size:9px;color:#2d5fa6;font-weight:700;text-transform:uppercase">Aproveitamento</div>
-          <div style="font-size:22px;font-weight:900;color:#2d5fa6">${aprovNum.toFixed(1)}%</div>
-        </div>
-        <div style="padding:12px;background:#fff1f2;border-radius:8px;border-left:4px solid #f43f5e">
-          <div style="font-size:9px;color:#f43f5e;font-weight:700;text-transform:uppercase">Perda</div>
-          <div style="font-size:22px;font-weight:900;color:#f43f5e">${perdaNum.toFixed(1)}%</div>
-        </div>
-        <div style="padding:12px;background:#f0fdff;border-radius:8px;border-left:4px solid #00a8cc">
-          <div style="font-size:9px;color:#00a8cc;font-weight:700;text-transform:uppercase">Chapas Usadas</div>
-          <div style="font-size:22px;font-weight:900;color:#00a8cc">${statChapas}</div>
-        </div>
-        <div style="padding:12px;background:#fffbeb;border-radius:8px;border-left:4px solid #f59e0b">
-          <div style="font-size:9px;color:#f59e0b;font-weight:700;text-transform:uppercase">Retalhos Gerados</div>
-          <div style="font-size:22px;font-weight:900;color:#f59e0b">${retalhosGerados.length}</div>
-        </div>
-      </div>
-
-      ${legendaPedidos}
-      ${resumoPecas}
-
-      <div style="font-size:12px;font-weight:700;color:#2d5fa6;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #2d5fa6;padding-bottom:5px;margin-bottom:16px">
-        Diagrama de Corte · ${resultado.length} Chapa(s)
-      </div>
+      ${page1}
       ${chapasHtml}
-
-      <div class="noprint" style="text-align:center;margin-top:28px;padding-top:16px;border-top:1px solid #e2e8f0">
-        <button onclick="window.print()" style="padding:10px 32px;background:#2d5fa6;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">🖨 Imprimir / Salvar PDF</button>
+      <div class="noprint" style="text-align:center;margin:28px auto;padding:16px;border-top:1px solid #e2e8f0">
+        <button onclick="window.print()" style="padding:10px 32px;background:#2d5fa6;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:0.3px">🖨 Imprimir / Salvar PDF</button>
       </div>
     </body></html>`);
     win.document.close();
