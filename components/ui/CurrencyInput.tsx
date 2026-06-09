@@ -13,75 +13,92 @@ interface CurrencyInputProps {
   tabIndex?: number;
 }
 
+function fmt(cents: number): string {
+  return (cents / 100).toLocaleString("pt-BR", {
+    style: "currency", currency: "BRL", minimumFractionDigits: 2,
+  });
+}
+
 export default function CurrencyInput({
-  value,
-  onChange,
+  value, onChange,
   placeholder = "R$ 0,00",
-  title,
-  style,
-  className = "fc",
-  disabled,
-  tabIndex,
+  title, style, className = "fc", disabled, tabIndex,
 }: CurrencyInputProps) {
-  const [display, setDisplay] = useState("");
+  const [cents, setCents] = useState(Math.round((value ?? 0) * 100));
   const focused = useRef(false);
+  const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!focused.current) {
-      setDisplay(value > 0 ? formatarExibicao(value) : "");
+      setCents(Math.round((value ?? 0) * 100));
     }
   }, [value]);
 
-  function formatarExibicao(v: number): string {
-    return v.toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-      minimumFractionDigits: 2,
-    });
+  function pinEnd() {
+    const el = ref.current;
+    if (el) el.setSelectionRange(el.value.length, el.value.length);
   }
 
   function handleFocus() {
     focused.current = true;
-    setDisplay(value > 0 ? value.toFixed(2).replace(".", ",") : "");
-  }
-
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setDisplay(e.target.value);
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    const allowed = ["Backspace","Delete","Tab","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End",".","," ];
-    if (!allowed.includes(e.key) && !/^\d$/.test(e.key)) {
-      e.preventDefault();
-    }
+    setTimeout(pinEnd, 0);
   }
 
   function handleBlur() {
     focused.current = false;
-    const raw = display
-      .replace(/R\$\s?/g, "")
-      .replace(/\./g, "")
-      .replace(",", ".");
-    const num = parseFloat(raw) || 0;
-    onChange(num);
-    setDisplay(num > 0 ? formatarExibicao(num) : "");
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    // Deixa atalhos de teclado (ctrl+c, ctrl+v, etc.) passarem
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+    if (/^\d$/.test(e.key)) {
+      e.preventDefault();
+      const next = Math.min(cents * 10 + Number(e.key), 999_999_999);
+      setCents(next);
+      onChange(next / 100);
+      return;
+    }
+
+    if (e.key === "Backspace" || e.key === "Delete") {
+      e.preventDefault();
+      const next = Math.floor(cents / 10);
+      setCents(next);
+      onChange(next / 100);
+      return;
+    }
+
+    // Permite teclas de navegação e funcionais
+    if (!["Tab","Enter","Escape","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End"].includes(e.key)) {
+      e.preventDefault();
+    }
+  }
+
+  // Fallback para colar (paste) e teclado virtual mobile
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const digits = e.target.value.replace(/\D/g, "");
+    const next = digits ? Math.min(parseInt(digits, 10), 999_999_999) : 0;
+    setCents(next);
+    onChange(next / 100);
   }
 
   return (
     <input
+      ref={ref}
       className={className}
       type="text"
-      inputMode="decimal"
-      value={display}
+      inputMode="numeric"
+      value={cents > 0 ? fmt(cents) : ""}
       placeholder={placeholder}
       title={title}
       style={style}
       disabled={disabled}
       tabIndex={tabIndex}
       onFocus={handleFocus}
-      onChange={handleChange}
-      onKeyDown={handleKeyDown}
       onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      onChange={handleChange}
+      onClick={pinEnd}
     />
   );
 }

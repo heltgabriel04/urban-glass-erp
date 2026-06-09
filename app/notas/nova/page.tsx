@@ -8,6 +8,7 @@ import { getPedidos } from "@/services/pedidos.service";
 import { salvarNotaCompleta, emitirNFeCompleta } from "@/services/notas.service";
 import EspelhoModal from "@/components/notas/EspelhoModal";
 import DateInput from "@/components/ui/DateInput";
+import CurrencyInput from "@/components/ui/CurrencyInput";
 import { formatBRL } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import type { Pedido, Cliente } from "@/types";
@@ -279,8 +280,8 @@ function NovaNFeInner() {
                       <div className="fg"><label className="fl">CFOP</label><input className="fc" value={item.cfop} onChange={e => atualizarItem(i,"cfop",e.target.value)} maxLength={5} /></div>
                       <div className="fg"><label className="fl">Unidade</label><input className="fc" value={item.unidade} onChange={e => atualizarItem(i,"unidade",e.target.value)} maxLength={6} /></div>
                       <div className="fg"><label className="fl">Qtd (m²)</label><input className="fc" type="number" value={item.quantidade} onChange={e => atualizarItem(i,"quantidade",Number(e.target.value))} /></div>
-                      <div className="fg"><label className="fl">Vl. Unit.</label><input className="fc" type="number" value={item.valor_unitario.toFixed(4)} onChange={e => atualizarItem(i,"valor_unitario",Number(e.target.value))} /></div>
-                      <div className="fg"><label className="fl">Vl. Bruto</label><input className="fc" type="number" value={item.valor_bruto} onChange={e => atualizarItem(i,"valor_bruto",Number(e.target.value))} /></div>
+                      <div className="fg"><label className="fl">Vl. Unit.</label><CurrencyInput value={item.valor_unitario} onChange={v => atualizarItem(i,"valor_unitario",v)} /></div>
+                      <div className="fg"><label className="fl">Vl. Bruto</label><CurrencyInput value={item.valor_bruto} onChange={v => atualizarItem(i,"valor_bruto",v)} /></div>
                       <div className="fg"><label className="fl">IPI %</label><input className="fc" type="number" value={item.ipi_pct} onChange={e => atualizarItem(i,"ipi_pct",Number(e.target.value))} /></div>
                       <div className="fg"><label className="fl">ICMS %</label><input className="fc" value={item.icms_pct} readOnly style={{ opacity:0.6 }} /></div>
                       <div className="fg"><label className="fl">Vl. ICMS</label><input className="fc" value={formatBRL(item.valor_icms)} readOnly style={{ opacity:0.6 }} /></div>
@@ -317,7 +318,7 @@ function NovaNFeInner() {
               {([["valor_desconto","Desconto (R$)"],["valor_frete","Valor Frete"],["valor_seguro","Valor Seguro"],["valor_outros","Outras Desp."]] as const).map(([k,l]) => (
                 <div key={k} className="fg">
                   <label className="fl">{l}</label>
-                  <input className="fc" type="number" min="0" step="0.01" value={form[k]} onChange={e => setF(k, Number(e.target.value))} />
+                  <CurrencyInput value={form[k]} onChange={v => setF(k, v)} />
                 </div>
               ))}
             </div>
