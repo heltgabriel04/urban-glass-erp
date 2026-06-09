@@ -156,7 +156,15 @@ export default function TabelasPage() {
 
         {erroSalvar && !precisaMigracao && (
           <div className="al al-w" style={{ marginBottom: "14px", fontSize: "12px" }}>
-            ⚠ Erro ao salvar: {erroSalvar}
+            <strong>⚠ Erro ao salvar: {erroSalvar}</strong>
+            {erroSalvar.includes("row-level security") && (
+              <>
+                <div style={{ marginTop: "6px" }}>Execute no <strong>Supabase SQL Editor</strong>:</div>
+                <code style={{ display: "block", marginTop: "6px", padding: "8px 12px", background: "rgba(0,0,0,.3)", borderRadius: "6px", fontFamily: "'DM Mono',monospace", fontSize: "12px", userSelect: "all" }}>
+                  ALTER TABLE tabela_preco_itens DISABLE ROW LEVEL SECURITY;
+                </code>
+              </>
+            )}
           </div>
         )}
 
