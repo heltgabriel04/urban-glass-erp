@@ -987,6 +987,9 @@ function OtimizadorContent() {
               {zerando ? "Zerando..." : "✕ Zerar Plano"}
             </button>
           )}
+          {resultado && (
+            <button className="btn bg sm" onClick={handleImprimirTeste}>🖨 Imprimir Plano</button>
+          )}
           {pedidoRef && <a href={"/pedidos/" + pedidoRef} className="btn bg sm">← Voltar ao Pedido</a>}
         </div>
       </div>
