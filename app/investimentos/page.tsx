@@ -55,6 +55,7 @@ export default function InvestimentosPage() {
   const [filtroAno, setFiltroAno]         = useState("");
   const [opcoesDB, setOpcoesDB]           = useState<OpcaoLista[]>([]);
   const [semTabela, setSemTabela]         = useState(false);
+  const [erroRLS, setErroRLS]             = useState(false);
   const [modalListas, setModalListas]     = useState(false);
   const [novoBanco, setNovoBanco]         = useState("");
   const [novaCat, setNovaCat]             = useState("");
@@ -149,7 +150,11 @@ export default function InvestimentosPage() {
       return;
     }
     const { error } = await supabase.from("inv_opcoes").insert([{ tipo, valor: valor.trim() }] as never);
-    if (error) { alert("Erro ao adicionar: " + error.message); return; }
+    if (error) {
+      if (error.message.includes("row-level security")) setErroRLS(true);
+      else alert("Erro ao adicionar: " + error.message);
+      return;
+    }
     if (tipo === "banco") setNovoBanco(""); else setNovaCat("");
     load();
   }
@@ -447,6 +452,15 @@ export default function InvestimentosPage() {
             {semTabela && (
               <div style={{ background: "rgba(245,158,11,.12)", border: "1px solid var(--warn)", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "12px", color: "var(--warn)" }}>
                 ⚠ A tabela <code style={{ fontFamily: "'DM Mono',monospace" }}>inv_opcoes</code> não existe ainda. Execute o SQL de migração mostrado na página para habilitar listas personalizadas.
+              </div>
+            )}
+
+            {erroRLS && (
+              <div style={{ background: "rgba(245,158,11,.12)", border: "1px solid var(--warn)", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "12px", color: "var(--warn)" }}>
+                <div style={{ fontWeight: 700, marginBottom: "6px" }}>⚠ Row Level Security bloqueando gravação. Execute no Supabase SQL Editor:</div>
+                <code style={{ display: "block", padding: "8px 10px", background: "rgba(0,0,0,.3)", borderRadius: "6px", fontFamily: "'DM Mono',monospace", fontSize: "11px", userSelect: "all" }}>
+                  ALTER TABLE inv_opcoes DISABLE ROW LEVEL SECURITY;
+                </code>
               </div>
             )}
 
