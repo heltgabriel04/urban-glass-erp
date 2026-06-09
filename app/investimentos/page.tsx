@@ -184,7 +184,7 @@ export default function InvestimentosPage() {
     key?: string,
   ) => (
     <tr key={key} style={{ background: isNew ? "rgba(245,158,11,.05)" : "var(--surf2)", outline: `1px solid ${isNew ? GBR : "var(--acc)"}` }}>
-      <td style={{ minWidth: "90px" }}>
+      <td style={{ minWidth: "130px" }}>
         <DateInput value={form.data} onChange={v => set(f => ({ ...f, data: v }))} />
       </td>
       <td>
@@ -198,7 +198,7 @@ export default function InvestimentosPage() {
           onChange={e => set(f => ({ ...f, empresa: e.target.value }))}
           onKeyDown={e => e.key === "Enter" && onSave()} />
       </td>
-      <td>
+      <td style={{ minWidth: "150px" }}>
         <CurrencyInput value={form.valor} onChange={v => set(f => ({ ...f, valor: v }))} />
       </td>
       <td>
