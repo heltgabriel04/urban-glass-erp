@@ -10,7 +10,7 @@ import { formatBRL, formatM2 } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
-import type { Cliente, Produto, TabelaPreco } from "@/types";
+import type { Cliente, Produto, TabelaPreco, TabelaPrecoItem } from "@/types";
 
 interface ItemForm {
   produto_id: number | null;
@@ -39,10 +39,11 @@ function arredondarParaMultiplo50(v: number): number {
 export default function NovoOrcamentoPage() {
   const router = useRouter();
 
-  const [clientes, setClientes]   = useState<Cliente[]>([]);
-  const [produtos, setProdutos]   = useState<Produto[]>([]);
-  const [tabelas, setTabelas]     = useState<TabelaPreco[]>([]);
-  const [proximoId, setProximoId] = useState("");
+  const [clientes, setClientes]       = useState<Cliente[]>([]);
+  const [produtos, setProdutos]       = useState<Produto[]>([]);
+  const [tabelas, setTabelas]         = useState<TabelaPreco[]>([]);
+  const [tabelaItens, setTabelaItens] = useState<TabelaPrecoItem[]>([]);
+  const [proximoId, setProximoId]     = useState("");
 
   const [clienteId, setClienteId]     = useState<number | null>(null);
   const [dtOrcamento, setDtOrcamento] = useState(new Date().toISOString().split("T")[0]);
@@ -75,15 +76,17 @@ export default function NovoOrcamentoPage() {
   }, [itens.length]);
 
   async function load() {
-    const [clis, prods, tabs, pid] = await Promise.all([
+    const [clis, prods, tabs, itens, pid] = await Promise.all([
       getClientes(true),
       supabase.from("produtos").select("*").eq("ativo", true).then(r => r.data as Produto[]),
       supabase.from("tabelas_preco").select("*").eq("ativo", true).then(r => r.data as TabelaPreco[]),
+      supabase.from("tabela_preco_itens").select("*").then(r => r.data as TabelaPrecoItem[] || []),
       getProximoIdOrcamento(),
     ]);
     setClientes(clis || []);
     setProdutos(prods || []);
     setTabelas(tabs || []);
+    setTabelaItens(itens || []);
     setProximoId(pid);
     setItens([{ ...ITEM_VAZIO }]);
     setLoading(false);
@@ -146,15 +149,25 @@ export default function NovoOrcamentoPage() {
     return calcM2Item(item) * (item.valor_m2 + item.lapidacao);
   }
 
+  function getPrecoProduto(produtoId: number): { valor: number; margem: number } {
+    const tab = getTabela();
+    if (tab) {
+      const item = tabelaItens.find(i => i.tabela_id === tab.id && i.produto_id === produtoId);
+      if (item) return { valor: item.valor, margem: item.margem };
+    }
+    const prod = produtos.find(p => p.id === produtoId);
+    return { valor: prod?.valor ?? 0, margem: prod?.margem ?? 0 };
+  }
+
   function updProduto(i: number, id: number, label: string) {
-    const prod = produtos.find(p => p.id === id);
+    const { valor, margem } = getPrecoProduto(id);
     setItens(items => items.map((item, idx) => idx !== i ? item : {
       ...item,
       produto_id: id,
       produto_nome: label,
-      valor_m2: prod?.valor ?? item.valor_m2,
-      preco_base: prod?.valor ?? 0,
-      margem_prod: prod?.margem ?? 0,
+      valor_m2: valor,
+      preco_base: valor,
+      margem_prod: margem,
     }));
   }
 

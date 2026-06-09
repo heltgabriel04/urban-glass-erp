@@ -11,7 +11,7 @@ import { formatBRL, formatM2 } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
-import type { Cliente, Produto, TabelaPreco, ItemPedidoInsert, PedidoInsert } from "@/types";
+import type { Cliente, Produto, TabelaPreco, TabelaPrecoItem, ItemPedidoInsert, PedidoInsert } from "@/types";
 
 type ModoPedido = "m2" | "ml";
 
@@ -95,10 +95,11 @@ function redistribuirParcelas(parcelas: ParcelaForm[], valorTotal: number, idxEd
 export default function NovoPedidoPage() {
   const router = useRouter();
 
-  const [clientes, setClientes]   = useState<Cliente[]>([]);
-  const [produtos, setProdutos]   = useState<Produto[]>([]);
-  const [tabelas, setTabelas]     = useState<TabelaPreco[]>([]);
-  const [proximoId, setProximoId] = useState("");
+  const [clientes, setClientes]       = useState<Cliente[]>([]);
+  const [produtos, setProdutos]       = useState<Produto[]>([]);
+  const [tabelas, setTabelas]         = useState<TabelaPreco[]>([]);
+  const [tabelaItens, setTabelaItens] = useState<TabelaPrecoItem[]>([]);
+  const [proximoId, setProximoId]     = useState("");
 
   const [clienteId, setClienteId]   = useState<number | null>(null);
   const [dtPedido, setDtPedido]     = useState(new Date().toISOString().split("T")[0]);
@@ -117,15 +118,17 @@ export default function NovoPedidoPage() {
   useEffect(() => { load(); }, []);
 
   async function load() {
-    const [clis, prods, tabs, pid] = await Promise.all([
+    const [clis, prods, tabs, itens, pid] = await Promise.all([
       getClientes(true),
       supabase.from("produtos").select("*").eq("ativo", true).then(r => r.data as Produto[]),
       supabase.from("tabelas_preco").select("*").eq("ativo", true).then(r => r.data as TabelaPreco[]),
+      supabase.from("tabela_preco_itens").select("*").then(r => r.data as TabelaPrecoItem[] || []),
       getProximoIdPedido(),
     ]);
     setClientes(clis || []);
     setProdutos(prods || []);
     setTabelas(tabs || []);
+    setTabelaItens(itens || []);
     setProximoId(pid);
     setItens([{ ...ITEM_VAZIO }]);
     setLoading(false);
@@ -209,34 +212,46 @@ export default function NovoPedidoPage() {
       if (idx !== i) return item;
       const novo = { ...item, [field]: value };
       if (field === "produto_id") {
-        const prod = produtos.find(p => p.id === Number(value));
-        if (prod) {
-          novo.produto_nome = prod.nome;
-          novo.valor_m2 = prod.valor;
-          novo.preco_base = prod.valor;
-          novo.margem_prod = prod.margem ?? 0;
+        const prodId = Number(value);
+        if (prodId) {
+          const prod = produtos.find(p => p.id === prodId);
+          const { valor, margem } = getPrecoProduto(prodId);
+          novo.produto_nome = prod?.nome ?? "";
+          novo.valor_m2     = valor;
+          novo.preco_base   = valor;
+          novo.margem_prod  = margem;
         } else {
           novo.produto_nome = "";
-          novo.valor_m2 = 0;
-          novo.preco_base = 0;
-          novo.margem_prod = 0;
+          novo.valor_m2     = 0;
+          novo.preco_base   = 0;
+          novo.margem_prod  = 0;
         }
       }
       return novo;
     }));
   }
 
+  function getPrecoProduto(produtoId: number): { valor: number; margem: number } {
+    const tab = getTabela();
+    if (tab) {
+      const item = tabelaItens.find(i => i.tabela_id === tab.id && i.produto_id === produtoId);
+      if (item) return { valor: item.valor, margem: item.margem };
+    }
+    const prod = produtos.find(p => p.id === produtoId);
+    return { valor: prod?.valor ?? 0, margem: prod?.margem ?? 0 };
+  }
+
   function setProdutoItem(i: number, id: number, label: string) {
-    const prod = produtos.find(p => p.id === id);
+    const { valor, margem } = getPrecoProduto(id);
     setItens(items => items.map((item, idx) => {
       if (idx !== i) return item;
       return {
         ...item,
         produto_id: id,
         produto_nome: label,
-        valor_m2: prod?.valor ?? item.valor_m2,
-        preco_base: prod?.valor ?? 0,
-        margem_prod: prod?.margem ?? 0,
+        valor_m2: valor,
+        preco_base: valor,
+        margem_prod: margem,
       };
     }));
   }

@@ -75,6 +75,15 @@ export interface TabelaPreco {
   created_at: string;
 }
 
+// ─── ITEM DA TABELA DE PREÇO ───────────────────────────────
+export interface TabelaPrecoItem {
+  id: number;
+  tabela_id: number;
+  produto_id: number;
+  valor: number;
+  margem: number;
+}
+
 // ─── PRODUTO ───────────────────────────────────────────────
 export interface Produto {
   id: number;
@@ -353,6 +362,7 @@ export type Database = {
       lancamentos:             { Row: Lancamento;          Insert: LancamentoInsert                           };
       historico_otimizador:    { Row: HistoricoOtimizador                                                     };
       tabelas_preco:           { Row: TabelaPreco                                                             };
+      tabela_preco_itens:      { Row: TabelaPrecoItem                                                         };
       notas_fiscais:           { Row: NotaFiscal;          Insert: NotaFiscalInsert                           };
       config_fiscal_produtos:  { Row: ConfigFiscalProduto                                                     };
     };

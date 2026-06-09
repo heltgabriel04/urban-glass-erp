@@ -5,7 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
 import CurrencyInput from "@/components/ui/CurrencyInput";
-import type { Produto, TabelaPreco } from "@/types";
+import type { Produto, TabelaPreco, TabelaPrecoItem } from "@/types";
 
 interface PrecoEdit {
   valor: number;
@@ -13,38 +13,49 @@ interface PrecoEdit {
 }
 
 export default function TabelasPage() {
-  const [produtos, setProdutos]       = useState<Produto[]>([]);
-  const [tabelas, setTabelas]         = useState<TabelaPreco[]>([]);
-  const [edits, setEdits]             = useState<Record<number, PrecoEdit>>({});
-  const [loading, setLoading]         = useState(true);
-  const [salvando, setSalvando]       = useState(false);
-  const [filtro, setFiltro]           = useState("");
-  const [filtroTipo, setFiltroTipo]   = useState("Todos");
-  const [margemPendente, setMargemPendente] = useState(false); // coluna margem não existe ainda no DB
+  const [produtos, setProdutos]         = useState<Produto[]>([]);
+  const [tabelas, setTabelas]           = useState<TabelaPreco[]>([]);
+  const [tabelaItens, setTabelaItens]   = useState<TabelaPrecoItem[]>([]);
+  const [tabelaAtiva, setTabelaAtiva]   = useState<TabelaPreco | null>(null);
+  const [edits, setEdits]               = useState<Record<number, PrecoEdit>>({});
+  const [loading, setLoading]           = useState(true);
+  const [salvando, setSalvando]         = useState(false);
+  const [filtro, setFiltro]             = useState("");
+  const [filtroTipo, setFiltroTipo]     = useState("Todos");
+  const [precisaMigracao, setPrecisaMigracao] = useState(false);
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     setLoading(true);
-    const [{ data: prods }, { data: tabs }] = await Promise.all([
+    const [{ data: prods }, { data: tabs }, { data: itens, error: erroItens }] = await Promise.all([
       supabase.from("produtos").select("*").order("tipo").order("nome"),
       supabase.from("tabelas_preco").select("*").order("id"),
+      supabase.from("tabela_preco_itens").select("*"),
     ]);
-    const lista = (prods as Produto[] || []);
-    setProdutos(lista);
-    setTabelas(tabs as TabelaPreco[] || []);
+    const listaProds   = (prods  as Produto[]         || []);
+    const listaTabelas = (tabs   as TabelaPreco[]      || []);
+    const listaItens   = (itens  as TabelaPrecoItem[]  || []);
+    setProdutos(listaProds);
+    setTabelas(listaTabelas);
+    setTabelaItens(listaItens);
+    setPrecisaMigracao(!!erroItens);
+    setTabelaAtiva(prev => prev ? (listaTabelas.find(t => t.id === prev.id) ?? listaTabelas[0] ?? null) : (listaTabelas[0] ?? null));
     setEdits({});
-    // detecta se coluna margem já existe (primeiro produto sem ela → undefined)
-    if (lista.length > 0 && (lista[0] as any).margem === undefined) {
-      setMargemPendente(true);
-    }
     setLoading(false);
   }
 
-  function getCurrent(id: number): PrecoEdit {
-    if (edits[id]) return edits[id];
-    const p = produtos.find(x => x.id === id)!;
-    return { valor: p.valor, margem: p.margem ?? 0 };
+  // Valor/margem salvo para produto na tabela ativa (sem edits locais)
+  function getSaved(produtoId: number): PrecoEdit {
+    if (!tabelaAtiva) return { valor: 0, margem: 0 };
+    const item = tabelaItens.find(i => i.tabela_id === tabelaAtiva.id && i.produto_id === produtoId);
+    if (item) return { valor: item.valor, margem: item.margem };
+    const prod = produtos.find(p => p.id === produtoId);
+    return { valor: prod?.valor ?? 0, margem: prod?.margem ?? 0 };
+  }
+
+  function getCurrent(produtoId: number): PrecoEdit {
+    return edits[produtoId] ?? getSaved(produtoId);
   }
 
   function setValor(id: number, valor: number) {
@@ -55,42 +66,33 @@ export default function TabelasPage() {
     setEdits(e => ({ ...e, [id]: { ...getCurrent(id), margem } }));
   }
 
-  const modificados = produtos
-    .filter(p => {
-      if (!edits[p.id]) return false;
-      const e = edits[p.id];
-      return e.valor !== p.valor || e.margem !== (p.margem ?? 0);
-    })
-    .map(p => p.id);
+  const modificados = Object.keys(edits).map(Number).filter(prodId => {
+    const saved = getSaved(prodId);
+    const edit  = edits[prodId];
+    return edit.valor !== saved.valor || edit.margem !== saved.margem;
+  });
+
+  function mudarTabela(tab: TabelaPreco) {
+    if (modificados.length > 0 && !confirm("Há alterações não salvas. Deseja descartá-las?")) return;
+    setTabelaAtiva(tab);
+    setEdits({});
+  }
 
   async function salvar() {
-    if (modificados.length === 0) return;
+    if (!tabelaAtiva || modificados.length === 0) return;
     setSalvando(true);
 
-    // 1. Salva sempre o valor (coluna garantida)
-    await Promise.all(
-      modificados.map(id =>
-        supabase.from("produtos").update({ valor: edits[id].valor } as never).eq("id", id)
+    const results = await Promise.all(
+      modificados.map(prodId =>
+        supabase.from("tabela_preco_itens").upsert(
+          { tabela_id: tabelaAtiva.id, produto_id: prodId, valor: edits[prodId].valor, margem: edits[prodId].margem },
+          { onConflict: "tabela_id,produto_id" } as never
+        )
       )
     );
 
-    // 2. Tenta salvar margem; se a coluna não existir ainda, apenas sinaliza
-    const { error: erroMargem } = await supabase
-      .from("produtos")
-      .update({ margem: edits[modificados[0]].margem } as never)
-      .eq("id", modificados[0]);
-
-    if (erroMargem) {
-      setMargemPendente(true);
-    } else {
-      setMargemPendente(false);
-      // coluna existe — salva margem de todos os modificados
-      await Promise.all(
-        modificados.slice(1).map(id =>
-          supabase.from("produtos").update({ margem: edits[id].margem } as never).eq("id", id)
-        )
-      );
-    }
+    const temErro = results.some((r: any) => r.error);
+    if (temErro) setPrecisaMigracao(true);
 
     setSalvando(false);
     load();
@@ -99,11 +101,9 @@ export default function TabelasPage() {
   const tipos = ["Todos", ...Array.from(new Set(produtos.map(p => p.tipo).filter(Boolean)))];
 
   const prodFiltrados = produtos.filter(p => {
-    const matchFiltro = !filtro ||
-      p.nome.toLowerCase().includes(filtro.toLowerCase()) ||
-      p.cod.toLowerCase().includes(filtro.toLowerCase());
-    const matchTipo = filtroTipo === "Todos" || p.tipo === filtroTipo;
-    return matchFiltro && matchTipo;
+    const ok1 = !filtro || p.nome.toLowerCase().includes(filtro.toLowerCase()) || p.cod.toLowerCase().includes(filtro.toLowerCase());
+    const ok2  = filtroTipo === "Todos" || p.tipo === filtroTipo;
+    return ok1 && ok2 && p.ativo;
   });
 
   return (
@@ -116,27 +116,40 @@ export default function TabelasPage() {
               {modificados.length} produto(s) alterado(s)
             </span>
           )}
-          <button
-            className="btn bp sm"
-            onClick={salvar}
-            disabled={salvando || modificados.length === 0}
-          >
+          <button className="btn bp sm" onClick={salvar} disabled={salvando || modificados.length === 0 || precisaMigracao}>
             {salvando ? "Salvando..." : "Salvar Alterações"}
           </button>
         </div>
       </div>
 
       <div className="con">
-        <div className="al al-i" style={{ marginBottom: "14px", fontSize: "12px" }}>
-          Defina o preço e a margem de negociação de cada produto. A margem é o % máximo de desconto ou acréscimo permitido ao criar orçamentos e pedidos.
-        </div>
-
-        {margemPendente && (
+        {precisaMigracao && (
           <div className="al al-w" style={{ marginBottom: "14px", fontSize: "12px" }}>
-            <strong>⚠ Coluna de margem ainda não existe no banco.</strong> Os preços são salvos normalmente, mas as margens só funcionarão após executar no <strong>Supabase SQL Editor</strong>:
-            <code style={{ display: "block", marginTop: "6px", padding: "8px 12px", background: "rgba(0,0,0,.3)", borderRadius: "6px", fontFamily: "'DM Mono',monospace", fontSize: "12px", userSelect: "all" }}>
-              ALTER TABLE produtos ADD COLUMN IF NOT EXISTS margem numeric(5,2) DEFAULT 0;
+            <strong>⚠ Execute este SQL no Supabase SQL Editor para ativar preços por tabela:</strong>
+            <code style={{ display: "block", marginTop: "8px", padding: "10px 14px", background: "rgba(0,0,0,.3)", borderRadius: "6px", fontFamily: "'DM Mono',monospace", fontSize: "12px", userSelect: "all", lineHeight: 1.7 }}>
+              {`CREATE TABLE IF NOT EXISTS tabela_preco_itens (\n  id serial PRIMARY KEY,\n  tabela_id integer NOT NULL REFERENCES tabelas_preco(id) ON DELETE CASCADE,\n  produto_id integer NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,\n  valor numeric(10,2) NOT NULL DEFAULT 0,\n  margem numeric(5,2) NOT NULL DEFAULT 0,\n  UNIQUE(tabela_id, produto_id)\n);\n\nALTER TABLE produtos ADD COLUMN IF NOT EXISTS margem numeric(5,2) DEFAULT 0;`}
             </code>
+          </div>
+        )}
+
+        {/* Tabs por tabela */}
+        {tabelas.length > 0 && (
+          <div style={{ display: "flex", gap: "6px", marginBottom: "16px", flexWrap: "wrap" }}>
+            {tabelas.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => mudarTabela(tab)}
+                style={{
+                  padding: "8px 22px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
+                  cursor: "pointer", border: "1px solid var(--b2)", transition: "all 0.15s",
+                  background: tabelaAtiva?.id === tab.id ? "var(--acc)" : "var(--surf1)",
+                  color:      tabelaAtiva?.id === tab.id ? "#000" : "var(--t2)",
+                }}
+              >
+                {tab.nome}
+                {!tab.ativo && <span style={{ marginLeft: "6px", fontSize: "10px", opacity: 0.6 }}>(inativa)</span>}
+              </button>
+            ))}
           </div>
         )}
 
@@ -144,29 +157,16 @@ export default function TabelasPage() {
         <div style={{ display: "flex", gap: "10px", marginBottom: "14px", flexWrap: "wrap" }}>
           <div className="tb-search" style={{ flex: 1, minWidth: "200px" }}>
             <span className="tb-search-ic">⌕</span>
-            <input
-              placeholder="Buscar produto ou código..."
-              value={filtro}
-              onChange={e => setFiltro(e.target.value)}
-            />
+            <input placeholder="Buscar produto ou código..." value={filtro} onChange={e => setFiltro(e.target.value)} />
           </div>
           <div style={{ display: "flex", gap: "4px" }}>
             {tipos.map(t => (
-              <button
-                key={t}
-                onClick={() => setFiltroTipo(t)}
-                style={{
-                  padding: "5px 12px",
-                  borderRadius: "6px",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  border: "1px solid var(--b2)",
-                  background: filtroTipo === t ? "var(--acc)" : "transparent",
-                  color: filtroTipo === t ? "#000" : "var(--t3)",
-                  transition: "all 0.15s",
-                }}
-              >
+              <button key={t} onClick={() => setFiltroTipo(t)} style={{
+                padding: "5px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: 600,
+                cursor: "pointer", border: "1px solid var(--b2)", transition: "all 0.15s",
+                background: filtroTipo === t ? "var(--acc)" : "transparent",
+                color:      filtroTipo === t ? "#000" : "var(--t3)",
+              }}>
                 {t}
               </button>
             ))}
@@ -175,12 +175,14 @@ export default function TabelasPage() {
 
         {loading ? (
           <div className="loading">Carregando...</div>
+        ) : !tabelaAtiva ? (
+          <div className="al al-w">Nenhuma tabela cadastrada.</div>
         ) : (
           <div className="card">
             <div className="ct">
-              Preços por Produto
+              {tabelaAtiva.nome}
               <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", fontWeight: 400 }}>
-                {prodFiltrados.length} produto(s)
+                {prodFiltrados.length} produto(s) · preços específicos desta tabela
               </span>
             </div>
 
@@ -192,55 +194,42 @@ export default function TabelasPage() {
                     <th>Produto</th>
                     <th style={{ width: "100px" }}>Tipo</th>
                     <th style={{ width: "80px" }}>Espessura</th>
-                    <th style={{ width: "140px" }}>Preço (R$/m²)</th>
-                    <th style={{ width: "160px" }}>Margem negociação</th>
-                    <th style={{ width: "70px" }}>Status</th>
+                    <th style={{ width: "150px" }}>Preço (R$/m²)</th>
+                    <th style={{ width: "190px" }}>Margem negociação</th>
                   </tr>
                 </thead>
                 <tbody>
                   {prodFiltrados.length === 0 && (
-                    <tr><td colSpan={7} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>Nenhum produto encontrado</td></tr>
+                    <tr><td colSpan={6} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>Nenhum produto encontrado</td></tr>
                   )}
                   {prodFiltrados.map(p => {
-                    const edit = getCurrent(p.id);
-                    const alterado = modificados.includes(p.id);
+                    const edit     = getCurrent(p.id);
+                    const temCustom = tabelaItens.some(i => i.tabela_id === tabelaAtiva.id && i.produto_id === p.id);
+                    const alterado  = modificados.includes(p.id);
                     const min = edit.margem > 0 ? edit.valor * (1 - edit.margem / 100) : null;
                     const max = edit.margem > 0 ? edit.valor * (1 + edit.margem / 100) : null;
 
                     return (
-                      <tr
-                        key={p.id}
-                        style={{
-                          opacity: p.ativo ? 1 : 0.5,
-                          background: alterado ? "rgba(16,185,129,.04)" : undefined,
-                        }}
-                      >
-                        <td>
-                          <span className="mono" style={{ fontSize: "11px", color: "var(--acc)" }}>{p.cod}</span>
-                        </td>
+                      <tr key={p.id} style={{ background: alterado ? "rgba(16,185,129,.04)" : undefined }}>
+                        <td><span className="mono" style={{ fontSize: "11px", color: "var(--acc)" }}>{p.cod}</span></td>
                         <td>
                           <strong>{p.nome}</strong>
                           {p.cor && <span style={{ fontSize: "11px", color: "var(--t3)", marginLeft: "6px" }}>{p.cor}</span>}
-                          {alterado && <span style={{ marginLeft: "6px", fontSize: "10px", color: "var(--ok)", fontFamily: "'DM Mono',monospace" }}>● editado</span>}
+                          {!temCustom && !alterado && (
+                            <span style={{ marginLeft: "8px", fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>padrão</span>
+                          )}
+                          {alterado && <span style={{ marginLeft: "8px", fontSize: "10px", color: "var(--ok)", fontFamily: "'DM Mono',monospace" }}>● editado</span>}
                         </td>
-                        <td>
-                          <span className="chip">{p.tipo || "—"}</span>
-                        </td>
+                        <td><span className="chip">{p.tipo || "—"}</span></td>
                         <td className="mono" style={{ fontSize: "12px" }}>{p.espessura || "—"}</td>
                         <td>
-                          <CurrencyInput
-                            value={edit.valor}
-                            onChange={v => setValor(p.id, v)}
-                          />
+                          <CurrencyInput value={edit.valor} onChange={v => setValor(p.id, v)} />
                         </td>
                         <td>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <input
                               className="fc"
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.5"
+                              type="number" min="0" max="100" step="0.5"
                               value={edit.margem || ""}
                               onChange={e => setMargem(p.id, parseFloat(e.target.value) || 0)}
                               placeholder="0"
@@ -254,11 +243,6 @@ export default function TabelasPage() {
                             )}
                           </div>
                         </td>
-                        <td>
-                          <span className={`chip ${p.ativo ? "cg" : "cr"}`}>
-                            {p.ativo ? "Ativo" : "Inativo"}
-                          </span>
-                        </td>
                       </tr>
                     );
                   })}
@@ -268,20 +252,12 @@ export default function TabelasPage() {
           </div>
         )}
 
-        {/* Seção de mínimos por tabela */}
         {tabelas.length > 0 && (
           <div className="card" style={{ marginTop: "16px" }}>
             <div className="ct">Pedido Mínimo por Tabela</div>
             <div className="tw" style={{ border: "none", borderRadius: 0 }}>
               <table>
-                <thead>
-                  <tr>
-                    <th>Tabela</th>
-                    <th>Tipo</th>
-                    <th>Mínimo</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
+                <thead><tr><th>Tabela</th><th>Tipo</th><th>Mínimo</th><th>Status</th></tr></thead>
                 <tbody>
                   {tabelas.map(t => (
                     <tr key={t.id}>
