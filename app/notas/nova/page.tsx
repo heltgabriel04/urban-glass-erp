@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/client";
 import { getPedidos } from "@/services/pedidos.service";
 import { salvarNotaCompleta, emitirNFeCompleta } from "@/services/notas.service";
 import EspelhoModal from "@/components/notas/EspelhoModal";
+import DateInput from "@/components/ui/DateInput";
 import { formatBRL } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import type { Pedido, Cliente } from "@/types";
@@ -380,7 +381,7 @@ function NovaNFeInner() {
           <div className="card" style={{ padding:"24px", display:"flex", flexDirection:"column", gap:"18px" }}>
             <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em" }}>DETALHES DA NOTA FISCAL</div>
             <div className="fr">
-              <div className="fg"><label className="fl">Data de Saída</label><input className="fc" type="date" value={form.dt_saida} onChange={e => setF("dt_saida", e.target.value)} /></div>
+              <div className="fg"><label className="fl">Data de Saída</label><DateInput value={form.dt_saida} onChange={v => setF("dt_saida", v)} /></div>
               <div className="fg"><label className="fl">Hora de Saída</label><input className="fc" type="time" value={form.hora_saida} onChange={e => setF("hora_saida", e.target.value)} /></div>
             </div>
             <div className="fg">

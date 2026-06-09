@@ -4,10 +4,11 @@ interface DateInputProps {
   value: string;
   onChange: (v: string) => void;
   className?: string;
+  style?: React.CSSProperties;
   tabIndex?: number;
 }
 
-export default function DateInput({ value, onChange, className = "fc", tabIndex }: DateInputProps) {
+export default function DateInput({ value, onChange, className = "fc", style, tabIndex }: DateInputProps) {
   const toDisplay = (v: string) => {
     if (!v || !v.includes("-")) return v;
     const parts = v.split("-");
@@ -38,6 +39,7 @@ export default function DateInput({ value, onChange, className = "fc", tabIndex 
   return (
     <input
       className={className}
+      style={style}
       type="text"
       placeholder="dd/mm/aaaa"
       maxLength={10}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
+import DateInput from "@/components/ui/DateInput";
 
 interface LogAtividade {
   id: string;
@@ -145,7 +146,7 @@ export default function LogsPage() {
           </div>
           <div className="fg" style={{ margin: 0 }}>
             <label className="fl">Data</label>
-            <input type="date" className="fc" value={filtroData} onChange={e => setFiltroData(e.target.value)} />
+            <DateInput className="fc" value={filtroData} onChange={v => setFiltroData(v)} />
           </div>
           {(filtroUsuario || filtroTabela || filtroData || busca) && (
             <button className="btn bg sm" onClick={() => { setFiltroUsuario(""); setFiltroTabela(""); setFiltroData(""); setBusca(""); }}>

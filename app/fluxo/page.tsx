@@ -5,6 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { getFaturamentoMensal, getLancamentos, createLancamento } from "@/services/financeiro.service";
 import { formatBRL, formatPercent, formatDate, MESES } from "@/lib/formatters";
 import CurrencyInput from "@/components/ui/CurrencyInput";
+import DateInput from "@/components/ui/DateInput";
 import type { FaturamentoMensal, Lancamento, LancamentoInsert } from "@/types";
 
 const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -186,7 +187,7 @@ export default function FluxoPage() {
               </div>
               <div className="fg">
                 <label className="fl">Vencimento</label>
-                <input className="fc" type="date" value={form.vencimento || ""} onChange={e => setForm(f => ({ ...f, vencimento: e.target.value || null }))} />
+                <DateInput value={form.vencimento ?? ""} onChange={v => setForm(f => ({ ...f, vencimento: v || null }))} />
               </div>
             </div>
             <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end" }}>

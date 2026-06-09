@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatDate, formatM2 } from "@/lib/formatters";
+import DateInput from "@/components/ui/DateInput";
 import type { Retalho, StatusRetalho } from "@/types";
 
 const CHIP: Record<StatusRetalho, string> = {
@@ -245,11 +246,11 @@ export default function RetalhoPage() {
 
               <div>
                 <label style={labelStyle}>Data</label>
-                <input
+                <DateInput
                   style={inputStyle}
-                  type="date"
+                  className=""
                   value={form.dt_gerado}
-                  onChange={e => setForm(f => ({ ...f, dt_gerado: e.target.value }))}
+                  onChange={v => setForm(f => ({ ...f, dt_gerado: v }))}
                 />
               </div>
             </div>
