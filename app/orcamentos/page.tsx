@@ -213,11 +213,17 @@ export default function OrcamentosPage() {
                           title="Gerar PDF"
                           onClick={e => {
                             e.stopPropagation();
+                            const nome = o.clientes?.nome ?? "Cliente";
+                            const data = o.dt_orcamento
+                              ? new Date(o.dt_orcamento + "T00:00:00").toLocaleDateString("pt-BR").replace(/\//g, "-")
+                              : "";
+                            const tituloOriginal = document.title;
+                            document.title = `${nome} - ${data}`;
                             const iframe = document.createElement("iframe");
                             iframe.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:9999;background:white;";
                             iframe.src = `/orcamentos/${o.id}?print=1`;
                             document.body.appendChild(iframe);
-                            setTimeout(() => { document.body.removeChild(iframe); }, 4000);
+                            setTimeout(() => { document.body.removeChild(iframe); document.title = tituloOriginal; }, 5000);
                           }}
                           style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", height:"28px", padding:"0 8px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"10px", fontWeight:700, fontFamily:"'DM Mono', monospace", letterSpacing:"0.5px", cursor:"pointer", transition:"all 0.15s" }}
                           onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(99,179,237,.15)"; b.style.borderColor = "var(--acc2)"; b.style.color = "var(--acc2)"; }}

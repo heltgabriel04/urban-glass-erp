@@ -254,11 +254,17 @@ export default function PedidosPage() {
                               title="Imprimir Romaneio de Saída"
                               onClick={e => {
                                 e.stopPropagation();
+                                const nome = (p as any).clientes?.nome ?? "Cliente";
+                                const data = p.dt_pedido
+                                  ? new Date(p.dt_pedido + "T00:00:00").toLocaleDateString("pt-BR").replace(/\//g, "-")
+                                  : "";
+                                const tituloOriginal = document.title;
+                                document.title = `${nome} - ${data}`;
                                 const i = document.createElement("iframe");
                                 i.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:9999;background:white;";
                                 i.src = "/pedidos/" + p.id + "?print=1";
                                 document.body.appendChild(i);
-                                setTimeout(() => { document.body.removeChild(i); }, 4000);
+                                setTimeout(() => { document.body.removeChild(i); document.title = tituloOriginal; }, 5000);
                               }}
                               style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", height:"28px", padding:"0 8px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"10px", fontWeight:700, fontFamily:"DM Mono, monospace", letterSpacing:"0.5px", cursor:"pointer", transition:"all 0.15s" }}
                               onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(16,185,129,.15)"; b.style.borderColor = "var(--ok)"; b.style.color = "var(--ok)"; }}
