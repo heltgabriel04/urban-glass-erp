@@ -5,6 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import { baixarChapasEstoque } from "@/services/estoque.service";
+import CurrencyInput from "@/components/ui/CurrencyInput";
 import type { EstoqueItem, Produto } from "@/types";
 
 const MEDIDAS_PADRAO = [
@@ -20,10 +21,10 @@ interface FormState {
   chapas: string;
   larg_chapa: string;
   alt_chapa: string;
-  custo_m2: string;
+  custo_m2: number;
 }
 
-const FORM_VAZIO: FormState = { produto_id: "", chapas: "", larg_chapa: "", alt_chapa: "", custo_m2: "" };
+const FORM_VAZIO: FormState = { produto_id: "", chapas: "", larg_chapa: "", alt_chapa: "", custo_m2: 0 };
 
 export default function EstoquePage() {
   const [estoque, setEstoque]   = useState<EstoqueItem[]>([]);
@@ -129,7 +130,7 @@ export default function EstoquePage() {
   const largMm     = parseFloat(form.larg_chapa || "0");
   const altMm      = parseFloat(form.alt_chapa  || "0");
   const m2PorChapa = largMm > 0 && altMm > 0 ? parseFloat(((largMm / 1000) * (altMm / 1000)).toFixed(4)) : 0;
-  const custoM2    = parseFloat(form.custo_m2 || "0");
+  const custoM2    = form.custo_m2;
   const m2Preview  = chapasNum > 0 && m2PorChapa > 0 ? parseFloat((chapasNum * m2PorChapa).toFixed(4)) : 0;
 
   function handleMedidaPadrao(label: string) {
@@ -141,7 +142,7 @@ export default function EstoquePage() {
 
   function handleProduto(pid: string) {
     const item = estoque.find(es => String(es.produto_id) === pid);
-    setForm(f => ({ ...f, produto_id: pid, chapas: "", custo_m2: item ? String(item.custo_m2) : "" }));
+    setForm(f => ({ ...f, produto_id: pid, chapas: "", custo_m2: item ? Number(item.custo_m2) : 0 }));
   }
 
   function resetForm() {
@@ -164,7 +165,7 @@ export default function EstoquePage() {
       chapas:     String(item.chapas_saldo),
       larg_chapa: "",
       alt_chapa:  "",
-      custo_m2:   String(item.custo_m2),
+      custo_m2:   Number(item.custo_m2),
     });
     setMedidaPadrao("");
     setShowForm(true);
@@ -351,8 +352,8 @@ export default function EstoquePage() {
               </div>
               <div>
                 <label style={lbl}>Custo por m² (R$)</label>
-                <input style={inp} type="number" step="0.01" placeholder="Ex: 85.00"
-                  value={form.custo_m2} onChange={e => setForm(f => ({ ...f, custo_m2: e.target.value }))} />
+                <CurrencyInput style={inp} className="" value={form.custo_m2}
+                  onChange={v => setForm(f => ({ ...f, custo_m2: v }))} />
               </div>
               <div>
                 <label style={lbl}>m² Total</label>

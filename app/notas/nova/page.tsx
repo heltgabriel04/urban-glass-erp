@@ -282,7 +282,7 @@ function NovaNFeInner() {
                       <div className="fg"><label className="fl">Qtd (m²)</label><input className="fc" type="number" value={item.quantidade} onChange={e => atualizarItem(i,"quantidade",Number(e.target.value))} /></div>
                       <div className="fg"><label className="fl">Vl. Unit.</label><CurrencyInput value={item.valor_unitario} onChange={v => atualizarItem(i,"valor_unitario",v)} /></div>
                       <div className="fg"><label className="fl">Vl. Bruto</label><CurrencyInput value={item.valor_bruto} onChange={v => atualizarItem(i,"valor_bruto",v)} /></div>
-                      <div className="fg"><label className="fl">IPI %</label><input className="fc" type="number" value={item.ipi_pct} onChange={e => atualizarItem(i,"ipi_pct",Number(e.target.value))} /></div>
+                      <div className="fg"><label className="fl">IPI %</label><input className="fc" type="number" min="0" max="100" step="0.5" value={item.ipi_pct} onChange={e => atualizarItem(i,"ipi_pct",Number(e.target.value))} /></div>
                       <div className="fg"><label className="fl">ICMS %</label><input className="fc" value={item.icms_pct} readOnly style={{ opacity:0.6 }} /></div>
                       <div className="fg"><label className="fl">Vl. ICMS</label><input className="fc" value={formatBRL(item.valor_icms)} readOnly style={{ opacity:0.6 }} /></div>
                       <div className="fg"><label className="fl">Vl. PIS</label><input className="fc" value={formatBRL(item.valor_pis)} readOnly style={{ opacity:0.6 }} /></div>

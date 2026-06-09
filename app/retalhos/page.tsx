@@ -256,9 +256,9 @@ export default function RetalhoPage() {
             </div>
 
             <div style={{ display:"flex", gap:"8px", marginTop:"14px", justifyContent:"flex-end" }}>
-              {form.largura && form.altura && (
+              {Number(form.largura) > 0 && Number(form.altura) > 0 && (
                 <span style={{ fontSize:"12px", color:"var(--t3)", alignSelf:"center", fontFamily:"'DM Mono', monospace" }}>
-                  m² calculado: {((parseInt(form.largura||"0") * parseInt(form.altura||"0")) / 1_000_000).toFixed(4)}
+                  m² calculado: {((Number(form.largura) * Number(form.altura)) / 1_000_000).toFixed(4)}
                 </span>
               )}
               <button className="btn bg sm" onClick={() => { setShowForm(false); setForm(FORM_VAZIO); }}>Cancelar</button>

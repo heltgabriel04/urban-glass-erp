@@ -52,6 +52,7 @@ export default function NovoOrcamentoPage() {
   const [obs, setObs]                 = useState("");
   const [desconto, setDesconto]       = useState(0);
   const [itens, setItens]             = useState<ItemForm[]>([{ ...ITEM_VAZIO }]);
+  const [loading, setLoading]         = useState(true);
   const [salvando, setSalvando]       = useState(false);
   const [totalPedidoInput, setTotalPedidoInput] = useState(0);
 
@@ -82,6 +83,7 @@ export default function NovoOrcamentoPage() {
     setTabelas(tabs || []);
     setProximoId(pid);
     setItens([{ ...ITEM_VAZIO }]);
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -236,6 +238,8 @@ export default function NovoOrcamentoPage() {
   }
 
   const tab = getTabela();
+
+  if (loading) return <AppLayout><div style={{ padding: "40px", textAlign: "center", color: "var(--t3)", fontSize: "13px" }}>Carregando...</div></AppLayout>;
 
   return (
     <AppLayout>

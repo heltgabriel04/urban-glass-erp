@@ -105,6 +105,7 @@ export default function NovoPedidoPage() {
   const [parcelas, setParcelas]     = useState(1);
   const [obs, setObs]               = useState("");
   const [itens, setItens]           = useState<ItemForm[]>([{ ...ITEM_VAZIO }]);
+  const [loading, setLoading]       = useState(true);
   const [salvando, setSalvando]     = useState(false);
   const [totalPedidoInput, setTotalPedidoInput] = useState(0);
   const [modoPedido, setModoPedido] = useState<ModoPedido>("m2");
@@ -124,6 +125,7 @@ export default function NovoPedidoPage() {
     setTabelas(tabs || []);
     setProximoId(pid);
     setItens([{ ...ITEM_VAZIO }]);
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -323,6 +325,8 @@ export default function NovoPedidoPage() {
   const toggleInativo: React.CSSProperties = { ...toggleBase, background: "transparent", color: "var(--t3)" };
   const colsM2 = "2fr 70px 70px 50px 90px 90px 90px 90px 36px";
   const colsMl = "2fr 90px 90px 50px 90px 90px 90px 36px";
+
+  if (loading) return <AppLayout><div style={{ padding: "40px", textAlign: "center", color: "var(--t3)", fontSize: "13px" }}>Carregando...</div></AppLayout>;
 
   return (
     <AppLayout>
