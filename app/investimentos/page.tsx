@@ -352,12 +352,12 @@ export default function InvestimentosPage() {
           </select>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <span style={{ fontSize: "11px", color: "var(--t3)", whiteSpace: "nowrap" }}>De</span>
-            <input type="month" className="fc" style={{ minWidth: "140px", margin: 0 }}
+            <input type="month" lang="pt-BR" className="fc" style={{ minWidth: "140px", margin: 0 }}
               value={filtroInicio} onChange={e => setFiltroInicio(e.target.value)} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <span style={{ fontSize: "11px", color: "var(--t3)", whiteSpace: "nowrap" }}>Até</span>
-            <input type="month" className="fc" style={{ minWidth: "140px", margin: 0 }}
+            <input type="month" lang="pt-BR" className="fc" style={{ minWidth: "140px", margin: 0 }}
               value={filtroFim} onChange={e => setFiltroFim(e.target.value)} />
           </div>
           {temFiltro && (
