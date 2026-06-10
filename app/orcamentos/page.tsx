@@ -272,35 +272,38 @@ export default function OrcamentosPage() {
 
       {/* Modal de Rejeição */}
       {modalRejeicao && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.55)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:999 }}
-          onClick={() => setModalRejeicao(null)}>
-          <div style={{ background:"var(--surf1)", border:"1px solid var(--b2)", borderRadius:"12px", padding:"28px 32px", width:"420px", maxWidth:"92vw", display:"flex", flexDirection:"column", gap:"16px" }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize:"15px", fontWeight:700, color:"var(--t1)" }}>Rejeitar orçamento <span style={{ color:"var(--acc)" }}>{modalRejeicao}</span></div>
-
-            <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
-              <label style={{ fontSize:"12px", color:"var(--t3)", fontWeight:600 }}>Motivo</label>
-              <select className="fc" value={motivoRejeicao} onChange={e => setMotivoRejeicao(e.target.value)} style={{ margin:0 }}>
-                <option value="">Selecione o motivo...</option>
-                {MOTIVOS.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
+        <div className="mov open" onClick={e => e.target === e.currentTarget && setModalRejeicao(null)}>
+          <div className="mod" style={{ width:"420px" }}>
+            <div className="mhd">
+              <div className="mtit">Rejeitar orçamento <span style={{ color:"var(--acc)" }}>{modalRejeicao}</span></div>
+              <button className="mcl" onClick={() => setModalRejeicao(null)}>✕</button>
             </div>
 
-            <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
-              <label style={{ fontSize:"12px", color:"var(--t3)", fontWeight:600 }}>Observações <span style={{ fontWeight:400 }}>(opcional)</span></label>
-              <textarea
-                className="fc"
-                value={obsRejeicao}
-                onChange={e => setObsRejeicao(e.target.value)}
-                placeholder="Detalhe o motivo da rejeição..."
-                rows={3}
-                style={{ margin:0, resize:"vertical" }}
-              />
+            <div style={{ padding:"20px", display:"flex", flexDirection:"column", gap:"16px" }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
+                <label style={{ fontSize:"12px", color:"var(--t3)", fontWeight:600 }}>Motivo</label>
+                <select className="fc" value={motivoRejeicao} onChange={e => setMotivoRejeicao(e.target.value)} style={{ margin:0 }}>
+                  <option value="">Selecione o motivo...</option>
+                  {MOTIVOS.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+
+              <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
+                <label style={{ fontSize:"12px", color:"var(--t3)", fontWeight:600 }}>Observações <span style={{ fontWeight:400 }}>(opcional)</span></label>
+                <textarea
+                  className="fc"
+                  value={obsRejeicao}
+                  onChange={e => setObsRejeicao(e.target.value)}
+                  placeholder="Detalhe o motivo da rejeição..."
+                  rows={3}
+                  style={{ margin:0, resize:"vertical" }}
+                />
+              </div>
             </div>
 
-            <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end", marginTop:"4px" }}>
-              <button className="btn bg sm" onClick={() => setModalRejeicao(null)}>Cancelar</button>
-              <button className="btn bw sm" onClick={confirmarRejeicao}>✕ Confirmar Rejeição</button>
+            <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end", padding:"16px 20px", borderTop:"1px solid var(--b1)" }}>
+              <button className="btn bg" onClick={() => setModalRejeicao(null)}>Cancelar</button>
+              <button className="btn bw" onClick={confirmarRejeicao}>✕ Confirmar Rejeição</button>
             </div>
           </div>
         </div>
