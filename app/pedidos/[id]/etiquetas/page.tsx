@@ -390,8 +390,8 @@ export default function EtiquetasPage() {
           .et-cliente { font-size: 8.5pt; color: #000 !important; font-weight: 900 !important; }
           .et-pedido  { font-size: 10pt; color: #000 !important; font-weight: 900 !important; }
           .et-medidas { font-size: 9pt; color: #000 !important; font-weight: 900 !important; }
-          .et-rodape-info { font-size: 7pt; color: #000 !important; font-weight: 700 !important; border-top: 0.3pt solid #ccc; padding-top: 2px; }
-          .et-lote    { font-size: 7pt; color: #000 !important; font-weight: 700 !important; }
+          .et-rodape-info { font-size: 7pt; color: #000 !important; font-weight: 700 !important; border-top: 0.3pt solid #ccc; padding-top: 2px; margin-top: 2px !important; }
+          .et-lote    { font-size: 7pt; color: #000 !important; font-weight: 700 !important; margin-top: 1px !important; }
           .et-qrlbl   { font-size: 7pt; color: #000 !important; font-weight: 700 !important; }
           .et-dim     { margin-top: 0; }
         }

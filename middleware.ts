@@ -22,6 +22,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Página de produção (QR code das etiquetas) é pública — tem bloqueio próprio por status
+  if (/^\/pedidos\/[^/]+\/producao$/.test(pathname)) {
+    return NextResponse.next();
+  }
+
   const response = NextResponse.next();
 
   const supabase = createServerClient(
