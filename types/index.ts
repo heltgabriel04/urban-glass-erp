@@ -5,11 +5,12 @@
 export type StatusPedido =
   | 'Aguardando otimização'
   | 'Em Produção – Corte'
+  | 'Qualidade (Corte)'
   | 'Em Produção – Lapidação'
+  | 'Qualidade (Lapidação)'
   | 'Separação'
-  | 'Saiu para entrega'
-  | 'Entregue'
   | 'Finalizado'
+  | 'Entregue'
   | 'Cancelado';
 
 export type StatusOrcamento  = 'Pendente' | 'Aprovado' | 'Recusado';

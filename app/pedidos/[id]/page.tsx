@@ -17,7 +17,9 @@ import { supabase } from "@/lib/supabase/client";
 const CHIP: Record<string, string> = {
   "Aguardando otimização":   "chip cy",
   "Em Produção – Corte":     "chip cp",
+  "Qualidade (Corte)":       "chip cg",
   "Em Produção – Lapidação": "chip co",
+  "Qualidade (Lapidação)":   "chip cg",
   "Separação":               "chip cb",
   "Finalizado":              "chip cg",
   "Entregue":                "chip cg",
@@ -27,7 +29,9 @@ const CHIP: Record<string, string> = {
 const FLUXO = [
   "Aguardando otimização",
   "Em Produção – Corte",
+  "Qualidade (Corte)",
   "Em Produção – Lapidação",
+  "Qualidade (Lapidação)",
   "Separação",
   "Finalizado",
   "Entregue",

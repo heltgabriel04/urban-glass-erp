@@ -12,7 +12,9 @@ const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out"
 const ETAPAS = [
   { status: "Aguardando otimização",   label: "Ag. Otimização", color: "var(--warn)" },
   { status: "Em Produção – Corte",     label: "Corte",          color: "var(--acc4)" },
+  { status: "Qualidade (Corte)",       label: "Qual. Corte",    color: "#22c55e"     },
   { status: "Em Produção – Lapidação", label: "Lapidação",      color: "var(--acc3)" },
+  { status: "Qualidade (Lapidação)",   label: "Qual. Lapid.",   color: "#06b6d4"     },
   { status: "Separação",               label: "Separação",      color: "var(--acc2)" },
   { status: "Finalizado",              label: "Finalizado",     color: "var(--ok)"   },
   { status: "Entregue",                label: "Entregue",       color: "var(--acc)"  },

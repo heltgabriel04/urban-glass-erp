@@ -12,9 +12,10 @@ import type { Pedido } from "@/types";
 const CHIP: Record<string, string> = {
   "Aguardando otimização":    "chip cy",
   "Em Produção – Corte":      "chip cp",
+  "Qualidade (Corte)":        "chip cg",
   "Em Produção – Lapidação":  "chip co",
+  "Qualidade (Lapidação)":    "chip cg",
   "Separação":                "chip cb",
-  "Saiu para entrega":        "chip cb",
   "Entregue":                 "chip cg",
   "Finalizado":               "chip cg",
   "Cancelado":                "chip cr",

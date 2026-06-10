@@ -11,7 +11,9 @@ import { useToast } from "@/components/ui/toast";
 const COLUNAS: StatusPedido[] = [
   "Aguardando otimização",
   "Em Produção – Corte",
+  "Qualidade (Corte)",
   "Em Produção – Lapidação",
+  "Qualidade (Lapidação)",
   "Separação",
   "Finalizado",
 ];
@@ -19,7 +21,9 @@ const COLUNAS: StatusPedido[] = [
 const COR_COL: Record<string, string> = {
   "Aguardando otimização":   "var(--warn)",
   "Em Produção – Corte":     "var(--acc4)",
+  "Qualidade (Corte)":       "#22c55e",
   "Em Produção – Lapidação": "var(--acc3)",
+  "Qualidade (Lapidação)":   "#06b6d4",
   "Separação":               "var(--acc)",
   "Finalizado":              "var(--ok)",
 };

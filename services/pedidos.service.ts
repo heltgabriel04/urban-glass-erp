@@ -81,7 +81,9 @@ export async function recalcularRecebido(pedidoId: string) {
 const FLUXO: StatusPedido[] = [
   'Aguardando otimização',
   'Em Produção – Corte',
+  'Qualidade (Corte)',
   'Em Produção – Lapidação',
+  'Qualidade (Lapidação)',
   'Separação',
   'Finalizado',
   'Entregue',
