@@ -494,7 +494,7 @@ export default function InvestimentosPage() {
                       <td>
                         {inv.categoria ? (
                           <div style={{ display: "flex", flexDirection: "column", gap: "3px", alignItems: "flex-start" }}>
-                            <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "99px", background: GB, color: G, border: `1px solid ${GBR}`, whiteSpace: "nowrap" }}>
+                            <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "99px", background: GB, color: G, border: `1px solid ${GBR}` }}>
                               {inv.categoria}
                             </span>
                             {inv.subcategoria && (
