@@ -7,6 +7,7 @@ import { formatBRL } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import { registrarLog } from "@/services/log.service";
+import * as XLSX from "xlsx";
 
 const BANCOS_DEFAULT    = ["Itaú Maxibuild", "ZRS"];
 const CATS_DEFAULT      = ["Manutenção", "Equipamentos e Material"];
@@ -219,6 +220,87 @@ export default function InvestimentosPage() {
     setTimeout(() => { document.title = orig; }, 2000);
   }
 
+  function handleExcel() {
+    const wb = XLSX.utils.book_new();
+    const rows: (string | number)[][] = [];
+
+    // Cabeçalho do documento
+    rows.push(["Urban Glass Comércio Ltda"]);
+    rows.push(["CNPJ: 65.668.970/0001-05"]);
+    rows.push(["Extrato de Investimentos"]);
+    rows.push([labelPeriodoPDF() + (filtroBanco ? ` · ${filtroBanco}` : "")]);
+    rows.push([`Gerado em ${new Date().toLocaleDateString("pt-BR")}`]);
+    rows.push([]);
+
+    // Resumo geral
+    rows.push(["Total do Período", totalFiltrado]);
+    rows.push(["Nº de Aportes", filtered.length]);
+    rows.push(["Média por Aporte", mediaPDF]);
+    rows.push([]);
+
+    // Resumo por banco (apenas se mais de um)
+    if (bancosNoPDF.length > 1) {
+      rows.push(["RESUMO POR BANCO"]);
+      rows.push(["Banco / Origem", "Aportes", "Total Investido", "% do Total"]);
+      bancosNoPDF.forEach(b => {
+        const its = filtered.filter(i => i.empresa === b);
+        const tot = its.reduce((s, i) => s + Number(i.valor), 0);
+        const pct = totalFiltrado > 0 ? `${(tot / totalFiltrado * 100).toFixed(1)}%` : "0.0%";
+        rows.push([b, its.length, tot, pct]);
+      });
+      rows.push(["Total", filtered.length, totalFiltrado, "100%"]);
+      rows.push([]);
+    }
+
+    // Detalhamento por mês
+    rows.push(["DETALHAMENTO POR PERÍODO"]);
+
+    mesesPDF.forEach(mes => {
+      const itsMes = filtered
+        .filter(i => i.data.startsWith(mes))
+        .sort((a, b) => a.data.localeCompare(b.data));
+      const totalMes = itsMes.reduce((s, i) => s + Number(i.valor), 0);
+
+      rows.push([]);
+      rows.push([labelMes(mes).toUpperCase()]);
+      rows.push(["Data", "Descrição", "Banco", "Valor (R$)", "Categoria", "Observação"]);
+
+      itsMes.forEach(inv => {
+        rows.push([
+          fmtData(inv.data),
+          inv.descricao,
+          inv.empresa,
+          Number(inv.valor),
+          inv.categoria ?? "",
+          inv.observacoes ?? "",
+        ]);
+      });
+
+      rows.push(["", "", `Subtotal ${labelMes(mes)}`, totalMes, "", ""]);
+    });
+
+    rows.push([]);
+    rows.push(["", "", "TOTAL GERAL INVESTIDO", totalFiltrado, "", ""]);
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws["!cols"] = [
+      { wch: 13 }, // Data
+      { wch: 36 }, // Descrição
+      { wch: 22 }, // Banco
+      { wch: 16 }, // Valor
+      { wch: 22 }, // Categoria
+      { wch: 32 }, // Observação
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, "Extrato");
+
+    const bancoSlug = filtroBanco ? `_${filtroBanco.replace(/\s+/g, "_")}` : "";
+    const periodoSlug = filtroInicio ? `_${filtroInicio}` : "";
+    const fimSlug = filtroFim ? `_ate_${filtroFim}` : "";
+    const dataHoje = new Date().toISOString().split("T")[0];
+    XLSX.writeFile(wb, `Investimentos_UrbanGlass${bancoSlug}${periodoSlug}${fimSlug}_${dataHoje}.xlsx`);
+  }
+
   // ─── style tokens ─────────────────────────────────────────────────────────
 
   const G   = "#f59e0b";
@@ -311,7 +393,8 @@ export default function InvestimentosPage() {
       <div className="tb no-print">
         <div className="tb-title">Investimentos</div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button className="btn bg sm" onClick={handlePDF} disabled={!investimentos.length}>⬡ Exportar PDF</button>
+          <button className="btn bg sm" onClick={handlePDF} disabled={!filtered.length}>⬡ PDF</button>
+          <button className="btn bg sm" onClick={handleExcel} disabled={!filtered.length}>↓ Excel</button>
           <button className="btn bg sm" onClick={() => setModalListas(true)}>⚙ Listas</button>
           <button className="btn bp sm" onClick={startAdd}>+ Novo Aporte</button>
         </div>
