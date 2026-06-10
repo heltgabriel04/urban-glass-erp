@@ -248,6 +248,9 @@ export default function InvestimentosPage() {
   const bancos        = [...new Set(investimentos.map(i => i.empresa))].sort();
   const temFiltro     = !!(busca || filtroBanco || filtroCategoria || filtroInicio || filtroFim);
   const categorias    = [...new Set(investimentos.map(i => i.categoria).filter(Boolean) as string[])].sort();
+  const datas         = investimentos.map(i => i.data.substring(0, 7)).sort();
+  const mesMin        = datas[0] ?? "";
+  const mesMax        = datas[datas.length - 1] ?? "";
 
   const mesesPDF    = [...new Set(filtered.map(i => i.data.substring(0, 7)))].sort();
   const bancosNoPDF = [...new Set(filtered.map(i => i.empresa))].sort();
@@ -444,11 +447,13 @@ export default function InvestimentosPage() {
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <span style={{ fontSize: "11px", color: "var(--t3)", whiteSpace: "nowrap" }}>De</span>
             <input type="month" lang="pt-BR" className="fc" style={{ minWidth: "140px", margin: 0 }}
+              min={mesMin} max={mesMax}
               value={filtroInicio} onChange={e => setFiltroInicio(e.target.value)} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <span style={{ fontSize: "11px", color: "var(--t3)", whiteSpace: "nowrap" }}>Até</span>
             <input type="month" lang="pt-BR" className="fc" style={{ minWidth: "140px", margin: 0 }}
+              min={mesMin} max={mesMax}
               value={filtroFim} onChange={e => setFiltroFim(e.target.value)} />
           </div>
           {temFiltro && (
