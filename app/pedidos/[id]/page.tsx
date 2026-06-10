@@ -75,6 +75,7 @@ interface ItemEdit {
   quantidade: number;
   valor_m2: number;
   lapidacao: number;
+  vidro_cliente: boolean;
 }
 
 // Estado de pagamento por parcela no painel financeiro
@@ -189,6 +190,7 @@ export default function PedidoDetalhe() {
       quantidade: item.quantidade,
       valor_m2: Number(item.valor_m2),
       lapidacao: Number(item.lapidacao ?? 0),
+      vidro_cliente: Boolean(item.vidro_cliente),
     })));
     setEditando(true);
   }
@@ -219,7 +221,7 @@ export default function PedidoDetalhe() {
     return m2 * item.valor_m2 + item.lapidacao * m2;
   }
 
-  function updEditItem(idx: number, field: keyof ItemEdit, value: number) {
+  function updEditItem(idx: number, field: keyof ItemEdit, value: number | boolean) {
     setEditItens(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
   }
 
@@ -253,6 +255,7 @@ export default function PedidoDetalhe() {
         largura: item.largura, altura: item.altura,
         quantidade: item.quantidade, valor_m2: item.valor_m2,
         lapidacao: item.lapidacao,
+        vidro_cliente: item.vidro_cliente,
         m2: parseFloat(m2.toFixed(4)),
         subtotal: parseFloat(subtotal.toFixed(2)),
       }).eq("id", item.id);
@@ -734,8 +737,8 @@ async function handleMarcarPago(lancId: number) {
                 {/* Itens */}
                 <div style={{ padding:"12px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)" }}>
                   <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"12px", textTransform:"uppercase" }}>Itens do Pedido</div>
-                  <div style={{ display:"grid", gridTemplateColumns:"2fr 70px 70px 50px 100px 90px", gap:"6px", marginBottom:"6px", paddingBottom:"6px", borderBottom:"1px solid var(--b1)" }}>
-                    {["Produto","Larg.","Alt.","Qtd","R$/m²","Subtotal"].map(h => (
+                  <div style={{ display:"grid", gridTemplateColumns:"2fr 62px 62px 44px 90px 62px 42px 78px", gap:"6px", marginBottom:"6px", paddingBottom:"6px", borderBottom:"1px solid var(--b1)" }}>
+                    {["Produto","Larg.","Alt.","Qtd","R$/m²","Lapid.","V.Cli","Subtotal"].map(h => (
                       <div key={h} style={{ fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px", fontFamily:"'DM Mono',monospace" }}>{h}</div>
                     ))}
                   </div>
@@ -744,7 +747,7 @@ async function handleMarcarPago(lancId: number) {
                     const sub = calcSubtotalItem(item);
                     return (
                       <div key={item.id} style={{ marginBottom:"10px" }}>
-                        <div style={{ display:"grid", gridTemplateColumns:"2fr 70px 70px 50px 100px 90px", gap:"6px", alignItems:"center" }}>
+                        <div style={{ display:"grid", gridTemplateColumns:"2fr 62px 62px 44px 90px 62px 42px 78px", gap:"6px", alignItems:"center" }}>
                           <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", padding:"7px 10px", background:"var(--surf1)", borderRadius:"6px", border:"1px solid var(--b1)" }}>
                             {item.produto_nome}
                           </div>
@@ -752,10 +755,26 @@ async function handleMarcarPago(lancId: number) {
                           <input style={fcSm} type="number" value={item.altura || ""} onChange={e => updEditItem(idx, "altura", parseInt(e.target.value) || 0)} placeholder="0" />
                           <input style={fcSm} type="number" value={item.quantidade} onChange={e => updEditItem(idx, "quantidade", parseInt(e.target.value) || 1)} min={1} />
                           <CurrencyInput value={item.valor_m2} onChange={v => updEditItem(idx, "valor_m2", v)} placeholder="R$/m²" style={{ margin:0, padding:"7px 10px", fontSize:"12px" }} />
+                          <CurrencyInput value={item.lapidacao} onChange={v => updEditItem(idx, "lapidacao", v)} placeholder="0" style={{ margin:0, padding:"7px 10px", fontSize:"12px" }} />
+                          <div style={{ display:"flex", alignItems:"center", justifyContent:"center" }}>
+                            <button
+                              title="Vidro do cliente"
+                              onClick={() => updEditItem(idx, "vidro_cliente", !item.vidro_cliente)}
+                              style={{ width:"32px", height:"32px", borderRadius:"6px", border:"1px solid", cursor:"pointer", fontSize:"15px", display:"flex", alignItems:"center", justifyContent:"center", transition:"all .15s",
+                                background: item.vidro_cliente ? "rgba(245,158,11,.15)" : "var(--surf1)",
+                                borderColor: item.vidro_cliente ? "var(--warn)" : "var(--b1)",
+                              }}
+                            >
+                              📦
+                            </button>
+                          </div>
                           <div style={{ fontSize:"12px", color:"var(--acc)", fontWeight:700, fontFamily:"'DM Mono',monospace", padding:"7px 0" }}>{formatBRL(sub)}</div>
                         </div>
                         {m2 > 0 && (
-                          <div style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", marginTop:"2px", paddingLeft:"2px" }}>{m2.toFixed(4)} m²</div>
+                          <div style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", marginTop:"2px", paddingLeft:"2px" }}>
+                            {m2.toFixed(4)} m²
+                            {item.vidro_cliente && <span style={{ color:"var(--warn)", marginLeft:"8px" }}>📦 Vidro do cliente</span>}
+                          </div>
                         )}
                       </div>
                     );
