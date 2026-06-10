@@ -56,3 +56,16 @@ export function formatMM(mm: number): string {
 export function gerarId(prefixo: string, ultimo: number): string {
   return `${prefixo}-${String(ultimo + 1).padStart(3, '0')}`;
 }
+
+/** Duração legível: 2d 4h, 3h, 45min */
+export function formatDuracao(ms: number): string {
+  if (ms <= 0) return '<1min';
+  const mins  = Math.floor(ms / 60000);
+  const hours = Math.floor(mins / 60);
+  const days  = Math.floor(hours / 24);
+  const h     = hours % 24;
+  if (days > 0 && h > 0) return `${days}d ${h}h`;
+  if (days > 0) return `${days}d`;
+  if (hours > 0) return `${hours}h`;
+  return `${mins}min`;
+}

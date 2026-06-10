@@ -6,7 +6,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido } from "@/services/pedidos.service";
 import { getLancamentosPorPedido, deletarLancamento, createLancamento, updateLancamento } from "@/services/financeiro.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
-import { formatBRL, formatDate } from "@/lib/formatters";
+import { formatBRL, formatDate, formatDuracao } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
@@ -55,6 +55,14 @@ function arredondarParaMultiplo50(v: number): number {
 }
 
 function hoje() { return new Date().toISOString().split("T")[0]; }
+
+function duracaoEtapa(history: { status: string; desde: string }[], step: string): string | null {
+  const idx = history.findIndex(h => h.status === step);
+  if (idx === -1) return null;
+  const from = new Date(history[idx].desde).getTime();
+  const to   = idx < history.length - 1 ? new Date(history[idx + 1].desde).getTime() : Date.now();
+  return formatDuracao(to - from);
+}
 
 function addMeses(dateStr: string, meses: number): string {
   if (!dateStr || dateStr.length < 10) return "";
@@ -479,26 +487,37 @@ async function handleMarcarPago(lancId: number) {
 
           {/* Progresso */}
           <div className="card" style={{ padding:"20px 24px" }}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", width:"100%" }}>
-              {FLUXO.map((step, i) => {
-                const done    = i < statusIdx;
-                const current = i === statusIdx;
-                const last    = i === FLUXO.length - 1;
-                return (
-                  <div key={step} style={{ display:"flex", alignItems:"center", flex: last ? "0 0 auto" : "1 1 0", minWidth:0 }}>
-                    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"6px", width:"80px", flexShrink:0 }}>
-                      <div style={{ width:"26px", height:"26px", borderRadius:"50%", background: done ? "var(--ok)" : current ? "var(--acc)" : "var(--surf3)", border: current ? "2px solid var(--acc)" : "2px solid transparent", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"10px", fontWeight:700, color: done || current ? "#000" : "var(--t3)", flexShrink:0 }}>
-                        {done ? "✓" : i + 1}
+            {(() => {
+              const history = (pedido.status_history ?? []) as { status: string; desde: string }[];
+              return (
+                <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"center", width:"100%" }}>
+                  {FLUXO.map((step, i) => {
+                    const done    = i < statusIdx;
+                    const current = i === statusIdx;
+                    const last    = i === FLUXO.length - 1;
+                    const dur     = duracaoEtapa(history, step);
+                    return (
+                      <div key={step} style={{ display:"flex", alignItems:"flex-start", flex: last ? "0 0 auto" : "1 1 0", minWidth:0 }}>
+                        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"5px", width:"84px", flexShrink:0 }}>
+                          <div style={{ width:"26px", height:"26px", borderRadius:"50%", background: done ? "var(--ok)" : current ? "var(--acc)" : "var(--surf3)", border: current ? "2px solid var(--acc)" : "2px solid transparent", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"10px", fontWeight:700, color: done || current ? "#000" : "var(--t3)", flexShrink:0 }}>
+                            {done ? "✓" : i + 1}
+                          </div>
+                          <div style={{ fontSize:"9px", textAlign:"center", lineHeight:1.3, color: current ? "var(--acc)" : done ? "var(--ok)" : "var(--t3)", fontWeight: current ? 700 : 500, fontFamily:"'DM Mono', monospace", wordBreak:"break-word" }}>
+                            {step}
+                          </div>
+                          {dur && (
+                            <div style={{ fontSize:"8px", color: current ? "var(--acc)" : "var(--t3)", fontFamily:"'DM Mono', monospace", background: current ? "rgba(99,102,241,.1)" : "var(--surf3)", borderRadius:"4px", padding:"1px 5px", whiteSpace:"nowrap" }}>
+                              {current ? "⏱ " : ""}{dur}
+                            </div>
+                          )}
+                        </div>
+                        {!last && <div style={{ flex:"1 1 auto", height:"2px", marginTop:"12px", background: done ? "var(--ok)" : "var(--surf3)", minWidth:"8px" }} />}
                       </div>
-                      <div style={{ fontSize:"9px", textAlign:"center", lineHeight:1.3, color: current ? "var(--acc)" : done ? "var(--ok)" : "var(--t3)", fontWeight: current ? 700 : 500, fontFamily:"'DM Mono', monospace", wordBreak:"break-word" }}>
-                        {step}
-                      </div>
-                    </div>
-                    {!last && <div style={{ flex:"1 1 auto", height:"2px", marginBottom:"18px", background: done ? "var(--ok)" : "var(--surf3)", minWidth:"12px" }} />}
-                  </div>
-                );
-              })}
-            </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Grid info + financeiro */}

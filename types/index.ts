@@ -122,6 +122,11 @@ export interface EstoqueItem {
 }
 
 // ─── PEDIDO ────────────────────────────────────────────────
+export interface StatusHistoryEntry {
+  status: StatusPedido;
+  desde: string; // ISO timestamp
+}
+
 export interface Pedido {
   id: string;
   cliente_id: number;
@@ -137,6 +142,7 @@ export interface Pedido {
   conta: string;
   parcelas: number;
   obs: string;
+  status_history?: StatusHistoryEntry[];
   created_at: string;
   updated_at: string;
   clientes?: Cliente;

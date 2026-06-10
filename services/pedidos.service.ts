@@ -29,9 +29,14 @@ export async function getPedidoById(id: string) {
 }
 
 export async function createPedido(pedido: PedidoInsert, itens: ItemPedidoInsert[] = []) {
+  const payload = {
+    ...pedido,
+    status_history: [{ status: pedido.status, desde: new Date().toISOString() }],
+  };
+
   const { data, error } = await supabase
     .from('pedidos')
-    .insert([pedido as never])
+    .insert([payload as never])
     .select()
     .single();
 
@@ -93,7 +98,12 @@ export async function avancarStatusPedido(id: string, statusAtual: StatusPedido)
   const idx = FLUXO.indexOf(statusAtual);
   if (idx === -1 || idx === FLUXO.length - 1) return null;
   const novoStatus = FLUXO[idx + 1];
-  const res = await updatePedido(id, { status: novoStatus });
+
+  const { data: cur } = await supabase.from('pedidos').select('status_history').eq('id', id).single();
+  const historico = (cur?.status_history as { status: StatusPedido; desde: string }[] | null) ?? [];
+  const novoHistorico = [...historico, { status: novoStatus, desde: new Date().toISOString() }];
+
+  const res = await updatePedido(id, { status: novoStatus, status_history: novoHistorico as any });
   if (res) registrarLog({
     acao: "avançou", tabela: "pedidos", registro_id: id,
     descricao: `Avançou status do pedido ${id}: ${statusAtual} → ${novoStatus}`,
@@ -106,7 +116,12 @@ export async function retrocederStatusPedido(id: string, statusAtual: StatusPedi
   const idx = FLUXO.indexOf(statusAtual);
   if (idx <= 0) return null;
   const novoStatus = FLUXO[idx - 1];
-  const res = await updatePedido(id, { status: novoStatus });
+
+  const { data: cur } = await supabase.from('pedidos').select('status_history').eq('id', id).single();
+  const historico = (cur?.status_history as { status: StatusPedido; desde: string }[] | null) ?? [];
+  const novoHistorico = historico.slice(0, -1);
+
+  const res = await updatePedido(id, { status: novoStatus, status_history: novoHistorico as any });
   if (res) registrarLog({
     acao: "retrocedeu", tabela: "pedidos", registro_id: id,
     descricao: `Retrocedeu status do pedido ${id}: ${statusAtual} → ${novoStatus}`,

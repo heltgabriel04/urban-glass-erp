@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidos, avancarStatusPedido, retrocederStatusPedido } from "@/services/pedidos.service";
-import { formatBRL, formatDate, formatM2 } from "@/lib/formatters";
+import { formatBRL, formatDate, formatM2, formatDuracao } from "@/lib/formatters";
 import type { Pedido, StatusPedido } from "@/types";
 import { useToast } from "@/components/ui/toast";
 
@@ -185,11 +185,22 @@ export default function ProducaoPage() {
                         : null;
                       const retUrgente = diasRet !== null && diasRet <= 3 && !ultimo;
 
+                      const history = (p.status_history ?? []) as { status: string; desde: string }[];
+                      const entradaStatus = [...history].reverse().find(h => h.status === p.status);
+                      const elapsed = entradaStatus
+                        ? formatDuracao(Date.now() - new Date(entradaStatus.desde).getTime())
+                        : null;
+
                       return (
                         <div key={p.id} className="kbcard" style={{ borderLeft: retUrgente ? "3px solid var(--warn)" : undefined, cursor: "pointer" }} onClick={() => router.push(`/pedidos/${p.id}`)}>
                           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                             <span className="kbcid">{p.id}</span>
                             <div style={{ display:"flex", gap:"4px", alignItems:"center" }}>
+                              {elapsed && (
+                                <span style={{ fontSize:"9px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", background:"var(--surf3)", borderRadius:"3px", padding:"1px 5px" }}>
+                                  ⏱ {elapsed}
+                                </span>
+                              )}
                               {eVidroCliente && (
                                 <span style={{ fontSize:"9px", color:"var(--warn)", fontFamily:"'DM Mono',monospace", fontWeight:700 }} title="Vidro do cliente">📦</span>
                               )}
