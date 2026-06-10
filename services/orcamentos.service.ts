@@ -57,7 +57,7 @@ export async function getOrcamentos(filtroStatus?: StatusOrcamento) {
 export async function getOrcamentoById(id: string) {
   const { data, error } = await supabase
     .from('orcamentos')
-    .select(`*, clientes ( * ), itens_orcamento ( * )`)
+    .select(`*, clientes ( * ), itens_orcamento ( *, produtos ( id, unidade ) )`)
     .eq('id', id)
     .single();
 

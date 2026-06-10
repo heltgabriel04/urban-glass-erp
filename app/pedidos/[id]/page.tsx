@@ -504,7 +504,7 @@ async function handleMarcarPago(lancId: number) {
                 <Row label="Telefone"           value={pedido.clientes?.tel ?? "—"} />
                 <Row label="Data do pedido"     value={formatDate(pedido.dt_pedido)} />
                 <Row label="Retirada prevista"  value={formatDate(pedido.dt_retirada)} />
-                <Row label="m² total"           value={Number(pedido.m2_total).toFixed(2) + " m²"} />
+                <Row label={(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml") ? "ml total" : "m² total"} value={Number(pedido.m2_total).toFixed(2) + " " + ((pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml") ? "ml" : "m²")} />
                 <Row label="Forma de pagamento" value={pedido.forma_pgto || "—"} />
                 {pedido.parcelas > 1 && <Row label="Parcelas" value={pedido.parcelas + "×"} />}
                 {pedido.obs && <Row label="Observações" value={pedido.obs} />}
@@ -647,21 +647,26 @@ async function handleMarcarPago(lancId: number) {
               <div className="tw">
                 <table>
                   <thead>
-                    <tr><th>#</th><th>Produto</th><th>Dimensão</th><th>m²</th><th>Qtd</th><th>R$/m²</th><th>V.Cliente</th><th>Subtotal</th></tr>
+                    <tr><th>#</th><th>Produto</th><th>Dimensão</th><th>Medida</th><th>Qtd</th><th>Preço/un.</th><th>V.Cliente</th><th>Subtotal</th></tr>
                   </thead>
                   <tbody>
-                    {pedido.itens_pedido!.map((item, i) => (
+                    {pedido.itens_pedido!.map((item, i) => {
+                      const isML = (item as any).produtos?.unidade === "ml";
+                      const medida = Number(item.m2).toFixed(3);
+                      const unidade = isML ? "ml" : "m²";
+                      return (
                       <tr key={item.id}>
                         <td className="mono" style={{ color:"var(--t3)" }}>{i + 1}</td>
                         <td><strong>{item.produto_nome}</strong></td>
                         <td className="mono">{item.largura} × {item.altura} mm</td>
-                        <td className="mono">{Number(item.m2).toFixed(3)}</td>
+                        <td className="mono">{medida} {unidade}</td>
                         <td className="mono">{item.quantidade}</td>
                         <td className="mono">{formatBRL(item.valor_m2)}</td>
                         <td style={{ textAlign:"center" }}>{(item as any).vidro_cliente ? <span style={{ color:"var(--warn)" }}>📦</span> : <span style={{ color:"var(--t3)" }}>—</span>}</td>
                         <td className="mono" style={{ color:"var(--acc)", fontWeight:600 }}>{formatBRL(item.subtotal)}</td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -813,30 +818,36 @@ async function handleMarcarPago(lancId: number) {
                 <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Pagamento</span><strong>{pedido.forma_pgto || "—"}</strong></div>
                 {pedido.parcelas > 1 && <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Parcelas</span><strong>{pedido.parcelas}×</strong></div>}
                 <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Retirada prevista</span><strong>{formatDate(pedido.dt_retirada)}</strong></div>
-                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>m² total</span><strong>{Number(pedido.m2_total).toFixed(2)} m²</strong></div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}>
+                  <span style={{ color:"#333" }}>{(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml") ? "ml total" : "m² total"}</span>
+                  <strong>{Number(pedido.m2_total).toFixed(2)} {(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml") ? "ml" : "m²"}</strong>
+                </div>
               </div>
             </div>
           </div>
           <table style={{ width:"100%", borderCollapse:"collapse", marginBottom:"16px", fontSize:"11px" }}>
             <thead>
               <tr style={{ background:"#2d5fa6" }}>
-                {["#","Produto","Dimensão (mm)","m²","Qtd","R$/m²","Subtotal"].map((h, i) => (
+                {["#","Produto","Dimensão (mm)","Medida","Qtd","Preço/un.","Subtotal"].map((h, i) => (
                   <th key={i} style={{ padding:"8px", color:"white", fontWeight:700, fontSize:"9px", textAlign: i === 0 || i === 4 ? "center" : i >= 5 ? "right" : "left", letterSpacing:"0.5px" }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {(pedido.itens_pedido ?? []).map((item, i) => (
+              {(pedido.itens_pedido ?? []).map((item, i) => {
+                const isML = (item as any).produtos?.unidade === "ml";
+                return (
                 <tr key={item.id} style={{ background: i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"center", color:"#000", fontSize:"10px", fontWeight:700 }}>{i + 1}</td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontWeight:700, color:"#000" }}>{item.produto_nome}</td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontFamily:"monospace", fontSize:"10px", fontWeight:700, color:"#000" }}>{item.largura} × {item.altura}</td>
-                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontFamily:"monospace", fontSize:"10px", fontWeight:700, color:"#000" }}>{Number(item.m2).toFixed(3)}</td>
+                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontFamily:"monospace", fontSize:"10px", fontWeight:700, color:"#000" }}>{Number(item.m2).toFixed(3)} {isML ? "ml" : "m²"}</td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"center", fontWeight:700, color:"#000" }}>{item.quantidade}</td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"right", fontFamily:"monospace", fontSize:"10px", fontWeight:700, color:"#000" }}>{formatBRL(item.valor_m2)}</td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"right", fontFamily:"monospace", fontWeight:700, color:"#2d5fa6" }}>{formatBRL(item.subtotal)}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"12px", marginBottom:"18px" }}>

@@ -335,7 +335,7 @@ export default function NovoPedidoPage() {
       produto_nome: i.produto_nome,
       largura: i.largura,
       altura: i.altura,
-      m2: calcM2Item(i),
+      m2: modoPedido === "ml" ? calcMLItem(i) : calcM2Item(i),
       valor_m2: i.valor_m2,
       lapidacao: i.lapidacao,
       quantidade: i.quantidade,

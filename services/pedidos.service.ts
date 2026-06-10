@@ -20,7 +20,7 @@ export async function getPedidos(filtroStatus?: StatusPedido) {
 export async function getPedidoById(id: string) {
   const { data, error } = await supabase
     .from('pedidos')
-    .select(`*, clientes ( * ), itens_pedido ( * )`)
+    .select(`*, clientes ( * ), itens_pedido ( *, produtos ( id, unidade ) )`)
     .eq('id', id)
     .single();
 
