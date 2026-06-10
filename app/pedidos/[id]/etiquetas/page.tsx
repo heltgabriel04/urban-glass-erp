@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { QRCodeSVG } from "qrcode.react";
 import { getPedidoById } from "@/services/pedidos.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { isChapaInteira } from "@/lib/chapas";
@@ -35,14 +36,13 @@ interface Etiqueta {
 }
 
 function QRCode({ data, size = 72 }: { data: string; size?: number }) {
-  const qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}&bgcolor=ffffff&color=000000&margin=2`;
   return (
-    <img
-      src={qrApi}
-      alt="QR"
-      width={size}
-      height={size}
-      style={{ display: "block", imageRendering: "pixelated" }}
+    <QRCodeSVG
+      value={data}
+      size={size}
+      bgColor="#ffffff"
+      fgColor="#000000"
+      level="M"
     />
   );
 }
