@@ -73,6 +73,8 @@ export default function InvestimentosPage() {
   const [novaCat, setNovaCat]             = useState("");
   const [catExpandida, setCatExpandida]   = useState<string | null>(null);
   const [novaSubcat, setNovaSubcat]       = useState("");
+  const [corrigindo, setCorrigindo]       = useState(false);
+  const [corrigido, setCorrigido]         = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -125,11 +127,16 @@ export default function InvestimentosPage() {
 
   function cancelEdit() { setEditingId(null); }
 
+  function empresaCanonica(val: string): string {
+    const norm = normalize(val);
+    return listaBancos.find(b => normalize(b) === norm) ?? val.trim();
+  }
+
   async function saveEdit() {
     if (!editingId || !editForm.empresa.trim() || !editForm.descricao.trim() || !editForm.valor) return;
     setSalvando(true);
     const payload: Record<string, unknown> = {
-      data: editForm.data, empresa: editForm.empresa.trim(),
+      data: editForm.data, empresa: empresaCanonica(editForm.empresa),
       categoria: editForm.categoria || null,
       descricao: editForm.descricao.trim(), valor: editForm.valor,
       observacoes: editForm.observacoes.trim() || null,
@@ -155,7 +162,7 @@ export default function InvestimentosPage() {
     if (!newForm.empresa.trim() || !newForm.descricao.trim() || !newForm.valor) return;
     setSalvando(true);
     const payload: Record<string, unknown> = {
-      data: newForm.data, empresa: newForm.empresa.trim(),
+      data: newForm.data, empresa: empresaCanonica(newForm.empresa),
       categoria: newForm.categoria || null,
       descricao: newForm.descricao.trim(), valor: newForm.valor,
       observacoes: newForm.observacoes.trim() || null,
@@ -175,6 +182,21 @@ export default function InvestimentosPage() {
     registrarLog({ acao: "excluiu", tabela: "investimentos", registro_id: inv.id, descricao: `Excluiu aporte de ${inv.empresa}` });
     if (editingId === inv.id) setEditingId(null);
     load();
+  }
+
+  async function corrigirBancos() {
+    setCorrigindo(true);
+    try {
+      const r = await fetch("/api/admin/fix-banco-case", { method: "POST" });
+      const d = await r.json();
+      setCorrigido(true);
+      await load();
+      alert(`✓ Corrigido: ${d.fixedInvestimentos} registro(s) e ${d.fixedOpcoes} opção(ões) duplicada(s) removida(s).`);
+    } catch {
+      alert("Erro ao corrigir.");
+    } finally {
+      setCorrigindo(false);
+    }
   }
 
   async function addOpcao(tipo: "banco" | "categoria", valor: string) {
@@ -246,6 +268,9 @@ export default function InvestimentosPage() {
   const maiorAporte   = investimentos.length ? Math.max(...investimentos.map(i => Number(i.valor))) : 0;
   const mediaAporte   = investimentos.length ? totalGeral / investimentos.length : 0;
   const bancos        = [...new Set(investimentos.map(i => i.empresa))].sort();
+  const normalize     = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+  const bancosNorm    = bancos.map(b => normalize(b));
+  const temDupBanco   = bancosNorm.length !== new Set(bancosNorm).size;
   const temFiltro     = !!(busca || filtroBanco || filtroCategoria || filtroInicio || filtroFim);
   const categorias    = [...new Set(investimentos.map(i => i.categoria).filter(Boolean) as string[])].sort();
   const datas         = investimentos.map(i => i.data.substring(0, 7)).sort();
@@ -393,6 +418,11 @@ export default function InvestimentosPage() {
       <div className="tb no-print">
         <div className="tb-title">Investimentos</div>
         <div style={{ display: "flex", gap: "8px" }}>
+          {temDupBanco && !corrigido && (
+            <button className="btn cy sm" onClick={corrigirBancos} disabled={corrigindo} title="Normalizar nomes duplicados de bancos">
+              {corrigindo ? "Corrigindo..." : "⚠ Corrigir Bancos"}
+            </button>
+          )}
           <button className="btn bg sm" onClick={handlePDF} disabled={!filtered.length}>⬡ PDF</button>
           <button className="btn bg sm" onClick={handleExcel} disabled={!filtered.length}>↓ Excel</button>
           <button className="btn bg sm" onClick={() => setModalListas(true)}>⚙ Listas</button>
