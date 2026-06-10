@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getOrcamentoById, updateOrcamento, aprovarOrcamento, rejeitarOrcamento } from "@/services/orcamentos.service";
-import { formatBRL, formatDate } from "@/lib/formatters";
+import { formatBRL, formatDate, formatM2 } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
+import { supabase } from "@/lib/supabase/client";
 
 const CHIP: Record<string, string> = {
   "Rascunho":  "chip cgr",
@@ -22,6 +23,7 @@ export default function OrcamentoDetalhe() {
   const { toast } = useToast();
 
   const [orc, setOrc] = useState<any>(null);
+  const [estoque, setEstoque] = useState<Map<number, { m2: number; chapas: number }>>(new Map());
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [modalRejeitar, setModalRejeitar] = useState(false);
@@ -34,8 +36,16 @@ export default function OrcamentoDetalhe() {
 
   async function load() {
     setLoading(true);
-    const data = await getOrcamentoById(id);
+    const [data, estRows] = await Promise.all([
+      getOrcamentoById(id),
+      supabase.from("estoque").select("produto_id, m2_saldo, chapas_saldo").then(r => r.data ?? []),
+    ]);
     setOrc(data);
+    const em = new Map<number, { m2: number; chapas: number }>();
+    (estRows as any[]).forEach((e: any) => {
+      if (e.produto_id != null) em.set(e.produto_id, { m2: Number(e.m2_saldo), chapas: Number(e.chapas_saldo) });
+    });
+    setEstoque(em);
     setLoading(false);
   }
 
@@ -215,6 +225,76 @@ export default function OrcamentoDetalhe() {
               )}
             </div>
           </div>
+
+          {/* Disponibilidade de Estoque */}
+          {estoque.size > 0 && itens.length > 0 && (() => {
+            const m2PorProd = new Map<number, { nome: string; m2: number }>();
+            for (const item of itens) {
+              if (!item.produto_id) continue;
+              const prev = m2PorProd.get(item.produto_id) ?? { nome: item.produto_nome, m2: 0 };
+              m2PorProd.set(item.produto_id, { nome: item.produto_nome, m2: prev.m2 + Number(item.m2) });
+            }
+            const linhas = Array.from(m2PorProd.entries()).map(([pid, { nome, m2 }]) => {
+              const est   = estoque.get(pid);
+              const saldo = est?.m2 ?? null;
+              const chapas = est?.chapas ?? null;
+              const ok    = saldo !== null && saldo >= m2 - 0.001;
+              const falta = saldo !== null ? Math.max(0, m2 - saldo) : null;
+              return { pid, nome, m2, saldo, chapas, ok, falta };
+            });
+            const insuf  = linhas.filter(l => !l.ok);
+            const allOk  = insuf.length === 0;
+            const semReg = linhas.filter(l => l.saldo === null);
+            return (
+              <div className="card" style={{ padding:"20px 24px" }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px" }}>
+                  <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>DISPONIBILIDADE DE ESTOQUE</div>
+                  <span style={{ fontSize:"11px", fontWeight:700, padding:"3px 12px", borderRadius:"99px",
+                    color: allOk ? "var(--ok)" : "var(--err)",
+                    background: allOk ? "rgba(16,185,129,.1)" : "rgba(244,63,94,.1)",
+                    border: `1px solid ${allOk ? "rgba(16,185,129,.3)" : "rgba(244,63,94,.3)"}`,
+                  }}>
+                    {allOk
+                      ? `✓ Estoque suficiente para todos os produtos`
+                      : `⚠ ${insuf.length} produto${insuf.length > 1 ? "s" : ""} com estoque insuficiente`}
+                  </span>
+                </div>
+
+                <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr 130px", gap:"0", borderBottom:"1px solid var(--b1)", paddingBottom:"7px", marginBottom:"2px" }}>
+                  {["Produto","Necessário","Disponível","Chapas","Situação"].map(h => (
+                    <div key={h} style={{ fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px", fontFamily:"'DM Mono',monospace", padding:"0 8px 0 0" }}>{h}</div>
+                  ))}
+                </div>
+
+                {linhas.map(l => (
+                  <div key={l.pid} style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr 130px", gap:"0", padding:"9px 0", borderBottom:"1px solid var(--b1)" }}>
+                    <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:"12px" }}>{l.nome}</div>
+                    <div style={{ fontSize:"12px", color:"var(--t2)", fontFamily:"'DM Mono',monospace" }}>{formatM2(l.m2)}</div>
+                    <div style={{ fontSize:"12px", fontFamily:"'DM Mono',monospace", fontWeight:700, color: l.saldo === null ? "var(--t3)" : l.ok ? "var(--ok)" : "var(--err)" }}>
+                      {l.saldo === null ? "—" : formatM2(l.saldo)}
+                    </div>
+                    <div style={{ fontSize:"12px", fontFamily:"'DM Mono',monospace", color:"var(--t3)" }}>
+                      {l.chapas === null ? "—" : `${l.chapas} ch.`}
+                    </div>
+                    <div style={{ fontSize:"11px", fontWeight:600 }}>
+                      {l.saldo === null
+                        ? <span style={{ color:"var(--t3)" }}>Sem registro</span>
+                        : l.ok
+                          ? <span style={{ color:"var(--ok)" }}>✓ OK</span>
+                          : <span style={{ color:"var(--err)" }}>⚠ Falta {formatM2(l.falta!)}</span>
+                      }
+                    </div>
+                  </div>
+                ))}
+
+                {semReg.length > 0 && (
+                  <div style={{ marginTop:"10px", fontSize:"11px", color:"var(--t3)", fontStyle:"italic" }}>
+                    * Produtos sem entrada no estoque não são rastreados automaticamente.
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="card" style={{ padding: "20px 24px" }}>
             <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, marginBottom: "16px", letterSpacing: ".06em" }}>
