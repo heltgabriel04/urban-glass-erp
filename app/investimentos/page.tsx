@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
@@ -74,6 +74,19 @@ export default function InvestimentosPage() {
   const [novaSubcat, setNovaSubcat]       = useState("");
 
   useEffect(() => { load(); }, []);
+
+  // click outside the edit row → save
+  const saveEditRef = useRef<() => void>(() => {});
+  useEffect(() => { saveEditRef.current = saveEdit; });
+  useEffect(() => {
+    if (!editingId) return;
+    function onMouseDown(e: MouseEvent) {
+      if ((e.target as Element).closest("[data-edit-row]")) return;
+      saveEditRef.current();
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [editingId]);
 
   async function load() {
     setLoading(true);
@@ -289,7 +302,7 @@ export default function InvestimentosPage() {
 
   const editActions = (onSave: () => void, onCancel: () => void) => (
     <div style={{ display: "flex", gap: "3px" }}>
-      <button className="btn bp xs" onClick={onSave} disabled={salvando}>✓</button>
+      <button className="btn bp xs" title="Salvar (ou clique fora)" onClick={onSave} disabled={salvando}>✓</button>
       <button className="btn bg xs" onClick={onCancel}>✕</button>
     </div>
   );
@@ -302,7 +315,7 @@ export default function InvestimentosPage() {
     isNew: boolean,
     key?: string,
   ) => (
-    <tr key={key} style={{ background: isNew ? "rgba(245,158,11,.05)" : "var(--surf2)", outline: `1px solid ${isNew ? GBR : "var(--acc)"}` }}>
+    <tr key={key} data-edit-row="" style={{ background: isNew ? "rgba(245,158,11,.05)" : "var(--surf2)", outline: `1px solid ${isNew ? GBR : "var(--acc)"}` }}>
       <td style={{ minWidth: "130px" }}>
         <DateInput value={form.data} onChange={v => set(f => ({ ...f, data: v }))} />
       </td>
