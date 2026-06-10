@@ -30,12 +30,12 @@ interface Etiqueta {
   totalPecasNaChapa: number;
   totalPecasGeral: number;
   loteCorte: string;
-  qrUrl: string;
+  qrData: string;
   modoCaixa?: boolean;
 }
 
-function QRCode({ url, size = 72 }: { url: string; size?: number }) {
-  const qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(url)}&bgcolor=ffffff&color=000000&margin=2`;
+function QRCode({ data, size = 72 }: { data: string; size?: number }) {
+  const qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}&bgcolor=ffffff&color=000000&margin=2`;
   return (
     <img
       src={qrApi}
@@ -94,7 +94,7 @@ function EtiquetaCard({ et, num }: { et: Etiqueta; num: number }) {
           <div className="et-lote">Lote: {et.loteCorte}</div>
         </div>
         <div className="et-dir">
-          <QRCode url={et.qrUrl} size={90} />
+          <QRCode data={et.qrData} size={90} />
           <div className="et-qrlbl">ESCANEAR</div>
         </div>
       </div>
@@ -152,7 +152,7 @@ export default function EtiquetasPage() {
               totalPecasNaChapa: chapa.placed.length,
               totalPecasGeral:   totalGeral,
               loteCorte:         lote,
-              qrUrl: `https://urbanglasserp.vercel.app/pedidos/${pidDaPeca}/producao`,
+              qrData: `URBAN GLASS\nPedido: ${pidDaPeca}\nCliente: ${ped?.clientes?.nome ?? ""}\nMaterial: ${peca.prod || chapa.prod}\nMedidas: ${peca.l}x${peca.a}mm\nLote: ${lote}`,
             });
           });
         });
@@ -197,7 +197,7 @@ export default function EtiquetasPage() {
                 totalPecasNaChapa: porCaixa,
                 totalPecasGeral:   totalGeral,
                 loteCorte:         lote,
-                qrUrl: `https://urbanglasserp.vercel.app/pedidos/${id}/producao`,
+                qrData: `URBAN GLASS\nPedido: ${id}\nCliente: ${ped?.clientes?.nome ?? ""}\nMaterial: ${item.produto_nome}\nMedidas: ${item.largura}x${item.altura}mm\nLote: ${lote}`,
                 modoCaixa:         true,
               });
               caixaIdx++;
