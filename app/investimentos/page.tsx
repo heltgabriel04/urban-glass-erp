@@ -60,7 +60,8 @@ export default function InvestimentosPage() {
   const [newForm, setNewForm]             = useState<RowState>({ ...EMPTY });
   const [salvando, setSalvando]           = useState(false);
   const [busca, setBusca]                 = useState("");
-  const [filtroBanco, setFiltroBanco]     = useState("");
+  const [filtroBanco, setFiltroBanco]       = useState("");
+  const [filtroCategoria, setFiltroCategoria] = useState("");
   const [filtroInicio, setFiltroInicio]   = useState("");
   const [filtroFim, setFiltroFim]         = useState("");
   const [opcoesDB, setOpcoesDB]           = useState<OpcaoLista[]>([]);
@@ -221,6 +222,7 @@ export default function InvestimentosPage() {
     const q = busca.toLowerCase();
     if (q && !inv.empresa.toLowerCase().includes(q) && !inv.descricao.toLowerCase().includes(q)) return false;
     if (filtroBanco && inv.empresa !== filtroBanco) return false;
+    if (filtroCategoria && inv.categoria !== filtroCategoria) return false;
     if (filtroInicio && inv.data < filtroInicio + "-01") return false;
     if (filtroFim) {
       const [y, m] = filtroFim.split("-").map(Number);
@@ -244,7 +246,8 @@ export default function InvestimentosPage() {
   const maiorAporte   = investimentos.length ? Math.max(...investimentos.map(i => Number(i.valor))) : 0;
   const mediaAporte   = investimentos.length ? totalGeral / investimentos.length : 0;
   const bancos        = [...new Set(investimentos.map(i => i.empresa))].sort();
-  const temFiltro     = !!(busca || filtroBanco || filtroInicio || filtroFim);
+  const temFiltro     = !!(busca || filtroBanco || filtroCategoria || filtroInicio || filtroFim);
+  const categorias    = [...new Set(investimentos.map(i => i.categoria).filter(Boolean) as string[])].sort();
 
   const mesesPDF    = [...new Set(filtered.map(i => i.data.substring(0, 7)))].sort();
   const bancosNoPDF = [...new Set(filtered.map(i => i.empresa))].sort();
@@ -434,6 +437,10 @@ export default function InvestimentosPage() {
             <option value="">Todos os bancos</option>
             {bancos.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
+          <select className="fc" style={{ minWidth: "170px" }} value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)}>
+            <option value="">Todas as categorias</option>
+            {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <span style={{ fontSize: "11px", color: "var(--t3)", whiteSpace: "nowrap" }}>De</span>
             <input type="month" lang="pt-BR" className="fc" style={{ minWidth: "140px", margin: 0 }}
@@ -445,7 +452,7 @@ export default function InvestimentosPage() {
               value={filtroFim} onChange={e => setFiltroFim(e.target.value)} />
           </div>
           {temFiltro && (
-            <button className="btn bg sm" onClick={() => { setBusca(""); setFiltroBanco(""); setFiltroInicio(""); setFiltroFim(""); }}>
+            <button className="btn bg sm" onClick={() => { setBusca(""); setFiltroBanco(""); setFiltroCategoria(""); setFiltroInicio(""); setFiltroFim(""); }}>
               ✕ Limpar
             </button>
           )}
@@ -453,7 +460,7 @@ export default function InvestimentosPage() {
 
         {temFiltro && filtered.length > 0 && (
           <div style={{ marginBottom: "14px", padding: "9px 14px", background: GB, border: `1px solid ${GBR}`, borderRadius: "8px", display: "flex", justifyContent: "space-between", fontSize: "12px", color: G }}>
-            <span>{filtered.length} resultado(s){filtroBanco ? ` · ${filtroBanco}` : ""}{(filtroInicio || filtroFim) ? ` · ${labelPeriodoPDF()}` : ""}</span>
+            <span>{filtered.length} resultado(s){filtroBanco ? ` · ${filtroBanco}` : ""}{filtroCategoria ? ` · ${filtroCategoria}` : ""}{(filtroInicio || filtroFim) ? ` · ${labelPeriodoPDF()}` : ""}</span>
             <span style={{ fontWeight: 700, fontFamily: "'DM Mono', monospace" }}>{formatBRL(totalFiltrado)}</span>
           </div>
         )}
