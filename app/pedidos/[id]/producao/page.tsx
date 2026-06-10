@@ -105,6 +105,28 @@ export default function ProducaoView() {
     </div>
   );
 
+  if (pedido.status === "Entregue" || pedido.status === "Cancelado") return (
+    <div style={{ ...styles.root, alignItems: "center", justifyContent: "center", textAlign: "center", gap: "20px" }}>
+      <div style={{ width: "64px", height: "64px", borderRadius: "18px", background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", fontWeight: 800, color: "rgba(255,255,255,.35)", letterSpacing: "0.05em" }}>
+        UG
+      </div>
+      <div>
+        <div style={{ fontSize: "13px", fontWeight: 700, color: "rgba(255,255,255,.2)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "10px" }}>
+          Urban Glass
+        </div>
+        <div style={{ fontSize: "28px" }}>
+          {pedido.status === "Entregue" ? "✓" : "✕"}
+        </div>
+        <div style={{ fontSize: "18px", fontWeight: 800, color: pedido.status === "Entregue" ? "#10b981" : "#f43f5e", marginTop: "8px" }}>
+          {pedido.status === "Entregue" ? "Pedido entregue" : "Pedido cancelado"}
+        </div>
+        <div style={{ fontSize: "12px", color: "rgba(255,255,255,.25)", marginTop: "8px", lineHeight: 1.6, maxWidth: "260px" }}>
+          Este link foi desativado.<br />O pedido não está mais em produção.
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div style={styles.root}>
 
