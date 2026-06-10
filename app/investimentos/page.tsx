@@ -9,16 +9,17 @@ import CurrencyInput from "@/components/ui/CurrencyInput";
 import { registrarLog } from "@/services/log.service";
 import * as XLSX from "xlsx";
 
-const BANCOS_DEFAULT    = ["Itaú Maxibuild", "ZRS"];
-const CATS_DEFAULT      = ["Manutenção", "Equipamentos e Material"];
+const BANCOS_DEFAULT = ["Itaú Maxibuild", "ZRS"];
+const CATS_DEFAULT   = ["Manutenção", "Equipamentos e Material"];
 
-interface OpcaoLista { id: number; tipo: string; valor: string; }
+interface OpcaoLista { id: number; tipo: string; valor: string; parent?: string | null; }
 
 interface Investimento {
   id: string;
   data: string;
   empresa: string;
   categoria: string | null;
+  subcategoria: string | null;
   descricao: string;
   valor: number;
   observacoes: string | null;
@@ -30,6 +31,7 @@ interface RowState {
   data: string;
   empresa: string;
   categoria: string;
+  subcategoria: string;
   descricao: string;
   valor: number;
   observacoes: string;
@@ -44,8 +46,10 @@ function labelMes(yyyyMM: string) {
 }
 
 const EMPTY: RowState = {
-  data: hoje(), empresa: "", categoria: "", descricao: "", valor: 0, observacoes: "", comprovante_url: "",
+  data: hoje(), empresa: "", categoria: "", subcategoria: "", descricao: "", valor: 0, observacoes: "", comprovante_url: "",
 };
+
+const SQL_MIGRACAO_COLUNAS = `-- Adiciona suporte a subcategorias em tabelas existentes:\nALTER TABLE inv_opcoes ADD COLUMN IF NOT EXISTS parent text;\nALTER TABLE investimentos ADD COLUMN IF NOT EXISTS subcategoria text;`;
 
 export default function InvestimentosPage() {
   const [investimentos, setInvestimentos] = useState<Investimento[]>([]);
@@ -57,14 +61,17 @@ export default function InvestimentosPage() {
   const [salvando, setSalvando]           = useState(false);
   const [busca, setBusca]                 = useState("");
   const [filtroBanco, setFiltroBanco]     = useState("");
-  const [filtroInicio, setFiltroInicio]   = useState("");  // YYYY-MM
-  const [filtroFim, setFiltroFim]         = useState("");  // YYYY-MM
+  const [filtroInicio, setFiltroInicio]   = useState("");
+  const [filtroFim, setFiltroFim]         = useState("");
   const [opcoesDB, setOpcoesDB]           = useState<OpcaoLista[]>([]);
   const [semTabela, setSemTabela]         = useState(false);
+  const [semColSubcat, setSemColSubcat]   = useState(false);
   const [erroRLS, setErroRLS]             = useState(false);
   const [modalListas, setModalListas]     = useState(false);
   const [novoBanco, setNovoBanco]         = useState("");
   const [novaCat, setNovaCat]             = useState("");
+  const [catExpandida, setCatExpandida]   = useState<string | null>(null);
+  const [novaSubcat, setNovaSubcat]       = useState("");
 
   useEffect(() => { load(); }, []);
 
@@ -75,8 +82,18 @@ export default function InvestimentosPage() {
       supabase.from("inv_opcoes").select("*").order("valor"),
     ]);
     setInvestimentos((data ?? []) as Investimento[]);
-    if (erroOpts) { setSemTabela(true); }
-    else          { setSemTabela(false); setOpcoesDB((opts ?? []) as OpcaoLista[]); }
+    if (erroOpts) {
+      setSemTabela(true);
+    } else {
+      setSemTabela(false);
+      setOpcoesDB((opts ?? []) as OpcaoLista[]);
+      // detect if new columns exist
+      const optsArr = opts ?? [];
+      const dataArr = data ?? [];
+      const semParent = optsArr.length > 0 && !("parent" in optsArr[0]);
+      const semSubcatInv = dataArr.length > 0 && !("subcategoria" in dataArr[0]);
+      setSemColSubcat(semParent || semSubcatInv);
+    }
     setLoading(false);
   }
 
@@ -86,6 +103,7 @@ export default function InvestimentosPage() {
     setEditingId(inv.id);
     setEditForm({
       data: inv.data, empresa: inv.empresa, categoria: inv.categoria ?? "",
+      subcategoria: inv.subcategoria ?? "",
       descricao: inv.descricao, valor: Number(inv.valor),
       observacoes: inv.observacoes ?? "", comprovante_url: inv.comprovante_url ?? "",
     });
@@ -96,21 +114,19 @@ export default function InvestimentosPage() {
   async function saveEdit() {
     if (!editingId || !editForm.empresa.trim() || !editForm.descricao.trim() || !editForm.valor) return;
     setSalvando(true);
-    const { error } = await supabase.from("investimentos").update({
-      data: editForm.data,
-      empresa: editForm.empresa.trim(),
+    const payload: Record<string, unknown> = {
+      data: editForm.data, empresa: editForm.empresa.trim(),
       categoria: editForm.categoria || null,
-      descricao: editForm.descricao.trim(),
-      valor: editForm.valor,
+      descricao: editForm.descricao.trim(), valor: editForm.valor,
       observacoes: editForm.observacoes.trim() || null,
       comprovante_url: editForm.comprovante_url.trim() || null,
       updated_at: new Date().toISOString(),
-    }).eq("id", editingId);
+    };
+    if (!semColSubcat) payload.subcategoria = editForm.subcategoria || null;
+    const { error } = await supabase.from("investimentos").update(payload).eq("id", editingId);
     if (error) { alert("Erro: " + error.message); setSalvando(false); return; }
     registrarLog({ acao: "editou", tabela: "investimentos", registro_id: editingId, descricao: `Editou aporte de ${editForm.empresa}` });
-    setSalvando(false);
-    setEditingId(null);
-    load();
+    setSalvando(false); setEditingId(null); load();
   }
 
   function startAdd() {
@@ -124,21 +140,19 @@ export default function InvestimentosPage() {
   async function saveAdd() {
     if (!newForm.empresa.trim() || !newForm.descricao.trim() || !newForm.valor) return;
     setSalvando(true);
-    const { error } = await supabase.from("investimentos").insert([{
-      data: newForm.data,
-      empresa: newForm.empresa.trim(),
+    const payload: Record<string, unknown> = {
+      data: newForm.data, empresa: newForm.empresa.trim(),
       categoria: newForm.categoria || null,
-      descricao: newForm.descricao.trim(),
-      valor: newForm.valor,
+      descricao: newForm.descricao.trim(), valor: newForm.valor,
       observacoes: newForm.observacoes.trim() || null,
       comprovante_url: newForm.comprovante_url.trim() || null,
       updated_at: new Date().toISOString(),
-    }] as never);
+    };
+    if (!semColSubcat) payload.subcategoria = newForm.subcategoria || null;
+    const { error } = await supabase.from("investimentos").insert([payload] as never);
     if (error) { alert("Erro: " + error.message); setSalvando(false); return; }
     registrarLog({ acao: "criou", tabela: "investimentos", descricao: `Aporte ${formatBRL(newForm.valor)} · ${newForm.empresa}` });
-    setSalvando(false);
-    setAddingNew(false);
-    load();
+    setSalvando(false); setAddingNew(false); load();
   }
 
   async function excluir(inv: Investimento) {
@@ -151,10 +165,7 @@ export default function InvestimentosPage() {
 
   async function addOpcao(tipo: "banco" | "categoria", valor: string) {
     if (!valor.trim()) return;
-    if (semTabela) {
-      alert("A tabela inv_opcoes ainda não existe no banco de dados.\nExecute o SQL de migração exibido na página principal primeiro.");
-      return;
-    }
+    if (semTabela) { alert("Execute o SQL de migração primeiro."); return; }
     const { error } = await supabase.from("inv_opcoes").insert([{ tipo, valor: valor.trim() }] as never);
     if (error) {
       if (error.message.includes("row-level security")) setErroRLS(true);
@@ -165,10 +176,30 @@ export default function InvestimentosPage() {
     load();
   }
 
+  async function addSubcat(cat: string, valor: string) {
+    if (!valor.trim() || !cat) return;
+    const { error } = await supabase.from("inv_opcoes").insert([{ tipo: "subcategoria", valor: valor.trim(), parent: cat }] as never);
+    if (error) {
+      if (error.message.includes("row-level security")) setErroRLS(true);
+      else if (error.message.toLowerCase().includes("column") || error.message.toLowerCase().includes("parent")) setSemColSubcat(true);
+      else alert("Erro ao adicionar subcategoria: " + error.message);
+      return;
+    }
+    setNovaSubcat("");
+    load();
+  }
+
   async function removeOpcao(id: number) {
     const { error } = await supabase.from("inv_opcoes").delete().eq("id", id);
     if (error) { alert("Erro ao remover: " + error.message); return; }
     load();
+  }
+
+  async function removeCat(o: OpcaoLista) {
+    // remove subcategories first, then the category itself
+    const subs = opcoesDB.filter(s => s.tipo === "subcategoria" && s.parent === o.valor);
+    for (const s of subs) await supabase.from("inv_opcoes").delete().eq("id", s.id);
+    await removeOpcao(o.id);
   }
 
   // ─── derived ──────────────────────────────────────────────────────────────
@@ -189,9 +220,11 @@ export default function InvestimentosPage() {
   const listaBancos = opcoesDB.filter(o => o.tipo === "banco").map(o => o.valor).length
     ? opcoesDB.filter(o => o.tipo === "banco").map(o => o.valor)
     : BANCOS_DEFAULT;
-  const listaCats   = opcoesDB.filter(o => o.tipo === "categoria").map(o => o.valor).length
+  const listaCats = opcoesDB.filter(o => o.tipo === "categoria").map(o => o.valor).length
     ? opcoesDB.filter(o => o.tipo === "categoria").map(o => o.valor)
     : CATS_DEFAULT;
+  const subcatsDe = (cat: string) =>
+    opcoesDB.filter(o => o.tipo === "subcategoria" && o.parent === cat).map(o => o.valor);
 
   const totalGeral    = investimentos.reduce((s, i) => s + Number(i.valor), 0);
   const totalFiltrado = filtered.reduce((s, i) => s + Number(i.valor), 0);
@@ -200,10 +233,9 @@ export default function InvestimentosPage() {
   const bancos        = [...new Set(investimentos.map(i => i.empresa))].sort();
   const temFiltro     = !!(busca || filtroBanco || filtroInicio || filtroFim);
 
-  // PDF-specific derived (uses filtered data)
-  const mesesPDF      = [...new Set(filtered.map(i => i.data.substring(0, 7)))].sort(); // ascending = extrato order
-  const bancosNoPDF   = [...new Set(filtered.map(i => i.empresa))].sort();
-  const mediaPDF      = filtered.length ? totalFiltrado / filtered.length : 0;
+  const mesesPDF    = [...new Set(filtered.map(i => i.data.substring(0, 7)))].sort();
+  const bancosNoPDF = [...new Set(filtered.map(i => i.empresa))].sort();
+  const mediaPDF    = filtered.length ? totalFiltrado / filtered.length : 0;
 
   function labelPeriodoPDF() {
     if (filtroInicio && filtroFim) return `${labelMes(filtroInicio)} a ${labelMes(filtroFim)}`;
@@ -222,35 +254,25 @@ export default function InvestimentosPage() {
 
   function handleExcel() {
     const rows = [
-      ["Data", "Descrição", "Banco", "Valor (R$)", "Categoria", "Observação"],
+      ["Data", "Descrição", "Banco", "Valor (R$)", "Categoria", "Subcategoria", "Observação"],
       ...filtered.map(inv => [
         fmtData(inv.data),
         inv.descricao,
         inv.empresa,
         Number(inv.valor),
         inv.categoria ?? "",
+        inv.subcategoria ?? "",
         inv.observacoes ?? "",
       ]),
     ];
-
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws["!cols"] = [
-      { wch: 13 },
-      { wch: 36 },
-      { wch: 22 },
-      { wch: 16 },
-      { wch: 22 },
-      { wch: 32 },
-    ];
-
+    ws["!cols"] = [{ wch: 13 }, { wch: 36 }, { wch: 22 }, { wch: 16 }, { wch: 22 }, { wch: 22 }, { wch: 32 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Investimentos");
-
-    const bancoSlug = filtroBanco ? `_${filtroBanco.replace(/\s+/g, "_")}` : "";
+    const bancoSlug   = filtroBanco ? `_${filtroBanco.replace(/\s+/g, "_")}` : "";
     const periodoSlug = filtroInicio ? `_${filtroInicio}` : "";
-    const fimSlug = filtroFim ? `_ate_${filtroFim}` : "";
-    const dataHoje = new Date().toISOString().split("T")[0];
-    XLSX.writeFile(wb, `Investimentos_UrbanGlass${bancoSlug}${periodoSlug}${fimSlug}_${dataHoje}.xlsx`);
+    const fimSlug     = filtroFim ? `_ate_${filtroFim}` : "";
+    XLSX.writeFile(wb, `Investimentos_UrbanGlass${bancoSlug}${periodoSlug}${fimSlug}_${new Date().toISOString().split("T")[0]}.xlsx`);
   }
 
   // ─── style tokens ─────────────────────────────────────────────────────────
@@ -264,7 +286,6 @@ export default function InvestimentosPage() {
     background: "var(--surf1)", border: "1px solid var(--acc)", borderRadius: "4px",
     color: "var(--t1)", fontFamily: "inherit", boxSizing: "border-box",
   };
-  const cs: React.CSSProperties = { ...ci, cursor: "pointer" };
 
   const editActions = (onSave: () => void, onCancel: () => void) => (
     <div style={{ display: "flex", gap: "3px" }}>
@@ -273,7 +294,6 @@ export default function InvestimentosPage() {
     </div>
   );
 
-  // Columns: Data | Descrição | Banco | Valor | Categoria | Observação | Link | Ações
   const editRow = (
     form: RowState,
     set: React.Dispatch<React.SetStateAction<RowState>>,
@@ -293,7 +313,8 @@ export default function InvestimentosPage() {
           onKeyDown={e => e.key === "Enter" && onSave()} />
       </td>
       <td>
-        <select className="fc" style={{ margin: 0, width: "100%" }} value={form.empresa} onChange={e => set(f => ({ ...f, empresa: e.target.value }))}>
+        <select className="fc" style={{ margin: 0, width: "100%" }} value={form.empresa}
+          onChange={e => set(f => ({ ...f, empresa: e.target.value }))}>
           <option value="">Selecione...</option>
           {listaBancos.map(b => <option key={b} value={b}>{b}</option>)}
         </select>
@@ -301,11 +322,21 @@ export default function InvestimentosPage() {
       <td style={{ minWidth: "150px" }}>
         <CurrencyInput value={form.valor} onChange={v => set(f => ({ ...f, valor: v }))} />
       </td>
-      <td>
-        <select className="fc" style={{ margin: 0, width: "100%" }} value={form.categoria} onChange={e => set(f => ({ ...f, categoria: e.target.value }))}>
-          <option value="">—</option>
-          {listaCats.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+      <td style={{ minWidth: "200px" }}>
+        <div style={{ display: "flex", gap: "4px" }}>
+          <select className="fc" style={{ margin: 0, flex: 1 }} value={form.categoria}
+            onChange={e => set(f => ({ ...f, categoria: e.target.value, subcategoria: "" }))}>
+            <option value="">—</option>
+            {listaCats.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          {!semColSubcat && form.categoria && subcatsDe(form.categoria).length > 0 && (
+            <select className="fc" style={{ margin: 0, flex: 1 }} value={form.subcategoria}
+              onChange={e => set(f => ({ ...f, subcategoria: e.target.value }))}>
+              <option value="">—</option>
+              {subcatsDe(form.categoria).map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )}
+        </div>
       </td>
       <td>
         <input style={ci} value={form.observacoes} placeholder="Observação..."
@@ -336,9 +367,7 @@ export default function InvestimentosPage() {
           tr { page-break-inside: avoid; }
           .pdf-mes-block { page-break-inside: avoid; }
         }
-        input[type="month"].fc {
-          color-scheme: dark;
-        }
+        input[type="month"].fc { color-scheme: dark; }
       `}</style>
 
       {/* Top bar */}
@@ -356,8 +385,15 @@ export default function InvestimentosPage() {
 
         {semTabela && (
           <div className="al al-w" style={{ marginBottom: "16px", fontSize: "12px" }}>
-            <strong>⚠ Execute este SQL no Supabase para habilitar listas personalizadas:</strong>
-            <code style={{ display: "block", marginTop: "8px", padding: "10px 14px", background: "rgba(0,0,0,.3)", borderRadius: "6px", fontFamily: "'DM Mono',monospace", fontSize: "11px", userSelect: "all", lineHeight: 1.8, whiteSpace: "pre" }}>{`CREATE TABLE IF NOT EXISTS inv_opcoes (\n  id serial PRIMARY KEY,\n  tipo text NOT NULL,\n  valor text NOT NULL,\n  UNIQUE(tipo, valor)\n);\n\nINSERT INTO inv_opcoes (tipo, valor) VALUES\n  ('banco', 'Itaú Maxibuild'),\n  ('banco', 'ZRS'),\n  ('categoria', 'Manutenção'),\n  ('categoria', 'Equipamentos e Material')\nON CONFLICT DO NOTHING;`}</code>
+            <strong>⚠ Execute este SQL no Supabase para habilitar listas personalizadas e subcategorias:</strong>
+            <code style={{ display: "block", marginTop: "8px", padding: "10px 14px", background: "rgba(0,0,0,.3)", borderRadius: "6px", fontFamily: "'DM Mono',monospace", fontSize: "11px", userSelect: "all", lineHeight: 1.8, whiteSpace: "pre" }}>{`CREATE TABLE IF NOT EXISTS inv_opcoes (\n  id serial PRIMARY KEY,\n  tipo text NOT NULL,\n  valor text NOT NULL,\n  parent text,\n  UNIQUE(tipo, valor)\n);\n\nINSERT INTO inv_opcoes (tipo, valor) VALUES\n  ('banco', 'Itaú Maxibuild'),\n  ('banco', 'ZRS'),\n  ('categoria', 'Manutenção'),\n  ('categoria', 'Equipamentos e Material')\nON CONFLICT DO NOTHING;\n\nALTER TABLE investimentos ADD COLUMN IF NOT EXISTS subcategoria text;`}</code>
+          </div>
+        )}
+
+        {!semTabela && semColSubcat && (
+          <div className="al al-w" style={{ marginBottom: "16px", fontSize: "12px" }}>
+            <strong>⚠ Execute este SQL para habilitar subcategorias:</strong>
+            <code style={{ display: "block", marginTop: "8px", padding: "10px 14px", background: "rgba(0,0,0,.3)", borderRadius: "6px", fontFamily: "'DM Mono',monospace", fontSize: "11px", userSelect: "all", lineHeight: 1.8, whiteSpace: "pre" }}>{SQL_MIGRACAO_COLUNAS}</code>
           </div>
         )}
 
@@ -420,7 +456,7 @@ export default function InvestimentosPage() {
                   <th style={{ width: "200px" }}>Descrição</th>
                   <th style={{ width: "140px" }}>Banco</th>
                   <th style={{ width: "120px", textAlign: "right" }}>Valor</th>
-                  <th style={{ width: "150px" }}>Categoria</th>
+                  <th style={{ width: "180px" }}>Categoria</th>
                   <th style={{ width: "160px" }}>Observação</th>
                   <th style={{ width: "70px" }}>Link</th>
                   <th style={{ width: "72px" }}>Ações</th>
@@ -456,9 +492,18 @@ export default function InvestimentosPage() {
                         {formatBRL(Number(inv.valor))}
                       </td>
                       <td>
-                        {inv.categoria
-                          ? <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "99px", background: GB, color: G, border: `1px solid ${GBR}`, whiteSpace: "nowrap" }}>{inv.categoria}</span>
-                          : <span style={{ color: "var(--t3)" }}>—</span>}
+                        {inv.categoria ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: "3px", alignItems: "flex-start" }}>
+                            <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "99px", background: GB, color: G, border: `1px solid ${GBR}`, whiteSpace: "nowrap" }}>
+                              {inv.categoria}
+                            </span>
+                            {inv.subcategoria && (
+                              <span style={{ fontSize: "10px", color: "var(--t3)", paddingLeft: "4px" }}>└ {inv.subcategoria}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span style={{ color: "var(--t3)" }}>—</span>
+                        )}
                       </td>
                       <td style={{ fontSize: "12px", color: "var(--t3)" }}>{inv.observacoes || "—"}</td>
                       <td onClick={e => e.stopPropagation()}>
@@ -508,7 +553,7 @@ export default function InvestimentosPage() {
       {/* ── Modal Gerenciar Listas ── */}
       {modalListas && (
         <div className="mov open" onClick={e => e.target === e.currentTarget && setModalListas(false)}>
-          <div className="mod" style={{ width: "520px" }}>
+          <div className="mod" style={{ width: "580px" }}>
             <div className="mhd">
               <div className="mtit">Gerenciar Listas</div>
               <button className="mcl" onClick={() => setModalListas(false)}>✕</button>
@@ -516,13 +561,20 @@ export default function InvestimentosPage() {
 
             {semTabela && (
               <div style={{ background: "rgba(245,158,11,.12)", border: "1px solid var(--warn)", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "12px", color: "var(--warn)" }}>
-                ⚠ A tabela <code style={{ fontFamily: "'DM Mono',monospace" }}>inv_opcoes</code> não existe ainda. Execute o SQL de migração mostrado na página para habilitar listas personalizadas.
+                ⚠ A tabela <code style={{ fontFamily: "'DM Mono',monospace" }}>inv_opcoes</code> não existe ainda. Execute o SQL de migração mostrado na página.
+              </div>
+            )}
+
+            {!semTabela && semColSubcat && (
+              <div style={{ background: "rgba(245,158,11,.12)", border: "1px solid var(--warn)", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "12px", color: "var(--warn)" }}>
+                <div style={{ fontWeight: 700, marginBottom: "6px" }}>⚠ Execute o SQL para habilitar subcategorias:</div>
+                <code style={{ display: "block", padding: "8px 10px", background: "rgba(0,0,0,.3)", borderRadius: "6px", fontFamily: "'DM Mono',monospace", fontSize: "11px", userSelect: "all", whiteSpace: "pre" }}>{SQL_MIGRACAO_COLUNAS}</code>
               </div>
             )}
 
             {erroRLS && (
               <div style={{ background: "rgba(245,158,11,.12)", border: "1px solid var(--warn)", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "12px", color: "var(--warn)" }}>
-                <div style={{ fontWeight: 700, marginBottom: "6px" }}>⚠ Row Level Security bloqueando gravação. Execute no Supabase SQL Editor:</div>
+                <div style={{ fontWeight: 700, marginBottom: "6px" }}>⚠ Row Level Security bloqueando. Execute:</div>
                 <code style={{ display: "block", padding: "8px 10px", background: "rgba(0,0,0,.3)", borderRadius: "6px", fontFamily: "'DM Mono',monospace", fontSize: "11px", userSelect: "all" }}>
                   ALTER TABLE inv_opcoes DISABLE ROW LEVEL SECURITY;
                 </code>
@@ -535,16 +587,17 @@ export default function InvestimentosPage() {
               <div>
                 <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "10px" }}>Bancos / Origens</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginBottom: "10px" }}>
-                  {(opcoesDB.filter(o => o.tipo === "banco").length ? opcoesDB.filter(o => o.tipo === "banco") : BANCOS_DEFAULT.map((v, i) => ({ id: -i - 1, tipo: "banco", valor: v }))).map(o => (
+                  {(opcoesDB.filter(o => o.tipo === "banco").length
+                    ? opcoesDB.filter(o => o.tipo === "banco")
+                    : BANCOS_DEFAULT.map((v, i) => ({ id: -i - 1, tipo: "banco", valor: v, parent: null }))
+                  ).map(o => (
                     <div key={o.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", background: "var(--surf2)", borderRadius: "6px", border: "1px solid var(--b1)" }}>
                       <span style={{ fontSize: "13px" }}>{o.valor}</span>
                       {o.id > 0 && (
-                        <button
-                          style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "12px", padding: "0 2px" }}
+                        <button style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "12px", padding: "0 2px" }}
                           onMouseEnter={e => (e.currentTarget.style.color = "var(--err)")}
                           onMouseLeave={e => (e.currentTarget.style.color = "var(--t3)")}
-                          onClick={() => removeOpcao(o.id)}
-                        >✕</button>
+                          onClick={() => removeOpcao(o.id)}>✕</button>
                       )}
                     </div>
                   ))}
@@ -557,23 +610,62 @@ export default function InvestimentosPage() {
                 </div>
               </div>
 
-              {/* Categorias */}
+              {/* Categorias — expandable with subcategories */}
               <div>
                 <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "10px" }}>Categorias</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginBottom: "10px" }}>
-                  {(opcoesDB.filter(o => o.tipo === "categoria").length ? opcoesDB.filter(o => o.tipo === "categoria") : CATS_DEFAULT.map((v, i) => ({ id: -i - 1, tipo: "categoria", valor: v }))).map(o => (
-                    <div key={o.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", background: "var(--surf2)", borderRadius: "6px", border: "1px solid var(--b1)" }}>
-                      <span style={{ fontSize: "13px" }}>{o.valor}</span>
-                      {o.id > 0 && (
-                        <button
-                          style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "12px", padding: "0 2px" }}
-                          onMouseEnter={e => (e.currentTarget.style.color = "var(--err)")}
-                          onMouseLeave={e => (e.currentTarget.style.color = "var(--t3)")}
-                          onClick={() => removeOpcao(o.id)}
-                        >✕</button>
-                      )}
-                    </div>
-                  ))}
+                  {(opcoesDB.filter(o => o.tipo === "categoria").length
+                    ? opcoesDB.filter(o => o.tipo === "categoria")
+                    : CATS_DEFAULT.map((v, i) => ({ id: -i - 1, tipo: "categoria", valor: v, parent: null }))
+                  ).map(o => {
+                    const subs = opcoesDB.filter(s => s.tipo === "subcategoria" && s.parent === o.valor);
+                    const expanded = catExpandida === o.valor;
+                    return (
+                      <div key={o.id}>
+                        {/* Category row */}
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 10px", background: expanded ? `rgba(245,158,11,.08)` : "var(--surf2)", borderRadius: expanded ? "6px 6px 0 0" : "6px", border: `1px solid ${expanded ? GBR : "var(--b1)"}`, cursor: "pointer" }}
+                          onClick={() => setCatExpandida(expanded ? null : o.valor)}>
+                          <span style={{ fontSize: "10px", color: expanded ? G : "var(--t3)", transition: "transform .15s", display: "inline-block", transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}>▶</span>
+                          <span style={{ fontSize: "13px", flex: 1 }}>{o.valor}</span>
+                          {subs.length > 0 && (
+                            <span style={{ fontSize: "10px", color: "var(--t3)", background: "var(--surf1)", padding: "1px 6px", borderRadius: "99px", border: "1px solid var(--b1)" }}>{subs.length}</span>
+                          )}
+                          {o.id > 0 && (
+                            <button style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "12px", padding: "0 2px" }}
+                              onMouseEnter={e => { e.stopPropagation(); (e.currentTarget as HTMLButtonElement).style.color = "var(--err)"; }}
+                              onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.color = "var(--t3)"}
+                              onClick={e => { e.stopPropagation(); removeCat(o); }}>✕</button>
+                          )}
+                        </div>
+
+                        {/* Subcategories panel */}
+                        {expanded && (
+                          <div style={{ padding: "8px 10px", background: "var(--surf1)", border: `1px solid ${GBR}`, borderTop: "none", borderRadius: "0 0 6px 6px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                            {subs.length === 0 && (
+                              <span style={{ fontSize: "11px", color: "var(--t3)", padding: "2px 4px" }}>Nenhuma subcategoria ainda.</span>
+                            )}
+                            {subs.map(s => (
+                              <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 8px", background: "var(--surf2)", borderRadius: "4px" }}>
+                                <span style={{ fontSize: "12px", color: "var(--t2)" }}>└ {s.valor}</span>
+                                <button style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "11px", padding: "0 2px" }}
+                                  onMouseEnter={e => (e.currentTarget.style.color = "var(--err)")}
+                                  onMouseLeave={e => (e.currentTarget.style.color = "var(--t3)")}
+                                  onClick={() => removeOpcao(s.id)}>✕</button>
+                              </div>
+                            ))}
+                            {!semColSubcat && (
+                              <div style={{ display: "flex", gap: "6px", marginTop: "4px" }}>
+                                <input className="fc" value={novaSubcat} onChange={e => setNovaSubcat(e.target.value)}
+                                  placeholder="Nova subcategoria..." style={{ margin: 0, flex: 1, fontSize: "12px" }}
+                                  onKeyDown={e => e.key === "Enter" && addSubcat(o.valor, novaSubcat)} />
+                                <button className="btn bp sm" onClick={() => addSubcat(o.valor, novaSubcat)} disabled={!novaSubcat.trim()}>+</button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
                 <div style={{ display: "flex", gap: "6px" }}>
                   <input className="fc" value={novaCat} onChange={e => setNovaCat(e.target.value)}
@@ -603,22 +695,20 @@ export default function InvestimentosPage() {
             <div style={{ fontSize: "10px", fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: "2px", marginBottom: "4px" }}>Extrato de</div>
             <div style={{ fontSize: "22px", fontWeight: 900, color: "#2d5fa6", letterSpacing: "-0.5px", lineHeight: 1 }}>Investimentos</div>
             <div style={{ fontSize: "10px", color: "#555", marginTop: "6px", fontWeight: 600 }}>{labelPeriodoPDF()}</div>
-            {filtroBanco && (
-              <div style={{ fontSize: "10px", color: "#2d5fa6", marginTop: "3px", fontWeight: 700 }}>{filtroBanco}</div>
-            )}
+            {filtroBanco && <div style={{ fontSize: "10px", color: "#2d5fa6", marginTop: "3px", fontWeight: 700 }}>{filtroBanco}</div>}
             <div style={{ fontSize: "9px", color: "#888", marginTop: "4px" }}>
               Gerado em {new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
             </div>
           </div>
         </div>
 
-        {/* KPI strip — filtered values */}
+        {/* KPI strip */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
           {[
-            { label: "Total do Período",   value: formatBRL(totalFiltrado),        color: "#2d5fa6" },
-            { label: "Nº de Aportes",      value: String(filtered.length),         color: "#2d5fa6" },
-            { label: "Média por Aporte",   value: formatBRL(mediaPDF),             color: "#444" },
-            { label: "Bancos / Origens",   value: String(bancosNoPDF.length),      color: "#444" },
+            { label: "Total do Período",   value: formatBRL(totalFiltrado),   color: "#2d5fa6" },
+            { label: "Nº de Aportes",      value: String(filtered.length),    color: "#2d5fa6" },
+            { label: "Média por Aporte",   value: formatBRL(mediaPDF),        color: "#444" },
+            { label: "Bancos / Origens",   value: String(bancosNoPDF.length), color: "#444" },
           ].map(k => (
             <div key={k.label} style={{ background: "#f0f4ff", borderRadius: "8px", padding: "12px 14px", borderLeft: "3px solid #2d5fa6" }}>
               <div style={{ fontSize: "8px", fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "5px" }}>{k.label}</div>
@@ -627,7 +717,7 @@ export default function InvestimentosPage() {
           ))}
         </div>
 
-        {/* Per-bank summary — uses filtered data */}
+        {/* Per-bank summary */}
         {bancosNoPDF.length > 1 && (
           <div style={{ marginBottom: "20px", pageBreakInside: "avoid" }}>
             <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "1px", color: "#2d5fa6", marginBottom: "8px", borderBottom: "1px solid #d0daf0", paddingBottom: "4px" }}>
@@ -636,10 +726,9 @@ export default function InvestimentosPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
               <thead>
                 <tr style={{ background: "#2d5fa6" }}>
-                  <th style={{ padding: "7px 10px", textAlign: "left",   color: "white", fontWeight: 700, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Banco / Origem</th>
-                  <th style={{ padding: "7px 10px", textAlign: "center", color: "white", fontWeight: 700, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Aportes</th>
-                  <th style={{ padding: "7px 10px", textAlign: "right",  color: "white", fontWeight: 700, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Total Investido</th>
-                  <th style={{ padding: "7px 10px", textAlign: "right",  color: "white", fontWeight: 700, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.5px" }}>% do Total</th>
+                  {["Banco / Origem", "Aportes", "Total Investido", "% do Total"].map((h, i) => (
+                    <th key={h} style={{ padding: "7px 10px", textAlign: i === 0 ? "left" : i === 2 || i === 3 ? "right" : "center", color: "white", fontWeight: 700, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -669,7 +758,7 @@ export default function InvestimentosPage() {
           </div>
         )}
 
-        {/* Detail table — grouped by month (extrato style) */}
+        {/* Detail by month */}
         <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "1px", color: "#2d5fa6", marginBottom: "10px", borderBottom: "1px solid #d0daf0", paddingBottom: "4px" }}>
           Detalhamento por Período
         </div>
@@ -679,53 +768,46 @@ export default function InvestimentosPage() {
           const totalMes = itsMes.reduce((s, i) => s + Number(i.valor), 0);
           return (
             <div key={mes} className="pdf-mes-block" style={{ marginBottom: "16px" }}>
-              {/* Month header */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#e8edf8", padding: "6px 10px", borderRadius: "4px 4px 0 0", borderLeft: "3px solid #2d5fa6", marginBottom: "0" }}>
-                <span style={{ fontSize: "10px", fontWeight: 800, color: "#2d5fa6", textTransform: "capitalize" }}>
-                  {labelMes(mes)}
-                </span>
-                <span style={{ fontSize: "10px", fontWeight: 700, color: "#2d5fa6", fontFamily: "monospace" }}>
-                  {itsMes.length} aporte(s) · {formatBRL(totalMes)}
-                </span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#e8edf8", padding: "6px 10px", borderRadius: "4px 4px 0 0", borderLeft: "3px solid #2d5fa6" }}>
+                <span style={{ fontSize: "10px", fontWeight: 800, color: "#2d5fa6", textTransform: "capitalize" }}>{labelMes(mes)}</span>
+                <span style={{ fontSize: "10px", fontWeight: 700, color: "#2d5fa6", fontFamily: "monospace" }}>{itsMes.length} aporte(s) · {formatBRL(totalMes)}</span>
               </div>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px" }}>
                 <thead>
                   <tr style={{ background: "#2d5fa6" }}>
                     {[
-                      { h: "Data",       align: "left",  w: "70px"  },
+                      { h: "Data",       align: "left",  w: "68px"  },
                       { h: "Descrição",  align: "left",  w: "auto"  },
-                      { h: "Banco",      align: "left",  w: "110px" },
-                      { h: "Valor",      align: "right", w: "90px"  },
-                      { h: "Categoria",  align: "left",  w: "90px"  },
-                      { h: "Observação", align: "left",  w: "100px" },
+                      { h: "Banco",      align: "left",  w: "100px" },
+                      { h: "Valor",      align: "right", w: "85px"  },
+                      { h: "Categoria",  align: "left",  w: "80px"  },
+                      { h: "Subcat.",    align: "left",  w: "80px"  },
+                      { h: "Observação", align: "left",  w: "90px"  },
                     ].map(({ h, align, w }) => (
-                      <th key={h} style={{ padding: "5px 8px", textAlign: align as "left" | "right", color: "white", fontWeight: 700, fontSize: "8px", textTransform: "uppercase", letterSpacing: "0.5px", width: w }}>
-                        {h}
-                      </th>
+                      <th key={h} style={{ padding: "5px 7px", textAlign: align as "left" | "right", color: "white", fontWeight: 700, fontSize: "8px", textTransform: "uppercase", letterSpacing: "0.5px", width: w }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {itsMes.map((inv, idx) => (
                     <tr key={inv.id} style={{ background: idx % 2 === 0 ? "#fff" : "#f7f9ff" }}>
-                      <td style={{ padding: "6px 8px", color: "#444", borderBottom: "1px solid #e8edf8", whiteSpace: "nowrap", fontFamily: "monospace", fontSize: "10px" }}>{fmtData(inv.data)}</td>
-                      <td style={{ padding: "6px 8px", color: "#222", fontWeight: 600, borderBottom: "1px solid #e8edf8" }}>{inv.descricao}</td>
-                      <td style={{ padding: "6px 8px", color: "#333", borderBottom: "1px solid #e8edf8" }}>{inv.empresa}</td>
-                      <td style={{ padding: "6px 8px", color: "#2d5fa6", fontWeight: 700, textAlign: "right", borderBottom: "1px solid #e8edf8", whiteSpace: "nowrap", fontFamily: "monospace" }}>{formatBRL(Number(inv.valor))}</td>
-                      <td style={{ padding: "6px 8px", color: "#d97706", borderBottom: "1px solid #e8edf8" }}>{inv.categoria ?? "—"}</td>
-                      <td style={{ padding: "6px 8px", color: "#666", borderBottom: "1px solid #e8edf8" }}>{inv.observacoes ?? "—"}</td>
+                      <td style={{ padding: "6px 7px", color: "#444", borderBottom: "1px solid #e8edf8", whiteSpace: "nowrap", fontFamily: "monospace", fontSize: "10px" }}>{fmtData(inv.data)}</td>
+                      <td style={{ padding: "6px 7px", color: "#222", fontWeight: 600, borderBottom: "1px solid #e8edf8" }}>{inv.descricao}</td>
+                      <td style={{ padding: "6px 7px", color: "#333", borderBottom: "1px solid #e8edf8" }}>{inv.empresa}</td>
+                      <td style={{ padding: "6px 7px", color: "#2d5fa6", fontWeight: 700, textAlign: "right", borderBottom: "1px solid #e8edf8", whiteSpace: "nowrap", fontFamily: "monospace" }}>{formatBRL(Number(inv.valor))}</td>
+                      <td style={{ padding: "6px 7px", color: "#d97706", borderBottom: "1px solid #e8edf8" }}>{inv.categoria ?? "—"}</td>
+                      <td style={{ padding: "6px 7px", color: "#888", borderBottom: "1px solid #e8edf8" }}>{inv.subcategoria ?? "—"}</td>
+                      <td style={{ padding: "6px 7px", color: "#666", borderBottom: "1px solid #e8edf8" }}>{inv.observacoes ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr style={{ background: "#f0f4ff" }}>
-                    <td colSpan={3} style={{ padding: "6px 8px", fontWeight: 700, fontSize: "9px", color: "#2d5fa6", textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                    <td colSpan={3} style={{ padding: "6px 7px", fontWeight: 700, fontSize: "9px", color: "#2d5fa6", textTransform: "uppercase", letterSpacing: "0.4px" }}>
                       Subtotal {labelMes(mes)}
                     </td>
-                    <td style={{ padding: "6px 8px", fontWeight: 900, color: "#2d5fa6", textAlign: "right", fontFamily: "monospace", fontSize: "11px" }}>
-                      {formatBRL(totalMes)}
-                    </td>
-                    <td colSpan={2} />
+                    <td style={{ padding: "6px 7px", fontWeight: 900, color: "#2d5fa6", textAlign: "right", fontFamily: "monospace", fontSize: "11px" }}>{formatBRL(totalMes)}</td>
+                    <td colSpan={3} />
                   </tr>
                 </tfoot>
               </table>
@@ -738,9 +820,7 @@ export default function InvestimentosPage() {
           <span style={{ fontSize: "11px", fontWeight: 800, color: "white", textTransform: "uppercase", letterSpacing: "0.5px" }}>
             Total Geral Investido · {filtered.length} aporte(s)
           </span>
-          <span style={{ fontSize: "15px", fontWeight: 900, color: "white", fontFamily: "monospace" }}>
-            {formatBRL(totalFiltrado)}
-          </span>
+          <span style={{ fontSize: "15px", fontWeight: 900, color: "white", fontFamily: "monospace" }}>{formatBRL(totalFiltrado)}</span>
         </div>
 
         {/* Footer */}
