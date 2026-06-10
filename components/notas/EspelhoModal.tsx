@@ -107,7 +107,7 @@ export default function EspelhoModal({ form, cliente, totais, onClose, onEmitir,
             <div style={{ border:bd, borderStyle:"dashed", marginBottom:"4px", display:"grid", gridTemplateColumns:"1fr 135px" }}>
               <div style={{ padding:"3px 5px", borderRight:"0.5px dashed #000" }}>
                 <div style={{ fontSize:"6px", color:"#000", lineHeight:1.6, marginBottom:"5px" }}>
-                  Recebemos de <strong>{emit?.nome ?? "EMITENTE"}</strong> ({emit?.fantasia || emit?.nome ?? "EMITENTE"}) os produtos e/ou
+                  Recebemos de <strong>{emit?.nome ?? "EMITENTE"}</strong> ({(emit?.fantasia || emit?.nome) ?? "EMITENTE"}) os produtos e/ou
                   serviços constantes na Nota Fiscal Eletrônica indicada ao lado.
                   Destinatário: <strong>{cliente.nome}</strong>
                 </div>
