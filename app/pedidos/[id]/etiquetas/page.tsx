@@ -152,9 +152,7 @@ export default function EtiquetasPage() {
               totalPecasNaChapa: chapa.placed.length,
               totalPecasGeral:   totalGeral,
               loteCorte:         lote,
-              qrData: ped?.status === "Entregue"
-                ? `URBAN GLASS\nPedido: ${pidDaPeca}\nCliente: ${ped?.clientes?.nome ?? ""}\nMaterial: ${peca.prod || chapa.prod}\nMedidas: ${peca.l}x${peca.a}mm\nLote: ${lote}`
-                : `https://urbanglasserp.vercel.app/pedidos/${pidDaPeca}/producao`,
+              qrData: `URBAN GLASS\nPedido: ${pidDaPeca}\nCliente: ${ped?.clientes?.nome ?? ""}\nMaterial: ${peca.prod || chapa.prod}\nMedidas: ${peca.l}x${peca.a}mm\nLote: ${lote}`,
             });
           });
         });
@@ -199,9 +197,7 @@ export default function EtiquetasPage() {
                 totalPecasNaChapa: porCaixa,
                 totalPecasGeral:   totalGeral,
                 loteCorte:         lote,
-                qrData: ped?.status === "Entregue"
-                  ? `URBAN GLASS\nPedido: ${id}\nCliente: ${ped?.clientes?.nome ?? ""}\nMaterial: ${item.produto_nome}\nMedidas: ${item.largura}x${item.altura}mm\nLote: ${lote}`
-                  : `https://urbanglasserp.vercel.app/pedidos/${id}/producao`,
+                qrData: `URBAN GLASS\nPedido: ${id}\nCliente: ${ped?.clientes?.nome ?? ""}\nMaterial: ${item.produto_nome}\nMedidas: ${item.largura}x${item.altura}mm\nLote: ${lote}`,
                 modoCaixa:         true,
               });
               caixaIdx++;
