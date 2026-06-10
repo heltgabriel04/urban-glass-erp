@@ -507,13 +507,11 @@ export default function InvestimentosPage() {
 
       {/* ── Modal Gerenciar Listas ── */}
       {modalListas && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }}
-          onClick={() => setModalListas(false)}>
-          <div style={{ background: "var(--surf1)", border: "2px solid var(--b2)", borderRadius: "12px", padding: "28px 32px", width: "520px", maxWidth: "94vw", boxShadow: "0 8px 32px rgba(0,0,0,.5)" }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <span style={{ fontSize: "15px", fontWeight: 700 }}>Gerenciar Listas</span>
-              <button className="btn bg sm" onClick={() => setModalListas(false)}>✕ Fechar</button>
+        <div className="mov open" onClick={e => e.target === e.currentTarget && setModalListas(false)}>
+          <div className="mod" style={{ width: "520px" }}>
+            <div className="mhd">
+              <div className="mtit">Gerenciar Listas</div>
+              <button className="mcl" onClick={() => setModalListas(false)}>✕</button>
             </div>
 
             {semTabela && (
