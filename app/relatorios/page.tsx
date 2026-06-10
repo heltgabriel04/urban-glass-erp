@@ -8,11 +8,12 @@ import { getEstoque } from "@/services/estoque.service";
 import { getOrcamentos } from "@/services/orcamentos.service";
 import { getAllHistoricoOtimizador } from "@/services/otimizador.service";
 import { formatBRL, formatPercent } from "@/lib/formatters";
+import { supabase } from "@/lib/supabase/client";
 import type { FinanceiroCliente, FaturamentoMensal, Pedido, Lancamento } from "@/types";
 
 const MESES_ABREV    = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MESES_COMPLETOS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-const TABS = ["Faturamento","Clientes","Pedidos","Eficiência","Fluxo de Caixa","Estoque","Orçamentos"];
+const TABS = ["Faturamento","Clientes","Pedidos","Eficiência","Fluxo de Caixa","Estoque","Orçamentos","Fechamento"];
 
 const STATUS_COR: Record<string, string> = {
   "Aguardando otimização":   "var(--warn)",
@@ -85,6 +86,8 @@ export default function RelatoriosPage() {
   const [otimHistorico, setOtimHistorico] = useState<Array<{ dt_otim: string; aproveitamento: number; perda: number; chapas_usadas: number; retalhos_gerados: number; total_pecas: number }>>([]);
   const [estoque, setEstoque]             = useState<any[]>([]);
   const [orcamentos, setOrcamentos]       = useState<any[]>([]);
+  const [investimentos, setInvestimentos] = useState<any[]>([]);
+  const [mesFechoSel, setMesFechoSel]     = useState<string>("");
 
   const hoje     = new Date().toISOString().split("T")[0];
   const dtEmissao = new Date().toLocaleDateString("pt-BR");
@@ -93,7 +96,7 @@ export default function RelatoriosPage() {
 
   async function load() {
     setLoading(true);
-    const [fin, fat, peds, lancs, otimHist, estq, orcs] = await Promise.all([
+    const [fin, fat, peds, lancs, otimHist, estq, orcs, invRes] = await Promise.all([
       getFinanceiroClientes(),
       getFaturamentoMensal(2026),
       getPedidos(),
@@ -101,14 +104,18 @@ export default function RelatoriosPage() {
       getAllHistoricoOtimizador(),
       getEstoque(),
       getOrcamentos(),
+      supabase.from("investimentos").select("*").order("data", { ascending: true }),
     ]);
     setFinanceiro(fin); setFatMensal(fat); setPedidos(peds);
     setLancamentos(lancs as Lancamento[]);
     setOtimHistorico(otimHist as any);
     setEstoque(estq);
     setOrcamentos(orcs as any[]);
+    setInvestimentos((invRes.data ?? []) as any[]);
     setLoading(false);
+    const mesAtual = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
     setMesSel(new Date().getMonth() + 1);
+    setMesFechoSel(mesAtual);
   }
 
   function imprimirRelatorio(tipo: TipoRelatorio) {
@@ -232,6 +239,69 @@ export default function RelatoriosPage() {
     }), [estoque]);
   const valorTotalEstoque = estoque.reduce((a: number, e: any) => a + Number(e.m2_saldo) * Number(e.custo_m2), 0);
   const m2TotalEstoque    = estoque.reduce((a: number, e: any) => a + Number(e.m2_saldo), 0);
+
+  // ── Fechamento mensal ─────────────────────────────────────────────────────
+  const invPorMes = useMemo(() => {
+    const map = new Map<string, { total: number; items: any[] }>();
+    investimentos.forEach(inv => {
+      const mes = (inv.data ?? "").substring(0, 7);
+      if (!mes) return;
+      const prev = map.get(mes) ?? { total: 0, items: [] };
+      prev.total += Number(inv.valor);
+      prev.items.push(inv);
+      map.set(mes, prev);
+    });
+    return map;
+  }, [investimentos]);
+
+  const mesesFecho = useMemo(() => {
+    const mesesInv = [...invPorMes.keys()];
+    const mesesFat = meses.filter(m => m.faturado > 0).map(m => `2026-${String(m.mesNum).padStart(2, "0")}`);
+    return [...new Set([...mesesInv, ...mesesFat])].sort();
+  }, [invPorMes, meses]);
+
+  const invMesSel   = mesFechoSel ? (invPorMes.get(mesFechoSel) ?? { total: 0, items: [] }) : { total: 0, items: [] };
+  const mesNumFecho = mesFechoSel ? Number(mesFechoSel.split("-")[1]) : 0;
+  const fatMesFecho = mesNumFecho > 0 ? (meses.find(m => m.mesNum === mesNumFecho)?.faturado ?? 0) : 0;
+  const resultadoMes = fatMesFecho - invMesSel.total;
+
+  const mesFechoAnt = mesFechoSel ? (() => {
+    const idx = mesesFecho.indexOf(mesFechoSel);
+    return idx > 0 ? mesesFecho[idx - 1] : null;
+  })() : null;
+  const invMesAnt   = mesFechoAnt ? (invPorMes.get(mesFechoAnt) ?? { total: 0, items: [] }) : { total: 0, items: [] };
+  const mesNumAnt   = mesFechoAnt ? Number(mesFechoAnt.split("-")[1]) : 0;
+  const fatMesAnt2  = mesNumAnt > 0 ? (meses.find(m => m.mesNum === mesNumAnt)?.faturado ?? 0) : 0;
+
+  const invPorCat = useMemo(() => {
+    const items = invMesSel.items ?? [];
+    const map = new Map<string, number>();
+    items.forEach(inv => {
+      const cat = inv.categoria ?? "Sem categoria";
+      map.set(cat, (map.get(cat) ?? 0) + Number(inv.valor));
+    });
+    return [...map.entries()].sort((a, b) => b[1] - a[1]);
+  }, [invMesSel]);
+
+  const invPorCatAno = useMemo(() => {
+    const map = new Map<string, number>();
+    investimentos.forEach(inv => {
+      const cat = inv.categoria ?? "Sem categoria";
+      map.set(cat, (map.get(cat) ?? 0) + Number(inv.valor));
+    });
+    return [...map.entries()].sort((a, b) => b[1] - a[1]);
+  }, [investimentos]);
+
+  const totalInvestidoAno = investimentos.reduce((a, i) => a + Number(i.valor), 0);
+
+  const fechamentoMeses = useMemo(() => mesesFecho.map(mes => {
+    const inv  = invPorMes.get(mes) ?? { total: 0, items: [] };
+    const mNum = Number(mes.split("-")[1]);
+    const fat  = meses.find(m => m.mesNum === mNum)?.faturado ?? 0;
+    const label = new Date(Number(mes.split("-")[0]), mNum - 1, 1)
+      .toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+    return { mes, label: label.charAt(0).toUpperCase() + label.slice(1), fat, inv: inv.total, resultado: fat - inv.total };
+  }), [mesesFecho, invPorMes, meses]);
 
   // ── Orçamentos ────────────────────────────────────────────────────────────
   const orcsAprovados  = orcamentos.filter((o: any) => o.status === 'Aprovado');
@@ -726,6 +796,228 @@ export default function RelatoriosPage() {
                       })}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* ══ TAB 7: FECHAMENTO ══ */}
+              {tabIdx === 7 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+
+                  {/* Seletor de mês */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "12px", color: "var(--t3)", fontWeight: 600 }}>Mês de fechamento:</span>
+                    <select className="fc" style={{ minWidth: "200px" }} value={mesFechoSel} onChange={e => setMesFechoSel(e.target.value)}>
+                      {mesesFecho.length === 0 && <option value="">Sem dados</option>}
+                      {mesesFecho.map(m => {
+                        const [y, mo] = m.split("-").map(Number);
+                        const label = new Date(y, mo - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+                        return <option key={m} value={m}>{label.charAt(0).toUpperCase() + label.slice(1)}</option>;
+                      })}
+                    </select>
+                    {mesFechoAnt && (
+                      <span style={{ fontSize: "11px", color: "var(--t3)" }}>
+                        vs {new Date(Number(mesFechoAnt.split("-")[0]), Number(mesFechoAnt.split("-")[1]) - 1, 1)
+                          .toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* KPIs do mês */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px" }}>
+                    {[
+                      { label: "Faturamento do Mês", value: formatBRL(fatMesFecho), color: "var(--ok)", sub: fatMesAnt2 > 0 ? `${fatMesFecho >= fatMesAnt2 ? "↑ +" : "↓ "}${Math.abs((fatMesFecho - fatMesAnt2) / fatMesAnt2 * 100).toFixed(1)}% vs mês ant.` : "—" },
+                      { label: "Investimentos do Mês", value: formatBRL(invMesSel.total), color: "#f59e0b", sub: `${invMesSel.items.length} lançamento(s)` },
+                      { label: "Resultado do Mês", value: formatBRL(resultadoMes), color: resultadoMes >= 0 ? "var(--ok)" : "var(--err)", sub: resultadoMes >= 0 ? "Superávit" : "Déficit" },
+                      { label: "Investido no Ano", value: formatBRL(totalInvestidoAno), color: "var(--acc2)", sub: `${investimentos.length} lançamentos` },
+                    ].map(card => (
+                      <div key={card.label} style={{ background: "var(--surf)", border: "1px solid var(--b1)", borderRadius: "12px", padding: "18px 20px" }}>
+                        <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600, marginBottom: "8px" }}>{card.label}</div>
+                        <div style={{ fontSize: "24px", fontWeight: 700, color: card.color, fontFamily: "'DM Mono', monospace", lineHeight: 1.1, marginBottom: "6px" }}>{card.value}</div>
+                        <div style={{ fontSize: "11px", color: card.color === "var(--err)" ? "var(--err)" : "var(--t3)" }}>{card.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Faturamento vs Investimentos por mês */}
+                  <div className="card">
+                    <div className="ct">Faturamento × Investimentos por Mês</div>
+                    <div style={{ display: "flex", gap: "14px", marginBottom: "10px" }}>
+                      {[{ color: "rgba(61,255,160,.5)", label: "Faturamento" }, { color: "rgba(245,158,11,.6)", label: "Investimentos" }].map(l => (
+                        <div key={l.label} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "10px", color: "var(--t2)" }}>
+                          <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: l.color }} />{l.label}
+                        </div>
+                      ))}
+                    </div>
+                    {(() => {
+                      const maxVal = Math.max(...fechamentoMeses.map(m => Math.max(m.fat, m.inv)), 1);
+                      return (
+                        <div style={{ height: "130px", display: "flex", alignItems: "flex-end", gap: "6px", marginBottom: "14px" }}>
+                          {fechamentoMeses.map((m, i) => {
+                            const sel  = m.mes === mesFechoSel;
+                            const hFat = m.fat > 0 ? Math.max((m.fat / maxVal) * 110, 4) : 4;
+                            const hInv = m.inv > 0 ? Math.max((m.inv / maxVal) * 110, 2) : 0;
+                            return (
+                              <div key={i} onClick={() => setMesFechoSel(m.mes)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px", cursor: "pointer" }}>
+                                <div style={{ width: "100%", display: "flex", alignItems: "flex-end", gap: "1px" }}>
+                                  <div style={{ flex: 1, height: `${hFat}px`, borderRadius: "2px 2px 0 0", background: sel ? "var(--ok)" : "rgba(61,255,160,.35)", transition: "all .15s", boxShadow: sel ? "0 0 8px rgba(61,255,160,.3)" : "none" }} />
+                                  <div style={{ flex: 1, height: `${hInv}px`, borderRadius: "2px 2px 0 0", background: sel ? "#f59e0b" : "rgba(245,158,11,.45)", transition: "all .15s" }} />
+                                </div>
+                                <div style={{ fontSize: "7px", fontFamily: "'DM Mono', monospace", color: sel ? "var(--acc)" : "var(--t3)", fontWeight: sel ? 700 : 400 }}>
+                                  {m.mes.substring(5)}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                    {/* Table summary */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 110px 110px 110px 80px", gap: "6px", padding: "5px 8px", fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", borderBottom: "1px solid var(--b1)", fontFamily: "'DM Mono', monospace" }}>
+                      <div>Mês</div><div style={{ textAlign: "right" }}>Faturamento</div><div style={{ textAlign: "right" }}>Investimentos</div><div style={{ textAlign: "right" }}>Resultado</div><div style={{ textAlign: "right" }}>Lanç.</div>
+                    </div>
+                    {fechamentoMeses.map((m, i) => {
+                      const sel = m.mes === mesFechoSel;
+                      return (
+                        <div key={i} onClick={() => setMesFechoSel(m.mes)} style={{ display: "grid", gridTemplateColumns: "1fr 110px 110px 110px 80px", gap: "6px", padding: "8px 8px", borderRadius: "6px", cursor: "pointer", background: sel ? "rgba(245,158,11,.06)" : i % 2 === 0 ? "var(--surf2)" : "transparent", border: sel ? "1px solid rgba(245,158,11,.25)" : "1px solid transparent", transition: "all .1s" }}>
+                          <div style={{ fontSize: "12px", color: "var(--t1)", fontWeight: sel ? 700 : 500 }}>{m.label}</div>
+                          <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--ok)", fontWeight: 600, textAlign: "right" }}>{m.fat > 0 ? formatBRL(m.fat) : "—"}</div>
+                          <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "#f59e0b", textAlign: "right" }}>{m.inv > 0 ? formatBRL(m.inv) : "—"}</div>
+                          <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: m.resultado >= 0 ? "var(--ok)" : "var(--err)", fontWeight: 700, textAlign: "right" }}>
+                            {(m.fat > 0 || m.inv > 0) ? (m.resultado >= 0 ? "+" : "") + formatBRL(m.resultado) : "—"}
+                          </div>
+                          <div style={{ fontSize: "11px", fontFamily: "'DM Mono', monospace", color: "var(--t3)", textAlign: "right" }}>
+                            {(invPorMes.get(m.mes)?.items.length ?? 0) || "—"}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Investimentos do mês por categoria + top lançamentos */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+
+                    {/* Por categoria */}
+                    <div className="card">
+                      <div className="ct">Investimentos por Categoria <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>{mesFechoSel ? new Date(Number(mesFechoSel.split("-")[0]), Number(mesFechoSel.split("-")[1]) - 1, 1).toLocaleDateString("pt-BR", { month: "long" }) : ""}</span></div>
+                      {invPorCat.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "30px", color: "var(--t3)", fontSize: "12px" }}>Nenhum investimento neste mês.</div>
+                      ) : (() => {
+                        const maxCat = invPorCat[0]?.[1] ?? 1;
+                        return invPorCat.map(([cat, val], i) => {
+                          const pct = (val / maxCat) * 100;
+                          const pctTotal = invMesSel.total > 0 ? (val / invMesSel.total * 100) : 0;
+                          return (
+                            <div key={i} style={{ display: "flex", flexDirection: "column", gap: "4px", marginBottom: "8px" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <span style={{ fontSize: "12px", color: "var(--t1)", fontWeight: 500 }}>{cat}</span>
+                                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                                  <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>{pctTotal.toFixed(1)}%</span>
+                                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#f59e0b", fontFamily: "'DM Mono', monospace" }}>{formatBRL(val)}</span>
+                                </div>
+                              </div>
+                              <div style={{ height: "5px", borderRadius: "3px", background: "var(--surf2)", overflow: "hidden" }}>
+                                <div style={{ height: "100%", width: `${pct}%`, background: "rgba(245,158,11,.65)", borderRadius: "3px", transition: "width .4s" }} />
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+
+                    {/* Top lançamentos do mês */}
+                    <div className="card">
+                      <div className="ct">Maiores Lançamentos <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>top 10 do mês</span></div>
+                      {invMesSel.items.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "30px", color: "var(--t3)", fontSize: "12px" }}>Nenhum lançamento neste mês.</div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 100px 90px", gap: "6px", padding: "5px 8px", fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", borderBottom: "1px solid var(--b1)", fontFamily: "'DM Mono', monospace" }}>
+                            <div>Descrição</div><div>Categoria</div><div style={{ textAlign: "right" }}>Valor</div>
+                          </div>
+                          {[...invMesSel.items].sort((a, b) => Number(b.valor) - Number(a.valor)).slice(0, 10).map((inv: any, i: number) => (
+                            <div key={inv.id ?? i} style={{ display: "grid", gridTemplateColumns: "1fr 100px 90px", gap: "6px", padding: "8px 8px", borderRadius: "5px", background: i % 2 === 0 ? "var(--surf2)" : "transparent", alignItems: "center" }}>
+                              <div>
+                                <div style={{ fontSize: "12px", color: "var(--t1)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{inv.descricao}</div>
+                                <div style={{ fontSize: "10px", color: "var(--t3)" }}>{inv.empresa}</div>
+                              </div>
+                              <div style={{ fontSize: "10px", color: "var(--t3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{inv.categoria ?? "—"}</div>
+                              <div style={{ fontSize: "13px", fontWeight: 700, color: "#f59e0b", fontFamily: "'DM Mono', monospace", textAlign: "right" }}>{formatBRL(Number(inv.valor))}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Estoque snapshot + categorias no ano */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+
+                    {/* Estoque atual */}
+                    <div className="card">
+                      <div className="ct">Estoque Atual</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "8px", marginBottom: "12px" }}>
+                        {[
+                          { label: "Valor em Estoque", value: formatBRL(valorTotalEstoque), color: "var(--acc)" },
+                          { label: "m² Disponível",    value: m2TotalEstoque.toFixed(1) + " m²", color: "var(--acc2)" },
+                          { label: "Chapas Inteiras",  value: String(estoque.reduce((a: number, e: any) => a + Number(e.chapas_saldo), 0)), color: "var(--acc4)" },
+                        ].map(k => (
+                          <div key={k.label} style={{ padding: "10px 12px", background: "var(--surf2)", borderRadius: "8px", border: "1px solid var(--b1)" }}>
+                            <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: "4px" }}>{k.label}</div>
+                            <div style={{ fontSize: "16px", fontWeight: 700, color: k.color, fontFamily: "'DM Mono', monospace" }}>{k.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {estoque.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "20px", color: "var(--t3)", fontSize: "12px" }}>Nenhum produto em estoque.</div>
+                      ) : estoqueOrdenado.map((e: any, i: number) => {
+                        const pctRest = Number(e.m2_entrada) > 0 ? Number(e.m2_saldo) / Number(e.m2_entrada) * 100 : 0;
+                        const sCor    = pctRest <= 20 ? "var(--err)" : pctRest <= 50 ? "var(--warn)" : "var(--ok)";
+                        return (
+                          <div key={e.id} style={{ display: "flex", flexDirection: "column", gap: "4px", marginBottom: "8px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--t1)" }}>{e.produtos?.nome ?? e.cod}</span>
+                              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                                <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>{Number(e.chapas_saldo)} chapas · {Number(e.m2_saldo).toFixed(1)} m²</span>
+                                <span style={{ fontSize: "11px", fontWeight: 700, color: sCor, fontFamily: "'DM Mono', monospace" }}>{pctRest.toFixed(0)}%</span>
+                              </div>
+                            </div>
+                            <div style={{ height: "4px", borderRadius: "2px", background: "var(--surf2)", overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: `${Math.min(pctRest, 100)}%`, background: sCor, borderRadius: "2px", opacity: 0.7 }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Categorias no ano */}
+                    <div className="card">
+                      <div className="ct">Investimentos por Categoria <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>acumulado 2026</span></div>
+                      {invPorCatAno.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "30px", color: "var(--t3)", fontSize: "12px" }}>Nenhum investimento registrado.</div>
+                      ) : (() => {
+                        const maxCat = invPorCatAno[0]?.[1] ?? 1;
+                        return invPorCatAno.map(([cat, val], i) => {
+                          const pct = (val / maxCat) * 100;
+                          const pctTotal = totalInvestidoAno > 0 ? (val / totalInvestidoAno * 100) : 0;
+                          return (
+                            <div key={i} style={{ display: "flex", flexDirection: "column", gap: "4px", marginBottom: "8px" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <span style={{ fontSize: "12px", color: "var(--t1)", fontWeight: 500 }}>{cat}</span>
+                                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                                  <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>{pctTotal.toFixed(1)}%</span>
+                                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#f59e0b", fontFamily: "'DM Mono', monospace" }}>{formatBRL(val)}</span>
+                                </div>
+                              </div>
+                              <div style={{ height: "5px", borderRadius: "3px", background: "var(--surf2)", overflow: "hidden" }}>
+                                <div style={{ height: "100%", width: `${pct}%`, background: "rgba(245,158,11,.5)", borderRadius: "3px", transition: "width .4s" }} />
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+
+                  </div>
                 </div>
               )}
 
