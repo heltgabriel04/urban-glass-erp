@@ -101,6 +101,21 @@ export default function PedidosPage() {
     else toast("Erro ao excluir pedido", "err");
   }
 
+  const [corrigindo, setCorrigindo] = useState(false);
+  const [corrigido, setCorrigido]   = useState(false);
+
+  async function corrigirML() {
+    if (!confirm("Isso vai atualizar os valores de medida (m²→ml) de todos os itens com 'vidro do cliente'. Continuar?")) return;
+    setCorrigindo(true);
+    const res = await fetch("/api/admin/fix-vidro-ml", { method: "POST" });
+    const json = await res.json();
+    setCorrigindo(false);
+    if (json.error) { toast("Erro: " + json.error, "err"); return; }
+    setCorrigido(true);
+    toast(`✓ ${json.fixed} item(s) corrigido(s) em ${json.pedidos} pedido(s)`);
+    load();
+  }
+
   const totalValor    = pedidos.reduce((a, p) => a + Number(p.valor_total), 0);
   const totalRecebido = pedidos.reduce((a, p) => a + Number(p.valor_recebido), 0);
   const totalAberto   = totalValor - totalRecebido;
@@ -154,6 +169,11 @@ export default function PedidosPage() {
             onChange={e => setFiltro(e.target.value)}
           />
         </div>
+        {!corrigido && pedidosVidroCliente.size > 0 && (
+          <button className="btn cy sm" onClick={corrigirML} disabled={corrigindo} title="Corrige os valores de medida dos itens com vidro do cliente para metro linear">
+            {corrigindo ? "Corrigindo..." : "⚙ Corrigir ML"}
+          </button>
+        )}
         <a href="/pedidos/novo" className="btn bp sm">+ Novo Pedido</a>
       </div>
 

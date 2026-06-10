@@ -188,7 +188,7 @@ export default function OrcamentoDetalhe() {
             <div className="card" style={{ padding: "20px 24px" }}>
               <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, marginBottom: "16px", letterSpacing: ".06em" }}>FINANCEIRO</div>
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <Row label={itens.every((i: any) => i.produtos?.unidade === "ml") ? "ml Total" : "m² Total"} value={`${Number(orc.m2_total).toFixed(2)} ${itens.every((i: any) => i.produtos?.unidade === "ml") ? "ml" : "m²"}`} />
+                <Row label={itens.every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml Total" : "m² Total"} value={`${Number(orc.m2_total).toFixed(2)} ${itens.every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml" : "m²"}`} />
                 {orc.desconto > 0 && <Row label={`Desconto (${orc.desconto}%)`} value={`− ${formatBRL(orc.valor_total / (1 - orc.desconto/100) * orc.desconto/100)}`} color="var(--err)" />}
                 <Row label="Valor Total" value={formatBRL(orc.valor_total)} accent />
                 {orc.parcelas > 1 && <Row label="Por Parcela" value={formatBRL(orc.valor_total / orc.parcelas)} />}
@@ -372,7 +372,7 @@ export default function OrcamentoDetalhe() {
             </thead>
             <tbody>
               {itens.map((item: any, i: number) => {
-                const isML = item.produtos?.unidade === "ml";
+                const isML = item.produtos?.unidade === "ml" || item.vidro_cliente === true;
                 return (
                 <tr key={item.id} style={{ background: i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
                   <td style={{ padding: "7px 8px", borderBottom: "1px solid #e0e6f5", textAlign: "center", fontWeight: 700, color: "#666", fontSize: "10px" }}>{i + 1}</td>
