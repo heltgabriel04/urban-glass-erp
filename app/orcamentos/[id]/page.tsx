@@ -24,6 +24,7 @@ export default function OrcamentoDetalhe() {
 
   const [orc, setOrc] = useState<any>(null);
   const [estoque, setEstoque] = useState<Map<number, { m2: number; chapas: number }>>(new Map());
+  const [comprometido, setComprometido] = useState<Map<number, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [modalRejeitar, setModalRejeitar] = useState(false);
@@ -46,6 +47,17 @@ export default function OrcamentoDetalhe() {
       if (e.produto_id != null) em.set(e.produto_id, { m2: Number(e.m2_saldo), chapas: Number(e.chapas_saldo) });
     });
     setEstoque(em);
+
+    // m² comprometidos em outros orçamentos pendentes (excluindo o atual)
+    const { data: pendOrcs } = await supabase.from("orcamentos").select("id").in("status", ["Rascunho", "Enviado"]).neq("id", id);
+    const pendIds = (pendOrcs ?? []).map((o: any) => o.id as string);
+    if (pendIds.length > 0) {
+      const { data: pendItens } = await supabase.from("itens_orcamento").select("produto_id, m2").in("orcamento_id", pendIds).not("produto_id", "is", null);
+      const cm = new Map<number, number>();
+      (pendItens ?? []).forEach((r: any) => { cm.set(r.produto_id, (cm.get(r.produto_id) ?? 0) + Number(r.m2)); });
+      setComprometido(cm);
+    }
+
     setLoading(false);
   }
 
@@ -235,19 +247,22 @@ export default function OrcamentoDetalhe() {
               m2PorProd.set(item.produto_id, { nome: item.produto_nome, m2: prev.m2 + Number(item.m2) });
             }
             const linhas = Array.from(m2PorProd.entries()).map(([pid, { nome, m2 }]) => {
-              const est   = estoque.get(pid);
-              const saldo = est?.m2 ?? null;
+              const est    = estoque.get(pid);
+              const saldo  = est?.m2 ?? null;
               const chapas = est?.chapas ?? null;
-              const ok    = saldo !== null && saldo >= m2 - 0.001;
-              const falta = saldo !== null ? Math.max(0, m2 - saldo) : null;
-              return { pid, nome, m2, saldo, chapas, ok, falta };
+              const comp   = comprometido.get(pid) ?? 0;
+              const real   = saldo !== null ? Math.max(0, saldo - comp) : null;
+              const ok     = real !== null && real >= m2 - 0.001;
+              const falta  = real !== null ? Math.max(0, m2 - real) : null;
+              return { pid, nome, m2, saldo, chapas, comp, real, ok, falta };
             });
-            const insuf  = linhas.filter(l => !l.ok);
-            const allOk  = insuf.length === 0;
-            const semReg = linhas.filter(l => l.saldo === null);
+            const insuf    = linhas.filter(l => !l.ok);
+            const allOk    = insuf.length === 0;
+            const semReg   = linhas.filter(l => l.saldo === null);
+            const temComp  = linhas.some(l => l.comp > 0.001);
             return (
               <div className="card" style={{ padding:"20px 24px" }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px" }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"4px" }}>
                   <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>DISPONIBILIDADE DE ESTOQUE</div>
                   <span style={{ fontSize:"11px", fontWeight:700, padding:"3px 12px", borderRadius:"99px",
                     color: allOk ? "var(--ok)" : "var(--err)",
@@ -255,29 +270,38 @@ export default function OrcamentoDetalhe() {
                     border: `1px solid ${allOk ? "rgba(16,185,129,.3)" : "rgba(244,63,94,.3)"}`,
                   }}>
                     {allOk
-                      ? `✓ Estoque suficiente para todos os produtos`
-                      : `⚠ ${insuf.length} produto${insuf.length > 1 ? "s" : ""} com estoque insuficiente`}
+                      ? `✓ Estoque suficiente`
+                      : `⚠ ${insuf.length} produto${insuf.length > 1 ? "s" : ""} insuficiente${insuf.length > 1 ? "s" : ""}`}
                   </span>
                 </div>
+                {temComp && (
+                  <div style={{ fontSize:"11px", color:"var(--warn)", marginBottom:"14px" }}>
+                    ⚠ Considera m² comprometidos em outros orçamentos pendentes (Rascunho/Enviado)
+                  </div>
+                )}
+                {!temComp && <div style={{ marginBottom:"14px" }} />}
 
-                <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr 130px", gap:"0", borderBottom:"1px solid var(--b1)", paddingBottom:"7px", marginBottom:"2px" }}>
-                  {["Produto","Necessário","Disponível","Chapas","Situação"].map(h => (
+                <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr 120px", gap:"0", borderBottom:"1px solid var(--b1)", paddingBottom:"7px", marginBottom:"2px" }}>
+                  {["Produto","Precisa","Estoque","Outros ORC.","Real disp.","Situação"].map(h => (
                     <div key={h} style={{ fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px", fontFamily:"'DM Mono',monospace", padding:"0 8px 0 0" }}>{h}</div>
                   ))}
                 </div>
 
                 {linhas.map(l => (
-                  <div key={l.pid} style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr 130px", gap:"0", padding:"9px 0", borderBottom:"1px solid var(--b1)" }}>
+                  <div key={l.pid} style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr 120px", gap:"0", padding:"9px 0", borderBottom:"1px solid var(--b1)" }}>
                     <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", paddingRight:"12px" }}>{l.nome}</div>
                     <div style={{ fontSize:"12px", color:"var(--t2)", fontFamily:"'DM Mono',monospace" }}>{formatM2(l.m2)}</div>
-                    <div style={{ fontSize:"12px", fontFamily:"'DM Mono',monospace", fontWeight:700, color: l.saldo === null ? "var(--t3)" : l.ok ? "var(--ok)" : "var(--err)" }}>
+                    <div style={{ fontSize:"12px", fontFamily:"'DM Mono',monospace", color:"var(--t3)" }}>
                       {l.saldo === null ? "—" : formatM2(l.saldo)}
                     </div>
-                    <div style={{ fontSize:"12px", fontFamily:"'DM Mono',monospace", color:"var(--t3)" }}>
-                      {l.chapas === null ? "—" : `${l.chapas} ch.`}
+                    <div style={{ fontSize:"12px", fontFamily:"'DM Mono',monospace", color: l.comp > 0.001 ? "var(--warn)" : "var(--t3)" }}>
+                      {l.comp > 0.001 ? `−${formatM2(l.comp)}` : "—"}
+                    </div>
+                    <div style={{ fontSize:"12px", fontFamily:"'DM Mono',monospace", fontWeight:700, color: l.real === null ? "var(--t3)" : l.ok ? "var(--ok)" : "var(--err)" }}>
+                      {l.real === null ? "—" : formatM2(l.real)}
                     </div>
                     <div style={{ fontSize:"11px", fontWeight:600 }}>
-                      {l.saldo === null
+                      {l.real === null
                         ? <span style={{ color:"var(--t3)" }}>Sem registro</span>
                         : l.ok
                           ? <span style={{ color:"var(--ok)" }}>✓ OK</span>

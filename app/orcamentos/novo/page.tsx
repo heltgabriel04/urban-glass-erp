@@ -57,6 +57,7 @@ export default function NovoOrcamentoPage() {
   const [desconto, setDesconto]       = useState(0);
   const [itens, setItens]             = useState<ItemForm[]>([{ ...ITEM_VAZIO }]);
   const [estoque, setEstoque]         = useState<Map<number, number>>(new Map());
+  const [comprometido, setComprometido] = useState<Map<number, number>>(new Map());
   const [loading, setLoading]         = useState(true);
   const [salvando, setSalvando]       = useState(false);
   const [totalPedidoInput, setTotalPedidoInput] = useState(0);
@@ -93,6 +94,17 @@ export default function NovoOrcamentoPage() {
     const em = new Map<number, number>();
     (estRows as any[]).forEach((e: any) => { if (e.produto_id != null) em.set(e.produto_id, Number(e.m2_saldo)); });
     setEstoque(em);
+
+    // m² já comprometidos em outros orçamentos pendentes (Rascunho + Enviado)
+    const { data: pendOrcs } = await supabase.from("orcamentos").select("id").in("status", ["Rascunho", "Enviado"]);
+    const pendIds = (pendOrcs ?? []).map((o: any) => o.id as string);
+    if (pendIds.length > 0) {
+      const { data: pendItens } = await supabase.from("itens_orcamento").select("produto_id, m2").in("orcamento_id", pendIds).not("produto_id", "is", null);
+      const cm = new Map<number, number>();
+      (pendItens ?? []).forEach((r: any) => { cm.set(r.produto_id, (cm.get(r.produto_id) ?? 0) + Number(r.m2)); });
+      setComprometido(cm);
+    }
+
     setItens([{ ...ITEM_VAZIO }]);
     setLoading(false);
   }
@@ -377,29 +389,39 @@ export default function NovoOrcamentoPage() {
               const linhas = Array.from(m2NecPorProduto.entries()).map(([pid, nec]) => {
                 const nome  = itens.find(i => i.produto_id === pid)?.produto_nome ?? "—";
                 const saldo = estoque.get(pid) ?? null;
-                const ok    = saldo !== null && saldo >= nec - 0.001;
-                return { nome, nec, saldo, ok };
+                const comp  = comprometido.get(pid) ?? 0;
+                const real  = saldo !== null ? Math.max(0, saldo - comp) : null;
+                const ok    = real !== null && real >= nec - 0.001;
+                return { nome, nec, saldo, comp, real, ok };
               });
               const algumRuim = linhas.some(l => !l.ok);
+              const temComp   = linhas.some(l => l.comp > 0.001);
               return (
                 <div style={{ borderTop:"1px solid var(--b1)", marginTop:"14px", paddingTop:"14px" }}>
                   <div style={{ fontSize:"10px", fontWeight:700, letterSpacing:".06em", marginBottom:"10px", color: algumRuim ? "var(--err)" : "var(--ok)" }}>
                     {algumRuim ? "⚠ ESTOQUE INSUFICIENTE" : "✓ ESTOQUE OK"}
+                    {temComp && <span style={{ fontWeight:400, color:"var(--t3)", marginLeft:"6px" }}>considerando outros ORC. pendentes</span>}
+                  </div>
+                  {/* cabeçalho */}
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 52px 52px 52px", gap:"4px", marginBottom:"6px" }}>
+                    {["Produto","Precisa","ORC.","Real"].map(h => (
+                      <div key={h} style={{ fontSize:"8px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px", fontFamily:"'DM Mono',monospace", textAlign: h === "Produto" ? "left" : "right" }}>{h}</div>
+                    ))}
                   </div>
                   {linhas.map(l => (
-                    <div key={l.nome} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"6px", gap:"8px" }}>
-                      <span style={{ fontSize:"11px", color:"var(--t2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1, minWidth:0 }} title={l.nome}>{l.nome}</span>
-                      <div style={{ display:"flex", gap:"4px", alignItems:"center", flexShrink:0 }}>
-                        <span style={{ fontSize:"10px", fontFamily:"'DM Mono',monospace", color:"var(--t3)" }}>{formatM2(l.nec)}</span>
-                        <span style={{ fontSize:"8px", color:"var(--t3)" }}>→</span>
-                        {l.saldo === null
+                    <div key={l.nome} style={{ display:"grid", gridTemplateColumns:"1fr 52px 52px 52px", gap:"4px", alignItems:"center", marginBottom:"5px" }}>
+                      <span style={{ fontSize:"11px", color:"var(--t2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }} title={l.nome}>{l.nome}</span>
+                      <span style={{ fontSize:"10px", fontFamily:"'DM Mono',monospace", color:"var(--t3)", textAlign:"right" }}>{formatM2(l.nec)}</span>
+                      <span style={{ fontSize:"10px", fontFamily:"'DM Mono',monospace", color: l.comp > 0.001 ? "var(--warn)" : "var(--t3)", textAlign:"right" }}>
+                        {l.comp > 0.001 ? `−${formatM2(l.comp)}` : "—"}
+                      </span>
+                      <div style={{ textAlign:"right" }}>
+                        {l.real === null
                           ? <span style={{ fontSize:"10px", color:"var(--t3)" }}>s/dado</span>
-                          : <span style={{ fontSize:"10px", fontFamily:"'DM Mono',monospace", fontWeight:700, color: l.ok ? "var(--ok)" : "var(--err)" }}>{formatM2(l.saldo)}</span>
+                          : <span style={{ fontSize:"10px", fontFamily:"'DM Mono',monospace", fontWeight:700, color: l.ok ? "var(--ok)" : "var(--err)" }}>
+                              {formatM2(l.real)}{!l.ok ? <span style={{ fontSize:"8px" }}> ⚠</span> : <span style={{ fontSize:"8px" }}> ✓</span>}
+                            </span>
                         }
-                        {l.saldo !== null && (l.ok
-                          ? <span style={{ fontSize:"9px", color:"var(--ok)" }}>✓</span>
-                          : <span style={{ fontSize:"9px", color:"var(--err)" }}>⚠</span>
-                        )}
                       </div>
                     </div>
                   ))}
@@ -503,17 +525,19 @@ export default function NovoOrcamentoPage() {
                       <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", opacity: 0.7 }}>cobrado: {lArred}×{aArred}</span>
                     )}
                     {item.produto_id != null && estoque.size > 0 && (() => {
-                      const saldo = estoque.get(item.produto_id!);
+                      const saldo   = estoque.get(item.produto_id!);
+                      const comp    = comprometido.get(item.produto_id!) ?? 0;
+                      const real    = saldo !== undefined ? Math.max(0, saldo - comp) : undefined;
                       const totalNec = m2NecPorProduto.get(item.produto_id!) ?? 0;
                       if (saldo === undefined) return (
                         <span style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", background:"var(--surf3)", border:"1px solid var(--b2)", padding:"1px 7px", borderRadius:"4px" }}>
                           📦 sem registro de estoque
                         </span>
                       );
-                      const ok = saldo >= totalNec - 0.001;
+                      const ok = real! >= totalNec - 0.001;
                       return (
                         <span style={{ fontSize:"10px", fontFamily:"'DM Mono',monospace", fontWeight:600, color: ok ? "var(--ok)" : "var(--err)", background: ok ? "rgba(16,185,129,.08)" : "rgba(244,63,94,.08)", border:`1px solid ${ok ? "rgba(16,185,129,.25)" : "rgba(244,63,94,.25)"}`, padding:"1px 7px", borderRadius:"4px", whiteSpace:"nowrap" }}>
-                          {ok ? "📦 " : "⚠ "}{formatM2(saldo)} disp.{!ok ? ` · falta ${formatM2(totalNec - saldo)}` : ""}
+                          {ok ? "📦 " : "⚠ "}{formatM2(real!)} real{comp > 0.001 ? ` (−${formatM2(comp)} outros ORC.)` : ""}{!ok ? ` · falta ${formatM2(totalNec - real!)}` : ""}
                         </span>
                       );
                     })()}
