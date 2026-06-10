@@ -402,7 +402,7 @@ async function handleMarcarPago(lancId: number) {
             Pedido <span style={{ color:"var(--acc)" }}>{pedido.id}</span>
           </div>
           <span className={CHIP[pedido.status] ?? "chip cgr"}>{pedido.status}</span>
-          <button className="btn bg sm" onClick={abrirEdicao}>✏ Editar</button>
+          <button className="btn bg sm" onClick={() => router.push(`/pedidos/${id}/editar`)}>✏ Editar</button>
           {temItens && !todosVidroCliente && !todosChapa && (
             <a href={"/otimizador?pedido=" + pedido.id} className="btn bg sm">◈ Otimizar Corte</a>
           )}
