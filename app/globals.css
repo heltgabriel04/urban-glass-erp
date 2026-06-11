@@ -618,7 +618,7 @@ textarea.fc { resize: vertical; min-height: 64px; }
 
 /* ─── TEMA CLARO ─────────────────────────────────────────── */
 [data-theme="light"] {
-  --bg:    #eef1f9;
+  --bg:    #e3d5cc;
   --surf:  #ffffff;
   --surf2: #f4f7fd;
   --surf3: #eaeff9;
