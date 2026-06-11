@@ -69,6 +69,13 @@ const SECAO_DEFS = {
 
 type SecaoKey = keyof typeof SECAO_DEFS;
 
+// Status a partir do qual etapas 2-4 ficam disponíveis
+const STATUSES_SEPARACAO_OU_ALEM = new Set([
+  "Separação",
+  "Finalizado",
+  "Entregue",
+]);
+
 function makeSecao(key: SecaoKey): SecaoChecklist {
   return {
     inicio: "",
@@ -237,13 +244,7 @@ function SignaturePad({
           display: "block",
         }}
       />
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         {value ? (
           <span style={{ fontSize: 11, color: "var(--ok)" }}>✓ Assinatura capturada</span>
         ) : (
@@ -252,14 +253,57 @@ function SignaturePad({
           </span>
         )}
         {value && !disabled && (
-          <button
-            className="btn bg xs"
-            onClick={clear}
-            style={{ fontSize: 11, padding: "3px 8px" }}
-          >
+          <button className="btn bg xs" onClick={clear} style={{ fontSize: 11, padding: "3px 8px" }}>
             ✕ Limpar
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Card de seção bloqueada ───────────────────────────────
+
+function SecaoLocked({ defKey }: { defKey: SecaoKey }) {
+  const def = SECAO_DEFS[defKey];
+  return (
+    <div
+      className="card"
+      style={{
+        borderColor: "var(--b1)",
+        opacity: 0.65,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        flexWrap: "wrap",
+        gap: 12,
+        padding: "16px 20px",
+      }}
+    >
+      <div>
+        <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15, color: "var(--t2)" }}>
+          {def.titulo}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 4 }}>
+          {def.responsavel} · {def.itens.length} itens
+        </div>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          background: "rgba(245,158,11,.08)",
+          border: "1px solid rgba(245,158,11,.25)",
+          borderRadius: 8,
+          padding: "8px 14px",
+          fontSize: 12,
+          color: "var(--warn)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        🔒 Disponível após o pedido atingir status{" "}
+        <strong style={{ marginLeft: 4 }}>Separação</strong>
       </div>
     </div>
   );
@@ -466,14 +510,11 @@ function SecaoCard({
                   disabled={disabled}
                   onClick={() => setItem(item.id, "valor", isSim ? null : "sim")}
                   style={{
-                    width: 56,
-                    height: 46,
-                    borderRadius: 9,
+                    width: 56, height: 46, borderRadius: 9,
                     border: isSim ? "2px solid var(--ok)" : "1px solid var(--b2)",
                     background: isSim ? "rgba(16,185,129,.2)" : "var(--surf2)",
                     color: isSim ? "var(--ok)" : "var(--t3)",
-                    fontWeight: 700,
-                    fontSize: 12,
+                    fontWeight: 700, fontSize: 12,
                     cursor: disabled ? "default" : "pointer",
                     fontFamily: "'DM Mono', monospace",
                     transition: "all 0.12s",
@@ -487,14 +528,11 @@ function SecaoCard({
                   disabled={disabled}
                   onClick={() => setItem(item.id, "valor", isNao ? null : "nao")}
                   style={{
-                    width: 56,
-                    height: 46,
-                    borderRadius: 9,
+                    width: 56, height: 46, borderRadius: 9,
                     border: isNao ? "2px solid var(--err)" : "1px solid var(--b2)",
                     background: isNao ? "rgba(244,63,94,.15)" : "var(--surf2)",
                     color: isNao ? "var(--err)" : "var(--t3)",
-                    fontWeight: 700,
-                    fontSize: 12,
+                    fontWeight: 700, fontSize: 12,
                     cursor: disabled ? "default" : "pointer",
                     fontFamily: "'DM Mono', monospace",
                     transition: "all 0.12s",
@@ -518,9 +556,7 @@ function SecaoCard({
       {/* Observações + Responsável + Assinatura */}
       <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
-          <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 6 }}>
-            OBSERVAÇÕES GERAIS
-          </div>
+          <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 6 }}>OBSERVAÇÕES GERAIS</div>
           <textarea
             value={data.obs}
             onChange={(e) => onChange({ ...data, obs: e.target.value })}
@@ -579,11 +615,18 @@ export default function ChecklistPage() {
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [concluding, setConcluding] = useState(false);
+  const [salvando1, setSalvando1] = useState(false);
   const [tentouConcluir, setTentouConcluir] = useState(false);
+  const [tentouSalvar1, setTentouSalvar1] = useState(false);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didInitRef = useRef(false);
   const concluido = checklist?.status === "concluido";
+
+  // Etapas 2-4 só ficam disponíveis após "Separação"
+  const etapas234Liberadas = pedido
+    ? STATUSES_SEPARACAO_OU_ALEM.has(pedido.status)
+    : false;
 
   const fc: React.CSSProperties = {
     background: "var(--surf2)",
@@ -615,7 +658,7 @@ export default function ChecklistPage() {
     load();
   }, [id]);
 
-  // Auto-save ao alterar dados
+  // Auto-save ao alterar dados (somente campos de etapas disponíveis)
   useEffect(() => {
     if (!didInitRef.current || concluido) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -639,8 +682,10 @@ export default function ChecklistPage() {
     return s.itens.every((i) => i.valor !== null) && !!s.assinatura;
   }
 
+  const etapa1Valida = secaoValida(dados.programacao);
+
   const podeConcluir =
-    secaoValida(dados.programacao) &&
+    etapa1Valida &&
     secaoValida(dados.separacao) &&
     secaoValida(dados.carregamento) &&
     secaoValida(dados.entrega);
@@ -652,16 +697,40 @@ export default function ChecklistPage() {
     entrega: "4 Descarregamento e Entrega",
   };
 
-  const pendencias = (["programacao", "separacao", "carregamento", "entrega"] as SecaoKey[])
-    .flatMap((key) => {
-      const s = dados[key];
-      const faltando = s.itens.filter((i) => i.valor === null).length;
-      const issues: string[] = [];
-      if (faltando > 0) issues.push(`${faltando} item${faltando > 1 ? "ns" : ""} sem resposta`);
-      if (!s.assinatura) issues.push("assinatura pendente");
-      if (issues.length === 0) return [];
-      return [{ label: SECAO_LABELS[key], issues }];
-    });
+  // Pendências só das etapas disponíveis
+  const secoesPendentes = etapas234Liberadas
+    ? (["programacao", "separacao", "carregamento", "entrega"] as SecaoKey[])
+    : (["programacao"] as SecaoKey[]);
+
+  const pendencias = secoesPendentes.flatMap((key) => {
+    const s = dados[key];
+    const faltando = s.itens.filter((i) => i.valor === null).length;
+    const issues: string[] = [];
+    if (faltando > 0) issues.push(`${faltando} item${faltando > 1 ? "ns" : ""} sem resposta`);
+    if (!s.assinatura) issues.push("assinatura pendente");
+    if (issues.length === 0) return [];
+    return [{ label: SECAO_LABELS[key], issues }];
+  });
+
+  async function handleSalvarEtapa1() {
+    if (!etapa1Valida) {
+      setTentouSalvar1(true);
+      return;
+    }
+    setSalvando1(true);
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const result = await upsertChecklist(id, dados, "em_andamento");
+    if (result) {
+      setChecklist(result);
+      setSaveStatus("saved");
+    } else {
+      setSaveStatus("error");
+    }
+    setSalvando1(false);
+  }
 
   async function handleConcluir() {
     if (!podeConcluir) {
@@ -701,6 +770,9 @@ export default function ChecklistPage() {
     );
   }
 
+  const showErrors1 = tentouSalvar1 || tentouConcluir;
+  const showErrorsRest = tentouConcluir;
+
   return (
     <AppLayout>
       {/* Top bar */}
@@ -712,6 +784,20 @@ export default function ChecklistPage() {
           Checklist de Expedição{" "}
           <span style={{ color: "var(--acc)" }}>{pedido.id}</span>
         </div>
+
+        {/* Badge de status do pedido */}
+        <div style={{
+          fontSize: 11,
+          color: "var(--t3)",
+          background: "var(--surf2)",
+          border: "1px solid var(--b1)",
+          borderRadius: 6,
+          padding: "4px 10px",
+          fontFamily: "'DM Mono', monospace",
+        }}>
+          {pedido.status}
+        </div>
+
         {concluido ? (
           <span
             style={{
@@ -749,7 +835,18 @@ export default function ChecklistPage() {
               : ""}
           </span>
         )}
-        {!concluido && (
+
+        {!concluido && !etapas234Liberadas && (
+          <button
+            className="btn bs sm"
+            disabled={salvando1}
+            onClick={handleSalvarEtapa1}
+          >
+            {salvando1 ? "Salvando..." : "💾 Salvar Etapa 1"}
+          </button>
+        )}
+
+        {!concluido && etapas234Liberadas && (
           <button
             className="btn bp sm"
             disabled={concluding}
@@ -761,15 +858,39 @@ export default function ChecklistPage() {
       </div>
 
       <div className="con" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        {/* Cabeçalho com dados do pedido */}
-        <div className="card">
+
+        {/* Aviso de etapas bloqueadas */}
+        {!etapas234Liberadas && !concluido && (
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
-              gap: 20,
+              background: "rgba(0,200,255,.06)",
+              border: "1px solid rgba(0,200,255,.2)",
+              borderRadius: 10,
+              padding: "12px 18px",
+              fontSize: 13,
+              color: "var(--acc2)",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
             }}
           >
+            <span style={{ fontSize: 16 }}>ℹ</span>
+            <div>
+              <strong>Etapa 1</strong> está disponível agora. As etapas{" "}
+              <strong>2, 3 e 4</strong> serão liberadas quando o pedido atingir o
+              status <strong>Separação</strong>.
+              {etapa1Valida && (
+                <span style={{ marginLeft: 8, color: "var(--ok)", fontWeight: 600 }}>
+                  ✓ Etapa 1 preenchida
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Cabeçalho com dados do pedido */}
+        <div className="card">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
             <div>
               <div style={{ fontSize: 10, color: "var(--t3)", fontWeight: 700, marginBottom: 6, letterSpacing: "0.05em" }}>
                 CLIENTE
@@ -811,38 +932,50 @@ export default function ChecklistPage() {
           </div>
         </div>
 
-        {/* Seções */}
+        {/* Etapa 1 — sempre disponível */}
         <SecaoCard
           defKey="programacao"
           data={dados.programacao}
           disabled={concluido}
-          showErrors={tentouConcluir}
+          showErrors={showErrors1}
           onChange={(d) => setDados((prev) => ({ ...prev, programacao: d }))}
         />
-        <SecaoCard
-          defKey="separacao"
-          data={dados.separacao}
-          disabled={concluido}
-          showErrors={tentouConcluir}
-          onChange={(d) => setDados((prev) => ({ ...prev, separacao: d }))}
-        />
-        <SecaoCard
-          defKey="carregamento"
-          data={dados.carregamento}
-          disabled={concluido}
-          showErrors={tentouConcluir}
-          onChange={(d) => setDados((prev) => ({ ...prev, carregamento: d }))}
-        />
-        <SecaoCard
-          defKey="entrega"
-          data={dados.entrega}
-          disabled={concluido}
-          showErrors={tentouConcluir}
-          onChange={(d) => setDados((prev) => ({ ...prev, entrega: d }))}
-        />
+
+        {/* Etapas 2-4 — bloqueadas ou disponíveis */}
+        {etapas234Liberadas ? (
+          <>
+            <SecaoCard
+              defKey="separacao"
+              data={dados.separacao}
+              disabled={concluido}
+              showErrors={showErrorsRest}
+              onChange={(d) => setDados((prev) => ({ ...prev, separacao: d }))}
+            />
+            <SecaoCard
+              defKey="carregamento"
+              data={dados.carregamento}
+              disabled={concluido}
+              showErrors={showErrorsRest}
+              onChange={(d) => setDados((prev) => ({ ...prev, carregamento: d }))}
+            />
+            <SecaoCard
+              defKey="entrega"
+              data={dados.entrega}
+              disabled={concluido}
+              showErrors={showErrorsRest}
+              onChange={(d) => setDados((prev) => ({ ...prev, entrega: d }))}
+            />
+          </>
+        ) : (
+          <>
+            <SecaoLocked defKey="separacao" />
+            <SecaoLocked defKey="carregamento" />
+            <SecaoLocked defKey="entrega" />
+          </>
+        )}
 
         {/* Banner de pendências */}
-        {tentouConcluir && !podeConcluir && (
+        {(tentouConcluir || tentouSalvar1) && pendencias.length > 0 && (
           <div
             style={{
               background: "rgba(244,63,94,.08)",
@@ -862,22 +995,13 @@ export default function ChecklistPage() {
                 gap: 8,
               }}
             >
-              ⚠ Pendências — preencha os itens abaixo antes de concluir
+              ⚠ Pendências — preencha os itens abaixo antes de
+              {etapas234Liberadas ? " concluir" : " salvar a Etapa 1"}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {pendencias.map((p) => (
-                <div
-                  key={p.label}
-                  style={{
-                    display: "flex",
-                    gap: 8,
-                    fontSize: 12,
-                    alignItems: "baseline",
-                  }}
-                >
-                  <span style={{ color: "var(--t1)", fontWeight: 600, minWidth: 240 }}>
-                    {p.label}
-                  </span>
+                <div key={p.label} style={{ display: "flex", gap: 8, fontSize: 12, alignItems: "baseline" }}>
+                  <span style={{ color: "var(--t1)", fontWeight: 600, minWidth: 240 }}>{p.label}</span>
                   <span style={{ color: "var(--err)" }}>{p.issues.join(" · ")}</span>
                 </div>
               ))}
@@ -885,8 +1009,8 @@ export default function ChecklistPage() {
           </div>
         )}
 
-        {/* Botão de conclusão no final */}
-        {!concluido && (
+        {/* Botão de conclusão no final (só quando etapas 2-4 liberadas) */}
+        {!concluido && etapas234Liberadas && (
           <div style={{ display: "flex", justifyContent: "center", paddingBottom: 48 }}>
             <button
               className="btn bp"
@@ -895,6 +1019,20 @@ export default function ChecklistPage() {
               style={{ padding: "14px 48px", fontSize: 15 }}
             >
               {concluding ? "Salvando..." : "✓ Concluir e Salvar Checklist"}
+            </button>
+          </div>
+        )}
+
+        {/* Botão salvar etapa 1 no final (quando etapas 2-4 ainda bloqueadas) */}
+        {!concluido && !etapas234Liberadas && (
+          <div style={{ display: "flex", justifyContent: "center", paddingBottom: 48 }}>
+            <button
+              className="btn bs"
+              disabled={salvando1}
+              onClick={handleSalvarEtapa1}
+              style={{ padding: "14px 48px", fontSize: 15 }}
+            >
+              {salvando1 ? "Salvando..." : "💾 Salvar Etapa 1"}
             </button>
           </div>
         )}
