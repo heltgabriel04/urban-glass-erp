@@ -7,38 +7,39 @@ export async function POST() {
     process.env.SUPABASE_SECRET_KEY!,
   );
 
-  // Busca todos os itens com vidro_cliente = true
   const { data: itens, error } = await supabase
     .from("itens_pedido")
-    .select("id, pedido_id, largura, altura, quantidade, valor_m2")
+    .select("id, pedido_id, largura, altura, quantidade")
     .eq("vidro_cliente", true);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!itens || itens.length === 0) return NextResponse.json({ fixed: 0 });
+  if (!itens || itens.length === 0) return NextResponse.json({ fixed: 0, pedidos: 0 });
 
-  // Atualiza m2 de cada item para o valor em ml
-  for (const item of itens) {
-    const ml = ((item.largura / 1000) + (item.altura / 1000)) * item.quantidade;
-    await supabase
-      .from("itens_pedido")
-      .update({ m2: parseFloat(ml.toFixed(4)) })
-      .eq("id", item.id);
-  }
+  // Atualiza todos os itens em paralelo
+  await Promise.all(
+    itens.map(item => {
+      const ml = parseFloat((((item.largura / 1000) + (item.altura / 1000)) * item.quantidade).toFixed(4));
+      return supabase.from("itens_pedido").update({ m2: ml }).eq("id", item.id);
+    })
+  );
 
-  // Recalcula m2_total de cada pedido afetado
+  // Recalcula m2_total de cada pedido afetado em paralelo
   const pedidosAfetados = [...new Set(itens.map(i => i.pedido_id))];
-  for (const pedidoId of pedidosAfetados) {
-    const { data: todosItens } = await supabase
-      .from("itens_pedido")
-      .select("m2")
-      .eq("pedido_id", pedidoId);
 
-    const novoTotal = (todosItens ?? []).reduce((s, i) => s + Number(i.m2), 0);
-    await supabase
-      .from("pedidos")
-      .update({ m2_total: parseFloat(novoTotal.toFixed(4)) })
-      .eq("id", pedidoId);
-  }
+  const itensPorPedido = await Promise.all(
+    pedidosAfetados.map(id =>
+      supabase.from("itens_pedido").select("m2").eq("pedido_id", id)
+    )
+  );
+
+  await Promise.all(
+    pedidosAfetados.map((id, idx) => {
+      const total = parseFloat(
+        ((itensPorPedido[idx].data ?? []).reduce((s, i) => s + Number(i.m2), 0)).toFixed(4)
+      );
+      return supabase.from("pedidos").update({ m2_total: total }).eq("id", id);
+    })
+  );
 
   return NextResponse.json({ fixed: itens.length, pedidos: pedidosAfetados.length });
 }
