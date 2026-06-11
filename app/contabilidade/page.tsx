@@ -84,45 +84,24 @@ function ModalProduto({ item, padrao, onSalvar, onRemover, onFechar, salvando }:
   }
 
   return (
-    <div
-      style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,.65)",
-        zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center",
-        padding: "20px",
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}
-    >
-      <div
-        style={{
-          background: "var(--surf1)", border: "1px solid var(--b1)",
-          borderRadius: "14px", width: "100%", maxWidth: "560px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "18px 22px", borderBottom: "1px solid var(--b1)",
-          }}
-        >
+    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
+      <div className="mod" style={{ width: "560px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
+
+        <div className="mhd">
           <div>
-            <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--t1)" }}>
-              Classificação Fiscal
-            </div>
+            <div className="mtit">Classificação Fiscal</div>
             <div style={{ fontSize: "12px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", marginTop: "2px" }}>
               {produto.cod} · {produto.nome}
             </div>
           </div>
-          <button
-            onClick={onFechar}
-            style={{
-              background: "transparent", border: "1px solid var(--b2)", borderRadius: "6px",
-              color: "var(--t3)", width: "28px", height: "28px", cursor: "pointer",
-              fontSize: "16px", display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-          >×</button>
+          <button className="mcl" onClick={onFechar}>✕</button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ padding: "22px", display: "flex", flexDirection: "column", gap: "16px" }}>
+        <form
+          id="form-fiscal-produto"
+          onSubmit={handleSubmit}
+          style={{ overflowY: "auto", padding: "20px", flex: 1, display: "flex", flexDirection: "column", gap: "16px" }}
+        >
 
           {/* NCM */}
           <div className="fg">
@@ -166,22 +145,17 @@ function ModalProduto({ item, padrao, onSalvar, onRemover, onFechar, salvando }:
           </div>
 
           {/* Info alíquotas */}
-          <div
-            style={{
-              background: "var(--surf2)", border: "1px solid var(--b1)",
-              borderRadius: "8px", padding: "12px 14px",
-            }}
-          >
+          <div style={{ background: "var(--surf2)", border: "1px solid var(--b1)", borderRadius: "8px", padding: "12px 14px" }}>
             <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 700, letterSpacing: "0.06em", marginBottom: "8px" }}>
               ALÍQUOTAS (herdadas dos Parâmetros Padrão)
             </div>
             <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
               {[
-                { label: "ICMS (MG)",  val: padrao.aliq_icms_dentro },
+                { label: "ICMS (MG)",   val: padrao.aliq_icms_dentro },
                 { label: "ICMS (fora)", val: padrao.aliq_icms_fora },
-                { label: "PIS",        val: padrao.aliq_pis },
-                { label: "COFINS",     val: padrao.aliq_cofins },
-                { label: "IPI",        val: padrao.aliq_ipi },
+                { label: "PIS",         val: padrao.aliq_pis },
+                { label: "COFINS",      val: padrao.aliq_cofins },
+                { label: "IPI",         val: padrao.aliq_ipi },
               ].map(({ label, val }) => (
                 <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                   <span style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
@@ -193,28 +167,30 @@ function ModalProduto({ item, padrao, onSalvar, onRemover, onFechar, salvando }:
             </div>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "4px" }}>
-            <div>
-              {config && (
-                <button
-                  type="button"
-                  className="btn bg xs"
-                  style={{ color: "var(--err)", borderColor: "var(--err)" }}
-                  onClick={onRemover}
-                  disabled={salvando}
-                >
-                  Remover exceção
-                </button>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button type="button" className="btn bg sm" onClick={onFechar} disabled={salvando}>Cancelar</button>
-              <button type="submit" className="btn bp sm" disabled={salvando}>
-                {salvando ? "Salvando..." : "Salvar"}
-              </button>
-            </div>
-          </div>
         </form>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderTop: "1px solid var(--b1)", flexShrink: 0 }}>
+          <div>
+            {config && (
+              <button
+                type="button"
+                className="btn bg sm"
+                style={{ color: "var(--err)", borderColor: "var(--err)" }}
+                onClick={onRemover}
+                disabled={salvando}
+              >
+                Remover exceção
+              </button>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button type="button" className="btn bg" onClick={onFechar} disabled={salvando}>Cancelar</button>
+            <button type="submit" form="form-fiscal-produto" className="btn bp" disabled={salvando}>
+              {salvando ? "Salvando..." : "Salvar"}
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   );
