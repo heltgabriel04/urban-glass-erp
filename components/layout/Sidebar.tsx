@@ -35,6 +35,7 @@ const NAV = [
       { href: "/investimentos", label: "Investimentos",      icon: "◆" },
       { href: "/fluxo",         label: "Fluxo de Caixa",    icon: "◈" },
       { href: "/notas",         label: "Notas Fiscais",      icon: "◧" },
+      { href: "/contabilidade", label: "Contabilidade",      icon: "◑" },
     ],
   },
   {
