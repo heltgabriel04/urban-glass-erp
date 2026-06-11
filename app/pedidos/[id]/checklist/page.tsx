@@ -271,11 +271,13 @@ function SecaoCard({
   defKey,
   data,
   disabled,
+  showErrors,
   onChange,
 }: {
   defKey: SecaoKey;
   data: SecaoChecklist;
   disabled: boolean;
+  showErrors: boolean;
   onChange: (d: SecaoChecklist) => void;
 }) {
   const def = SECAO_DEFS[defKey];
@@ -304,12 +306,20 @@ function SecaoCard({
 
   const isSigned = !!data.assinatura;
   const allAnswered = data.itens.every((i) => i.valor !== null);
+  const pendingCount = data.itens.filter((i) => i.valor === null).length;
 
   return (
     <div
       className="card"
       style={{
-        borderColor: isSigned ? "var(--ok)" : allAnswered ? "var(--acc2)" : "var(--b1)",
+        borderColor:
+          showErrors && (!allAnswered || !isSigned)
+            ? "var(--err)"
+            : isSigned
+            ? "var(--ok)"
+            : allAnswered
+            ? "var(--acc2)"
+            : "var(--b1)",
         transition: "border-color 0.2s",
       }}
     >
@@ -335,7 +345,26 @@ function SecaoCard({
           }}
         >
           {def.titulo}
-          {isSigned && (
+          {showErrors && (!allAnswered || !isSigned) && (
+            <span
+              style={{
+                fontSize: 11,
+                color: "var(--err)",
+                background: "rgba(244,63,94,.1)",
+                border: "1px solid rgba(244,63,94,.3)",
+                borderRadius: 6,
+                padding: "2px 8px",
+              }}
+            >
+              {[
+                !allAnswered && `${pendingCount} item${pendingCount > 1 ? "ns" : ""} sem resposta`,
+                !isSigned && "assinatura pendente",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+          )}
+          {isSigned && allAnswered && (
             <span
               style={{
                 fontSize: 11,
@@ -416,12 +445,21 @@ function SecaoCard({
                   ? "rgba(244,63,94,.04)"
                   : isSim
                   ? "rgba(16,185,129,.03)"
+                  : showErrors && item.valor === null
+                  ? "rgba(244,63,94,.07)"
                   : "transparent",
                 transition: "background 0.15s",
+                outline: showErrors && item.valor === null ? "1px solid rgba(244,63,94,.25)" : "none",
+                borderRadius: showErrors && item.valor === null ? 6 : 0,
               }}
             >
               <div style={{ fontSize: 13, lineHeight: 1.45, color: "var(--t1)" }}>
                 {defItem.label}
+                {showErrors && item.valor === null && (
+                  <span style={{ marginLeft: 8, fontSize: 10, color: "var(--err)", fontWeight: 700 }}>
+                    ⚠ pendente
+                  </span>
+                )}
               </div>
               <div style={{ display: "flex", justifyContent: "center" }}>
                 <button
@@ -507,8 +545,15 @@ function SecaoCard({
             />
           </div>
           <div>
-            <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 6 }}>
-              ASSINATURA
+            <div
+              style={{
+                fontSize: 11,
+                color: showErrors && !isSigned ? "var(--err)" : "var(--t3)",
+                marginBottom: 6,
+                fontWeight: showErrors && !isSigned ? 700 : 400,
+              }}
+            >
+              ASSINATURA{showErrors && !isSigned ? " ⚠ obrigatória" : ""}
             </div>
             <SignaturePad
               value={data.assinatura}
@@ -534,6 +579,7 @@ export default function ChecklistPage() {
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [concluding, setConcluding] = useState(false);
+  const [tentouConcluir, setTentouConcluir] = useState(false);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didInitRef = useRef(false);
@@ -589,7 +635,39 @@ export default function ChecklistPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dados]);
 
+  function secaoValida(s: SecaoChecklist) {
+    return s.itens.every((i) => i.valor !== null) && !!s.assinatura;
+  }
+
+  const podeConcluir =
+    secaoValida(dados.programacao) &&
+    secaoValida(dados.separacao) &&
+    secaoValida(dados.carregamento) &&
+    secaoValida(dados.entrega);
+
+  const SECAO_LABELS: Record<string, string> = {
+    programacao: "1 Programação para Expedição",
+    separacao: "2 Separação dos Produtos",
+    carregamento: "3 Carregamento",
+    entrega: "4 Descarregamento e Entrega",
+  };
+
+  const pendencias = (["programacao", "separacao", "carregamento", "entrega"] as SecaoKey[])
+    .flatMap((key) => {
+      const s = dados[key];
+      const faltando = s.itens.filter((i) => i.valor === null).length;
+      const issues: string[] = [];
+      if (faltando > 0) issues.push(`${faltando} item${faltando > 1 ? "ns" : ""} sem resposta`);
+      if (!s.assinatura) issues.push("assinatura pendente");
+      if (issues.length === 0) return [];
+      return [{ label: SECAO_LABELS[key], issues }];
+    });
+
   async function handleConcluir() {
+    if (!podeConcluir) {
+      setTentouConcluir(true);
+      return;
+    }
     setConcluding(true);
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
@@ -602,12 +680,6 @@ export default function ChecklistPage() {
     }
     setConcluding(false);
   }
-
-  const podeConcluir =
-    !!dados.programacao.assinatura &&
-    !!dados.separacao.assinatura &&
-    !!dados.carregamento.assinatura &&
-    !!dados.entrega.assinatura;
 
   if (loading) {
     return (
@@ -680,9 +752,8 @@ export default function ChecklistPage() {
         {!concluido && (
           <button
             className="btn bp sm"
-            disabled={!podeConcluir || concluding}
+            disabled={concluding}
             onClick={handleConcluir}
-            title={!podeConcluir ? "Assine todas as 4 seções para concluir" : ""}
           >
             {concluding ? "Salvando..." : "✓ Concluir"}
           </button>
@@ -745,45 +816,86 @@ export default function ChecklistPage() {
           defKey="programacao"
           data={dados.programacao}
           disabled={concluido}
+          showErrors={tentouConcluir}
           onChange={(d) => setDados((prev) => ({ ...prev, programacao: d }))}
         />
         <SecaoCard
           defKey="separacao"
           data={dados.separacao}
           disabled={concluido}
+          showErrors={tentouConcluir}
           onChange={(d) => setDados((prev) => ({ ...prev, separacao: d }))}
         />
         <SecaoCard
           defKey="carregamento"
           data={dados.carregamento}
           disabled={concluido}
+          showErrors={tentouConcluir}
           onChange={(d) => setDados((prev) => ({ ...prev, carregamento: d }))}
         />
         <SecaoCard
           defKey="entrega"
           data={dados.entrega}
           disabled={concluido}
+          showErrors={tentouConcluir}
           onChange={(d) => setDados((prev) => ({ ...prev, entrega: d }))}
         />
+
+        {/* Banner de pendências */}
+        {tentouConcluir && !podeConcluir && (
+          <div
+            style={{
+              background: "rgba(244,63,94,.08)",
+              border: "1px solid rgba(244,63,94,.3)",
+              borderRadius: 12,
+              padding: "16px 20px",
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 700,
+                color: "var(--err)",
+                marginBottom: 10,
+                fontSize: 13,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              ⚠ Pendências — preencha os itens abaixo antes de concluir
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {pendencias.map((p) => (
+                <div
+                  key={p.label}
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    fontSize: 12,
+                    alignItems: "baseline",
+                  }}
+                >
+                  <span style={{ color: "var(--t1)", fontWeight: 600, minWidth: 240 }}>
+                    {p.label}
+                  </span>
+                  <span style={{ color: "var(--err)" }}>{p.issues.join(" · ")}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Botão de conclusão no final */}
         {!concluido && (
           <div style={{ display: "flex", justifyContent: "center", paddingBottom: 48 }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-              {!podeConcluir && (
-                <div style={{ fontSize: 12, color: "var(--t3)", textAlign: "center" }}>
-                  Assine todas as 4 seções para habilitar a conclusão
-                </div>
-              )}
-              <button
-                className="btn bp"
-                disabled={!podeConcluir || concluding}
-                onClick={handleConcluir}
-                style={{ padding: "14px 48px", fontSize: 15, opacity: podeConcluir ? 1 : 0.4 }}
-              >
-                {concluding ? "Salvando..." : "✓ Concluir e Salvar Checklist"}
-              </button>
-            </div>
+            <button
+              className="btn bp"
+              disabled={concluding}
+              onClick={handleConcluir}
+              style={{ padding: "14px 48px", fontSize: 15 }}
+            >
+              {concluding ? "Salvando..." : "✓ Concluir e Salvar Checklist"}
+            </button>
           </div>
         )}
 
