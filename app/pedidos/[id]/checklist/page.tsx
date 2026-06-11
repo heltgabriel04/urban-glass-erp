@@ -168,6 +168,10 @@ function SignaturePad({
     };
   }
 
+  function getStrokeColor() {
+    return getComputedStyle(document.documentElement).getPropertyValue("--t1").trim() || "#dde1f0";
+  }
+
   function startDraw(
     e: React.TouchEvent<HTMLCanvasElement> | React.MouseEvent<HTMLCanvasElement>
   ) {
@@ -179,7 +183,7 @@ function SignaturePad({
     const ctx = canvasRef.current!.getContext("2d")!;
     ctx.beginPath();
     ctx.arc(pos.x, pos.y, 1.2, 0, Math.PI * 2);
-    ctx.fillStyle = "#dde1f0";
+    ctx.fillStyle = getStrokeColor();
     ctx.fill();
   }
 
@@ -194,7 +198,7 @@ function SignaturePad({
     ctx.beginPath();
     ctx.moveTo(lastPos.current.x, lastPos.current.y);
     ctx.lineTo(pos.x, pos.y);
-    ctx.strokeStyle = "#dde1f0";
+    ctx.strokeStyle = getStrokeColor();
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
