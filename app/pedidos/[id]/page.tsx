@@ -371,7 +371,8 @@ async function handleMarcarPago(lancId: number) {
   const statusIdx    = FLUXO.indexOf(pedido.status);
   const podeAvancar  = !["Entregue","Cancelado"].includes(pedido.status);
   const temItens     = (pedido.itens_pedido?.length ?? 0) > 0;
-  const podeRomaneio = ["Finalizado","Entregue"].includes(pedido.status);
+  const podeRomaneio   = ["Finalizado","Entregue"].includes(pedido.status);
+  const podeChecklist  = statusIdx >= FLUXO.indexOf("Separação");
   const temOtimizacao = otimizacoes.length > 0;
   const ultimaOtim   = otimizacoes[0] ?? null;
   const todosVidroCliente = temItens && (pedido.itens_pedido ?? []).every(i => (i as any).vidro_cliente === true);
@@ -420,6 +421,21 @@ async function handleMarcarPago(lancId: number) {
           )}
           {(temOtimizacao || todosChapa) && (
             <a href={"/pedidos/" + pedido.id + "/etiquetas"} className="btn bg sm" style={{ textDecoration:"none" }}>🏷 Etiquetas</a>
+          )}
+          {podeChecklist && (
+            <a
+              href={`/pedidos/${id}/checklist`}
+              className="btn sm"
+              style={{
+                background: "rgba(0,200,255,.12)",
+                border: "1px solid var(--acc2)",
+                color: "var(--acc2)",
+                fontWeight: 700,
+                textDecoration: "none",
+              }}
+            >
+              ☑ Checklist
+            </a>
           )}
           <button
             className="btn sm"

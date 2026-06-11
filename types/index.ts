@@ -172,6 +172,41 @@ export interface ItemPedido {
 
 export type ItemPedidoInsert = Omit<ItemPedido, 'id' | 'created_at' | 'produtos'>;
 
+// ─── CHECKLIST DE EXPEDIÇÃO ────────────────────────────────
+export interface ChecklistItemData {
+  id: string;
+  valor: 'sim' | 'nao' | null;
+  obs: string;
+}
+
+export interface SecaoChecklist {
+  inicio: string;
+  fim: string;
+  itens: ChecklistItemData[];
+  obs: string;
+  nome: string;
+  assinatura: string;
+}
+
+export interface ChecklistDados {
+  transportadora: string;
+  programacao: SecaoChecklist;
+  separacao: SecaoChecklist;
+  carregamento: SecaoChecklist;
+  entrega: SecaoChecklist;
+}
+
+export type StatusChecklist = 'em_andamento' | 'concluido';
+
+export interface ChecklistExpedicao {
+  id: string;
+  pedido_id: string;
+  status: StatusChecklist;
+  dados: ChecklistDados;
+  created_at: string;
+  updated_at: string;
+}
+
 // ─── ORÇAMENTO ─────────────────────────────────────────────
 export interface Orcamento {
   id: string;
@@ -390,6 +425,7 @@ export type Database = {
       notas_fiscais:           { Row: NotaFiscal;          Insert: NotaFiscalInsert                           };
       config_fiscal_produtos:  { Row: ConfigFiscalProduto                                                     };
       config_fiscal_padrao:    { Row: ConfigFiscalPadrao                                                      };
+      checklist_expedicao:     { Row: ChecklistExpedicao; Insert: Omit<ChecklistExpedicao, 'id' | 'created_at' | 'updated_at'>; Update: Partial<Omit<ChecklistExpedicao, 'id' | 'created_at'>> };
     };
     Views: {
       financeiro_clientes: { Row: FinanceiroCliente };
