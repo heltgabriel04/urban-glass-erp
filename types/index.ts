@@ -309,6 +309,21 @@ export interface ConfigFiscalProduto {
   updated_at: string;
 }
 
+export interface ConfigFiscalPadrao {
+  id: number;
+  regime: 'normal' | 'simples';
+  aliq_icms_dentro: number;
+  aliq_icms_fora: number;
+  aliq_pis: number;
+  aliq_cofins: number;
+  aliq_ipi: number;
+  cst_icms_padrao: string;
+  cfop_dentro_padrao: string;
+  cfop_fora_padrao: string;
+  ncm_padrao: string;
+  updated_at: string;
+}
+
 // ─── FATURAMENTO MENSAL (view) ─────────────────────────────
 export interface FaturamentoMensal {
   ano: number;
@@ -374,6 +389,7 @@ export type Database = {
       tabela_preco_itens:      { Row: TabelaPrecoItem                                                         };
       notas_fiscais:           { Row: NotaFiscal;          Insert: NotaFiscalInsert                           };
       config_fiscal_produtos:  { Row: ConfigFiscalProduto                                                     };
+      config_fiscal_padrao:    { Row: ConfigFiscalPadrao                                                      };
     };
     Views: {
       financeiro_clientes: { Row: FinanceiroCliente };
