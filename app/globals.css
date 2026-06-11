@@ -615,3 +615,70 @@ textarea.fc { resize: vertical; min-height: 64px; }
   color: var(--acc2); padding: 2px 8px; border-radius: 4px;
   font-size: 10px; font-family: 'DM Mono', monospace;
 }
+
+/* ─── TEMA CLARO ─────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg:    #eef1f9;
+  --surf:  #ffffff;
+  --surf2: #f4f7fd;
+  --surf3: #eaeff9;
+  --surf4: #dfe7f5;
+
+  --b1: #dde6f2;
+  --b2: #c6d4e8;
+  --b3: #9db0cc;
+
+  --acc:  #0d9668;
+  --acc2: #0369a1;
+  --acc3: #c2410c;
+  --acc4: #6d28d9;
+  --acc5: #b45309;
+
+  --ok:   #0d9668;
+  --warn: #b45309;
+  --err:  #be123c;
+
+  --t1: #111827;
+  --t2: #374151;
+  --t3: #6b7280;
+  --t4: #9ca3af;
+
+  --sh: 0 4px 32px rgba(0,0,0,.1);
+}
+
+/* Ajustes de componentes para tema claro */
+[data-theme="light"] .bp { color: #fff; }
+[data-theme="light"] .bp:hover { background: #0a7a54; box-shadow: 0 0 18px rgba(13,150,104,.25); }
+[data-theme="light"] .bs { color: #fff; }
+[data-theme="light"] .bs:hover { background: #025a8c; }
+
+[data-theme="light"] .ni.active { background: rgba(13,150,104,.09); }
+[data-theme="light"] .sb-logo-wrap:hover { background: rgba(13,150,104,.06) !important; }
+[data-theme="light"] .sb:hover { box-shadow: 4px 0 24px rgba(0,0,0,.12) !important; }
+
+[data-theme="light"] tbody tr:hover td { background: rgba(0,0,0,.025); }
+
+[data-theme="light"] .cg { color: #065f46; border-color: rgba(16,185,129,.4); }
+[data-theme="light"] .cy { color: #78350f; border-color: rgba(245,158,11,.4); }
+[data-theme="light"] .cr { color: #881337; border-color: rgba(244,63,94,.4); }
+[data-theme="light"] .cb { color: #0c4a6e; border-color: rgba(0,200,255,.4); }
+[data-theme="light"] .cp { color: #4c1d95; border-color: rgba(167,139,250,.4); }
+[data-theme="light"] .co { color: #7c2d12; border-color: rgba(255,107,53,.4); }
+[data-theme="light"] .cgr { background: rgba(0,0,0,.05); color: var(--t3); }
+
+[data-theme="light"] .nbdg.blue { color: #fff; }
+
+[data-theme="light"] .add-il:hover { background: rgba(13,150,104,.07); }
+
+[data-theme="light"] .mov { background: rgba(0,0,0,.45); }
+
+[data-theme="light"] .rtag {
+  background: rgba(3,105,161,.08);
+  border-color: rgba(3,105,161,.25);
+  color: var(--acc2);
+}
+
+[data-theme="light"] .tab.on { box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+[data-theme="light"] .kbcard:hover { transform: translateY(-1px); }
+
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: var(--b2); }
