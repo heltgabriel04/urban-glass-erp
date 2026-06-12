@@ -38,13 +38,16 @@ const BANCOS_POS_DEFAULT: SaldoBanco[] = [
   { id: "pre-5", banco: "Elobank Caixa",    agencia: "", conta: "", saldo: 0 },
 ];
 
-interface SaldoBanco    { id: string; banco: string; agencia: string; conta: string; saldo: number; }
-interface AporteGabriel { id: string; data: string; descricao: string; valor: number; }
-interface DadosPermuta  { valorTotal: number; valorRecebido: number; dataInicio: string; descricao: string; status: "ativo" | "parcial" | "liquidado"; observacoes: string; }
+interface SaldoBanco     { id: string; banco: string; agencia: string; conta: string; saldo: number; }
+interface AporteGabriel  { id: string; data: string; descricao: string; valor: number; }
+interface ItemPedido     { id: string; material: string; quantidadeTon: number; valorUnitario: number; }
+interface PedidoPermuta  { id: string; numeroPedido: string; itens: ItemPedido[]; }
+interface MovPermuta     { id: string; data: string; valor: number; pedido: string; tipo: "PERMUTA" | "FATURAMENTO"; empresa: string; }
+interface PermutaV2      { pedidos: PedidoPermuta[]; movimentacoes: MovPermuta[]; status: "ativo" | "parcial" | "liquidado"; observacoes: string; }
 
-const LS_BANCOS_KEY   = "ug_bancos_v1";
+const LS_BANCOS_KEY    = "ug_bancos_v1";
 const LS_APORTES_G_KEY = "ug_aportes_g_v1";
-const LS_PERMUTA_KEY  = "ug_permuta_v1";
+const LS_PERMUTA_KEY   = "ug_permuta_v2";
 
 function lsLoad<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -57,7 +60,7 @@ function lsSave(key: string, value: unknown): void {
 
 const toBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
 
-const PERMUTA_DEFAULT: DadosPermuta = { valorTotal: 0, valorRecebido: 0, dataInicio: "", descricao: "Permuta com Mendes & Mendes", status: "ativo", observacoes: "" };
+const PERMUTA_DEFAULT: PermutaV2 = { pedidos: [], movimentacoes: [], status: "ativo", observacoes: "" };
 
 const STATUS_PERMUTA = {
   ativo:     { label: "Ativo",     cor: "#3dffa0", bg: "rgba(61,255,160,.12)" },
@@ -70,19 +73,19 @@ interface PosFinProps {
   setBancos: Dispatch<SetStateAction<SaldoBanco[]>>;
   aportes: AporteGabriel[];
   setAportes: Dispatch<SetStateAction<AporteGabriel[]>>;
-  permuta: DadosPermuta;
-  setPermuta: Dispatch<SetStateAction<DadosPermuta>>;
+  permuta: PermutaV2;
+  setPermuta: Dispatch<SetStateAction<PermutaV2>>;
 }
 
 function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permuta, setPermuta }: PosFinProps) {
   const [adicionando,     setAdicionando]     = useState(false);
   const [novoBanco,       setNovoBanco]       = useState<Omit<SaldoBanco, "id">>({ banco: "", agencia: "", conta: "", saldo: 0 });
-  const [permutaEdit,     setPermutaEdit]     = useState<DadosPermuta>(PERMUTA_DEFAULT);
-  const [editandoPermuta, setEditandoPermuta] = useState(false);
+  const [pedidosAbertos,  setPedidosAbertos]  = useState<Set<string>>(new Set());
   const [abertoBancos,    setAbertoBancos]    = useState(false);
   const [abertoAporte,    setAbertoAporte]    = useState(false);
   const [abertoPermuta,   setAbertoPermuta]   = useState(false);
   const [salvoAporte,     setSalvoAporte]     = useState(false);
+  const [salvoPermuta,    setSalvoPermuta]    = useState(false);
   const [abertoLanc,      setAbertoLanc]      = useState(false);
   const [lancamentos,     setLancamentos]     = useState<{ id: string; data: string; descricao: string; valor: number }[]>([]);
 
@@ -94,9 +97,10 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
   const totalBancos  = bancos.reduce((s, b) => s + b.saldo, 0);
   const bancoCor     = (nome: string) => BANCOS_POSICAO.find(b => b.nome === nome)?.cor ?? "#6b7280";
   const bancoIni     = (nome: string) => BANCOS_POSICAO.find(b => b.nome === nome)?.ini ?? nome.slice(0, 2).toUpperCase();
-  const totalAportes = aportes.reduce((s, a) => s + a.valor, 0);
-  const saldoPermuta = permuta.valorTotal - permuta.valorRecebido;
-  const pctPermuta   = permuta.valorTotal > 0 ? Math.min(100, (permuta.valorRecebido / permuta.valorTotal) * 100) : 0;
+  const totalAportes       = aportes.reduce((s, a) => s + a.valor, 0);
+  const totalPermutaItens  = permuta.pedidos.reduce((s, p) => s + p.itens.reduce((ss, i) => ss + i.quantidadeTon * i.valorUnitario, 0), 0);
+  const totalMovimentado   = permuta.movimentacoes.reduce((s, m) => s + m.valor, 0);
+  const saldoRestante      = totalPermutaItens - totalMovimentado;
 
   function adicionarBanco() {
     if (!novoBanco.banco) return;
@@ -108,7 +112,17 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
     if (!confirm("Remover este banco?")) return;
     setBancos(p => p.filter(b => b.id !== id));
   }
-  function salvarPermuta() { setPermuta(permutaEdit); setEditandoPermuta(false); }
+  function togglePedido(id: string) { setPedidosAbertos(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; }); }
+  function addPedido() { setPermuta(p => ({ ...p, pedidos: [...p.pedidos, { id: Date.now().toString(), numeroPedido: "", itens: [] }] })); setSalvoPermuta(false); }
+  function removePedido(id: string) { if (!confirm("Remover este pedido?")) return; setPermuta(p => ({ ...p, pedidos: p.pedidos.filter(pd => pd.id !== id) })); setSalvoPermuta(false); }
+  function addItem(pid: string) { setPermuta(p => ({ ...p, pedidos: p.pedidos.map(pd => pd.id === pid ? { ...pd, itens: [...pd.itens, { id: Date.now().toString(), material: "", quantidadeTon: 0, valorUnitario: 0 }] } : pd) })); setSalvoPermuta(false); }
+  function removeItem(pid: string, iid: string) { setPermuta(p => ({ ...p, pedidos: p.pedidos.map(pd => pd.id === pid ? { ...pd, itens: pd.itens.filter(i => i.id !== iid) } : pd) })); setSalvoPermuta(false); }
+  function patchItem(pid: string, iid: string, patch: Partial<ItemPedido>) { setPermuta(p => ({ ...p, pedidos: p.pedidos.map(pd => pd.id === pid ? { ...pd, itens: pd.itens.map(i => i.id === iid ? { ...i, ...patch } : i) } : pd) })); setSalvoPermuta(false); }
+  function patchPedido(pid: string, patch: Partial<PedidoPermuta>) { setPermuta(p => ({ ...p, pedidos: p.pedidos.map(pd => pd.id === pid ? { ...pd, ...patch } : pd) })); setSalvoPermuta(false); }
+  function addMov() { setPermuta(p => ({ ...p, movimentacoes: [...p.movimentacoes, { id: Date.now().toString(), data: new Date().toISOString().split("T")[0], valor: 0, pedido: "", tipo: "PERMUTA", empresa: "" }] })); setSalvoPermuta(false); }
+  function removeMov(id: string) { setPermuta(p => ({ ...p, movimentacoes: p.movimentacoes.filter(m => m.id !== id) })); setSalvoPermuta(false); }
+  function patchMov(id: string, patch: Partial<MovPermuta>) { setPermuta(p => ({ ...p, movimentacoes: p.movimentacoes.map(m => m.id === id ? { ...m, ...patch } : m) })); setSalvoPermuta(false); }
+  function salvarPermuta() { lsSave(LS_PERMUTA_KEY, permuta); setSalvoPermuta(true); setTimeout(() => setSalvoPermuta(false), 3000); }
 
   const chevron = (aberto: boolean, onToggle: () => void) => (
     <button onClick={onToggle} style={{ width: "28px", height: "28px", borderRadius: "6px", background: "transparent", border: "1px solid var(--b2)", color: "var(--t3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", flexShrink: 0 }}>
@@ -309,73 +323,187 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
       {/* ── PERMUTA MENDES & MENDES ── */}
       <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderTop: "3px solid #8b5cf6", borderRadius: "12px", overflow: "hidden" }}>
         {secaoHdr("#8b5cf6", "⇄", "Permuta Comercial", "Mendes & Mendes", "Acordo de permuta com parceiro comercial",
-          abertoPermuta && <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            {!editandoPermuta && (
-              <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 10px", borderRadius: "99px", background: STATUS_PERMUTA[permuta.status].bg, color: STATUS_PERMUTA[permuta.status].cor, border: `1px solid ${STATUS_PERMUTA[permuta.status].cor}50` }}>
+          <>
+            {!abertoPermuta && totalPermutaItens > 0 && (
+              <div style={{ textAlign: "right", marginRight: "4px" }}>
+                <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "2px" }}>Total Acordado</div>
+                <div style={{ fontSize: "15px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: "#8b5cf6" }}>{toBRL(totalPermutaItens)}</div>
+              </div>
+            )}
+            {abertoPermuta && (
+              <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 10px", borderRadius: "99px", background: STATUS_PERMUTA[permuta.status].bg, color: STATUS_PERMUTA[permuta.status].cor, border: `1px solid ${STATUS_PERMUTA[permuta.status].cor}50` }}>
                 ● {STATUS_PERMUTA[permuta.status].label}
               </span>
             )}
-            <button className="btn bg sm" style={{ color: "#8b5cf6", borderColor: "rgba(139,92,246,.4)" }}
-              onClick={() => { setPermutaEdit({ ...permuta }); setEditandoPermuta(true); setAbertoPermuta(true); }}>✎ Editar</button>
-          </div>,
+          </>,
           abertoPermuta, () => setAbertoPermuta(v => !v)
         )}
-        {(abertoPermuta || editandoPermuta) && (!editandoPermuta ? (
-          <div style={{ padding: "20px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px", marginBottom: "16px" }}>
-              {metricaCard("Valor Total",     toBRL(permuta.valorTotal),    "#8b5cf6", true)}
-              {metricaCard("Valor Recebido",  toBRL(permuta.valorRecebido), "var(--ok)")}
-              {metricaCard("Saldo a Receber", toBRL(saldoPermuta),          saldoPermuta > 0 ? "var(--warn)" : "var(--t3)")}
-              {metricaCard("Data de Início",  permuta.dataInicio ? new Date(permuta.dataInicio + "T00:00:00").toLocaleDateString("pt-BR") : "—", "var(--t2)")}
+        {abertoPermuta && (
+          <div style={{ padding: "16px" }}>
+
+            {/* ── Resumo ── */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
+              {metricaCard("Total Acordado",    toBRL(totalPermutaItens), "#8b5cf6", true)}
+              {metricaCard("Total Movimentado", toBRL(totalMovimentado),  "var(--t2)", true)}
+              {metricaCard("Saldo Restante",    toBRL(Math.abs(saldoRestante)), saldoRestante > 0 ? "var(--warn)" : "var(--ok)", true)}
             </div>
-            {permuta.valorTotal > 0 && (
-              <div style={{ marginBottom: permuta.observacoes ? "16px" : 0 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "7px" }}>
-                  <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>Progresso da Permuta</div>
-                  <div style={{ fontSize: "12px", fontWeight: 700, color: "#8b5cf6", fontFamily: "'DM Mono', monospace" }}>{pctPermuta.toFixed(1)}% concluído</div>
+
+            {/* ── Pedidos / Materiais ── */}
+            <div style={{ marginBottom: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                <div style={{ fontSize: "10px", fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.08em" }}>■ Pedidos / Materiais</div>
+                <button onClick={addPedido} style={{ fontSize: "11px", fontWeight: 600, padding: "3px 11px", borderRadius: "6px", border: "1px solid rgba(139,92,246,.35)", background: "rgba(139,92,246,.08)", color: "#8b5cf6", cursor: "pointer" }}>＋ Pedido</button>
+              </div>
+              {permuta.pedidos.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "16px", color: "var(--t3)", fontSize: "12px", background: "var(--surf2)", borderRadius: "8px", border: "1px dashed var(--b1)" }}>
+                  Nenhum pedido — clique em <strong style={{ color: "#8b5cf6" }}>＋ Pedido</strong> para adicionar
                 </div>
-                <div style={{ height: "8px", background: "var(--surf2)", borderRadius: "99px", border: "1px solid var(--b1)", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${pctPermuta}%`, background: "linear-gradient(90deg, #8b5cf6, #a78bfa)", borderRadius: "99px", transition: "width .4s ease" }} />
+              ) : permuta.pedidos.map(pedido => {
+                const pedTot = pedido.itens.reduce((s, i) => s + i.quantidadeTon * i.valorUnitario, 0);
+                const exp = pedidosAbertos.has(pedido.id);
+                return (
+                  <div key={pedido.id} style={{ background: "var(--surf2)", border: "1px solid var(--b1)", borderLeft: "3px solid #8b5cf6", borderRadius: "8px", marginBottom: "8px", overflow: "hidden" }}>
+                    <div onClick={() => togglePedido(pedido.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", cursor: "pointer", userSelect: "none" }}>
+                      <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontSize: "9px", color: "#8b5cf6", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>Pedido</span>
+                        <input value={pedido.numeroPedido} placeholder="Nº"
+                          className="fc" style={{ margin: 0, width: "80px", fontSize: "12px", fontFamily: "'DM Mono', monospace", padding: "3px 7px" }}
+                          onChange={e => patchPedido(pedido.id, { numeroPedido: e.target.value })} />
+                        <span style={{ fontSize: "10px", color: "var(--t3)" }}>{pedido.itens.length} item(ns)</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <span style={{ fontSize: "13px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: "#8b5cf6" }}>{toBRL(pedTot)}</span>
+                        <button onClick={e => { e.stopPropagation(); removePedido(pedido.id); }} style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "11px", padding: "2px 5px" }}>✕</button>
+                        <span style={{ fontSize: "11px", color: "var(--t3)", display: "inline-block", transition: "transform .2s", transform: exp ? "rotate(0deg)" : "rotate(-90deg)" }}>▾</span>
+                      </div>
+                    </div>
+                    {exp && (
+                      <div style={{ padding: "0 12px 12px" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 85px 120px 110px 28px", gap: "4px", padding: "5px 4px", borderBottom: "1px solid var(--b1)", marginBottom: "4px" }}>
+                          {["Material", "Qtd (t)", "Valor/t", "Total", ""].map(h => (
+                            <div key={h} style={{ fontSize: "9px", color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, textAlign: h === "Total" ? "right" : "left" }}>{h}</div>
+                          ))}
+                        </div>
+                        {pedido.itens.length === 0 ? (
+                          <div style={{ textAlign: "center", padding: "10px 0", color: "var(--t3)", fontSize: "11px" }}>Nenhum item</div>
+                        ) : pedido.itens.map(item => (
+                          <div key={item.id} style={{ display: "grid", gridTemplateColumns: "1fr 85px 120px 110px 28px", gap: "4px", alignItems: "center", marginBottom: "3px" }}>
+                            <input className="fc" placeholder="Material" value={item.material} style={{ margin: 0, fontSize: "11px", padding: "4px 7px" }}
+                              onChange={e => patchItem(pedido.id, item.id, { material: e.target.value })} />
+                            <input className="fc" type="number" step="0.001" placeholder="0" value={item.quantidadeTon || ""} style={{ margin: 0, fontSize: "11px", padding: "4px 7px", textAlign: "right", fontFamily: "'DM Mono', monospace" }}
+                              onChange={e => patchItem(pedido.id, item.id, { quantidadeTon: Number(e.target.value) })} />
+                            <CurrencyInput value={item.valorUnitario} style={{ margin: 0, fontSize: "11px", padding: "4px 7px", textAlign: "right", fontFamily: "'DM Mono', monospace" }}
+                              onChange={v => patchItem(pedido.id, item.id, { valorUnitario: v })} />
+                            <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--t1)", fontFamily: "'DM Mono', monospace", textAlign: "right", padding: "0 4px" }}>
+                              {item.quantidadeTon && item.valorUnitario ? toBRL(item.quantidadeTon * item.valorUnitario) : "—"}
+                            </div>
+                            <button onClick={() => removeItem(pedido.id, item.id)} style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "11px", padding: "4px", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                          </div>
+                        ))}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px", paddingTop: "8px", borderTop: "1px solid var(--b1)" }}>
+                          <button onClick={() => addItem(pedido.id)} style={{ fontSize: "10px", fontWeight: 600, padding: "3px 10px", borderRadius: "5px", border: "1px solid rgba(139,92,246,.3)", background: "rgba(139,92,246,.06)", color: "#8b5cf6", cursor: "pointer" }}>＋ Material</button>
+                          <span style={{ fontSize: "12px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: "#8b5cf6" }}>Subtotal: {toBRL(pedTot)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {permuta.pedidos.length > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 4px 0", borderTop: "1px solid var(--b1)" }}>
+                  <span style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, display: "flex", alignItems: "center" }}>{permuta.pedidos.length} pedido(s)</span>
+                  <span style={{ fontSize: "13px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: "#8b5cf6" }}>{toBRL(totalPermutaItens)}</span>
+                </div>
+              )}
+            </div>
+
+            {/* ── Movimentações ── */}
+            <div style={{ marginBottom: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                <div style={{ fontSize: "10px", fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.08em" }}>■ Movimentações</div>
+                <button onClick={addMov} style={{ fontSize: "11px", fontWeight: 600, padding: "3px 11px", borderRadius: "6px", border: "1px solid rgba(139,92,246,.35)", background: "rgba(139,92,246,.08)", color: "#8b5cf6", cursor: "pointer" }}>＋ Lançamento</button>
+              </div>
+              <div style={{ background: "var(--surf2)", border: "1px solid var(--b1)", borderRadius: "8px", overflow: "hidden" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "100px 130px 70px 120px 1fr 28px", gap: 0, padding: "6px 10px", background: "rgba(139,92,246,.07)", borderBottom: "1px solid var(--b1)" }}>
+                  {["Data", "Valor", "Pedido", "Tipo", "Empresa", ""].map(h => (
+                    <div key={h} style={{ fontSize: "9px", color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, textAlign: h === "Valor" ? "right" : "left" }}>{h}</div>
+                  ))}
+                </div>
+                {permuta.movimentacoes.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "18px 0", color: "var(--t3)", fontSize: "12px" }}>
+                    Nenhum lançamento — clique em <strong style={{ color: "#8b5cf6" }}>＋ Lançamento</strong>
+                  </div>
+                ) : (
+                  <>
+                    {permuta.movimentacoes.map((mov, i) => (
+                      <div key={mov.id} style={{ display: "grid", gridTemplateColumns: "100px 130px 70px 120px 1fr 28px", alignItems: "center", padding: "4px 6px", background: i % 2 === 0 ? "transparent" : "rgba(139,92,246,.03)", borderBottom: i < permuta.movimentacoes.length - 1 ? "1px solid var(--b1)" : "none" }}>
+                        <input type="date" className="fc" value={mov.data} style={{ margin: 0, fontSize: "11px", padding: "4px 6px", background: "transparent", border: "1px solid transparent", borderRadius: "4px" }}
+                          onFocus={e => (e.target.style.borderColor = "rgba(139,92,246,.4)")} onBlur={e => (e.target.style.borderColor = "transparent")}
+                          onChange={e => patchMov(mov.id, { data: e.target.value })} />
+                        <CurrencyInput value={mov.valor} style={{ margin: 0, fontSize: "12px", textAlign: "right", fontFamily: "'DM Mono', monospace", padding: "4px 6px", background: "transparent", border: "1px solid transparent", borderRadius: "4px" }}
+                          onFocus={e => (e.currentTarget.style.borderColor = "rgba(139,92,246,.4)")} onBlur={e => (e.currentTarget.style.borderColor = "transparent")}
+                          onChange={v => patchMov(mov.id, { valor: v })} />
+                        <input className="fc" placeholder="Nº" value={mov.pedido} style={{ margin: 0, fontSize: "11px", padding: "4px 6px", fontFamily: "'DM Mono', monospace", background: "transparent", border: "1px solid transparent", borderRadius: "4px" }}
+                          onFocus={e => (e.target.style.borderColor = "rgba(139,92,246,.4)")} onBlur={e => (e.target.style.borderColor = "transparent")}
+                          onChange={e => patchMov(mov.id, { pedido: e.target.value })} />
+                        <select className="fc" value={mov.tipo} style={{ margin: 0, fontSize: "10px", padding: "4px 6px" }}
+                          onChange={e => patchMov(mov.id, { tipo: e.target.value as MovPermuta["tipo"] })}>
+                          <option value="PERMUTA">Permuta</option>
+                          <option value="FATURAMENTO">Faturamento</option>
+                        </select>
+                        <input className="fc" placeholder="Empresa" value={mov.empresa} style={{ margin: 0, fontSize: "11px", padding: "4px 6px", background: "transparent", border: "1px solid transparent", borderRadius: "4px" }}
+                          onFocus={e => (e.target.style.borderColor = "rgba(139,92,246,.4)")} onBlur={e => (e.target.style.borderColor = "transparent")}
+                          onChange={e => patchMov(mov.id, { empresa: e.target.value })} />
+                        <button onClick={() => removeMov(mov.id)} style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "11px", padding: "4px", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                      </div>
+                    ))}
+                    <div style={{ display: "grid", gridTemplateColumns: "100px 130px 70px 120px 1fr 28px", padding: "7px 10px", background: "rgba(139,92,246,.07)", borderTop: "1px solid rgba(139,92,246,.2)" }}>
+                      <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", display: "flex", alignItems: "center" }}>{permuta.movimentacoes.length} lanç.</div>
+                      <div style={{ fontSize: "13px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: "#8b5cf6", textAlign: "right" }}>{toBRL(totalMovimentado)}</div>
+                      <div /><div /><div /><div />
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* ── Saldo Restante ── */}
+            <div style={{ background: saldoRestante > 0 ? "rgba(245,158,11,.07)" : "rgba(61,255,160,.07)", border: `1px solid ${saldoRestante > 0 ? "rgba(245,158,11,.3)" : "rgba(61,255,160,.3)"}`, borderRadius: "10px", padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+              <div>
+                <div style={{ fontSize: "9px", color: saldoRestante > 0 ? "#f59e0b" : "var(--ok)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, marginBottom: "4px" }}>Saldo Restante</div>
+                <div style={{ fontSize: "24px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: saldoRestante > 0 ? "#f59e0b" : "var(--ok)", lineHeight: 1 }}>{toBRL(Math.abs(saldoRestante))}</div>
+                <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "4px" }}>
+                  {saldoRestante > 0 ? `A receber${totalPermutaItens > 0 ? ` · ${((saldoRestante / totalPermutaItens) * 100).toFixed(1)}% pendente` : ""}` : "Totalmente liquidado ✓"}
                 </div>
               </div>
-            )}
-            {permuta.observacoes && (
-              <div style={{ background: "rgba(139,92,246,.06)", border: "1px solid rgba(139,92,246,.2)", borderRadius: "8px", padding: "12px 16px" }}>
-                <div style={{ fontSize: "9px", color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: "4px" }}>Observações</div>
-                <div style={{ fontSize: "13px", color: "var(--t2)", lineHeight: 1.5 }}>{permuta.observacoes}</div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: "11px", color: "var(--t3)", marginBottom: "6px" }}>
+                  Total acordado <span style={{ fontFamily: "'DM Mono', monospace", fontWeight: 700, color: "var(--t2)" }}>{toBRL(totalPermutaItens)}</span>
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--t3)" }}>
+                  Movimentado <span style={{ fontFamily: "'DM Mono', monospace", fontWeight: 700, color: "var(--t2)" }}>{toBRL(totalMovimentado)}</span>
+                </div>
+                <div style={{ marginTop: "10px" }}>
+                  <select className="fc" value={permuta.status} style={{ fontSize: "10px", padding: "3px 8px", margin: 0 }}
+                    onChange={e => setPermuta(p => ({ ...p, status: e.target.value as PermutaV2["status"] }))}>
+                    <option value="ativo">● Ativo</option>
+                    <option value="parcial">◑ Parcial</option>
+                    <option value="liquidado">○ Liquidado</option>
+                  </select>
+                </div>
               </div>
-            )}
-          </div>
-        ) : (
-          <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px" }}>
-              <div className="fg" style={{ margin: 0 }}><label className="fl">Valor Total (R$)</label>
-                <input className="fc" type="number" step="0.01" value={permutaEdit.valorTotal || ""}
-                  onChange={e => setPermutaEdit(p => ({ ...p, valorTotal: Number(e.target.value) }))} /></div>
-              <div className="fg" style={{ margin: 0 }}><label className="fl">Já Recebido (R$)</label>
-                <input className="fc" type="number" step="0.01" value={permutaEdit.valorRecebido || ""}
-                  onChange={e => setPermutaEdit(p => ({ ...p, valorRecebido: Number(e.target.value) }))} /></div>
-              <div className="fg" style={{ margin: 0 }}><label className="fl">Data de Início</label>
-                <input className="fc" type="date" value={permutaEdit.dataInicio}
-                  onChange={e => setPermutaEdit(p => ({ ...p, dataInicio: e.target.value }))} /></div>
-              <div className="fg" style={{ margin: 0 }}><label className="fl">Status</label>
-                <select className="fc" value={permutaEdit.status}
-                  onChange={e => setPermutaEdit(p => ({ ...p, status: e.target.value as DadosPermuta["status"] }))}>
-                  <option value="ativo">Ativo</option>
-                  <option value="parcial">Parcial</option>
-                  <option value="liquidado">Liquidado</option>
-                </select></div>
             </div>
-            <div className="fg" style={{ margin: 0 }}><label className="fl">Observações</label>
-              <textarea className="fc" rows={2} value={permutaEdit.observacoes}
-                onChange={e => setPermutaEdit(p => ({ ...p, observacoes: e.target.value }))}
-                style={{ resize: "vertical" as const, fontFamily: "inherit", minHeight: "60px" }} /></div>
-            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-              <button className="btn bg" onClick={() => setEditandoPermuta(false)}>Cancelar</button>
-              <button className="btn bp" onClick={salvarPermuta}>✓ Salvar</button>
+
+            {/* ── Salvar ── */}
+            <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "10px" }}>
+              {salvoPermuta && <span style={{ fontSize: "11px", color: "var(--ok)", fontWeight: 600 }}>✓ Salvo com sucesso</span>}
+              <button onClick={salvarPermuta} style={{ fontSize: "12px", fontWeight: 700, padding: "7px 20px", borderRadius: "8px", border: "none", background: salvoPermuta ? "var(--ok)" : "#8b5cf6", color: "white", cursor: "pointer", transition: "background .3s" }}>
+                {salvoPermuta ? "✓ Salvo" : "💾 Salvar alterações"}
+              </button>
             </div>
+
           </div>
-        ))}
+        )}
       </div>
 
       {/* ── LANÇAMENTOS DETALHADOS ── */}
@@ -503,12 +631,12 @@ export default function InvestimentosPage() {
   const [corrigido, setCorrigido]         = useState(false);
   const [bancosPos,  setBancosPos]        = useState<SaldoBanco[]>([]);
   const [aportePos,  setAportePos]        = useState<AporteGabriel[]>([]);
-  const [permutaPos, setPermutaPos]       = useState<DadosPermuta>(PERMUTA_DEFAULT);
+  const [permutaPos, setPermutaPos]       = useState<PermutaV2>(PERMUTA_DEFAULT);
 
   useEffect(() => {
     setBancosPos(lsLoad<SaldoBanco[]>(LS_BANCOS_KEY, BANCOS_POS_DEFAULT));
     setAportePos(lsLoad<AporteGabriel[]>(LS_APORTES_G_KEY, []));
-    const p = lsLoad<DadosPermuta>(LS_PERMUTA_KEY, PERMUTA_DEFAULT);
+    const p = lsLoad<PermutaV2>(LS_PERMUTA_KEY, PERMUTA_DEFAULT);
     setPermutaPos(p);
   }, []);
   useEffect(() => { lsSave(LS_BANCOS_KEY,  bancosPos);  }, [bancosPos]);
@@ -708,7 +836,8 @@ export default function InvestimentosPage() {
   const mediaAporte     = investimentos.length ? totalGeral / investimentos.length : 0;
   const totalBancosPos  = bancosPos.reduce((s, b) => s + b.saldo, 0);
   const aporteEmBRLPos  = aportePos.reduce((s, a) => s + a.valor, 0);
-  const totalPosicaoGlobal = totalGeral + totalBancosPos + aporteEmBRLPos + permutaPos.valorTotal;
+  const totalPermutaAcordado = permutaPos.pedidos.reduce((s, p) => s + p.itens.reduce((ss, i) => ss + i.quantidadeTon * i.valorUnitario, 0), 0);
+  const totalPosicaoGlobal = totalGeral + totalBancosPos + aporteEmBRLPos + totalPermutaAcordado;
   const bancos        = [...new Set(investimentos.map(i => i.empresa))].sort();
   const normalize     = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
   const bancosNorm    = bancos.map(b => normalize(b));
