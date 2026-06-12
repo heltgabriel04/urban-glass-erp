@@ -33,10 +33,15 @@ interface PedidoSugerido {
 // 1° corte: horizontal por toda a largura → separa faixas
 // 2° corte: vertical dentro de cada faixa → peças individuais
 // Reflete o fluxo real de corte em vidro pesado.
-function empacotar(
+//
+// Empacota numa ÚNICA chapa, respeitando a ordem de colocação recebida (`ordem`).
+// Usa Best-Fit: cada peça vai para a faixa que desperdiça MENOS altura (encaixe
+// mais justo), testando as duas orientações. Só abre faixa nova se não couber.
+function empacotarOrdem(
   W: number, H: number,
   pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
-  kerf: number
+  kerf: number,
+  ordem: number[]
 ): { placed: PecaPlacada[]; usados: Set<number>; free: EspacoLivre[] } {
   type Strip = { y: number; h: number; xUsed: number };
 
@@ -45,16 +50,10 @@ function empacotar(
   const strips: Strip[] = [];
   let   bottomY = 0;
 
-  // Ordena pela menor dimensão decrescente: peças mais "altas" (em paisagem) abrem
-  // as primeiras faixas e permitem que peças menores caibam nelas.
-  const ordem = pecas
-    .map((p, i) => ({ ...p, origIdx: i }))
-    .sort((a, b) => Math.min(b.l, b.a) - Math.min(a.l, a.a));
+  for (const origIdx of ordem) {
+    const peca = pecas[origIdx];
 
-  for (const peca of ordem) {
-    if (usados.has(peca.origIdx)) continue;
-
-    // Ambas as orientações que cabem na largura da chapa
+    // Ambas as orientações que cabem na largura da chapa (rotaciona pra melhor encaixe)
     const oris = [
       { pl: peca.l, pa: peca.a, rot: false as boolean },
       { pl: peca.a, pa: peca.l, rot: true  as boolean },
@@ -62,41 +61,40 @@ function empacotar(
 
     if (oris.length === 0) continue;
 
-    let ok = false;
-
-    // ── Tenta encaixar numa faixa existente (First-Fit) ──
+    // ── Best-Fit: melhor faixa existente (menor sobra de altura, depois menor sobra de largura) ──
+    let best: { strip: Strip; pl: number; pa: number; rot: boolean; x: number; waste: number; leftW: number } | null = null;
     for (const strip of strips) {
-      // Orientações que cabem na altura da faixa; prefere a que mais preenche a altura
-      const cand = oris
-        .filter(o => o.pa <= strip.h)
-        .sort((a, b) => b.pa - a.pa);
-
-      for (const ori of cand) {
+      for (const ori of oris) {
+        if (ori.pa > strip.h) continue;                         // não cabe na altura da faixa
         const x = strip.xUsed > 0 ? strip.xUsed + kerf : 0;
-        if (x + ori.pl > W) continue;
-        placed.push({ x, y: strip.y, l: ori.pl, a: ori.pa,
-          idx: peca.origIdx, prod: peca.prod, rot: ori.rot, pedidoId: peca.pedidoId });
-        usados.add(peca.origIdx);
-        strip.xUsed = x + ori.pl;
-        ok = true;
-        break;
+        if (x + ori.pl > W) continue;                           // não cabe na largura restante
+        const waste = strip.h - ori.pa;                         // altura desperdiçada na faixa
+        const leftW = W - (x + ori.pl);                         // largura restante após a peça
+        if (!best || waste < best.waste || (waste === best.waste && leftW < best.leftW)) {
+          best = { strip, pl: ori.pl, pa: ori.pa, rot: ori.rot, x, waste, leftW };
+        }
       }
-      if (ok) break;
+    }
+
+    if (best) {
+      placed.push({ x: best.x, y: best.strip.y, l: best.pl, a: best.pa,
+        idx: origIdx, prod: peca.prod, rot: best.rot, pedidoId: peca.pedidoId });
+      usados.add(origIdx);
+      best.strip.xUsed = best.x + best.pl;
+      continue;
     }
 
     // ── Abre nova faixa (novo corte longitudinal) ──
-    if (!ok) {
-      // Prefere orientação que gera faixa mais estreita (menor altura)
-      const best = [...oris].sort((a, b) => a.pa - b.pa)[0];
-      const y    = strips.length > 0 ? bottomY + kerf : 0;
-      if (y + best.pa > H) continue;
+    // Prefere a orientação mais baixa que ainda caiba na altura restante da chapa.
+    const y = strips.length > 0 ? bottomY + kerf : 0;
+    const chosen = [...oris].sort((a, b) => a.pa - b.pa).find(o => y + o.pa <= H);
+    if (!chosen) continue;
 
-      placed.push({ x: 0, y, l: best.pl, a: best.pa,
-        idx: peca.origIdx, prod: peca.prod, rot: best.rot, pedidoId: peca.pedidoId });
-      usados.add(peca.origIdx);
-      strips.push({ y, h: best.pa, xUsed: best.pl });
-      bottomY = y + best.pa;
-    }
+    placed.push({ x: 0, y, l: chosen.pl, a: chosen.pa,
+      idx: origIdx, prod: peca.prod, rot: chosen.rot, pedidoId: peca.pedidoId });
+    usados.add(origIdx);
+    strips.push({ y, h: chosen.pa, xUsed: chosen.pl });
+    bottomY = y + chosen.pa;
   }
 
   // Espaços livres: lateral direita de cada faixa + retalho inferior
@@ -110,6 +108,36 @@ function empacotar(
   if (H - yBot >= 200 && W >= 200) free.push({ x: 0, y: yBot, l: W, a: H - yBot });
 
   return { placed, usados, free };
+}
+
+// Empacota numa única chapa testando VÁRIAS ordens de colocação e fica com a melhor
+// (maior área aproveitada, desempate por mais peças). Explora a "melhor possibilidade"
+// em vez de depender de uma única heurística fixa.
+function empacotar(
+  W: number, H: number,
+  pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
+  kerf: number
+): { placed: PecaPlacada[]; usados: Set<number>; free: EspacoLivre[] } {
+  const base = pecas.map((_, i) => i);
+  const orderings: number[][] = [
+    [...base].sort((a, b) => Math.min(pecas[b].l, pecas[b].a) - Math.min(pecas[a].l, pecas[a].a)), // menor lado ↓
+    [...base].sort((a, b) => Math.max(pecas[b].l, pecas[b].a) - Math.max(pecas[a].l, pecas[a].a)), // maior lado ↓
+    [...base].sort((a, b) => pecas[b].a - pecas[a].a),                                             // altura ↓
+    [...base].sort((a, b) => pecas[b].l - pecas[a].l),                                             // largura ↓
+    [...base].sort((a, b) => (pecas[b].l * pecas[b].a) - (pecas[a].l * pecas[a].a)),               // área ↓
+  ];
+
+  let melhor: ReturnType<typeof empacotarOrdem> | null = null;
+  let melhorArea = -1, melhorQtd = -1;
+  for (const ordem of orderings) {
+    const r = empacotarOrdem(W, H, pecas, kerf, ordem);
+    const area = r.placed.reduce((s, p) => s + p.l * p.a, 0);
+    const qtd  = r.placed.length;
+    if (area > melhorArea || (area === melhorArea && qtd > melhorQtd)) {
+      melhor = r; melhorArea = area; melhorQtd = qtd;
+    }
+  }
+  return melhor ?? { placed: [], usados: new Set<number>(), free: [] };
 }
 
 // Calcula aproveitamento de um conjunto de peças (sem estado React)
@@ -433,7 +461,7 @@ function OtimizadorContent() {
       const CH = chapa ? chapa.h : chapaH;
       const W = CW - bord * 2;
       const H = CH - bord * 2;
-      grupo.sort((a, b) => b.l * b.a - a.l * a.a);
+      // empacotar() já testa várias ordens internamente; não precisa pré-ordenar aqui.
       let rem = [...grupo];
 
       if (useRetalhos) {
