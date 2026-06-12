@@ -43,10 +43,12 @@ interface AporteGabriel  { id: string; data: string; descricao: string; valor: n
 interface MovPedido      { id: string; data: string; valor: number; numeroPedido: string; tipo: "PERMUTA" | "FATURAMENTO"; empresa: string; }
 interface PedidoPermuta  { id: string; material: string; quantidadeTon: number; valor: number; movimentacoes: MovPedido[]; }
 interface PermutaV2      { pedidos: PedidoPermuta[]; status: "ativo" | "parcial" | "liquidado"; observacoes: string; }
+interface Lancamento     { id: string; data: string; observacao: string; valor: number; }
 
 const LS_BANCOS_KEY    = "ug_bancos_v1";
 const LS_APORTES_G_KEY = "ug_aportes_g_v1";
 const LS_PERMUTA_KEY   = "ug_permuta_v3";
+const LS_LANC_KEY      = "ug_lancamentos_v2";
 
 function lsLoad<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -74,9 +76,11 @@ interface PosFinProps {
   setAportes: Dispatch<SetStateAction<AporteGabriel[]>>;
   permuta: PermutaV2;
   setPermuta: Dispatch<SetStateAction<PermutaV2>>;
+  lancamentos: Lancamento[];
+  setLancamentos: Dispatch<SetStateAction<Lancamento[]>>;
 }
 
-function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permuta, setPermuta }: PosFinProps) {
+function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permuta, setPermuta, lancamentos, setLancamentos }: PosFinProps) {
   const [adicionando,     setAdicionando]     = useState(false);
   const [novoBanco,       setNovoBanco]       = useState<Omit<SaldoBanco, "id">>({ banco: "", agencia: "", conta: "", saldo: 0 });
   const [pedidosAbertos,  setPedidosAbertos]  = useState<Set<string>>(new Set());
@@ -86,12 +90,6 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
   const [salvoAporte,     setSalvoAporte]     = useState(false);
   const [salvoPermuta,    setSalvoPermuta]    = useState(false);
   const [abertoLanc,      setAbertoLanc]      = useState(false);
-  const [lancamentos,     setLancamentos]     = useState<{ id: string; data: string; descricao: string; valor: number }[]>([]);
-
-  useEffect(() => {
-    setLancamentos(lsLoad<{ id: string; data: string; descricao: string; valor: number }[]>("ug_lancamentos_v1", []));
-  }, []);
-  useEffect(() => { lsSave("ug_lancamentos_v1", lancamentos); }, [lancamentos]);
 
   const totalBancos  = bancos.reduce((s, b) => s + b.saldo, 0);
   const bancoCor     = (nome: string) => BANCOS_POSICAO.find(b => b.nome === nome)?.cor ?? "#6b7280";
@@ -468,22 +466,32 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
         )}
       </div>
 
-      {/* ── LANÇAMENTOS DETALHADOS ── */}
+      {/* ── LANÇAMENTOS / COMPRAS ── */}
       <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderTop: "3px solid #14b8a6", borderRadius: "12px", overflow: "hidden" }}>
-        {secaoHdr("#14b8a6", "≡", "Detalhamento", "Lançamentos", "Aportes e movimentações detalhados",
-          abertoLanc && (
-            <button className="btn bp sm" style={{ background: "transparent", color: "#14b8a6", borderColor: "rgba(20,184,166,.4)", fontSize: "11px" }}
-              onClick={() => setLancamentos(p => [...p, { id: Date.now().toString(), data: new Date().toISOString().split("T")[0], descricao: "", valor: 0 }])}>
-              ＋ Linha
-            </button>
-          ),
+        {secaoHdr("#14b8a6", "🛒", "Compras / Saídas", "Lançamentos", "Registro de compras e saídas financeiras",
+          <>
+            {!abertoLanc && lancamentos.length > 0 && (
+              <div style={{ textAlign: "right", marginRight: "4px" }}>
+                <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "2px" }}>Total</div>
+                <div style={{ fontSize: "15px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: "#14b8a6" }}>
+                  {toBRL(lancamentos.reduce((s, l) => s + l.valor, 0))}
+                </div>
+              </div>
+            )}
+            {abertoLanc && (
+              <button className="btn bp sm" style={{ background: "transparent", color: "#14b8a6", borderColor: "rgba(20,184,166,.4)", fontSize: "11px" }}
+                onClick={() => setLancamentos(p => [...p, { id: Date.now().toString(), data: new Date().toISOString().split("T")[0], observacao: "", valor: 0 }])}>
+                ＋ Linha
+              </button>
+            )}
+          </>,
           abertoLanc, () => setAbertoLanc(v => !v)
         )}
         {abertoLanc && (
           <div style={{ padding: "0 16px 16px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "110px 1fr 130px 28px", gap: "6px", padding: "8px 4px 6px", borderBottom: "1px solid var(--b1)", marginBottom: "4px" }}>
-              {["Data", "Descrição", "Valor (R$)", ""].map(h => (
-                <div key={h} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, textAlign: h === "Valor (R$)" ? "right" : "left" }}>{h}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "110px 1fr 140px 28px", gap: "6px", padding: "8px 4px 6px", borderBottom: "1px solid var(--b1)", marginBottom: "4px" }}>
+              {["Data da Compra", "Observação", "Valor", ""].map(h => (
+                <div key={h} style={{ fontSize: "9px", color: "#14b8a6", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, textAlign: h === "Valor" ? "right" : "left" }}>{h}</div>
               ))}
             </div>
             {lancamentos.length === 0 ? (
@@ -492,24 +500,24 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
               </div>
             ) : (
               <>
-                {lancamentos.map(lanc => (
-                  <div key={lanc.id} style={{ display: "grid", gridTemplateColumns: "110px 1fr 130px 28px", gap: "6px", alignItems: "center", marginBottom: "4px" }}>
+                {lancamentos.map((lanc, i) => (
+                  <div key={lanc.id} style={{ display: "grid", gridTemplateColumns: "110px 1fr 140px 28px", gap: "6px", alignItems: "center", marginBottom: "3px", padding: "2px 0", background: i % 2 === 0 ? "transparent" : "rgba(20,184,166,.03)", borderRadius: "4px" }}>
                     <input type="date" className="fc" value={lanc.data}
-                      style={{ margin: 0, fontSize: "11px", padding: "5px 8px" }}
+                      style={{ margin: 0, fontSize: "11px", padding: "5px 7px" }}
                       onChange={e => setLancamentos(p => p.map(l => l.id === lanc.id ? { ...l, data: e.target.value } : l))} />
-                    <input className="fc" placeholder="Descrição" value={lanc.descricao}
-                      style={{ margin: 0, fontSize: "12px", padding: "5px 8px" }}
-                      onChange={e => setLancamentos(p => p.map(l => l.id === lanc.id ? { ...l, descricao: e.target.value } : l))} />
-                    <input type="number" step="0.01" className="fc" placeholder="0,00" value={lanc.valor || ""}
-                      style={{ margin: 0, fontSize: "12px", textAlign: "right", fontFamily: "'DM Mono', monospace", padding: "5px 8px" }}
-                      onChange={e => setLancamentos(p => p.map(l => l.id === lanc.id ? { ...l, valor: Number(e.target.value) } : l))} />
+                    <input className="fc" placeholder="Observação" value={lanc.observacao}
+                      style={{ margin: 0, fontSize: "12px", padding: "5px 7px" }}
+                      onChange={e => setLancamentos(p => p.map(l => l.id === lanc.id ? { ...l, observacao: e.target.value } : l))} />
+                    <CurrencyInput value={lanc.valor}
+                      style={{ margin: 0, fontSize: "12px", textAlign: "right", fontFamily: "'DM Mono', monospace", padding: "5px 7px" }}
+                      onChange={v => setLancamentos(p => p.map(l => l.id === lanc.id ? { ...l, valor: v } : l))} />
                     <button onClick={() => setLancamentos(p => p.filter(l => l.id !== lanc.id))}
                       style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "12px", padding: "4px", borderRadius: "4px", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
                   </div>
                 ))}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 4px 0", borderTop: "1px solid var(--b1)", marginTop: "6px" }}>
                   <span style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600 }}>{lancamentos.length} lançamento(s)</span>
-                  <span style={{ fontSize: "14px", fontWeight: 700, fontFamily: "'DM Mono', monospace", color: "#14b8a6" }}>
+                  <span style={{ fontSize: "14px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: "#14b8a6" }}>
                     {toBRL(lancamentos.reduce((s, l) => s + l.valor, 0))}
                   </span>
                 </div>
@@ -593,18 +601,20 @@ export default function InvestimentosPage() {
   const [corrigido, setCorrigido]         = useState(false);
   const [abertoAportes, setAbertoAportes] = useState(true);
   const [bancosPos,  setBancosPos]        = useState<SaldoBanco[]>([]);
+  const [lancamentosPos, setLancamentosPos] = useState<Lancamento[]>([]);
   const [aportePos,  setAportePos]        = useState<AporteGabriel[]>([]);
   const [permutaPos, setPermutaPos]       = useState<PermutaV2>(PERMUTA_DEFAULT);
 
   useEffect(() => {
     setBancosPos(lsLoad<SaldoBanco[]>(LS_BANCOS_KEY, BANCOS_POS_DEFAULT));
     setAportePos(lsLoad<AporteGabriel[]>(LS_APORTES_G_KEY, []));
-    const p = lsLoad<PermutaV2>(LS_PERMUTA_KEY, PERMUTA_DEFAULT);
-    setPermutaPos(p);
+    setPermutaPos(lsLoad<PermutaV2>(LS_PERMUTA_KEY, PERMUTA_DEFAULT));
+    setLancamentosPos(lsLoad<Lancamento[]>(LS_LANC_KEY, []));
   }, []);
   useEffect(() => { lsSave(LS_BANCOS_KEY,  bancosPos);  }, [bancosPos]);
   useEffect(() => { lsSave(LS_APORTES_G_KEY, aportePos); }, [aportePos]);
   useEffect(() => { lsSave(LS_PERMUTA_KEY, permutaPos); }, [permutaPos]);
+  useEffect(() => { lsSave(LS_LANC_KEY, lancamentosPos); }, [lancamentosPos]);
 
   useEffect(() => { load(); }, []);
 
@@ -801,7 +811,8 @@ export default function InvestimentosPage() {
   const aporteEmBRLPos  = aportePos.reduce((s, a) => s + a.valor, 0);
   const totalPermutaAcordado   = permutaPos.pedidos.reduce((s, p) => s + p.valor, 0);
   const totalPermutaMovimentado = permutaPos.pedidos.reduce((s, p) => s + p.movimentacoes.reduce((ss, m) => ss + m.valor, 0), 0);
-  const totalPosicaoGlobal = totalGeral + totalBancosPos + aporteEmBRLPos + (totalPermutaAcordado - totalPermutaMovimentado);
+  const totalLancamentosPos = lancamentosPos.reduce((s, l) => s + l.valor, 0);
+  const totalPosicaoGlobal = totalGeral + totalBancosPos + aporteEmBRLPos + (totalPermutaAcordado - totalPermutaMovimentado) + totalLancamentosPos;
   const bancos        = [...new Set(investimentos.map(i => i.empresa))].sort();
   const normalize     = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
   const bancosNorm    = bancos.map(b => normalize(b));
@@ -983,7 +994,7 @@ export default function InvestimentosPage() {
         {/* Stats */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px", marginBottom: "22px" }}>
           {[
-            { label: "Total Geral",          val: formatBRL(totalPosicaoGlobal), sub: `aportes · bancos · exterior · permuta`, c: G },
+            { label: "Total Geral",          val: formatBRL(totalPosicaoGlobal), sub: `aportes · bancos · exterior · permuta · compras`, c: G },
             { label: "Maior Aporte",       val: formatBRL(maiorAporte),  sub: "individual",                        c: G },
             { label: "Média por Aporte",   val: formatBRL(mediaAporte),  sub: "por registro",                      c: "var(--acc)" },
             { label: "Bancos / Origens",   val: String(bancos.length),   sub: "registrados",                       c: "var(--acc2)" },
@@ -1001,6 +1012,7 @@ export default function InvestimentosPage() {
           bancos={bancosPos}  setBancos={setBancosPos}
           aportes={aportePos} setAportes={setAportePos}
           permuta={permutaPos} setPermuta={setPermutaPos}
+          lancamentos={lancamentosPos} setLancamentos={setLancamentosPos}
         />
 
         {/* Aportes Card */}
