@@ -102,7 +102,7 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aporte, setAporte, permuta,
   );
 
   const secaoHdr = (acento: string, icone: string, tag: string, titulo: string, sub: string, direita: ReactNode, aberto: boolean, onToggle: () => void) => (
-    <div style={{ padding: "16px 20px", background: "var(--surf2)", borderBottom: aberto ? "1px solid var(--b1)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <div onClick={onToggle} style={{ padding: "16px 20px", background: "var(--surf2)", borderBottom: aberto ? "1px solid var(--b1)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
         <div style={{ width: "40px", height: "40px", borderRadius: "10px", background: `${acento}20`, border: `1px solid ${acento}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", flexShrink: 0 }}>{icone}</div>
         <div>
@@ -111,7 +111,7 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aporte, setAporte, permuta,
           <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "1px" }}>{sub}</div>
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+      <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
         {direita}
         {chevron(aberto, onToggle)}
       </div>
@@ -130,12 +130,12 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aporte, setAporte, permuta,
 
       {/* ── SALDOS BANCÁRIOS ── */}
       <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderTop: "3px solid var(--acc2)", borderRadius: "12px", overflow: "hidden" }}>
-        <div style={{ padding: "16px 20px", background: "var(--surf2)", borderBottom: abertoBancos ? "1px solid var(--b1)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div onClick={() => setAbertoBancos(v => !v)} style={{ padding: "16px 20px", background: "var(--surf2)", borderBottom: abertoBancos ? "1px solid var(--b1)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
           <div>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", display: "flex", alignItems: "center", gap: "8px" }}>🏦 Saldos Bancários</div>
             <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "2px" }}>Posição atual das contas — atualização manual</div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: "14px" }}>
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "2px" }}>Saldo Consolidado</div>
               <div style={{ fontSize: "22px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: totalBancos >= 0 ? "var(--ok)" : "var(--err)" }}>{toBRL(totalBancos)}</div>
