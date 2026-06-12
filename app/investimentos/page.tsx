@@ -38,13 +38,13 @@ const BANCOS_POS_DEFAULT: SaldoBanco[] = [
   { id: "pre-5", banco: "Elobank Caixa",    agencia: "", conta: "", saldo: 0 },
 ];
 
-interface SaldoBanco  { id: string; banco: string; agencia: string; conta: string; saldo: number; }
-interface DadosAporte { valor: number; moeda: "BRL" | "USD" | "EUR"; cotacao: number; dataAporte: string; descricao: string; observacoes: string; }
-interface DadosPermuta { valorTotal: number; valorRecebido: number; dataInicio: string; descricao: string; status: "ativo" | "parcial" | "liquidado"; observacoes: string; }
+interface SaldoBanco    { id: string; banco: string; agencia: string; conta: string; saldo: number; }
+interface AporteGabriel { id: string; data: string; descricao: string; valor: number; }
+interface DadosPermuta  { valorTotal: number; valorRecebido: number; dataInicio: string; descricao: string; status: "ativo" | "parcial" | "liquidado"; observacoes: string; }
 
-const LS_BANCOS_KEY  = "ug_bancos_v1";
-const LS_APORTE_KEY  = "ug_aporte_v1";
-const LS_PERMUTA_KEY = "ug_permuta_v1";
+const LS_BANCOS_KEY   = "ug_bancos_v1";
+const LS_APORTES_G_KEY = "ug_aportes_g_v1";
+const LS_PERMUTA_KEY  = "ug_permuta_v1";
 
 function lsLoad<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -57,7 +57,6 @@ function lsSave(key: string, value: unknown): void {
 
 const toBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
 
-const APORTE_DEFAULT: DadosAporte   = { valor: 0, moeda: "BRL", cotacao: 1, dataAporte: "", descricao: "Aporte realizado por Gabriel", observacoes: "" };
 const PERMUTA_DEFAULT: DadosPermuta = { valorTotal: 0, valorRecebido: 0, dataInicio: "", descricao: "Permuta com Mendes & Mendes", status: "ativo", observacoes: "" };
 
 const STATUS_PERMUTA = {
@@ -69,17 +68,15 @@ const STATUS_PERMUTA = {
 interface PosFinProps {
   bancos: SaldoBanco[];
   setBancos: Dispatch<SetStateAction<SaldoBanco[]>>;
-  aporte: DadosAporte;
-  setAporte: Dispatch<SetStateAction<DadosAporte>>;
+  aportes: AporteGabriel[];
+  setAportes: Dispatch<SetStateAction<AporteGabriel[]>>;
   permuta: DadosPermuta;
   setPermuta: Dispatch<SetStateAction<DadosPermuta>>;
 }
 
-function SecaoPosicaoFinanceira({ bancos, setBancos, aporte, setAporte, permuta, setPermuta }: PosFinProps) {
+function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permuta, setPermuta }: PosFinProps) {
   const [adicionando,     setAdicionando]     = useState(false);
   const [novoBanco,       setNovoBanco]       = useState<Omit<SaldoBanco, "id">>({ banco: "", agencia: "", conta: "", saldo: 0 });
-  const [aporteEdit,      setAporteEdit]      = useState<DadosAporte>(APORTE_DEFAULT);
-  const [editandoAporte,  setEditandoAporte]  = useState(false);
   const [permutaEdit,     setPermutaEdit]     = useState<DadosPermuta>(PERMUTA_DEFAULT);
   const [editandoPermuta, setEditandoPermuta] = useState(false);
   const [abertoBancos,    setAbertoBancos]    = useState(false);
@@ -96,7 +93,7 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aporte, setAporte, permuta,
   const totalBancos  = bancos.reduce((s, b) => s + b.saldo, 0);
   const bancoCor     = (nome: string) => BANCOS_POSICAO.find(b => b.nome === nome)?.cor ?? "#6b7280";
   const bancoIni     = (nome: string) => BANCOS_POSICAO.find(b => b.nome === nome)?.ini ?? nome.slice(0, 2).toUpperCase();
-  const aporteEmBRL  = aporte.moeda === "BRL" ? aporte.valor : aporte.valor * aporte.cotacao;
+  const totalAportes = aportes.reduce((s, a) => s + a.valor, 0);
   const saldoPermuta = permuta.valorTotal - permuta.valorRecebido;
   const pctPermuta   = permuta.valorTotal > 0 ? Math.min(100, (permuta.valorRecebido / permuta.valorTotal) * 100) : 0;
 
@@ -110,7 +107,6 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aporte, setAporte, permuta,
     if (!confirm("Remover este banco?")) return;
     setBancos(p => p.filter(b => b.id !== id));
   }
-  function salvarAporte()  { setAporte(aporteEdit);   setEditandoAporte(false); }
   function salvarPermuta() { setPermuta(permutaEdit); setEditandoPermuta(false); }
 
   const chevron = (aberto: boolean, onToggle: () => void) => (
@@ -214,60 +210,50 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aporte, setAporte, permuta,
       {/* ── APORTE GABRIEL — EXTERIOR ── */}
       <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderTop: "3px solid #3b82f6", borderRadius: "12px", overflow: "hidden" }}>
         {secaoHdr("#3b82f6", "✈", "Aporte Exterior", "Aporte de Gabriel", "Investimento externo realizado pelo sócio",
-          abertoAporte && <button className="btn bg sm" style={{ color: "#3b82f6", borderColor: "rgba(59,130,246,.4)" }}
-            onClick={() => { setAporteEdit({ ...aporte }); setEditandoAporte(true); setAbertoAporte(true); }}>✎ Editar</button>,
+          abertoAporte && (
+            <button className="btn bp sm" style={{ background: "transparent", color: "#3b82f6", borderColor: "rgba(59,130,246,.4)", fontSize: "11px" }}
+              onClick={() => setAportes(p => [...p, { id: Date.now().toString(), data: new Date().toISOString().split("T")[0], descricao: "", valor: 0 }])}>
+              ＋ Linha
+            </button>
+          ),
           abertoAporte, () => setAbertoAporte(v => !v)
         )}
-        {(abertoAporte || editandoAporte) && (!editandoAporte ? (
-
-          <div style={{ padding: "20px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px", marginBottom: aporte.observacoes ? "16px" : 0 }}>
-              {metricaCard(`Valor (${aporte.moeda})`,
-                aporte.moeda === "BRL" ? toBRL(aporte.valor) : aporte.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 }) + (aporte.moeda === "USD" ? " US$" : " €"),
-                "#3b82f6", true)}
-              {metricaCard(aporte.moeda !== "BRL" ? `Cotação (1 ${aporte.moeda})` : "Moeda", aporte.moeda === "BRL" ? "Real (BRL)" : toBRL(aporte.cotacao), "var(--t2)")}
-              {metricaCard("Equivalente em BRL", toBRL(aporteEmBRL), "var(--ok)", true)}
-              {metricaCard("Data do Aporte", aporte.dataAporte ? new Date(aporte.dataAporte + "T00:00:00").toLocaleDateString("pt-BR") : "—", "var(--t2)")}
+        {abertoAporte && (
+          <div style={{ padding: "0 16px 16px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "110px 1fr 130px 28px", gap: "6px", padding: "8px 4px 6px", borderBottom: "1px solid var(--b1)", marginBottom: "4px" }}>
+              {["Data", "Descrição", "Valor (R$)", ""].map(h => (
+                <div key={h} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, textAlign: h === "Valor (R$)" ? "right" : "left" }}>{h}</div>
+              ))}
             </div>
-            {aporte.observacoes && (
-              <div style={{ background: "rgba(59,130,246,.06)", border: "1px solid rgba(59,130,246,.2)", borderRadius: "8px", padding: "12px 16px" }}>
-                <div style={{ fontSize: "9px", color: "#3b82f6", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: "4px" }}>Observações</div>
-                <div style={{ fontSize: "13px", color: "var(--t2)", lineHeight: 1.5 }}>{aporte.observacoes}</div>
+            {aportes.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "18px 0", color: "var(--t3)", fontSize: "12px" }}>
+                Nenhum aporte — clique em <strong style={{ color: "#3b82f6" }}>＋ Linha</strong> para adicionar
               </div>
+            ) : (
+              <>
+                {aportes.map(ap => (
+                  <div key={ap.id} style={{ display: "grid", gridTemplateColumns: "110px 1fr 130px 28px", gap: "6px", alignItems: "center", marginBottom: "4px" }}>
+                    <input type="date" className="fc" value={ap.data}
+                      style={{ margin: 0, fontSize: "11px", padding: "5px 8px" }}
+                      onChange={e => setAportes(p => p.map(a => a.id === ap.id ? { ...a, data: e.target.value } : a))} />
+                    <input className="fc" placeholder="Descrição" value={ap.descricao}
+                      style={{ margin: 0, fontSize: "12px", padding: "5px 8px" }}
+                      onChange={e => setAportes(p => p.map(a => a.id === ap.id ? { ...a, descricao: e.target.value } : a))} />
+                    <input type="number" step="0.01" className="fc" placeholder="0,00" value={ap.valor || ""}
+                      style={{ margin: 0, fontSize: "12px", textAlign: "right", fontFamily: "'DM Mono', monospace", padding: "5px 8px" }}
+                      onChange={e => setAportes(p => p.map(a => a.id === ap.id ? { ...a, valor: Number(e.target.value) } : a))} />
+                    <button onClick={() => setAportes(p => p.filter(a => a.id !== ap.id))}
+                      style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "12px", padding: "4px", borderRadius: "4px", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                  </div>
+                ))}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 4px 0", borderTop: "1px solid var(--b1)", marginTop: "6px" }}>
+                  <span style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600 }}>{aportes.length} aporte(s)</span>
+                  <span style={{ fontSize: "14px", fontWeight: 700, fontFamily: "'DM Mono', monospace", color: "#3b82f6" }}>{toBRL(totalAportes)}</span>
+                </div>
+              </>
             )}
           </div>
-        ) : (
-          <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: aporteEdit.moeda !== "BRL" ? "2fr 1fr 1fr 1fr" : "2fr 1fr 1fr", gap: "12px" }}>
-              <div className="fg" style={{ margin: 0 }}><label className="fl">Valor</label>
-                <input className="fc" type="number" step="0.01" value={aporteEdit.valor || ""}
-                  onChange={e => setAporteEdit(p => ({ ...p, valor: Number(e.target.value) }))} /></div>
-              <div className="fg" style={{ margin: 0 }}><label className="fl">Moeda</label>
-                <select className="fc" value={aporteEdit.moeda}
-                  onChange={e => setAporteEdit(p => ({ ...p, moeda: e.target.value as DadosAporte["moeda"] }))}>
-                  <option value="BRL">BRL — Real</option>
-                  <option value="USD">USD — Dólar</option>
-                  <option value="EUR">EUR — Euro</option>
-                </select></div>
-              {aporteEdit.moeda !== "BRL" && (
-                <div className="fg" style={{ margin: 0 }}><label className="fl">Cotação (R$)</label>
-                  <input className="fc" type="number" step="0.0001" value={aporteEdit.cotacao || ""}
-                    onChange={e => setAporteEdit(p => ({ ...p, cotacao: Number(e.target.value) }))} /></div>
-              )}
-              <div className="fg" style={{ margin: 0 }}><label className="fl">Data do Aporte</label>
-                <input className="fc" type="date" value={aporteEdit.dataAporte}
-                  onChange={e => setAporteEdit(p => ({ ...p, dataAporte: e.target.value }))} /></div>
-            </div>
-            <div className="fg" style={{ margin: 0 }}><label className="fl">Observações</label>
-              <textarea className="fc" rows={2} value={aporteEdit.observacoes}
-                onChange={e => setAporteEdit(p => ({ ...p, observacoes: e.target.value }))}
-                style={{ resize: "vertical" as const, fontFamily: "inherit", minHeight: "60px" }} /></div>
-            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-              <button className="btn bg" onClick={() => setEditandoAporte(false)}>Cancelar</button>
-              <button className="btn bp" onClick={salvarAporte}>✓ Salvar</button>
-            </div>
-          </div>
-        ))}
+        )}
       </div>
 
       {/* ── PERMUTA MENDES & MENDES ── */}
@@ -466,18 +452,17 @@ export default function InvestimentosPage() {
   const [corrigindo, setCorrigindo]       = useState(false);
   const [corrigido, setCorrigido]         = useState(false);
   const [bancosPos,  setBancosPos]        = useState<SaldoBanco[]>([]);
-  const [aportePos,  setAportePos]        = useState<DadosAporte>(APORTE_DEFAULT);
+  const [aportePos,  setAportePos]        = useState<AporteGabriel[]>([]);
   const [permutaPos, setPermutaPos]       = useState<DadosPermuta>(PERMUTA_DEFAULT);
 
   useEffect(() => {
     setBancosPos(lsLoad<SaldoBanco[]>(LS_BANCOS_KEY, BANCOS_POS_DEFAULT));
-    const a = lsLoad<DadosAporte>(LS_APORTE_KEY, APORTE_DEFAULT);
-    setAportePos(a);
+    setAportePos(lsLoad<AporteGabriel[]>(LS_APORTES_G_KEY, []));
     const p = lsLoad<DadosPermuta>(LS_PERMUTA_KEY, PERMUTA_DEFAULT);
     setPermutaPos(p);
   }, []);
   useEffect(() => { lsSave(LS_BANCOS_KEY,  bancosPos);  }, [bancosPos]);
-  useEffect(() => { lsSave(LS_APORTE_KEY,  aportePos);  }, [aportePos]);
+  useEffect(() => { lsSave(LS_APORTES_G_KEY, aportePos); }, [aportePos]);
   useEffect(() => { lsSave(LS_PERMUTA_KEY, permutaPos); }, [permutaPos]);
 
   useEffect(() => { load(); }, []);
@@ -672,7 +657,7 @@ export default function InvestimentosPage() {
   const maiorAporte     = investimentos.length ? Math.max(...investimentos.map(i => Number(i.valor))) : 0;
   const mediaAporte     = investimentos.length ? totalGeral / investimentos.length : 0;
   const totalBancosPos  = bancosPos.reduce((s, b) => s + b.saldo, 0);
-  const aporteEmBRLPos  = aportePos.moeda === "BRL" ? aportePos.valor : aportePos.valor * aportePos.cotacao;
+  const aporteEmBRLPos  = aportePos.reduce((s, a) => s + a.valor, 0);
   const totalPosicaoGlobal = totalGeral + totalBancosPos + aporteEmBRLPos + permutaPos.valorTotal;
   const bancos        = [...new Set(investimentos.map(i => i.empresa))].sort();
   const normalize     = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
@@ -872,7 +857,7 @@ export default function InvestimentosPage() {
         {/* Posição Financeira */}
         <SecaoPosicaoFinanceira
           bancos={bancosPos}  setBancos={setBancosPos}
-          aporte={aportePos}  setAporte={setAportePos}
+          aportes={aportePos} setAportes={setAportePos}
           permuta={permutaPos} setPermuta={setPermutaPos}
         />
 
