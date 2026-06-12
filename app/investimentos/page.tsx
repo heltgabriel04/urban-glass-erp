@@ -42,7 +42,7 @@ interface SaldoBanco     { id: string; banco: string; agencia: string; conta: st
 interface AporteGabriel  { id: string; data: string; descricao: string; valor: number; }
 interface MovPedido      { id: string; data: string; valor: number; numeroPedido: string; tipo: "PERMUTA" | "FATURAMENTO"; empresa: string; }
 interface PedidoPermuta  { id: string; material: string; quantidadeTon: number; valor: number; movimentacoes: MovPedido[]; }
-interface PermutaV2      { pedidos: PedidoPermuta[]; status: "ativo" | "parcial" | "liquidado"; observacoes: string; saldoManual: number; totalAcordadoManual: number; }
+interface PermutaV2      { pedidos: PedidoPermuta[]; status: "ativo" | "parcial" | "liquidado"; observacoes: string; saldoManual: number; totalAcordadoManual: number; totalMovimentadoManual: number; }
 interface Lancamento     { id: string; data: string; observacao: string; valor: number; }
 
 const LS_BANCOS_KEY    = "ug_bancos_v1";
@@ -61,7 +61,7 @@ function lsSave(key: string, value: unknown): void {
 
 const toBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
 
-const PERMUTA_DEFAULT: PermutaV2 = { pedidos: [], status: "ativo", observacoes: "", saldoManual: 0, totalAcordadoManual: 0 };
+const PERMUTA_DEFAULT: PermutaV2 = { pedidos: [], status: "ativo", observacoes: "", saldoManual: 0, totalAcordadoManual: 0, totalMovimentadoManual: 0 };
 
 const STATUS_PERMUTA = {
   ativo:     { label: "Ativo",     cor: "#3dffa0", bg: "rgba(61,255,160,.12)" },
@@ -181,19 +181,11 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
                     <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--t1)", flex: 1, lineHeight: 1.2 }}>{banco.banco}</div>
                     <button title="Remover" onClick={() => removerBanco(banco.id)} style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "12px", padding: "2px 4px", borderRadius: "4px", lineHeight: 1 }}>✕</button>
                   </div>
-                  <input
-                    type="number" step="0.01"
-                    value={banco.saldo || ""}
-                    onChange={e => setBancos(p => p.map(b => b.id === banco.id ? { ...b, saldo: Number(e.target.value) } : b))}
-                    placeholder="0,00"
-                    className="fc"
+                  <CurrencyInput
+                    value={banco.saldo}
+                    onChange={v => setBancos(p => p.map(b => b.id === banco.id ? { ...b, saldo: v } : b))}
                     style={{ width: "100%", margin: 0, fontFamily: "'DM Mono', monospace", fontWeight: 700, fontSize: "13px", textAlign: "right", color: banco.saldo < 0 ? "var(--err)" : "var(--t1)", boxSizing: "border-box" }}
                   />
-                  {banco.saldo !== 0 && (
-                    <div style={{ fontSize: "10px", color: "var(--t3)", textAlign: "right", marginTop: "4px", fontFamily: "'DM Mono', monospace" }}>
-                      {toBRL(banco.saldo)}
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -205,9 +197,9 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
                   <option value="">Selecionar...</option>
                   {BANCOS_POSICAO.map(bl => <option key={bl.nome} value={bl.nome}>{bl.nome}</option>)}
                 </select>
-                <input className="fc" type="number" step="0.01" placeholder="Saldo inicial (R$)" value={novoBanco.saldo || ""}
+                <CurrencyInput value={novoBanco.saldo}
                   style={{ margin: 0, textAlign: "right", fontFamily: "'DM Mono', monospace" }}
-                  onChange={e => setNovoBanco(p => ({ ...p, saldo: Number(e.target.value) }))} />
+                  onChange={v => setNovoBanco(p => ({ ...p, saldo: v }))} />
                 <div style={{ display: "flex", gap: "6px" }}>
                   <button className="btn bp sm" style={{ flex: 1, fontSize: "11px" }} onClick={adicionarBanco} disabled={!novoBanco.banco}>Adicionar</button>
                   <button className="btn bg sm" style={{ fontSize: "11px" }} onClick={() => { setAdicionando(false); setNovoBanco({ banco: "", agencia: "", conta: "", saldo: 0 }); }}>Cancelar</button>
@@ -344,7 +336,7 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
             {permuta.pedidos.length > 0 && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "10px", marginBottom: "16px" }}>
                 {metricaCard("Total Acordado",    toBRL(totalAcordadoEfet), "#8b5cf6", true)}
-                {metricaCard("Total Movimentado", toBRL(totalMovimentado),  "var(--t2)", true)}
+                {metricaCard("Total Movimentado", toBRL((permuta.totalMovimentadoManual ?? 0) > 0 ? permuta.totalMovimentadoManual : totalMovimentado), "var(--t2)", true)}
                 {metricaCard("Saldo Restante",    toBRL(saldoEfetivo), saldoEfetivo > 0 ? "var(--warn)" : "var(--ok)", true)}
               </div>
             )}
@@ -452,13 +444,21 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
             })}
 
             {/* ── Campos editáveis manuais ── */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "14px", marginBottom: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginTop: "14px", marginBottom: "12px" }}>
               <div style={{ background: "rgba(139,92,246,.06)", border: "1px solid rgba(139,92,246,.25)", borderRadius: "10px", padding: "12px 16px" }}>
                 <div style={{ fontSize: "9px", color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, marginBottom: "6px" }}>Total Acordado</div>
                 <CurrencyInput
                   value={permuta.totalAcordadoManual}
                   onChange={v => { setPermuta(p => ({ ...p, totalAcordadoManual: v })); setSalvoPermuta(false); }}
-                  style={{ margin: 0, width: "100%", fontSize: "18px", fontWeight: 800, textAlign: "right", fontFamily: "'DM Mono', monospace", background: "transparent", border: "1px solid rgba(139,92,246,.3)", borderRadius: "8px", padding: "6px 12px", color: "#8b5cf6" }}
+                  style={{ margin: 0, width: "100%", fontSize: "16px", fontWeight: 800, textAlign: "right", fontFamily: "'DM Mono', monospace", background: "transparent", border: "1px solid rgba(139,92,246,.3)", borderRadius: "8px", padding: "6px 10px", color: "#8b5cf6" }}
+                />
+              </div>
+              <div style={{ background: "rgba(139,92,246,.06)", border: "1px solid rgba(139,92,246,.25)", borderRadius: "10px", padding: "12px 16px" }}>
+                <div style={{ fontSize: "9px", color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, marginBottom: "6px" }}>Total Movimentado</div>
+                <CurrencyInput
+                  value={permuta.totalMovimentadoManual ?? 0}
+                  onChange={v => { setPermuta(p => ({ ...p, totalMovimentadoManual: v })); setSalvoPermuta(false); }}
+                  style={{ margin: 0, width: "100%", fontSize: "16px", fontWeight: 800, textAlign: "right", fontFamily: "'DM Mono', monospace", background: "transparent", border: "1px solid rgba(139,92,246,.3)", borderRadius: "8px", padding: "6px 10px", color: "var(--t2)" }}
                 />
               </div>
               <div style={{ background: "rgba(139,92,246,.06)", border: "1px solid rgba(139,92,246,.25)", borderRadius: "10px", padding: "12px 16px" }}>
@@ -466,7 +466,7 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
                 <CurrencyInput
                   value={permuta.saldoManual}
                   onChange={v => { setPermuta(p => ({ ...p, saldoManual: v })); setSalvoPermuta(false); }}
-                  style={{ margin: 0, width: "100%", fontSize: "18px", fontWeight: 800, textAlign: "right", fontFamily: "'DM Mono', monospace", background: "transparent", border: "1px solid rgba(139,92,246,.3)", borderRadius: "8px", padding: "6px 12px", color: permuta.saldoManual > 0 ? "#f59e0b" : "var(--ok)" }}
+                  style={{ margin: 0, width: "100%", fontSize: "16px", fontWeight: 800, textAlign: "right", fontFamily: "'DM Mono', monospace", background: "transparent", border: "1px solid rgba(139,92,246,.3)", borderRadius: "8px", padding: "6px 10px", color: permuta.saldoManual > 0 ? "#f59e0b" : "var(--ok)" }}
                 />
               </div>
             </div>
@@ -1386,6 +1386,154 @@ export default function InvestimentosPage() {
               <div style={{ fontSize: "16px", fontWeight: 900, color: k.color, fontFamily: "monospace", lineHeight: 1 }}>{k.value}</div>
             </div>
           ))}
+        </div>
+
+        {/* ── Posição Financeira ── */}
+        <div style={{ marginBottom: "22px", pageBreakInside: "avoid" }}>
+          <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "1px", color: "#2d5fa6", marginBottom: "10px", borderBottom: "1px solid #d0daf0", paddingBottom: "4px" }}>
+            Posição Financeira
+          </div>
+
+          {/* Saldos Bancários */}
+          {bancosPos.length > 0 && (
+            <div style={{ marginBottom: "14px" }}>
+              <div style={{ fontSize: "9px", fontWeight: 700, color: "#444", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "6px" }}>Saldos Bancários</div>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px" }}>
+                <thead>
+                  <tr style={{ background: "#2d5fa6" }}>
+                    {["Banco / Conta", "Saldo"].map((h, i) => (
+                      <th key={h} style={{ padding: "5px 10px", textAlign: i === 1 ? "right" : "left", color: "white", fontWeight: 700, fontSize: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {bancosPos.map((b, i) => (
+                    <tr key={b.id} style={{ background: i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
+                      <td style={{ padding: "5px 10px", fontWeight: 600, borderBottom: "1px solid #e8edf8" }}>{b.banco}</td>
+                      <td style={{ padding: "5px 10px", textAlign: "right", fontWeight: 700, fontFamily: "monospace", color: "#2d5fa6", borderBottom: "1px solid #e8edf8" }}>{toBRL(b.saldo)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: "#f0f4ff" }}>
+                    <td style={{ padding: "5px 10px", fontWeight: 800, fontSize: "9px" }}>Total Bancos</td>
+                    <td style={{ padding: "5px 10px", textAlign: "right", fontWeight: 900, fontFamily: "monospace", color: "#2d5fa6" }}>{toBRL(bancosPos.reduce((s, b) => s + b.saldo, 0))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+
+          {/* Aporte Gabriel */}
+          {aportePos.length > 0 && (
+            <div style={{ marginBottom: "14px" }}>
+              <div style={{ fontSize: "9px", fontWeight: 700, color: "#444", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "6px" }}>Aporte de Gabriel — Exterior</div>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px" }}>
+                <thead>
+                  <tr style={{ background: "#3b82f6" }}>
+                    {["Data", "Descrição", "Valor"].map((h, i) => (
+                      <th key={h} style={{ padding: "5px 10px", textAlign: i === 2 ? "right" : "left", color: "white", fontWeight: 700, fontSize: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {aportePos.map((a, i) => (
+                    <tr key={a.id} style={{ background: i % 2 === 0 ? "#fff" : "#f0f6ff" }}>
+                      <td style={{ padding: "5px 10px", fontFamily: "monospace", color: "#444", borderBottom: "1px solid #e8edf8", whiteSpace: "nowrap" }}>{a.data ? new Date(a.data + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</td>
+                      <td style={{ padding: "5px 10px", fontWeight: 600, borderBottom: "1px solid #e8edf8" }}>{a.descricao || "—"}</td>
+                      <td style={{ padding: "5px 10px", textAlign: "right", fontWeight: 700, fontFamily: "monospace", color: "#3b82f6", borderBottom: "1px solid #e8edf8" }}>{toBRL(a.valor)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: "#eff6ff" }}>
+                    <td colSpan={2} style={{ padding: "5px 10px", fontWeight: 800, fontSize: "9px" }}>Total Aportado</td>
+                    <td style={{ padding: "5px 10px", textAlign: "right", fontWeight: 900, fontFamily: "monospace", color: "#3b82f6" }}>{toBRL(aportePos.reduce((s, a) => s + a.valor, 0))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+
+          {/* Mendes & Mendes */}
+          <div style={{ marginBottom: "14px" }}>
+            <div style={{ fontSize: "9px", fontWeight: 700, color: "#444", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "6px" }}>Permuta — Mendes & Mendes</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+              {[
+                { label: "Total Acordado",    value: toBRL((permutaPos.totalAcordadoManual ?? 0) > 0 ? permutaPos.totalAcordadoManual : permutaPos.pedidos.reduce((s, p) => s + p.valor, 0)), color: "#8b5cf6" },
+                { label: "Total Movimentado", value: toBRL((permutaPos.totalMovimentadoManual ?? 0) > 0 ? permutaPos.totalMovimentadoManual : permutaPos.pedidos.reduce((s, p) => s + p.movimentacoes.reduce((ss, m) => ss + m.valor, 0), 0)), color: "#555" },
+                { label: "Saldo Restante",    value: toBRL(permutaPos.saldoManual + permutaPos.pedidos.reduce((s, p) => s + p.valor, 0)), color: "#f59e0b" },
+              ].map(c => (
+                <div key={c.label} style={{ background: "#faf5ff", borderRadius: "6px", padding: "8px 12px", borderLeft: "3px solid #8b5cf6" }}>
+                  <div style={{ fontSize: "7px", fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "4px" }}>{c.label}</div>
+                  <div style={{ fontSize: "13px", fontWeight: 900, color: c.color, fontFamily: "monospace" }}>{c.value}</div>
+                </div>
+              ))}
+            </div>
+            {permutaPos.pedidos.length > 0 && (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px" }}>
+                <thead>
+                  <tr style={{ background: "#8b5cf6" }}>
+                    {["#", "Material", "Qtd (t)", "Valor", "Movimentado", "Saldo"].map((h, i) => (
+                      <th key={h} style={{ padding: "5px 8px", textAlign: i >= 2 ? "right" : "left", color: "white", fontWeight: 700, fontSize: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {permutaPos.pedidos.map((p, i) => {
+                    const mov = p.movimentacoes.reduce((s, m) => s + m.valor, 0);
+                    return (
+                      <tr key={p.id} style={{ background: i % 2 === 0 ? "#fff" : "#faf5ff" }}>
+                        <td style={{ padding: "5px 8px", color: "#888", borderBottom: "1px solid #e8edf8" }}>{i + 1}</td>
+                        <td style={{ padding: "5px 8px", fontWeight: 600, borderBottom: "1px solid #e8edf8" }}>{p.material || "—"}</td>
+                        <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace", color: "#444", borderBottom: "1px solid #e8edf8" }}>{p.quantidadeTon || "—"}</td>
+                        <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 700, fontFamily: "monospace", color: "#8b5cf6", borderBottom: "1px solid #e8edf8" }}>{toBRL(p.valor)}</td>
+                        <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace", color: "#555", borderBottom: "1px solid #e8edf8" }}>{toBRL(mov)}</td>
+                        <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 700, fontFamily: "monospace", color: "#f59e0b", borderBottom: "1px solid #e8edf8" }}>{toBRL(p.valor + mov)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Lançamentos */}
+          {lancamentosPos.length > 0 && (
+            <div style={{ marginBottom: "6px" }}>
+              <div style={{ fontSize: "9px", fontWeight: 700, color: "#444", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "6px" }}>Lançamentos / Compras</div>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px" }}>
+                <thead>
+                  <tr style={{ background: "#14b8a6" }}>
+                    {["Data da Compra", "Observação", "Valor"].map((h, i) => (
+                      <th key={h} style={{ padding: "5px 10px", textAlign: i === 2 ? "right" : "left", color: "white", fontWeight: 700, fontSize: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {lancamentosPos.map((l, i) => (
+                    <tr key={l.id} style={{ background: i % 2 === 0 ? "#fff" : "#f0fdfb" }}>
+                      <td style={{ padding: "5px 10px", fontFamily: "monospace", color: "#444", borderBottom: "1px solid #e8edf8", whiteSpace: "nowrap" }}>{l.data ? new Date(l.data + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</td>
+                      <td style={{ padding: "5px 10px", fontWeight: 600, borderBottom: "1px solid #e8edf8" }}>{l.observacao || "—"}</td>
+                      <td style={{ padding: "5px 10px", textAlign: "right", fontWeight: 700, fontFamily: "monospace", color: "#14b8a6", borderBottom: "1px solid #e8edf8" }}>{toBRL(l.valor)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: "#f0fdfb" }}>
+                    <td colSpan={2} style={{ padding: "5px 10px", fontWeight: 800, fontSize: "9px" }}>Total Lançamentos</td>
+                    <td style={{ padding: "5px 10px", textAlign: "right", fontWeight: 900, fontFamily: "monospace", color: "#14b8a6" }}>{toBRL(lancamentosPos.reduce((s, l) => s + l.valor, 0))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+
+          {/* Resumo total */}
+          <div style={{ background: "#2d5fa6", borderRadius: "6px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "10px", fontWeight: 800, color: "white", textTransform: "uppercase", letterSpacing: "0.5px" }}>Posição Financeira Total</span>
+            <span style={{ fontSize: "15px", fontWeight: 900, color: "white", fontFamily: "monospace" }}>{formatBRL(totalPosicaoGlobal)}</span>
+          </div>
         </div>
 
         {/* Per-bank summary */}
