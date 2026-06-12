@@ -82,9 +82,16 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aporte, setAporte, permuta,
   const [editandoAporte,  setEditandoAporte]  = useState(false);
   const [permutaEdit,     setPermutaEdit]     = useState<DadosPermuta>(PERMUTA_DEFAULT);
   const [editandoPermuta, setEditandoPermuta] = useState(false);
-  const [abertoBancos,    setAbertoBancos]    = useState(true);
-  const [abertoAporte,    setAbertoAporte]    = useState(true);
-  const [abertoPermuta,   setAbertoPermuta]   = useState(true);
+  const [abertoBancos,    setAbertoBancos]    = useState(false);
+  const [abertoAporte,    setAbertoAporte]    = useState(false);
+  const [abertoPermuta,   setAbertoPermuta]   = useState(false);
+  const [abertoLanc,      setAbertoLanc]      = useState(false);
+  const [lancamentos,     setLancamentos]     = useState<{ id: string; data: string; descricao: string; valor: number }[]>([]);
+
+  useEffect(() => {
+    setLancamentos(lsLoad<{ id: string; data: string; descricao: string; valor: number }[]>("ug_lancamentos_v1", []));
+  }, []);
+  useEffect(() => { lsSave("ug_lancamentos_v1", lancamentos); }, [lancamentos]);
 
   const totalBancos  = bancos.reduce((s, b) => s + b.saldo, 0);
   const bancoCor     = (nome: string) => BANCOS_POSICAO.find(b => b.nome === nome)?.cor ?? "#6b7280";
@@ -113,16 +120,16 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aporte, setAporte, permuta,
   );
 
   const secaoHdr = (acento: string, icone: string, tag: string, titulo: string, sub: string, direita: ReactNode, aberto: boolean, onToggle: () => void) => (
-    <div onClick={onToggle} style={{ padding: "16px 20px", background: "var(--surf2)", borderBottom: aberto ? "1px solid var(--b1)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-        <div style={{ width: "40px", height: "40px", borderRadius: "10px", background: `${acento}20`, border: `1px solid ${acento}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", flexShrink: 0 }}>{icone}</div>
+    <div onClick={onToggle} style={{ padding: "12px 16px", background: "var(--surf2)", borderBottom: aberto ? "1px solid var(--b1)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <div style={{ width: "34px", height: "34px", borderRadius: "8px", background: `${acento}20`, border: `1px solid ${acento}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "15px", flexShrink: 0 }}>{icone}</div>
         <div>
-          <div style={{ fontSize: "10px", color: acento, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase" }}>{tag}</div>
-          <div style={{ fontSize: "15px", fontWeight: 800, color: "var(--t1)", marginTop: "1px" }}>{titulo}</div>
-          <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "1px" }}>{sub}</div>
+          <div style={{ fontSize: "9px", color: acento, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase" }}>{tag}</div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", marginTop: "1px" }}>{titulo}</div>
+          <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "1px" }}>{sub}</div>
         </div>
       </div>
-      <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+      <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
         {direita}
         {chevron(aberto, onToggle)}
       </div>
@@ -130,9 +137,9 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aporte, setAporte, permuta,
   );
 
   const metricaCard = (label: string, value: string, cor: string, destaque = false) => (
-    <div key={label} style={{ background: "var(--surf2)", border: "1px solid var(--b1)", borderRadius: "8px", padding: "14px 16px" }}>
-      <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: "6px" }}>{label}</div>
-      <div style={{ fontSize: destaque ? "20px" : "16px", fontWeight: destaque ? 800 : 700, color: cor, fontFamily: "'DM Mono', monospace" }}>{value}</div>
+    <div key={label} style={{ background: "var(--surf2)", border: "1px solid var(--b1)", borderRadius: "8px", padding: "11px 14px" }}>
+      <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: "5px" }}>{label}</div>
+      <div style={{ fontSize: destaque ? "17px" : "14px", fontWeight: destaque ? 800 : 700, color: cor, fontFamily: "'DM Mono', monospace" }}>{value}</div>
     </div>
   );
 
@@ -141,15 +148,15 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aporte, setAporte, permuta,
 
       {/* ── SALDOS BANCÁRIOS ── */}
       <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderTop: "3px solid var(--acc2)", borderRadius: "12px", overflow: "hidden" }}>
-        <div onClick={() => setAbertoBancos(v => !v)} style={{ padding: "16px 20px", background: "var(--surf2)", borderBottom: abertoBancos ? "1px solid var(--b1)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
+        <div onClick={() => setAbertoBancos(v => !v)} style={{ padding: "12px 16px", background: "var(--surf2)", borderBottom: abertoBancos ? "1px solid var(--b1)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
           <div>
-            <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", display: "flex", alignItems: "center", gap: "8px" }}>🏦 Saldos Bancários</div>
-            <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "2px" }}>Posição atual das contas — atualização manual</div>
+            <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--t1)", display: "flex", alignItems: "center", gap: "8px" }}>🏦 Saldos Bancários</div>
+            <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "2px" }}>Posição atual das contas — atualização manual</div>
           </div>
-          <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "2px" }}>Saldo Consolidado</div>
-              <div style={{ fontSize: "22px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: totalBancos >= 0 ? "var(--ok)" : "var(--err)" }}>{toBRL(totalBancos)}</div>
+              <div style={{ fontSize: "18px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: totalBancos >= 0 ? "var(--ok)" : "var(--err)" }}>{toBRL(totalBancos)}</div>
             </div>
             {abertoBancos && <button className="btn bp sm" onClick={() => { setAdicionando(true); }}>＋ Banco</button>}
             {chevron(abertoBancos, () => setAbertoBancos(v => !v))}
@@ -163,8 +170,8 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aporte, setAporte, permuta,
               return (
                 <div key={banco.id} style={{ background: "var(--surf2)", border: "1px solid var(--b1)", borderLeft: `4px solid ${cor}`, borderRadius: "10px", padding: "14px 14px 12px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "9px", marginBottom: "12px" }}>
-                    <div style={{ width: "32px", height: "32px", borderRadius: "7px", background: cor, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 800, color: "white", flexShrink: 0, letterSpacing: "0.02em" }}>{ini}</div>
-                    <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--t1)", flex: 1, lineHeight: 1.2 }}>{banco.banco}</div>
+                    <div style={{ width: "28px", height: "28px", borderRadius: "6px", background: cor, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 800, color: "white", flexShrink: 0, letterSpacing: "0.02em" }}>{ini}</div>
+                    <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--t1)", flex: 1, lineHeight: 1.2 }}>{banco.banco}</div>
                     <button title="Remover" onClick={() => removerBanco(banco.id)} style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "12px", padding: "2px 4px", borderRadius: "4px", lineHeight: 1 }}>✕</button>
                   </div>
                   <input
@@ -173,7 +180,7 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aporte, setAporte, permuta,
                     onChange={e => setBancos(p => p.map(b => b.id === banco.id ? { ...b, saldo: Number(e.target.value) } : b))}
                     placeholder="0,00"
                     className="fc"
-                    style={{ width: "100%", margin: 0, fontFamily: "'DM Mono', monospace", fontWeight: 700, fontSize: "16px", textAlign: "right", color: banco.saldo < 0 ? "var(--err)" : "var(--t1)", boxSizing: "border-box" }}
+                    style={{ width: "100%", margin: 0, fontFamily: "'DM Mono', monospace", fontWeight: 700, fontSize: "13px", textAlign: "right", color: banco.saldo < 0 ? "var(--err)" : "var(--t1)", boxSizing: "border-box" }}
                   />
                   {banco.saldo !== 0 && (
                     <div style={{ fontSize: "10px", color: "var(--t3)", textAlign: "right", marginTop: "4px", fontFamily: "'DM Mono', monospace" }}>
@@ -333,6 +340,57 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aporte, setAporte, permuta,
             </div>
           </div>
         ))}
+      </div>
+
+      {/* ── LANÇAMENTOS DETALHADOS ── */}
+      <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderTop: "3px solid #14b8a6", borderRadius: "12px", overflow: "hidden" }}>
+        {secaoHdr("#14b8a6", "≡", "Detalhamento", "Lançamentos", "Aportes e movimentações detalhados",
+          abertoLanc && (
+            <button className="btn bp sm" style={{ background: "transparent", color: "#14b8a6", borderColor: "rgba(20,184,166,.4)", fontSize: "11px" }}
+              onClick={() => setLancamentos(p => [...p, { id: Date.now().toString(), data: new Date().toISOString().split("T")[0], descricao: "", valor: 0 }])}>
+              ＋ Linha
+            </button>
+          ),
+          abertoLanc, () => setAbertoLanc(v => !v)
+        )}
+        {abertoLanc && (
+          <div style={{ padding: "0 16px 16px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "110px 1fr 130px 28px", gap: "6px", padding: "8px 4px 6px", borderBottom: "1px solid var(--b1)", marginBottom: "4px" }}>
+              {["Data", "Descrição", "Valor (R$)", ""].map(h => (
+                <div key={h} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, textAlign: h === "Valor (R$)" ? "right" : "left" }}>{h}</div>
+              ))}
+            </div>
+            {lancamentos.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "18px 0", color: "var(--t3)", fontSize: "12px" }}>
+                Nenhum lançamento — clique em <strong style={{ color: "#14b8a6" }}>＋ Linha</strong> para adicionar
+              </div>
+            ) : (
+              <>
+                {lancamentos.map(lanc => (
+                  <div key={lanc.id} style={{ display: "grid", gridTemplateColumns: "110px 1fr 130px 28px", gap: "6px", alignItems: "center", marginBottom: "4px" }}>
+                    <input type="date" className="fc" value={lanc.data}
+                      style={{ margin: 0, fontSize: "11px", padding: "5px 8px" }}
+                      onChange={e => setLancamentos(p => p.map(l => l.id === lanc.id ? { ...l, data: e.target.value } : l))} />
+                    <input className="fc" placeholder="Descrição" value={lanc.descricao}
+                      style={{ margin: 0, fontSize: "12px", padding: "5px 8px" }}
+                      onChange={e => setLancamentos(p => p.map(l => l.id === lanc.id ? { ...l, descricao: e.target.value } : l))} />
+                    <input type="number" step="0.01" className="fc" placeholder="0,00" value={lanc.valor || ""}
+                      style={{ margin: 0, fontSize: "12px", textAlign: "right", fontFamily: "'DM Mono', monospace", padding: "5px 8px" }}
+                      onChange={e => setLancamentos(p => p.map(l => l.id === lanc.id ? { ...l, valor: Number(e.target.value) } : l))} />
+                    <button onClick={() => setLancamentos(p => p.filter(l => l.id !== lanc.id))}
+                      style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "12px", padding: "4px", borderRadius: "4px", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                  </div>
+                ))}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 4px 0", borderTop: "1px solid var(--b1)", marginTop: "6px" }}>
+                  <span style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600 }}>{lancamentos.length} lançamento(s)</span>
+                  <span style={{ fontSize: "14px", fontWeight: 700, fontFamily: "'DM Mono', monospace", color: "#14b8a6" }}>
+                    {toBRL(lancamentos.reduce((s, l) => s + l.valor, 0))}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
     </div>
@@ -803,10 +861,10 @@ export default function InvestimentosPage() {
             { label: "Média por Aporte",   val: formatBRL(mediaAporte),  sub: "por registro",                      c: "var(--acc)" },
             { label: "Bancos / Origens",   val: String(bancos.length),   sub: "registrados",                       c: "var(--acc2)" },
           ].map(s => (
-            <div key={s.label} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: "4px" }}>
-              <div style={{ fontSize: "11px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{s.label}</div>
-              <div style={{ fontSize: "22px", fontWeight: 700, color: s.c, fontFamily: "'DM Mono', monospace", lineHeight: 1.2 }}>{s.val}</div>
-              <div style={{ fontSize: "11px", color: "var(--t3)" }}>{s.sub}</div>
+            <div key={s.label} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "3px" }}>
+              <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{s.label}</div>
+              <div style={{ fontSize: "18px", fontWeight: 700, color: s.c, fontFamily: "'DM Mono', monospace", lineHeight: 1.2 }}>{s.val}</div>
+              <div style={{ fontSize: "10px", color: "var(--t3)" }}>{s.sub}</div>
             </div>
           ))}
         </div>
