@@ -591,6 +591,7 @@ export default function InvestimentosPage() {
   const [novaSubcat, setNovaSubcat]       = useState("");
   const [corrigindo, setCorrigindo]       = useState(false);
   const [corrigido, setCorrigido]         = useState(false);
+  const [abertoAportes, setAbertoAportes] = useState(true);
   const [bancosPos,  setBancosPos]        = useState<SaldoBanco[]>([]);
   const [aportePos,  setAportePos]        = useState<AporteGabriel[]>([]);
   const [permutaPos, setPermutaPos]       = useState<PermutaV2>(PERMUTA_DEFAULT);
@@ -960,7 +961,6 @@ export default function InvestimentosPage() {
           <button className="btn bg sm" onClick={handlePDF} disabled={!filtered.length}>⬡ PDF</button>
           <button className="btn bg sm" onClick={handleExcel} disabled={!filtered.length}>↓ Excel</button>
           <button className="btn bg sm" onClick={() => setModalListas(true)}>⚙ Listas</button>
-          <button className="btn bp sm" onClick={startAdd}>+ Novo Aporte</button>
         </div>
       </div>
 
@@ -1003,49 +1003,83 @@ export default function InvestimentosPage() {
           permuta={permutaPos} setPermuta={setPermutaPos}
         />
 
-        {/* Filters */}
-        <div style={{ display: "flex", gap: "10px", marginBottom: "18px", flexWrap: "wrap", alignItems: "center" }}>
-          <input className="fc" placeholder="Buscar banco ou descrição..." value={busca}
-            onChange={e => setBusca(e.target.value)} style={{ flex: 1, minWidth: "200px" }} />
-          <select className="fc" style={{ minWidth: "160px" }} value={filtroBanco} onChange={e => setFiltroBanco(e.target.value)}>
-            <option value="">Todos os bancos</option>
-            {bancos.map(b => <option key={b} value={b}>{b}</option>)}
-          </select>
-          <select className="fc" style={{ minWidth: "170px" }} value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)}>
-            <option value="">Todas as categorias</option>
-            {categorias.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ fontSize: "11px", color: "var(--t3)", whiteSpace: "nowrap" }}>De</span>
-            <input type="month" lang="pt-BR" className="fc" style={{ minWidth: "140px", margin: 0 }}
-              min={mesMin} max={mesMax}
-              value={filtroInicio} onChange={e => setFiltroInicio(e.target.value)} />
+        {/* Aportes Card */}
+        <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderTop: `3px solid ${G}`, borderRadius: "12px", overflow: "hidden", marginBottom: "0" }}>
+          {/* Header */}
+          <div onClick={() => setAbertoAportes(v => !v)} style={{ padding: "12px 16px", background: "var(--surf2)", borderBottom: abertoAportes ? "1px solid var(--b1)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ width: "34px", height: "34px", borderRadius: "8px", background: `${G}20`, border: `1px solid ${G}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "15px", flexShrink: 0 }}>📋</div>
+              <div>
+                <div style={{ fontSize: "9px", color: G, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase" }}>Histórico</div>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", marginTop: "1px" }}>Aportes Registrados</div>
+                <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "1px" }}>Lançamentos do banco de dados</div>
+              </div>
+            </div>
+            <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              {!abertoAportes && investimentos.length > 0 && (
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "2px" }}>
+                    {temFiltro ? `${filtered.length} de ${investimentos.length}` : `${investimentos.length} aporte(s)`}
+                  </div>
+                  <div style={{ fontSize: "15px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: G }}>
+                    {formatBRL(temFiltro ? totalFiltrado : totalGeral)}
+                  </div>
+                </div>
+              )}
+              {abertoAportes && (
+                <button className="btn bp sm" onClick={() => startAdd()}>+ Novo Aporte</button>
+              )}
+              <button onClick={() => setAbertoAportes(v => !v)} style={{ width: "28px", height: "28px", borderRadius: "6px", background: "transparent", border: "1px solid var(--b2)", color: "var(--t3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", flexShrink: 0 }}>
+                <span style={{ display: "inline-block", transition: "transform .2s", transform: abertoAportes ? "rotate(0deg)" : "rotate(-90deg)" }}>▾</span>
+              </button>
+            </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ fontSize: "11px", color: "var(--t3)", whiteSpace: "nowrap" }}>Até</span>
-            <input type="month" lang="pt-BR" className="fc" style={{ minWidth: "140px", margin: 0 }}
-              min={mesMin} max={mesMax}
-              value={filtroFim} onChange={e => setFiltroFim(e.target.value)} />
-          </div>
-          {temFiltro && (
-            <button className="btn bg sm" onClick={() => { setBusca(""); setFiltroBanco(""); setFiltroCategoria(""); setFiltroInicio(""); setFiltroFim(""); }}>
-              ✕ Limpar
-            </button>
-          )}
-        </div>
 
-        {temFiltro && filtered.length > 0 && (
-          <div style={{ marginBottom: "14px", padding: "9px 14px", background: GB, border: `1px solid ${GBR}`, borderRadius: "8px", display: "flex", justifyContent: "space-between", fontSize: "12px", color: G }}>
-            <span>{filtered.length} resultado(s){filtroBanco ? ` · ${filtroBanco}` : ""}{filtroCategoria ? ` · ${filtroCategoria}` : ""}{(filtroInicio || filtroFim) ? ` · ${labelPeriodoPDF()}` : ""}</span>
-            <span style={{ fontWeight: 700, fontFamily: "'DM Mono', monospace" }}>{formatBRL(totalFiltrado)}</span>
-          </div>
-        )}
+          {abertoAportes && (
+            <div style={{ padding: "16px" }}>
+              {/* Filters */}
+              <div style={{ display: "flex", gap: "10px", marginBottom: "14px", flexWrap: "wrap", alignItems: "center" }}>
+                <input className="fc" placeholder="Buscar banco ou descrição..." value={busca}
+                  onChange={e => setBusca(e.target.value)} style={{ flex: 1, minWidth: "200px", margin: 0 }} />
+                <select className="fc" style={{ minWidth: "160px", margin: 0 }} value={filtroBanco} onChange={e => setFiltroBanco(e.target.value)}>
+                  <option value="">Todos os bancos</option>
+                  {bancos.map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
+                <select className="fc" style={{ minWidth: "170px", margin: 0 }} value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)}>
+                  <option value="">Todas as categorias</option>
+                  {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={{ fontSize: "11px", color: "var(--t3)", whiteSpace: "nowrap" }}>De</span>
+                  <input type="month" lang="pt-BR" className="fc" style={{ minWidth: "140px", margin: 0 }}
+                    min={mesMin} max={mesMax}
+                    value={filtroInicio} onChange={e => setFiltroInicio(e.target.value)} />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={{ fontSize: "11px", color: "var(--t3)", whiteSpace: "nowrap" }}>Até</span>
+                  <input type="month" lang="pt-BR" className="fc" style={{ minWidth: "140px", margin: 0 }}
+                    min={mesMin} max={mesMax}
+                    value={filtroFim} onChange={e => setFiltroFim(e.target.value)} />
+                </div>
+                {temFiltro && (
+                  <button className="btn bg sm" onClick={() => { setBusca(""); setFiltroBanco(""); setFiltroCategoria(""); setFiltroInicio(""); setFiltroFim(""); }}>
+                    ✕ Limpar
+                  </button>
+                )}
+              </div>
 
-        {loading ? (
-          <div className="loading">Carregando investimentos...</div>
-        ) : (
-          <div className="tw">
-            <table>
+              {temFiltro && filtered.length > 0 && (
+                <div style={{ marginBottom: "12px", padding: "9px 14px", background: GB, border: `1px solid ${GBR}`, borderRadius: "8px", display: "flex", justifyContent: "space-between", fontSize: "12px", color: G }}>
+                  <span>{filtered.length} resultado(s){filtroBanco ? ` · ${filtroBanco}` : ""}{filtroCategoria ? ` · ${filtroCategoria}` : ""}{(filtroInicio || filtroFim) ? ` · ${labelPeriodoPDF()}` : ""}</span>
+                  <span style={{ fontWeight: 700, fontFamily: "'DM Mono', monospace" }}>{formatBRL(totalFiltrado)}</span>
+                </div>
+              )}
+
+              {loading ? (
+                <div className="loading">Carregando investimentos...</div>
+              ) : (
+                <div className="tw">
+                  <table>
               <thead>
                 <tr>
                   <th style={{ width: "90px" }}>Data</th>
@@ -1141,9 +1175,12 @@ export default function InvestimentosPage() {
                   </tr>
                 </tfoot>
               )}
-            </table>
-          </div>
-        )}
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Modal Gerenciar Listas ── */}
