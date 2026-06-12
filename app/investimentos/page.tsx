@@ -624,7 +624,7 @@ export default function InvestimentosPage() {
   const [novaSubcat, setNovaSubcat]       = useState("");
   const [corrigindo, setCorrigindo]       = useState(false);
   const [corrigido, setCorrigido]         = useState(false);
-  const [abertoAportes, setAbertoAportes] = useState(true);
+  const [abertoAportes, setAbertoAportes] = useState(false);
   const [bancosPos,  setBancosPos]        = useState<SaldoBanco[]>([]);
   const [lancamentosPos, setLancamentosPos] = useState<Lancamento[]>([]);
   const [aportePos,  setAportePos]        = useState<AporteGabriel[]>([]);
