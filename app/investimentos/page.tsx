@@ -973,11 +973,22 @@ export default function InvestimentosPage() {
       <style>{`
         .inv-print { display: none; }
         @media print {
+          /* esconde a interface do app */
           .no-print, .sb { display: none !important; }
-          body { background: white !important; overflow: auto !important; }
-          .erp-layout { display: block !important; }
-          .erp-content, .erp-main { overflow: visible !important; }
+
+          /* deixa o conteúdo fluir por várias páginas (sem cortar em 100vh) */
+          html, body { height: auto !important; overflow: visible !important; background: white !important; }
+          .erp-layout { display: block !important; height: auto !important; }
+          .erp-content, .erp-main { display: block !important; overflow: visible !important; height: auto !important; }
+
+          /* mostra o documento de impressão */
           .inv-print { display: block !important; }
+
+          /* neutraliza o tema escuro do app dentro do PDF
+             (sem !important para que os estilos inline claros das tabelas prevaleçam) */
+          .inv-print thead th { background: transparent; border: none; white-space: normal; }
+          .inv-print td { border-bottom: none; color: inherit; }
+
           @page { margin: 12mm 14mm; size: A4 portrait; }
           thead { display: table-header-group; }
           tr { page-break-inside: avoid; }

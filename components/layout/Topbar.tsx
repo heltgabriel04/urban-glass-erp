@@ -28,7 +28,7 @@ export default function Topbar() {
   });
 
   return (
-    <div style={{
+    <div className="no-print" style={{
       padding: "10px 26px",
       borderBottom: "1px solid var(--b1)",
       background: "var(--surf)",
