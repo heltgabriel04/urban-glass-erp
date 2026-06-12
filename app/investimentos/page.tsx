@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
@@ -53,27 +53,26 @@ const STATUS_PERMUTA = {
   liquidado: { label: "Liquidado", cor: "#6b7280", bg: "rgba(107,114,128,.12)" },
 };
 
-function SecaoPosicaoFinanceira() {
-  const [bancos,          setBancos]          = useState<SaldoBanco[]>([]);
+interface PosFinProps {
+  bancos: SaldoBanco[];
+  setBancos: Dispatch<SetStateAction<SaldoBanco[]>>;
+  aporte: DadosAporte;
+  setAporte: Dispatch<SetStateAction<DadosAporte>>;
+  permuta: DadosPermuta;
+  setPermuta: Dispatch<SetStateAction<DadosPermuta>>;
+}
+
+function SecaoPosicaoFinanceira({ bancos, setBancos, aporte, setAporte, permuta, setPermuta }: PosFinProps) {
   const [adicionando,     setAdicionando]     = useState(false);
   const [editandoBanco,   setEditandoBanco]   = useState<string | null>(null);
   const [novoBanco,       setNovoBanco]       = useState<Omit<SaldoBanco, "id">>({ banco: "", agencia: "", conta: "", saldo: 0 });
-  const [aporte,          setAporte]          = useState<DadosAporte>(APORTE_DEFAULT);
   const [aporteEdit,      setAporteEdit]      = useState<DadosAporte>(APORTE_DEFAULT);
   const [editandoAporte,  setEditandoAporte]  = useState(false);
-  const [permuta,         setPermuta]         = useState<DadosPermuta>(PERMUTA_DEFAULT);
   const [permutaEdit,     setPermutaEdit]     = useState<DadosPermuta>(PERMUTA_DEFAULT);
   const [editandoPermuta, setEditandoPermuta] = useState(false);
-
-  useEffect(() => {
-    setBancos(lsLoad<SaldoBanco[]>(LS_BANCOS_KEY, []));
-    const a = lsLoad<DadosAporte>(LS_APORTE_KEY, APORTE_DEFAULT);
-    setAporte(a); setAporteEdit(a);
-    const p = lsLoad<DadosPermuta>(LS_PERMUTA_KEY, PERMUTA_DEFAULT);
-    setPermuta(p); setPermutaEdit(p);
-  }, []);
-
-  useEffect(() => { lsSave(LS_BANCOS_KEY, bancos); }, [bancos]);
+  const [abertoBancos,    setAbertoBancos]    = useState(true);
+  const [abertoAporte,    setAbertoAporte]    = useState(true);
+  const [abertoPermuta,   setAbertoPermuta]   = useState(true);
 
   const totalBancos  = bancos.reduce((s, b) => s + b.saldo, 0);
   const bancoCor     = (nome: string) => BANCOS_POSICAO.find(b => b.nome === nome)?.cor ?? "#6b7280";
@@ -93,11 +92,17 @@ function SecaoPosicaoFinanceira() {
     setBancos(p => p.filter(b => b.id !== id));
     if (editandoBanco === id) setEditandoBanco(null);
   }
-  function salvarAporte()  { setAporte(aporteEdit);   lsSave(LS_APORTE_KEY, aporteEdit);   setEditandoAporte(false); }
-  function salvarPermuta() { setPermuta(permutaEdit); lsSave(LS_PERMUTA_KEY, permutaEdit); setEditandoPermuta(false); }
+  function salvarAporte()  { setAporte(aporteEdit);   setEditandoAporte(false); }
+  function salvarPermuta() { setPermuta(permutaEdit); setEditandoPermuta(false); }
 
-  const secaoHdr = (acento: string, icone: string, tag: string, titulo: string, sub: string, direita: ReactNode) => (
-    <div style={{ padding: "16px 20px", background: "var(--surf2)", borderBottom: "1px solid var(--b1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+  const chevron = (aberto: boolean, onToggle: () => void) => (
+    <button onClick={onToggle} style={{ width: "28px", height: "28px", borderRadius: "6px", background: "transparent", border: "1px solid var(--b2)", color: "var(--t3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", flexShrink: 0 }}>
+      <span style={{ display: "inline-block", transition: "transform .2s", transform: aberto ? "rotate(0deg)" : "rotate(-90deg)" }}>▾</span>
+    </button>
+  );
+
+  const secaoHdr = (acento: string, icone: string, tag: string, titulo: string, sub: string, direita: ReactNode, aberto: boolean, onToggle: () => void) => (
+    <div style={{ padding: "16px 20px", background: "var(--surf2)", borderBottom: aberto ? "1px solid var(--b1)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
         <div style={{ width: "40px", height: "40px", borderRadius: "10px", background: `${acento}20`, border: `1px solid ${acento}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", flexShrink: 0 }}>{icone}</div>
         <div>
@@ -106,7 +111,10 @@ function SecaoPosicaoFinanceira() {
           <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "1px" }}>{sub}</div>
         </div>
       </div>
-      {direita}
+      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        {direita}
+        {chevron(aberto, onToggle)}
+      </div>
     </div>
   );
 
@@ -122,20 +130,21 @@ function SecaoPosicaoFinanceira() {
 
       {/* ── SALDOS BANCÁRIOS ── */}
       <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderTop: "3px solid var(--acc2)", borderRadius: "12px", overflow: "hidden" }}>
-        <div style={{ padding: "16px 20px", background: "var(--surf2)", borderBottom: "1px solid var(--b1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ padding: "16px 20px", background: "var(--surf2)", borderBottom: abertoBancos ? "1px solid var(--b1)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", display: "flex", alignItems: "center", gap: "8px" }}>🏦 Saldos Bancários</div>
             <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "2px" }}>Posição atual das contas — atualização manual</div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "2px" }}>Saldo Consolidado</div>
               <div style={{ fontSize: "22px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: totalBancos >= 0 ? "var(--ok)" : "var(--err)" }}>{toBRL(totalBancos)}</div>
             </div>
-            <button className="btn bp sm" onClick={() => { setAdicionando(true); setEditandoBanco(null); }}>＋ Banco</button>
+            {abertoBancos && <button className="btn bp sm" onClick={() => { setAdicionando(true); setEditandoBanco(null); }}>＋ Banco</button>}
+            {chevron(abertoBancos, () => setAbertoBancos(v => !v))}
           </div>
         </div>
-        <div style={{ padding: "20px" }}>
+        {(abertoBancos || editandoBanco !== null || adicionando) && <div style={{ padding: "20px" }}>
           {bancos.length === 0 && !adicionando ? (
             <div style={{ textAlign: "center", padding: "24px 0", color: "var(--t3)", fontSize: "13px" }}>
               Nenhuma conta cadastrada — clique em <strong style={{ color: "var(--acc)" }}>+ Banco</strong> para adicionar
@@ -212,16 +221,18 @@ function SecaoPosicaoFinanceira() {
               )}
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* ── APORTE GABRIEL — EXTERIOR ── */}
       <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderTop: "3px solid #3b82f6", borderRadius: "12px", overflow: "hidden" }}>
         {secaoHdr("#3b82f6", "✈", "Aporte Exterior", "Aporte de Gabriel", "Investimento externo realizado pelo sócio",
-          <button className="btn bg sm" style={{ color: "#3b82f6", borderColor: "rgba(59,130,246,.4)" }}
-            onClick={() => { setAporteEdit({ ...aporte }); setEditandoAporte(true); }}>✎ Editar</button>
+          abertoAporte && <button className="btn bg sm" style={{ color: "#3b82f6", borderColor: "rgba(59,130,246,.4)" }}
+            onClick={() => { setAporteEdit({ ...aporte }); setEditandoAporte(true); setAbertoAporte(true); }}>✎ Editar</button>,
+          abertoAporte, () => setAbertoAporte(v => !v)
         )}
-        {!editandoAporte ? (
+        {(abertoAporte || editandoAporte) && (!editandoAporte ? (
+
           <div style={{ padding: "20px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px", marginBottom: aporte.observacoes ? "16px" : 0 }}>
               {metricaCard(`Valor (${aporte.moeda})`,
@@ -269,23 +280,24 @@ function SecaoPosicaoFinanceira() {
               <button className="btn bp" onClick={salvarAporte}>✓ Salvar</button>
             </div>
           </div>
-        )}
+        ))}
       </div>
 
       {/* ── PERMUTA MENDES & MENDES ── */}
       <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderTop: "3px solid #8b5cf6", borderRadius: "12px", overflow: "hidden" }}>
         {secaoHdr("#8b5cf6", "⇄", "Permuta Comercial", "Mendes & Mendes", "Acordo de permuta com parceiro comercial",
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          abertoPermuta && <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             {!editandoPermuta && (
               <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 10px", borderRadius: "99px", background: STATUS_PERMUTA[permuta.status].bg, color: STATUS_PERMUTA[permuta.status].cor, border: `1px solid ${STATUS_PERMUTA[permuta.status].cor}50` }}>
                 ● {STATUS_PERMUTA[permuta.status].label}
               </span>
             )}
             <button className="btn bg sm" style={{ color: "#8b5cf6", borderColor: "rgba(139,92,246,.4)" }}
-              onClick={() => { setPermutaEdit({ ...permuta }); setEditandoPermuta(true); }}>✎ Editar</button>
-          </div>
+              onClick={() => { setPermutaEdit({ ...permuta }); setEditandoPermuta(true); setAbertoPermuta(true); }}>✎ Editar</button>
+          </div>,
+          abertoPermuta, () => setAbertoPermuta(v => !v)
         )}
-        {!editandoPermuta ? (
+        {(abertoPermuta || editandoPermuta) && (!editandoPermuta ? (
           <div style={{ padding: "20px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px", marginBottom: "16px" }}>
               {metricaCard("Valor Total",     toBRL(permuta.valorTotal),    "#8b5cf6", true)}
@@ -340,7 +352,7 @@ function SecaoPosicaoFinanceira() {
               <button className="btn bp" onClick={salvarPermuta}>✓ Salvar</button>
             </div>
           </div>
-        )}
+        ))}
       </div>
 
     </div>
@@ -415,6 +427,20 @@ export default function InvestimentosPage() {
   const [novaSubcat, setNovaSubcat]       = useState("");
   const [corrigindo, setCorrigindo]       = useState(false);
   const [corrigido, setCorrigido]         = useState(false);
+  const [bancosPos,  setBancosPos]        = useState<SaldoBanco[]>([]);
+  const [aportePos,  setAportePos]        = useState<DadosAporte>(APORTE_DEFAULT);
+  const [permutaPos, setPermutaPos]       = useState<DadosPermuta>(PERMUTA_DEFAULT);
+
+  useEffect(() => {
+    setBancosPos(lsLoad<SaldoBanco[]>(LS_BANCOS_KEY, []));
+    const a = lsLoad<DadosAporte>(LS_APORTE_KEY, APORTE_DEFAULT);
+    setAportePos(a);
+    const p = lsLoad<DadosPermuta>(LS_PERMUTA_KEY, PERMUTA_DEFAULT);
+    setPermutaPos(p);
+  }, []);
+  useEffect(() => { lsSave(LS_BANCOS_KEY,  bancosPos);  }, [bancosPos]);
+  useEffect(() => { lsSave(LS_APORTE_KEY,  aportePos);  }, [aportePos]);
+  useEffect(() => { lsSave(LS_PERMUTA_KEY, permutaPos); }, [permutaPos]);
 
   useEffect(() => { load(); }, []);
 
@@ -603,10 +629,13 @@ export default function InvestimentosPage() {
   const subcatsDe = (cat: string) =>
     opcoesDB.filter(o => o.tipo === "subcategoria" && o.parent === cat).map(o => o.valor);
 
-  const totalGeral    = investimentos.reduce((s, i) => s + Number(i.valor), 0);
-  const totalFiltrado = filtered.reduce((s, i) => s + Number(i.valor), 0);
-  const maiorAporte   = investimentos.length ? Math.max(...investimentos.map(i => Number(i.valor))) : 0;
-  const mediaAporte   = investimentos.length ? totalGeral / investimentos.length : 0;
+  const totalGeral      = investimentos.reduce((s, i) => s + Number(i.valor), 0);
+  const totalFiltrado   = filtered.reduce((s, i) => s + Number(i.valor), 0);
+  const maiorAporte     = investimentos.length ? Math.max(...investimentos.map(i => Number(i.valor))) : 0;
+  const mediaAporte     = investimentos.length ? totalGeral / investimentos.length : 0;
+  const totalBancosPos  = bancosPos.reduce((s, b) => s + b.saldo, 0);
+  const aporteEmBRLPos  = aportePos.moeda === "BRL" ? aportePos.valor : aportePos.valor * aportePos.cotacao;
+  const totalPosicaoGlobal = totalGeral + totalBancosPos + aporteEmBRLPos + permutaPos.valorTotal;
   const bancos        = [...new Set(investimentos.map(i => i.empresa))].sort();
   const normalize     = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
   const bancosNorm    = bancos.map(b => normalize(b));
@@ -789,7 +818,7 @@ export default function InvestimentosPage() {
         {/* Stats */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px", marginBottom: "22px" }}>
           {[
-            { label: "Total Investido",    val: formatBRL(totalGeral),   sub: `${investimentos.length} aporte(s)`, c: G },
+            { label: "Total Geral",          val: formatBRL(totalPosicaoGlobal), sub: `aportes · bancos · exterior · permuta`, c: G },
             { label: "Maior Aporte",       val: formatBRL(maiorAporte),  sub: "individual",                        c: G },
             { label: "Média por Aporte",   val: formatBRL(mediaAporte),  sub: "por registro",                      c: "var(--acc)" },
             { label: "Bancos / Origens",   val: String(bancos.length),   sub: "registrados",                       c: "var(--acc2)" },
@@ -803,7 +832,11 @@ export default function InvestimentosPage() {
         </div>
 
         {/* Posição Financeira */}
-        <SecaoPosicaoFinanceira />
+        <SecaoPosicaoFinanceira
+          bancos={bancosPos}  setBancos={setBancosPos}
+          aporte={aportePos}  setAporte={setAportePos}
+          permuta={permutaPos} setPermuta={setPermutaPos}
+        />
 
         {/* Filters */}
         <div style={{ display: "flex", gap: "10px", marginBottom: "18px", flexWrap: "wrap", alignItems: "center" }}>
