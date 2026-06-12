@@ -322,8 +322,8 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
           <>
             {!abertoPermuta && totalPermutaItens > 0 && (
               <div style={{ textAlign: "right", marginRight: "4px" }}>
-                <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "2px" }}>Total Acordado</div>
-                <div style={{ fontSize: "15px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: "#8b5cf6" }}>{toBRL(totalPermutaItens)}</div>
+                <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "2px" }}>Saldo Restante</div>
+                <div style={{ fontSize: "15px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: saldoRestante > 0 ? "#f59e0b" : "var(--ok)" }}>{toBRL(saldoRestante)}</div>
               </div>
             )}
             {abertoPermuta && (
@@ -798,8 +798,9 @@ export default function InvestimentosPage() {
   const mediaAporte     = investimentos.length ? totalGeral / investimentos.length : 0;
   const totalBancosPos  = bancosPos.reduce((s, b) => s + b.saldo, 0);
   const aporteEmBRLPos  = aportePos.reduce((s, a) => s + a.valor, 0);
-  const totalPermutaAcordado = permutaPos.pedidos.reduce((s, p) => s + p.valor, 0);
-  const totalPosicaoGlobal = totalGeral + totalBancosPos + aporteEmBRLPos + totalPermutaAcordado;
+  const totalPermutaAcordado   = permutaPos.pedidos.reduce((s, p) => s + p.valor, 0);
+  const totalPermutaMovimentado = permutaPos.pedidos.reduce((s, p) => s + p.movimentacoes.reduce((ss, m) => ss + m.valor, 0), 0);
+  const totalPosicaoGlobal = totalGeral + totalBancosPos + aporteEmBRLPos + (totalPermutaAcordado - totalPermutaMovimentado);
   const bancos        = [...new Set(investimentos.map(i => i.empresa))].sort();
   const normalize     = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
   const bancosNorm    = bancos.map(b => normalize(b));
