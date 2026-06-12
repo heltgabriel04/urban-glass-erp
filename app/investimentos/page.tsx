@@ -211,12 +211,20 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
       {/* ── APORTE GABRIEL — EXTERIOR ── */}
       <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderTop: "3px solid #3b82f6", borderRadius: "12px", overflow: "hidden" }}>
         {secaoHdr("#3b82f6", "✈", "Aporte Exterior", "Aporte de Gabriel", "Investimento externo realizado pelo sócio",
-          abertoAporte && (
-            <button style={{ fontSize: "11px", fontWeight: 600, padding: "4px 12px", borderRadius: "6px", border: "1px solid rgba(59,130,246,.35)", background: "rgba(59,130,246,.08)", color: "#3b82f6", cursor: "pointer" }}
-              onClick={() => { setAportes(p => [...p, { id: Date.now().toString(), data: new Date().toISOString().split("T")[0], descricao: "", valor: 0 }]); setSalvoAporte(false); }}>
-              ＋ Linha
-            </button>
-          ),
+          <>
+            {!abertoAporte && totalAportes > 0 && (
+              <div style={{ textAlign: "right", marginRight: "4px" }}>
+                <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "2px" }}>Total Aportado</div>
+                <div style={{ fontSize: "15px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: "#3b82f6" }}>{toBRL(totalAportes)}</div>
+              </div>
+            )}
+            {abertoAporte && (
+              <button style={{ fontSize: "11px", fontWeight: 600, padding: "4px 12px", borderRadius: "6px", border: "1px solid rgba(59,130,246,.35)", background: "rgba(59,130,246,.08)", color: "#3b82f6", cursor: "pointer" }}
+                onClick={() => { setAportes(p => [...p, { id: Date.now().toString(), data: new Date().toISOString().split("T")[0], descricao: "", valor: 0 }]); setSalvoAporte(false); }}>
+                ＋ Linha
+              </button>
+            )}
+          </>,
           abertoAporte, () => setAbertoAporte(v => !v)
         )}
         {abertoAporte && (
@@ -259,11 +267,13 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
                     onFocus={e => (e.target.style.borderColor = "rgba(59,130,246,.4)")}
                     onBlur={e => (e.target.style.borderColor = "transparent")}
                     onChange={e => { setAportes(p => p.map(a => a.id === ap.id ? { ...a, descricao: e.target.value } : a)); setSalvoAporte(false); }} />
-                  <input type="number" step="0.01" className="fc" placeholder="0,00" value={ap.valor || ""}
+                  <CurrencyInput
+                    value={ap.valor}
                     style={{ margin: 0, fontSize: "12px", textAlign: "right", fontFamily: "'DM Mono', monospace", padding: "4px 7px", background: "transparent", border: "1px solid transparent", borderRadius: "5px" }}
-                    onFocus={e => (e.target.style.borderColor = "rgba(59,130,246,.4)")}
-                    onBlur={e => (e.target.style.borderColor = "transparent")}
-                    onChange={e => { setAportes(p => p.map(a => a.id === ap.id ? { ...a, valor: Number(e.target.value) } : a)); setSalvoAporte(false); }} />
+                    onFocus={e => (e.currentTarget.style.borderColor = "rgba(59,130,246,.4)")}
+                    onBlur={e => (e.currentTarget.style.borderColor = "transparent")}
+                    onChange={v => { setAportes(p => p.map(a => a.id === ap.id ? { ...a, valor: v } : a)); setSalvoAporte(false); }}
+                  />
                   <button onClick={() => { setAportes(p => p.filter(a => a.id !== ap.id)); setSalvoAporte(false); }}
                     style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "11px", padding: "4px", borderRadius: "4px", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
                 </div>
