@@ -12,6 +12,11 @@ import * as XLSX from "xlsx";
 // ─── Posição Financeira (saldos, aporte, permuta) ────────
 
 const BANCOS_POSICAO = [
+  { nome: "Maxi Inter",       cor: "#ff7a00", ini: "MI" },
+  { nome: "Urban Inter",      cor: "#e8650a", ini: "UI" },
+  { nome: "ZRS Inter",        cor: "#f59e0b", ini: "ZI" },
+  { nome: "Elobank Caixa",    cor: "#005ca9", ini: "EL" },
+  { nome: "Cofre (dinheiro)", cor: "#10b981", ini: "CF" },
   { nome: "Nubank",           cor: "#820ad1", ini: "N"  },
   { nome: "Itaú",             cor: "#ec7000", ini: "I"  },
   { nome: "Bradesco",         cor: "#cc0000", ini: "B"  },
@@ -23,6 +28,14 @@ const BANCOS_POSICAO = [
   { nome: "Sicredi",          cor: "#007040", ini: "Sc" },
   { nome: "C6 Bank",          cor: "#232323", ini: "C6" },
   { nome: "Outro",            cor: "#6b7280", ini: "?"  },
+];
+
+const BANCOS_POS_DEFAULT: SaldoBanco[] = [
+  { id: "pre-1", banco: "Maxi Inter",       agencia: "", conta: "", saldo: 0 },
+  { id: "pre-2", banco: "Urban Inter",      agencia: "", conta: "", saldo: 0 },
+  { id: "pre-3", banco: "Cofre (dinheiro)", agencia: "", conta: "", saldo: 0 },
+  { id: "pre-4", banco: "ZRS Inter",        agencia: "", conta: "", saldo: 0 },
+  { id: "pre-5", banco: "Elobank Caixa",    agencia: "", conta: "", saldo: 0 },
 ];
 
 interface SaldoBanco  { id: string; banco: string; agencia: string; conta: string; saldo: number; }
@@ -64,7 +77,6 @@ interface PosFinProps {
 
 function SecaoPosicaoFinanceira({ bancos, setBancos, aporte, setAporte, permuta, setPermuta }: PosFinProps) {
   const [adicionando,     setAdicionando]     = useState(false);
-  const [editandoBanco,   setEditandoBanco]   = useState<string | null>(null);
   const [novoBanco,       setNovoBanco]       = useState<Omit<SaldoBanco, "id">>({ banco: "", agencia: "", conta: "", saldo: 0 });
   const [aporteEdit,      setAporteEdit]      = useState<DadosAporte>(APORTE_DEFAULT);
   const [editandoAporte,  setEditandoAporte]  = useState(false);
@@ -90,7 +102,6 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aporte, setAporte, permuta,
   function removerBanco(id: string) {
     if (!confirm("Remover este banco?")) return;
     setBancos(p => p.filter(b => b.id !== id));
-    if (editandoBanco === id) setEditandoBanco(null);
   }
   function salvarAporte()  { setAporte(aporteEdit);   setEditandoAporte(false); }
   function salvarPermuta() { setPermuta(permutaEdit); setEditandoPermuta(false); }
@@ -140,87 +151,56 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aporte, setAporte, permuta,
               <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "2px" }}>Saldo Consolidado</div>
               <div style={{ fontSize: "22px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: totalBancos >= 0 ? "var(--ok)" : "var(--err)" }}>{toBRL(totalBancos)}</div>
             </div>
-            {abertoBancos && <button className="btn bp sm" onClick={() => { setAdicionando(true); setEditandoBanco(null); }}>＋ Banco</button>}
+            {abertoBancos && <button className="btn bp sm" onClick={() => { setAdicionando(true); }}>＋ Banco</button>}
             {chevron(abertoBancos, () => setAbertoBancos(v => !v))}
           </div>
         </div>
-        {(abertoBancos || editandoBanco !== null || adicionando) && <div style={{ padding: "20px" }}>
-          {bancos.length === 0 && !adicionando ? (
-            <div style={{ textAlign: "center", padding: "24px 0", color: "var(--t3)", fontSize: "13px" }}>
-              Nenhuma conta cadastrada — clique em <strong style={{ color: "var(--acc)" }}>+ Banco</strong> para adicionar
-            </div>
-          ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "12px" }}>
-              {bancos.map(banco => {
-                const cor = bancoCor(banco.banco);
-                const ini = bancoIni(banco.banco);
-                const emEd = editandoBanco === banco.id;
-                return (
-                  <div key={banco.id} style={{ background: "var(--surf2)", border: `1px solid ${emEd ? cor : "var(--b1)"}`, borderLeft: `4px solid ${cor}`, borderRadius: "10px", padding: "16px", transition: "border-color .15s" }}>
-                    {!emEd ? (
-                      <>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                          <div style={{ width: "34px", height: "34px", borderRadius: "8px", background: cor, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800, color: "white", flexShrink: 0 }}>{ini}</div>
-                          <div>
-                            <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)" }}>{banco.banco}</div>
-                            {(banco.agencia || banco.conta) && (
-                              <div style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", marginTop: "1px" }}>
-                                {banco.agencia && `Ag ${banco.agencia}`}{banco.agencia && banco.conta && " · "}{banco.conta && `Cc ${banco.conta}`}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div style={{ fontSize: "22px", fontWeight: 800, color: banco.saldo >= 0 ? "var(--t1)" : "var(--err)", fontFamily: "'DM Mono', monospace", marginBottom: "12px", lineHeight: 1 }}>{toBRL(banco.saldo)}</div>
-                        <button className="btn bg xs" style={{ width: "100%", color: "var(--t3)", fontSize: "11px" }} onClick={() => setEditandoBanco(banco.id)}>✎ Editar</button>
-                      </>
-                    ) : (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                        <div style={{ fontSize: "10px", fontWeight: 700, color: cor, textTransform: "uppercase", letterSpacing: "0.06em" }}>Editando</div>
-                        <select className="fc" style={{ fontSize: "12px" }} value={banco.banco}
-                          onChange={e => setBancos(p => p.map(b => b.id === banco.id ? { ...b, banco: e.target.value } : b))}>
-                          {BANCOS_POSICAO.map(bl => <option key={bl.nome} value={bl.nome}>{bl.nome}</option>)}
-                        </select>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                          <input className="fc" style={{ fontSize: "11px" }} placeholder="Agência" value={banco.agencia}
-                            onChange={e => setBancos(p => p.map(b => b.id === banco.id ? { ...b, agencia: e.target.value } : b))} />
-                          <input className="fc" style={{ fontSize: "11px" }} placeholder="Conta" value={banco.conta}
-                            onChange={e => setBancos(p => p.map(b => b.id === banco.id ? { ...b, conta: e.target.value } : b))} />
-                        </div>
-                        <input className="fc" type="number" step="0.01" placeholder="Saldo (R$)" value={banco.saldo || ""}
-                          onChange={e => setBancos(p => p.map(b => b.id === banco.id ? { ...b, saldo: Number(e.target.value) } : b))} />
-                        <div style={{ display: "flex", gap: "6px" }}>
-                          <button className="btn bp sm" style={{ flex: 1, fontSize: "11px" }} onClick={() => setEditandoBanco(null)}>✓ Salvar</button>
-                          <button className="btn bg xs" style={{ color: "var(--err)", borderColor: "var(--err)" }} onClick={() => removerBanco(banco.id)}>✕</button>
-                        </div>
-                      </div>
-                    )}
+        {(abertoBancos || adicionando) && <div style={{ padding: "20px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "12px" }}>
+            {bancos.map(banco => {
+              const cor = bancoCor(banco.banco);
+              const ini = bancoIni(banco.banco);
+              return (
+                <div key={banco.id} style={{ background: "var(--surf2)", border: "1px solid var(--b1)", borderLeft: `4px solid ${cor}`, borderRadius: "10px", padding: "14px 14px 12px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "9px", marginBottom: "12px" }}>
+                    <div style={{ width: "32px", height: "32px", borderRadius: "7px", background: cor, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 800, color: "white", flexShrink: 0, letterSpacing: "0.02em" }}>{ini}</div>
+                    <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--t1)", flex: 1, lineHeight: 1.2 }}>{banco.banco}</div>
+                    <button title="Remover" onClick={() => removerBanco(banco.id)} style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "12px", padding: "2px 4px", borderRadius: "4px", lineHeight: 1 }}>✕</button>
                   </div>
-                );
-              })}
-              {adicionando && (
-                <div style={{ background: "var(--surf2)", border: "1px dashed var(--acc)", borderRadius: "10px", padding: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <div style={{ fontSize: "10px", fontWeight: 700, color: "var(--acc)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Novo Banco</div>
-                  <select className="fc" style={{ fontSize: "12px" }} value={novoBanco.banco}
-                    onChange={e => setNovoBanco(p => ({ ...p, banco: e.target.value }))}>
-                    <option value="">Selecionar banco...</option>
-                    {BANCOS_POSICAO.map(bl => <option key={bl.nome} value={bl.nome}>{bl.nome}</option>)}
-                  </select>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                    <input className="fc" style={{ fontSize: "11px" }} placeholder="Agência" value={novoBanco.agencia}
-                      onChange={e => setNovoBanco(p => ({ ...p, agencia: e.target.value }))} />
-                    <input className="fc" style={{ fontSize: "11px" }} placeholder="Conta" value={novoBanco.conta}
-                      onChange={e => setNovoBanco(p => ({ ...p, conta: e.target.value }))} />
-                  </div>
-                  <input className="fc" type="number" step="0.01" placeholder="Saldo inicial (R$)" value={novoBanco.saldo || ""}
-                    onChange={e => setNovoBanco(p => ({ ...p, saldo: Number(e.target.value) }))} />
-                  <div style={{ display: "flex", gap: "6px" }}>
-                    <button className="btn bp sm" style={{ flex: 1, fontSize: "11px" }} onClick={adicionarBanco} disabled={!novoBanco.banco}>Adicionar</button>
-                    <button className="btn bg sm" style={{ fontSize: "11px" }} onClick={() => { setAdicionando(false); setNovoBanco({ banco: "", agencia: "", conta: "", saldo: 0 }); }}>Cancelar</button>
-                  </div>
+                  <input
+                    type="number" step="0.01"
+                    value={banco.saldo || ""}
+                    onChange={e => setBancos(p => p.map(b => b.id === banco.id ? { ...b, saldo: Number(e.target.value) } : b))}
+                    placeholder="0,00"
+                    className="fc"
+                    style={{ width: "100%", margin: 0, fontFamily: "'DM Mono', monospace", fontWeight: 700, fontSize: "16px", textAlign: "right", color: banco.saldo < 0 ? "var(--err)" : "var(--t1)", boxSizing: "border-box" }}
+                  />
+                  {banco.saldo !== 0 && (
+                    <div style={{ fontSize: "10px", color: "var(--t3)", textAlign: "right", marginTop: "4px", fontFamily: "'DM Mono', monospace" }}>
+                      {toBRL(banco.saldo)}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          )}
+              );
+            })}
+            {adicionando && (
+              <div style={{ background: "var(--surf2)", border: "1px dashed var(--acc)", borderRadius: "10px", padding: "14px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                <div style={{ fontSize: "10px", fontWeight: 700, color: "var(--acc)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Novo Banco</div>
+                <select className="fc" style={{ fontSize: "12px", margin: 0 }} value={novoBanco.banco}
+                  onChange={e => setNovoBanco(p => ({ ...p, banco: e.target.value }))}>
+                  <option value="">Selecionar...</option>
+                  {BANCOS_POSICAO.map(bl => <option key={bl.nome} value={bl.nome}>{bl.nome}</option>)}
+                </select>
+                <input className="fc" type="number" step="0.01" placeholder="Saldo inicial (R$)" value={novoBanco.saldo || ""}
+                  style={{ margin: 0, textAlign: "right", fontFamily: "'DM Mono', monospace" }}
+                  onChange={e => setNovoBanco(p => ({ ...p, saldo: Number(e.target.value) }))} />
+                <div style={{ display: "flex", gap: "6px" }}>
+                  <button className="btn bp sm" style={{ flex: 1, fontSize: "11px" }} onClick={adicionarBanco} disabled={!novoBanco.banco}>Adicionar</button>
+                  <button className="btn bg sm" style={{ fontSize: "11px" }} onClick={() => { setAdicionando(false); setNovoBanco({ banco: "", agencia: "", conta: "", saldo: 0 }); }}>Cancelar</button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>}
       </div>
 
@@ -432,7 +412,7 @@ export default function InvestimentosPage() {
   const [permutaPos, setPermutaPos]       = useState<DadosPermuta>(PERMUTA_DEFAULT);
 
   useEffect(() => {
-    setBancosPos(lsLoad<SaldoBanco[]>(LS_BANCOS_KEY, []));
+    setBancosPos(lsLoad<SaldoBanco[]>(LS_BANCOS_KEY, BANCOS_POS_DEFAULT));
     const a = lsLoad<DadosAporte>(LS_APORTE_KEY, APORTE_DEFAULT);
     setAportePos(a);
     const p = lsLoad<DadosPermuta>(LS_PERMUTA_KEY, PERMUTA_DEFAULT);
