@@ -42,12 +42,12 @@ interface SaldoBanco     { id: string; banco: string; agencia: string; conta: st
 interface AporteGabriel  { id: string; data: string; descricao: string; valor: number; }
 interface MovPedido      { id: string; data: string; valor: number; numeroPedido: string; tipo: "PERMUTA" | "FATURAMENTO"; empresa: string; }
 interface PedidoPermuta  { id: string; material: string; quantidadeTon: number; valor: number; movimentacoes: MovPedido[]; }
-interface PermutaV2      { pedidos: PedidoPermuta[]; status: "ativo" | "parcial" | "liquidado"; observacoes: string; }
+interface PermutaV2      { pedidos: PedidoPermuta[]; status: "ativo" | "parcial" | "liquidado"; observacoes: string; saldoManual: number; }
 interface Lancamento     { id: string; data: string; observacao: string; valor: number; }
 
 const LS_BANCOS_KEY    = "ug_bancos_v1";
 const LS_APORTES_G_KEY = "ug_aportes_g_v1";
-const LS_PERMUTA_KEY   = "ug_permuta_v3";
+const LS_PERMUTA_KEY   = "ug_permuta_v4";
 const LS_LANC_KEY      = "ug_lancamentos_v2";
 
 function lsLoad<T>(key: string, fallback: T): T {
@@ -61,7 +61,7 @@ function lsSave(key: string, value: unknown): void {
 
 const toBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
 
-const PERMUTA_DEFAULT: PermutaV2 = { pedidos: [], status: "ativo", observacoes: "" };
+const PERMUTA_DEFAULT: PermutaV2 = { pedidos: [], status: "ativo", observacoes: "", saldoManual: 0 };
 
 const STATUS_PERMUTA = {
   ativo:     { label: "Ativo",     cor: "#3dffa0", bg: "rgba(61,255,160,.12)" },
@@ -318,12 +318,15 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
       <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderTop: "3px solid #8b5cf6", borderRadius: "12px", overflow: "hidden" }}>
         {secaoHdr("#8b5cf6", "⇄", "Permuta Comercial", "Mendes & Mendes", "Pedidos com movimentações de desconto",
           <>
-            {!abertoPermuta && totalPermutaItens > 0 && (
-              <div style={{ textAlign: "right", marginRight: "4px" }}>
-                <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "2px" }}>Saldo Restante</div>
-                <div style={{ fontSize: "15px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: saldoRestante > 0 ? "#f59e0b" : "var(--ok)" }}>{toBRL(saldoRestante)}</div>
-              </div>
-            )}
+            {!abertoPermuta && (permuta.saldoManual > 0 || totalPermutaItens > 0) && (() => {
+              const exibir = permuta.saldoManual > 0 ? permuta.saldoManual : saldoRestante;
+              return (
+                <div style={{ textAlign: "right", marginRight: "4px" }}>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "2px" }}>Saldo Restante</div>
+                  <div style={{ fontSize: "15px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: exibir > 0 ? "#f59e0b" : "var(--ok)" }}>{toBRL(exibir)}</div>
+                </div>
+              );
+            })()}
             {abertoPermuta && (
               <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 10px", borderRadius: "99px", background: STATUS_PERMUTA[permuta.status].bg, color: STATUS_PERMUTA[permuta.status].cor, border: `1px solid ${STATUS_PERMUTA[permuta.status].cor}50` }}>
                 ● {STATUS_PERMUTA[permuta.status].label}
@@ -446,8 +449,21 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
               );
             })}
 
+            {/* ── Saldo Restante editável ── */}
+            <div style={{ background: "rgba(139,92,246,.06)", border: "1px solid rgba(139,92,246,.25)", borderRadius: "10px", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "14px", marginBottom: "12px" }}>
+              <div>
+                <div style={{ fontSize: "9px", color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, marginBottom: "3px" }}>Saldo Restante</div>
+                <div style={{ fontSize: "10px", color: "var(--t3)" }}>Calculado: {toBRL(saldoRestante)}</div>
+              </div>
+              <CurrencyInput
+                value={permuta.saldoManual}
+                onChange={v => { setPermuta(p => ({ ...p, saldoManual: v })); setSalvoPermuta(false); }}
+                style={{ margin: 0, width: "160px", fontSize: "18px", fontWeight: 800, textAlign: "right", fontFamily: "'DM Mono', monospace", background: "transparent", border: "1px solid rgba(139,92,246,.3)", borderRadius: "8px", padding: "6px 12px", color: permuta.saldoManual > 0 ? "#f59e0b" : "var(--ok)" }}
+              />
+            </div>
+
             {/* ── Salvar + status ── */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "14px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0" }}>
               <select className="fc" value={permuta.status} style={{ fontSize: "10px", padding: "5px 10px", margin: 0, width: "auto" }}
                 onChange={e => setPermuta(p => ({ ...p, status: e.target.value as PermutaV2["status"] }))}>
                 <option value="ativo">● Ativo</option>
@@ -812,7 +828,8 @@ export default function InvestimentosPage() {
   const totalPermutaAcordado   = permutaPos.pedidos.reduce((s, p) => s + p.valor, 0);
   const totalPermutaMovimentado = permutaPos.pedidos.reduce((s, p) => s + p.movimentacoes.reduce((ss, m) => ss + m.valor, 0), 0);
   const totalLancamentosPos = lancamentosPos.reduce((s, l) => s + l.valor, 0);
-  const totalPosicaoGlobal = totalGeral + totalBancosPos + aporteEmBRLPos + (totalPermutaAcordado - totalPermutaMovimentado) + totalLancamentosPos;
+  const saldoPermutaEfetivo = permutaPos.saldoManual > 0 ? permutaPos.saldoManual : (totalPermutaAcordado - totalPermutaMovimentado);
+  const totalPosicaoGlobal = totalGeral + totalBancosPos + aporteEmBRLPos + saldoPermutaEfetivo + totalLancamentosPos;
   const bancos        = [...new Set(investimentos.map(i => i.empresa))].sort();
   const normalize     = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
   const bancosNorm    = bancos.map(b => normalize(b));
