@@ -33,7 +33,9 @@ const NAV = [
     items: [
       { href: "/financeiro",    label: "Gestão de Contas",   icon: "◉" },
       { href: "/investimentos", label: "Investimentos",      icon: "◆" },
-      { href: "/investimentos/apresentacao", label: "Investimentos · Apresentação", icon: "◇" },
+      // Oculto temporariamente a pedido — rota /investimentos/apresentacao continua existindo.
+      // Para reexibir, basta descomentar a linha abaixo:
+      // { href: "/investimentos/apresentacao", label: "Investimentos · Apresentação", icon: "◇" },
       { href: "/fluxo",         label: "Fluxo de Caixa",    icon: "◈" },
       { href: "/notas",         label: "Notas Fiscais",      icon: "◧" },
       { href: "/contabilidade", label: "Contabilidade",      icon: "◑" },
