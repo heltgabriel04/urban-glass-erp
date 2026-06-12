@@ -982,6 +982,7 @@ export default function InvestimentosPage() {
           thead { display: table-header-group; }
           tr { page-break-inside: avoid; }
           .pdf-mes-block { page-break-inside: avoid; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
         input[type="month"].fc { color-scheme: dark; }
       `}</style>
@@ -1374,22 +1375,26 @@ export default function InvestimentosPage() {
         </div>
 
         {/* KPI strip */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "20px" }}>
-          {[
-            { label: "Total do Período",   value: formatBRL(totalFiltrado),   color: "#2d5fa6" },
-            { label: "Nº de Aportes",      value: String(filtered.length),    color: "#2d5fa6" },
-            { label: "Média por Aporte",   value: formatBRL(mediaPDF),        color: "#444" },
-            { label: "Bancos / Origens",   value: String(bancosNoPDF.length), color: "#444" },
-          ].map(k => (
-            <div key={k.label} style={{ background: "#f0f4ff", borderRadius: "8px", padding: "12px 14px", borderLeft: "3px solid #2d5fa6" }}>
-              <div style={{ fontSize: "8px", fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "5px" }}>{k.label}</div>
-              <div style={{ fontSize: "16px", fontWeight: 900, color: k.color, fontFamily: "monospace", lineHeight: 1 }}>{k.value}</div>
-            </div>
-          ))}
-        </div>
+        <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "6px 0", marginBottom: "18px" }}>
+          <tbody>
+            <tr>
+              {[
+                { label: "Total do Período",   value: formatBRL(totalFiltrado),   color: "#2d5fa6" },
+                { label: "Nº de Aportes",      value: String(filtered.length),    color: "#2d5fa6" },
+                { label: "Média por Aporte",   value: formatBRL(mediaPDF),        color: "#444" },
+                { label: "Bancos / Origens",   value: String(bancosNoPDF.length), color: "#444" },
+              ].map(k => (
+                <td key={k.label} style={{ width: "25%", background: "#f0f4ff", borderRadius: "8px", padding: "10px 12px", borderLeft: "3px solid #2d5fa6", verticalAlign: "top" }}>
+                  <div style={{ fontSize: "7px", fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "5px" }}>{k.label}</div>
+                  <div style={{ fontSize: "15px", fontWeight: 900, color: k.color, fontFamily: "monospace", lineHeight: 1 }}>{k.value}</div>
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
 
         {/* ── Posição Financeira ── */}
-        <div style={{ marginBottom: "22px", pageBreakInside: "avoid" }}>
+        <div style={{ marginBottom: "22px", pageBreakBefore: "always" }}>
           <div style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "1px", color: "#2d5fa6", marginBottom: "10px", borderBottom: "1px solid #d0daf0", paddingBottom: "4px" }}>
             Posição Financeira
           </div>
@@ -1458,18 +1463,22 @@ export default function InvestimentosPage() {
           {/* Mendes & Mendes */}
           <div style={{ marginBottom: "14px" }}>
             <div style={{ fontSize: "9px", fontWeight: 700, color: "#444", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "6px" }}>Permuta — Mendes & Mendes</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "8px" }}>
-              {[
-                { label: "Total Acordado",    value: toBRL((permutaPos.totalAcordadoManual ?? 0) > 0 ? permutaPos.totalAcordadoManual : permutaPos.pedidos.reduce((s, p) => s + p.valor, 0)), color: "#8b5cf6" },
-                { label: "Total Movimentado", value: toBRL((permutaPos.totalMovimentadoManual ?? 0) > 0 ? permutaPos.totalMovimentadoManual : permutaPos.pedidos.reduce((s, p) => s + p.movimentacoes.reduce((ss, m) => ss + m.valor, 0), 0)), color: "#555" },
-                { label: "Saldo Restante",    value: toBRL(permutaPos.saldoManual + permutaPos.pedidos.reduce((s, p) => s + p.valor, 0)), color: "#f59e0b" },
-              ].map(c => (
-                <div key={c.label} style={{ background: "#faf5ff", borderRadius: "6px", padding: "8px 12px", borderLeft: "3px solid #8b5cf6" }}>
-                  <div style={{ fontSize: "7px", fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "4px" }}>{c.label}</div>
-                  <div style={{ fontSize: "13px", fontWeight: 900, color: c.color, fontFamily: "monospace" }}>{c.value}</div>
-                </div>
-              ))}
-            </div>
+            <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "6px 0", marginBottom: "8px" }}>
+              <tbody>
+                <tr>
+                  {[
+                    { label: "Total Acordado",    value: toBRL((permutaPos.totalAcordadoManual ?? 0) > 0 ? permutaPos.totalAcordadoManual : permutaPos.pedidos.reduce((s, p) => s + p.valor, 0)), color: "#8b5cf6" },
+                    { label: "Total Movimentado", value: toBRL((permutaPos.totalMovimentadoManual ?? 0) > 0 ? permutaPos.totalMovimentadoManual : permutaPos.pedidos.reduce((s, p) => s + p.movimentacoes.reduce((ss, m) => ss + m.valor, 0), 0)), color: "#555" },
+                    { label: "Saldo Restante",    value: toBRL(permutaPos.saldoManual + permutaPos.pedidos.reduce((s, p) => s + p.valor, 0)), color: "#f59e0b" },
+                  ].map(c => (
+                    <td key={c.label} style={{ width: "33.33%", background: "#faf5ff", borderRadius: "6px", padding: "8px 12px", borderLeft: "3px solid #8b5cf6", verticalAlign: "top" }}>
+                      <div style={{ fontSize: "7px", fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "4px" }}>{c.label}</div>
+                      <div style={{ fontSize: "13px", fontWeight: 900, color: c.color, fontFamily: "monospace" }}>{c.value}</div>
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
             {permutaPos.pedidos.length > 0 && (
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px" }}>
                 <thead>
