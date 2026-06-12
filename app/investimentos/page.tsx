@@ -1020,12 +1020,12 @@ export default function InvestimentosPage() {
         {/* Stats */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px", marginBottom: "22px" }}>
           {[
-            { label: "Total Geral",          val: formatBRL(totalPosicaoGlobal), sub: `aportes · bancos · exterior · permuta · compras`, c: G },
-            { label: "Maior Aporte",       val: formatBRL(maiorAporte),  sub: "individual",                        c: G },
-            { label: "Média por Aporte",   val: formatBRL(mediaAporte),  sub: "por registro",                      c: "var(--acc)" },
-            { label: "Bancos / Origens",   val: String(bancos.length),   sub: "registrados",                       c: "var(--acc2)" },
+            { label: "Posição Total",      val: formatBRL(totalPosicaoGlobal), sub: "consolidado geral",              c: G,              border: G },
+            { label: "Saldo em Bancos",    val: formatBRL(totalBancosPos),     sub: `${bancosPos.length} conta(s)`,   c: "var(--acc2)",  border: "var(--acc2)" },
+            { label: "Aporte Gabriel",     val: formatBRL(aporteEmBRLPos),     sub: `${aportePos.length} lançamento(s)`, c: "#3b82f6",   border: "#3b82f6" },
+            { label: "Saldo Permuta",      val: formatBRL(saldoPermutaEfetivo),sub: "Mendes & Mendes",                c: "#8b5cf6",      border: "#8b5cf6" },
           ].map(s => (
-            <div key={s.label} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "3px" }}>
+            <div key={s.label} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderTop: `3px solid ${s.border}`, borderRadius: "10px", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "3px" }}>
               <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{s.label}</div>
               <div style={{ fontSize: "18px", fontWeight: 700, color: s.c, fontFamily: "'DM Mono', monospace", lineHeight: 1.2 }}>{s.val}</div>
               <div style={{ fontSize: "10px", color: "var(--t3)" }}>{s.sub}</div>
