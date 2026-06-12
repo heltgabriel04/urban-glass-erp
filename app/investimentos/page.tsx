@@ -98,6 +98,7 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
   const totalPermutaItens  = permuta.pedidos.reduce((s, p) => s + p.valor, 0);
   const totalMovimentado   = permuta.pedidos.reduce((s, p) => s + p.movimentacoes.reduce((ss, m) => ss + m.valor, 0), 0);
   const saldoRestante      = totalPermutaItens + totalMovimentado;
+  const saldoEfetivo       = permuta.saldoManual + totalPermutaItens;
   const totalAcordadoEfet  = permuta.totalAcordadoManual > 0 ? permuta.totalAcordadoManual : totalPermutaItens;
 
   function adicionarBanco() {
@@ -320,7 +321,7 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
         {secaoHdr("#8b5cf6", "⇄", "Permuta Comercial", "Mendes & Mendes", "Pedidos com movimentações de desconto",
           <>
             {!abertoPermuta && (permuta.saldoManual > 0 || totalPermutaItens > 0) && (() => {
-              const exibir = permuta.saldoManual > 0 ? permuta.saldoManual : saldoRestante;
+              const exibir = saldoEfetivo;
               return (
                 <div style={{ textAlign: "right", marginRight: "4px" }}>
                   <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "2px" }}>Saldo Restante</div>
@@ -344,7 +345,7 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "10px", marginBottom: "16px" }}>
                 {metricaCard("Total Acordado",    toBRL(totalAcordadoEfet), "#8b5cf6", true)}
                 {metricaCard("Total Movimentado", toBRL(totalMovimentado),  "var(--t2)", true)}
-                {metricaCard("Saldo Restante",    toBRL(permuta.saldoManual > 0 ? permuta.saldoManual : saldoRestante), (permuta.saldoManual > 0 ? permuta.saldoManual : saldoRestante) > 0 ? "var(--warn)" : "var(--ok)", true)}
+                {metricaCard("Saldo Restante",    toBRL(saldoEfetivo), saldoEfetivo > 0 ? "var(--warn)" : "var(--ok)", true)}
               </div>
             )}
 
@@ -836,7 +837,7 @@ export default function InvestimentosPage() {
   const totalPermutaItensPos   = permutaPos.pedidos.reduce((s, p) => s + p.valor, 0);
   const totalPermutaMovPos     = permutaPos.pedidos.reduce((s, p) => s + p.movimentacoes.reduce((ss, m) => ss + m.valor, 0), 0);
   const totalLancamentosPos    = lancamentosPos.reduce((s, l) => s + l.valor, 0);
-  const saldoPermutaEfetivo    = permutaPos.saldoManual > 0 ? permutaPos.saldoManual : (totalPermutaItensPos + totalPermutaMovPos);
+  const saldoPermutaEfetivo    = permutaPos.saldoManual + totalPermutaItensPos;
   const totalPosicaoGlobal     = totalGeral + totalBancosPos + aporteEmBRLPos + saldoPermutaEfetivo + totalLancamentosPos;
   const bancos        = [...new Set(investimentos.map(i => i.empresa))].sort();
   const normalize     = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
