@@ -82,6 +82,7 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
   const [abertoBancos,    setAbertoBancos]    = useState(false);
   const [abertoAporte,    setAbertoAporte]    = useState(false);
   const [abertoPermuta,   setAbertoPermuta]   = useState(false);
+  const [salvoAporte,     setSalvoAporte]     = useState(false);
   const [abertoLanc,      setAbertoLanc]      = useState(false);
   const [lancamentos,     setLancamentos]     = useState<{ id: string; data: string; descricao: string; valor: number }[]>([]);
 
@@ -211,47 +212,86 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
       <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderTop: "3px solid #3b82f6", borderRadius: "12px", overflow: "hidden" }}>
         {secaoHdr("#3b82f6", "✈", "Aporte Exterior", "Aporte de Gabriel", "Investimento externo realizado pelo sócio",
           abertoAporte && (
-            <button className="btn bp sm" style={{ background: "transparent", color: "#3b82f6", borderColor: "rgba(59,130,246,.4)", fontSize: "11px" }}
-              onClick={() => setAportes(p => [...p, { id: Date.now().toString(), data: new Date().toISOString().split("T")[0], descricao: "", valor: 0 }])}>
+            <button style={{ fontSize: "11px", fontWeight: 600, padding: "4px 12px", borderRadius: "6px", border: "1px solid rgba(59,130,246,.35)", background: "rgba(59,130,246,.08)", color: "#3b82f6", cursor: "pointer" }}
+              onClick={() => { setAportes(p => [...p, { id: Date.now().toString(), data: new Date().toISOString().split("T")[0], descricao: "", valor: 0 }]); setSalvoAporte(false); }}>
               ＋ Linha
             </button>
           ),
           abertoAporte, () => setAbertoAporte(v => !v)
         )}
         {abertoAporte && (
-          <div style={{ padding: "0 16px 16px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "110px 1fr 130px 28px", gap: "6px", padding: "8px 4px 6px", borderBottom: "1px solid var(--b1)", marginBottom: "4px" }}>
-              {["Data", "Descrição", "Valor (R$)", ""].map(h => (
-                <div key={h} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, textAlign: h === "Valor (R$)" ? "right" : "left" }}>{h}</div>
-              ))}
-            </div>
-            {aportes.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "18px 0", color: "var(--t3)", fontSize: "12px" }}>
-                Nenhum aporte — clique em <strong style={{ color: "#3b82f6" }}>＋ Linha</strong> para adicionar
-              </div>
-            ) : (
-              <>
-                {aportes.map(ap => (
-                  <div key={ap.id} style={{ display: "grid", gridTemplateColumns: "110px 1fr 130px 28px", gap: "6px", alignItems: "center", marginBottom: "4px" }}>
-                    <input type="date" className="fc" value={ap.data}
-                      style={{ margin: 0, fontSize: "11px", padding: "5px 8px" }}
-                      onChange={e => setAportes(p => p.map(a => a.id === ap.id ? { ...a, data: e.target.value } : a))} />
-                    <input className="fc" placeholder="Descrição" value={ap.descricao}
-                      style={{ margin: 0, fontSize: "12px", padding: "5px 8px" }}
-                      onChange={e => setAportes(p => p.map(a => a.id === ap.id ? { ...a, descricao: e.target.value } : a))} />
-                    <input type="number" step="0.01" className="fc" placeholder="0,00" value={ap.valor || ""}
-                      style={{ margin: 0, fontSize: "12px", textAlign: "right", fontFamily: "'DM Mono', monospace", padding: "5px 8px" }}
-                      onChange={e => setAportes(p => p.map(a => a.id === ap.id ? { ...a, valor: Number(e.target.value) } : a))} />
-                    <button onClick={() => setAportes(p => p.filter(a => a.id !== ap.id))}
-                      style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "12px", padding: "4px", borderRadius: "4px", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-                  </div>
-                ))}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 4px 0", borderTop: "1px solid var(--b1)", marginTop: "6px" }}>
-                  <span style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600 }}>{aportes.length} aporte(s)</span>
-                  <span style={{ fontSize: "14px", fontWeight: 700, fontFamily: "'DM Mono', monospace", color: "#3b82f6" }}>{toBRL(totalAportes)}</span>
+          <div style={{ padding: "16px" }}>
+
+            {/* resumo */}
+            <div style={{ display: "flex", gap: "12px", marginBottom: "16px" }}>
+              <div style={{ flex: 1, background: "rgba(59,130,246,.07)", border: "1px solid rgba(59,130,246,.2)", borderRadius: "10px", padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: "9px", color: "#3b82f6", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, marginBottom: "4px" }}>Total Aportado</div>
+                  <div style={{ fontSize: "22px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: "#3b82f6", lineHeight: 1 }}>{toBRL(totalAportes)}</div>
                 </div>
-              </>
-            )}
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "4px" }}>Registros</div>
+                  <div style={{ fontSize: "22px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: "var(--t2)", lineHeight: 1 }}>{aportes.length}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* tabela */}
+            <div style={{ background: "var(--surf2)", border: "1px solid var(--b1)", borderRadius: "8px", overflow: "hidden" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "116px 1fr 136px 32px", gap: 0, padding: "7px 12px", background: "rgba(59,130,246,.06)", borderBottom: "1px solid var(--b1)" }}>
+                {(["Data", "Descrição", "Valor (R$)", ""] as const).map(h => (
+                  <div key={h} style={{ fontSize: "9px", color: "#3b82f6", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, textAlign: h === "Valor (R$)" ? "right" : "left" }}>{h}</div>
+                ))}
+              </div>
+              {aportes.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "22px 0", color: "var(--t3)", fontSize: "12px" }}>
+                  Nenhum aporte registrado — clique em <strong style={{ color: "#3b82f6" }}>＋ Linha</strong> para adicionar
+                </div>
+              ) : aportes.map((ap, i) => (
+                <div key={ap.id} style={{ display: "grid", gridTemplateColumns: "116px 1fr 136px 32px", alignItems: "center", padding: "5px 8px", background: i % 2 === 0 ? "transparent" : "rgba(59,130,246,.03)", borderBottom: i < aportes.length - 1 ? "1px solid var(--b1)" : "none" }}>
+                  <input type="date" className="fc" value={ap.data}
+                    style={{ margin: 0, fontSize: "11px", padding: "4px 7px", background: "transparent", border: "1px solid transparent", borderRadius: "5px" }}
+                    onFocus={e => (e.target.style.borderColor = "rgba(59,130,246,.4)")}
+                    onBlur={e => (e.target.style.borderColor = "transparent")}
+                    onChange={e => { setAportes(p => p.map(a => a.id === ap.id ? { ...a, data: e.target.value } : a)); setSalvoAporte(false); }} />
+                  <input className="fc" placeholder="Descrição do aporte" value={ap.descricao}
+                    style={{ margin: 0, fontSize: "12px", padding: "4px 7px", background: "transparent", border: "1px solid transparent", borderRadius: "5px" }}
+                    onFocus={e => (e.target.style.borderColor = "rgba(59,130,246,.4)")}
+                    onBlur={e => (e.target.style.borderColor = "transparent")}
+                    onChange={e => { setAportes(p => p.map(a => a.id === ap.id ? { ...a, descricao: e.target.value } : a)); setSalvoAporte(false); }} />
+                  <input type="number" step="0.01" className="fc" placeholder="0,00" value={ap.valor || ""}
+                    style={{ margin: 0, fontSize: "12px", textAlign: "right", fontFamily: "'DM Mono', monospace", padding: "4px 7px", background: "transparent", border: "1px solid transparent", borderRadius: "5px" }}
+                    onFocus={e => (e.target.style.borderColor = "rgba(59,130,246,.4)")}
+                    onBlur={e => (e.target.style.borderColor = "transparent")}
+                    onChange={e => { setAportes(p => p.map(a => a.id === ap.id ? { ...a, valor: Number(e.target.value) } : a)); setSalvoAporte(false); }} />
+                  <button onClick={() => { setAportes(p => p.filter(a => a.id !== ap.id)); setSalvoAporte(false); }}
+                    style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "11px", padding: "4px", borderRadius: "4px", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                </div>
+              ))}
+              {aportes.length > 0 && (
+                <div style={{ display: "grid", gridTemplateColumns: "116px 1fr 136px 32px", padding: "8px 12px", background: "rgba(59,130,246,.06)", borderTop: "1px solid rgba(59,130,246,.2)" }}>
+                  <div />
+                  <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, display: "flex", alignItems: "center" }}>{aportes.length} registro(s)</div>
+                  <div style={{ fontSize: "13px", fontWeight: 800, fontFamily: "'DM Mono', monospace", color: "#3b82f6", textAlign: "right" }}>{toBRL(totalAportes)}</div>
+                  <div />
+                </div>
+              )}
+            </div>
+
+            {/* rodapé com salvar */}
+            <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "10px", marginTop: "14px" }}>
+              {salvoAporte && (
+                <span style={{ fontSize: "11px", color: "var(--ok)", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px" }}>
+                  ✓ Salvo com sucesso
+                </span>
+              )}
+              <button
+                onClick={() => { lsSave(LS_APORTES_G_KEY, aportes); setSalvoAporte(true); setTimeout(() => setSalvoAporte(false), 3000); }}
+                style={{ fontSize: "12px", fontWeight: 700, padding: "7px 20px", borderRadius: "8px", border: "none", background: salvoAporte ? "var(--ok)" : "#3b82f6", color: "white", cursor: "pointer", transition: "background .3s", display: "flex", alignItems: "center", gap: "6px" }}>
+                {salvoAporte ? "✓ Salvo" : "💾 Salvar alterações"}
+              </button>
+            </div>
+
           </div>
         )}
       </div>
