@@ -42,12 +42,12 @@ interface SaldoBanco     { id: string; banco: string; agencia: string; conta: st
 interface AporteGabriel  { id: string; data: string; descricao: string; valor: number; }
 interface MovPedido      { id: string; data: string; valor: number; numeroPedido: string; tipo: "PERMUTA" | "FATURAMENTO"; empresa: string; }
 interface PedidoPermuta  { id: string; material: string; quantidadeTon: number; valor: number; movimentacoes: MovPedido[]; }
-interface PermutaV2      { pedidos: PedidoPermuta[]; status: "ativo" | "parcial" | "liquidado"; observacoes: string; saldoManual: number; }
+interface PermutaV2      { pedidos: PedidoPermuta[]; status: "ativo" | "parcial" | "liquidado"; observacoes: string; saldoManual: number; totalAcordadoManual: number; }
 interface Lancamento     { id: string; data: string; observacao: string; valor: number; }
 
 const LS_BANCOS_KEY    = "ug_bancos_v1";
 const LS_APORTES_G_KEY = "ug_aportes_g_v1";
-const LS_PERMUTA_KEY   = "ug_permuta_v4";
+const LS_PERMUTA_KEY   = "ug_permuta_v5";
 const LS_LANC_KEY      = "ug_lancamentos_v2";
 
 function lsLoad<T>(key: string, fallback: T): T {
@@ -61,7 +61,7 @@ function lsSave(key: string, value: unknown): void {
 
 const toBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
 
-const PERMUTA_DEFAULT: PermutaV2 = { pedidos: [], status: "ativo", observacoes: "", saldoManual: 0 };
+const PERMUTA_DEFAULT: PermutaV2 = { pedidos: [], status: "ativo", observacoes: "", saldoManual: 0, totalAcordadoManual: 0 };
 
 const STATUS_PERMUTA = {
   ativo:     { label: "Ativo",     cor: "#3dffa0", bg: "rgba(61,255,160,.12)" },
@@ -95,9 +95,10 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
   const bancoCor     = (nome: string) => BANCOS_POSICAO.find(b => b.nome === nome)?.cor ?? "#6b7280";
   const bancoIni     = (nome: string) => BANCOS_POSICAO.find(b => b.nome === nome)?.ini ?? nome.slice(0, 2).toUpperCase();
   const totalAportes     = aportes.reduce((s, a) => s + a.valor, 0);
-  const totalPermutaItens = permuta.pedidos.reduce((s, p) => s + p.valor, 0);
-  const totalMovimentado  = permuta.pedidos.reduce((s, p) => s + p.movimentacoes.reduce((ss, m) => ss + m.valor, 0), 0);
-  const saldoRestante     = totalPermutaItens - totalMovimentado;
+  const totalPermutaItens  = permuta.pedidos.reduce((s, p) => s + p.valor, 0);
+  const totalMovimentado   = permuta.pedidos.reduce((s, p) => s + p.movimentacoes.reduce((ss, m) => ss + m.valor, 0), 0);
+  const saldoRestante      = totalPermutaItens + totalMovimentado;
+  const totalAcordadoEfet  = permuta.totalAcordadoManual > 0 ? permuta.totalAcordadoManual : totalPermutaItens;
 
   function adicionarBanco() {
     if (!novoBanco.banco) return;
@@ -341,9 +342,9 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
             {/* ── Resumo global ── */}
             {permuta.pedidos.length > 0 && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "10px", marginBottom: "16px" }}>
-                {metricaCard("Total Acordado",    toBRL(totalPermutaItens), "#8b5cf6", true)}
+                {metricaCard("Total Acordado",    toBRL(totalAcordadoEfet), "#8b5cf6", true)}
                 {metricaCard("Total Movimentado", toBRL(totalMovimentado),  "var(--t2)", true)}
-                {metricaCard("Saldo Restante",    toBRL(permuta.saldoManual > 0 ? permuta.saldoManual : Math.abs(saldoRestante)), (permuta.saldoManual > 0 ? permuta.saldoManual : saldoRestante) > 0 ? "var(--warn)" : "var(--ok)", true)}
+                {metricaCard("Saldo Restante",    toBRL(permuta.saldoManual > 0 ? permuta.saldoManual : saldoRestante), (permuta.saldoManual > 0 ? permuta.saldoManual : saldoRestante) > 0 ? "var(--warn)" : "var(--ok)", true)}
               </div>
             )}
 
@@ -359,7 +360,7 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
               </div>
             ) : permuta.pedidos.map((pedido, pi) => {
               const movTotal = pedido.movimentacoes.reduce((s, m) => s + m.valor, 0);
-              const saldo    = pedido.valor - movTotal;
+              const saldo    = pedido.valor + movTotal;
               const exp      = pedidosAbertos.has(pedido.id);
               return (
                 <div key={pedido.id} style={{ background: "var(--surf2)", border: "1px solid var(--b1)", borderLeft: `3px solid #8b5cf6`, borderRadius: "8px", marginBottom: "8px", overflow: "hidden" }}>
@@ -449,17 +450,24 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
               );
             })}
 
-            {/* ── Saldo Restante editável ── */}
-            <div style={{ background: "rgba(139,92,246,.06)", border: "1px solid rgba(139,92,246,.25)", borderRadius: "10px", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "14px", marginBottom: "12px" }}>
-              <div>
-                <div style={{ fontSize: "9px", color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, marginBottom: "3px" }}>Saldo Restante</div>
-                <div style={{ fontSize: "10px", color: "var(--t3)" }}>Calculado: {toBRL(saldoRestante)}</div>
+            {/* ── Campos editáveis manuais ── */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "14px", marginBottom: "12px" }}>
+              <div style={{ background: "rgba(139,92,246,.06)", border: "1px solid rgba(139,92,246,.25)", borderRadius: "10px", padding: "12px 16px" }}>
+                <div style={{ fontSize: "9px", color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, marginBottom: "6px" }}>Total Acordado</div>
+                <CurrencyInput
+                  value={permuta.totalAcordadoManual}
+                  onChange={v => { setPermuta(p => ({ ...p, totalAcordadoManual: v })); setSalvoPermuta(false); }}
+                  style={{ margin: 0, width: "100%", fontSize: "18px", fontWeight: 800, textAlign: "right", fontFamily: "'DM Mono', monospace", background: "transparent", border: "1px solid rgba(139,92,246,.3)", borderRadius: "8px", padding: "6px 12px", color: "#8b5cf6" }}
+                />
               </div>
-              <CurrencyInput
-                value={permuta.saldoManual}
-                onChange={v => { setPermuta(p => ({ ...p, saldoManual: v })); setSalvoPermuta(false); }}
-                style={{ margin: 0, width: "160px", fontSize: "18px", fontWeight: 800, textAlign: "right", fontFamily: "'DM Mono', monospace", background: "transparent", border: "1px solid rgba(139,92,246,.3)", borderRadius: "8px", padding: "6px 12px", color: permuta.saldoManual > 0 ? "#f59e0b" : "var(--ok)" }}
-              />
+              <div style={{ background: "rgba(139,92,246,.06)", border: "1px solid rgba(139,92,246,.25)", borderRadius: "10px", padding: "12px 16px" }}>
+                <div style={{ fontSize: "9px", color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, marginBottom: "6px" }}>Saldo Restante</div>
+                <CurrencyInput
+                  value={permuta.saldoManual}
+                  onChange={v => { setPermuta(p => ({ ...p, saldoManual: v })); setSalvoPermuta(false); }}
+                  style={{ margin: 0, width: "100%", fontSize: "18px", fontWeight: 800, textAlign: "right", fontFamily: "'DM Mono', monospace", background: "transparent", border: "1px solid rgba(139,92,246,.3)", borderRadius: "8px", padding: "6px 12px", color: permuta.saldoManual > 0 ? "#f59e0b" : "var(--ok)" }}
+                />
+              </div>
             </div>
 
             {/* ── Salvar + status ── */}
@@ -825,11 +833,11 @@ export default function InvestimentosPage() {
   const mediaAporte     = investimentos.length ? totalGeral / investimentos.length : 0;
   const totalBancosPos  = bancosPos.reduce((s, b) => s + b.saldo, 0);
   const aporteEmBRLPos  = aportePos.reduce((s, a) => s + a.valor, 0);
-  const totalPermutaAcordado   = permutaPos.pedidos.reduce((s, p) => s + p.valor, 0);
-  const totalPermutaMovimentado = permutaPos.pedidos.reduce((s, p) => s + p.movimentacoes.reduce((ss, m) => ss + m.valor, 0), 0);
-  const totalLancamentosPos = lancamentosPos.reduce((s, l) => s + l.valor, 0);
-  const saldoPermutaEfetivo = permutaPos.saldoManual > 0 ? permutaPos.saldoManual : (totalPermutaAcordado - totalPermutaMovimentado);
-  const totalPosicaoGlobal = totalGeral + totalBancosPos + aporteEmBRLPos + saldoPermutaEfetivo + totalLancamentosPos;
+  const totalPermutaItensPos   = permutaPos.pedidos.reduce((s, p) => s + p.valor, 0);
+  const totalPermutaMovPos     = permutaPos.pedidos.reduce((s, p) => s + p.movimentacoes.reduce((ss, m) => ss + m.valor, 0), 0);
+  const totalLancamentosPos    = lancamentosPos.reduce((s, l) => s + l.valor, 0);
+  const saldoPermutaEfetivo    = permutaPos.saldoManual > 0 ? permutaPos.saldoManual : (totalPermutaItensPos + totalPermutaMovPos);
+  const totalPosicaoGlobal     = totalGeral + totalBancosPos + aporteEmBRLPos + saldoPermutaEfetivo + totalLancamentosPos;
   const bancos        = [...new Set(investimentos.map(i => i.empresa))].sort();
   const normalize     = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
   const bancosNorm    = bancos.map(b => normalize(b));
