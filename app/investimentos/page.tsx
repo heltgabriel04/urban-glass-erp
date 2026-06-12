@@ -343,7 +343,7 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "10px", marginBottom: "16px" }}>
                 {metricaCard("Total Acordado",    toBRL(totalPermutaItens), "#8b5cf6", true)}
                 {metricaCard("Total Movimentado", toBRL(totalMovimentado),  "var(--t2)", true)}
-                {metricaCard("Saldo Restante",    toBRL(Math.abs(saldoRestante)), saldoRestante > 0 ? "var(--warn)" : "var(--ok)", true)}
+                {metricaCard("Saldo Restante",    toBRL(permuta.saldoManual > 0 ? permuta.saldoManual : Math.abs(saldoRestante)), (permuta.saldoManual > 0 ? permuta.saldoManual : saldoRestante) > 0 ? "var(--warn)" : "var(--ok)", true)}
               </div>
             )}
 
