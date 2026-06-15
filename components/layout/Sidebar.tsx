@@ -55,6 +55,7 @@ const NAV = [
       { href: "/tabelas",    label: "Tabelas de Preço",     icon: "▦" },
       { href: "/relatorios", label: "Relatórios & BI",      icon: "◭" },
       { href: "/margem",     label: "Margem & CMV",         icon: "⬗" },
+      { href: "/giro",       label: "Giro & Cobertura",     icon: "↻" },
       { href: "/logs",       label: "Histórico",            icon: "◷" },
     ],
   },
