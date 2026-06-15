@@ -11,7 +11,7 @@ import { formatBRL, formatM2 } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
-import type { Cliente, Produto, TabelaPreco, TabelaPrecoItem, ItemPedidoInsert, PedidoInsert } from "@/types";
+import type { Cliente, Produto, TabelaPreco, TabelaPrecoItem, ItemPedidoInsert, PedidoInsert, Vendedor } from "@/types";
 
 type ModoPedido = "m2" | "ml";
 
@@ -99,9 +99,11 @@ export default function NovoPedidoPage() {
   const [produtos, setProdutos]       = useState<Produto[]>([]);
   const [tabelas, setTabelas]         = useState<TabelaPreco[]>([]);
   const [tabelaItens, setTabelaItens] = useState<TabelaPrecoItem[]>([]);
+  const [vendedores, setVendedores]   = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
   const [proximoId, setProximoId]     = useState("");
 
   const [clienteId, setClienteId]   = useState<number | null>(null);
+  const [vendedorId, setVendedorId] = useState<number | null>(null);
   const [dtPedido, setDtPedido]     = useState(new Date().toISOString().split("T")[0]);
   const [dtRetirada, setDtRetirada] = useState("");
   const [formaPgto, setFormaPgto]   = useState("");
@@ -118,17 +120,19 @@ export default function NovoPedidoPage() {
   useEffect(() => { load(); }, []);
 
   async function load() {
-    const [clis, prods, tabs, itens, pid] = await Promise.all([
+    const [clis, prods, tabs, itens, pid, vends] = await Promise.all([
       getClientes(true),
       supabase.from("produtos").select("*").eq("ativo", true).then(r => r.data as Produto[]),
       supabase.from("tabelas_preco").select("*").eq("ativo", true).then(r => r.data as TabelaPreco[]),
       supabase.from("tabela_preco_itens").select("*").then(r => r.data as TabelaPrecoItem[] || []),
       getProximoIdPedido(),
+      supabase.from("vendedores").select("id, nome, comissao_pct").eq("ativo", true).order("nome").then(r => r.data ?? []),
     ]);
     setClientes(clis || []);
     setProdutos(prods || []);
     setTabelas(tabs || []);
     setTabelaItens(itens || []);
+    setVendedores(vends as Pick<Vendedor, "id" | "nome" | "comissao_pct">[]);
     setProximoId(pid);
     setItens([{ ...ITEM_VAZIO }]);
     setLoading(false);
@@ -317,6 +321,7 @@ export default function NovoPedidoPage() {
     const pedido: PedidoInsert = {
       id: proximoId,
       cliente_id: clienteId,
+      vendedor_id: vendedorId,
       dt_pedido: dtPedido,
       dt_retirada: dtRetirada || null,
       datas_pgto: parcelasForm.map(p => p.data).filter(d => d),
@@ -346,6 +351,22 @@ export default function NovoPedidoPage() {
     const result = await createPedido(pedido, itensInsert);
     if (result) {
       await criarLancamentosParcelados({ pedidoId: proximoId, clienteId, parcelas: parcelasForm });
+      if (vendedorId) {
+        const vendedor = vendedores.find(v => v.id === vendedorId);
+        const valorComissao = vendedor ? parseFloat((valorTotal * vendedor.comissao_pct / 100).toFixed(2)) : 0;
+        if (vendedor && valorComissao > 0) {
+          await supabase.from("lancamentos").insert([{
+            tipo:        "Saída",
+            descricao:   `Comissão — ${vendedor.nome} — Pedido ${proximoId}`,
+            valor:        valorComissao,
+            status:       "Pendente",
+            vencimento:   null,
+            pedido_id:    proximoId,
+            cliente_id:   null,
+            vendedor_id:  vendedorId,
+          } as never]);
+        }
+      }
       router.push("/pedidos");
     }
     setSalvando(false);
@@ -380,6 +401,25 @@ export default function NovoPedidoPage() {
             <div className="fg" style={{ marginBottom: "10px" }}>
               <label className="fl">Cliente *</label>
               <AutocompleteInput options={clienteOpts} value={clienteId} onChange={(id) => setClienteId(id)} placeholder="Buscar cliente..." />
+            </div>
+
+            <div className="fg" style={{ marginBottom: "10px" }}>
+              <label className="fl">Vendedor / Comissão</label>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <select className="fc" style={{ flex: 1 }} value={vendedorId ?? ""} onChange={e => setVendedorId(e.target.value ? Number(e.target.value) : null)}>
+                  <option value="">— Sem vendedor —</option>
+                  {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome} ({v.comissao_pct}%)</option>)}
+                </select>
+                {vendedorId && (() => {
+                  const vend = vendedores.find(v => v.id === vendedorId);
+                  const val  = vend ? valorTotal * vend.comissao_pct / 100 : 0;
+                  return val > 0 ? (
+                    <span style={{ fontSize: "12px", color: "var(--warn)", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>
+                      {vend!.comissao_pct}% = {val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </span>
+                  ) : null;
+                })()}
+              </div>
             </div>
 
             {clienteId && tab && (
