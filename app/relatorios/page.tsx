@@ -28,7 +28,7 @@ const STATUS_COR: Record<string, string> = {
   "Cancelado":               "var(--err)",
 };
 
-type TipoRelatorio = "gerencial" | "inadimplencia" | "faturamento" | null;
+type TipoRelatorio = "gerencial" | "inadimplencia" | "faturamento" | "completo" | null;
 
 // ── helpers de estilo PDF ────────────────────────────────────────────────────
 const AZUL  = "#1a3d6b";
@@ -395,6 +395,7 @@ export default function RelatoriosPage() {
               { tipo: "gerencial" as TipoRelatorio,     label: "Gerencial",   cor: "#2d5fa6" },
               { tipo: "inadimplencia" as TipoRelatorio, label: "Inadimpl.",   cor: "#c0392b" },
               { tipo: "faturamento" as TipoRelatorio,   label: "Faturamento", cor: "#16a085" },
+              { tipo: "completo" as TipoRelatorio,      label: "Completo",    cor: "#6b21a8" },
             ] as const).map(r => (
               <button key={r.tipo} onClick={() => imprimirRelatorio(r.tipo)}
                 style={{ fontSize: "10px", fontFamily: "'DM Mono', monospace", padding: "4px 10px", borderRadius: "5px", cursor: "pointer", fontWeight: 600, background: r.cor + "18", border: `1px solid ${r.cor}44`, color: r.cor }}>
@@ -1275,8 +1276,8 @@ export default function RelatoriosPage() {
         {/* ════════════════════════════════════════════════════════════════════
             PDF: RELATÓRIO GERENCIAL
         ════════════════════════════════════════════════════════════════════ */}
-        {reporteAtivo === "gerencial" && (
-          <div className="print-area" style={S.page}>
+        {(reporteAtivo === "gerencial" || reporteAtivo === "completo") && (
+          <div className="print-area" style={{ ...S.page, ...(reporteAtivo === "completo" ? { pageBreakAfter: "always" as const, breakAfter: "page" as const } : {}) }}>
             <PdfHeader titulo="Relatório Gerencial" subtitulo="Sumário Executivo 2026" emissao={dtEmissao} />
             <div style={S.body}>
 
@@ -1471,8 +1472,8 @@ export default function RelatoriosPage() {
         {/* ════════════════════════════════════════════════════════════════════
             PDF: RELATÓRIO DE INADIMPLÊNCIA
         ════════════════════════════════════════════════════════════════════ */}
-        {reporteAtivo === "inadimplencia" && (
-          <div className="print-area" style={S.page}>
+        {(reporteAtivo === "inadimplencia" || reporteAtivo === "completo") && (
+          <div className="print-area" style={{ ...S.page, ...(reporteAtivo === "completo" ? { pageBreakAfter: "always" as const, breakAfter: "page" as const } : {}) }}>
             <PdfHeader titulo="Relatório de Inadimplência" subtitulo="Análise de Crédito e Risco" emissao={dtEmissao} cor="#7b1818" />
             <div style={S.body}>
 
@@ -1692,7 +1693,7 @@ export default function RelatoriosPage() {
         {/* ════════════════════════════════════════════════════════════════════
             PDF: RELATÓRIO DE FATURAMENTO ANALÍTICO
         ════════════════════════════════════════════════════════════════════ */}
-        {reporteAtivo === "faturamento" && (
+        {(reporteAtivo === "faturamento" || reporteAtivo === "completo") && (
           <div className="print-area" style={S.page}>
             <PdfHeader titulo="Relatório de Faturamento" subtitulo="Análise Analítica 2026" emissao={dtEmissao} />
             <div style={S.body}>
