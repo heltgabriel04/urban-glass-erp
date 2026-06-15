@@ -30,7 +30,10 @@ begin
   -- 2) Cascata de exclusão (tudo na mesma transação)
   delete from retalhos             where pedido_origem = p_pedido_id;
   delete from historico_otimizador where pedido_id     = p_pedido_id;
-  delete from otimizacoes          where pedido_id     = p_pedido_id;
+  -- `otimizacoes` não existe em todos os ambientes — só apaga se existir
+  if to_regclass('public.otimizacoes') is not null then
+    execute format('delete from public.otimizacoes where pedido_id = %L', p_pedido_id);
+  end if;
   delete from lancamentos          where pedido_id     = p_pedido_id;
   delete from itens_pedido         where pedido_id     = p_pedido_id;
   update orcamentos set pedido_id = null where pedido_id = p_pedido_id;
