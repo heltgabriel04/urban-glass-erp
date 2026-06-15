@@ -136,6 +136,7 @@ export interface EstoqueItem {
   chapas_saldo: number;
   m2_por_chapa: number;
   custo_m2: number;
+  estoque_minimo_chapas?: number;
   updated_at: string;
   produtos?: Produto;
 }
