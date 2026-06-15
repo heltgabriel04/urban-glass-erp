@@ -6,7 +6,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido } from "@/services/pedidos.service";
 import { getLancamentosPorPedido, deletarLancamento, createLancamento, updateLancamento } from "@/services/financeiro.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
-import { createNaoConformidade, getNaoConformidadesPorPedido } from "@/services/qualidade.service";
+import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, updateNaoConformidade } from "@/services/qualidade.service";
 import { formatBRL, formatDate, formatDuracao } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import DateInput from "@/components/ui/DateInput";
@@ -136,6 +136,7 @@ export default function PedidoDetalhe() {
   const [ncForm, setNcForm]         = useState<Partial<NaoConformidadeInsert>>({
     tipo: "Quebra de vidro", gravidade: "Média", status: "Aberta", descricao: "", obs: null,
   });
+  const [fotosNC, setFotosNC]       = useState<File[]>([]);
 
   const [editando, setEditando]         = useState(false);
   const [editForm, setEditForm]         = useState({
@@ -430,9 +431,14 @@ async function handleMarcarPago(lancId: number) {
     };
     const result = await createNaoConformidade(payload);
     if (result) {
+      if (fotosNC.length > 0) {
+        const urls = await uploadFotosNC(result.id, fotosNC);
+        if (urls.length > 0) await updateNaoConformidade(result.id, { fotos_urls: urls });
+      }
       toast(`${result.codigo} registrada`);
       setModalNC(false);
       setNcForm({ tipo: "Quebra de vidro", gravidade: "Média", status: "Aberta", descricao: "", obs: null });
+      setFotosNC([]);
       await load();
     } else {
       toast("Erro ao registrar NC", "err");
@@ -1044,8 +1050,32 @@ async function handleMarcarPago(lancId: number) {
                   </div>
                 )}
               </div>
+              {/* Fotos */}
+              <div className="form-group" style={{ padding:"0 0 4px" }}>
+                <label className="form-label">Fotos (opcional)</label>
+                <label style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:"6px", padding:"12px", border:"2px dashed var(--border)", borderRadius:"8px", cursor:"pointer", background:"var(--bg2)" }}
+                  onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = "var(--accent)"; }}
+                  onDragLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                  onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = "var(--border)"; const f = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/")); setFotosNC(p => [...p, ...f]); }}>
+                  <span style={{ fontSize:"16px" }}>📷</span>
+                  <span style={{ fontSize:"11px", color:"var(--t3)" }}>Arraste ou clique para selecionar imagens</span>
+                  <input type="file" accept="image/*" multiple style={{ display:"none" }}
+                    onChange={e => { setFotosNC(p => [...p, ...Array.from(e.target.files ?? [])]); e.target.value = ""; }} />
+                </label>
+                {fotosNC.length > 0 && (
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:"8px", marginTop:"8px" }}>
+                    {fotosNC.map((f, i) => (
+                      <div key={i} style={{ position:"relative", width:"64px", height:"64px" }}>
+                        <img src={URL.createObjectURL(f)} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", borderRadius:"6px", border:"1px solid var(--border)" }} />
+                        <button onClick={() => setFotosNC(p => p.filter((_, j) => j !== i))}
+                          style={{ position:"absolute", top:"-5px", right:"-5px", background:"#ef4444", border:"none", borderRadius:"50%", width:"16px", height:"16px", color:"#fff", fontSize:"9px", cursor:"pointer", lineHeight:"16px", padding:0 }}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div className="modal-footer">
-                <button className="btn secondary" onClick={() => setModalNC(false)}>Cancelar</button>
+                <button className="btn secondary" onClick={() => { setModalNC(false); setFotosNC([]); }}>Cancelar</button>
                 <button className="btn primary" onClick={handleSalvarNC} disabled={salvando}>{salvando ? "Salvando..." : "Registrar NC"}</button>
               </div>
             </div>

@@ -260,3 +260,29 @@ export async function getResumoQualidade(): Promise<{
     retrabalhosAbertos: retrabAtivos ?? 0,
   };
 }
+
+// ─── Storage: fotos de NCs ─────────────────────────────────
+const BUCKET = 'nc-fotos';
+
+export async function uploadFotosNC(ncId: number, files: File[]): Promise<string[]> {
+  const urls: string[] = [];
+  for (const file of files) {
+    const ext  = file.name.split('.').pop() ?? 'jpg';
+    const path = `${ncId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false });
+    if (error) { console.error('uploadFotoNC:', error); continue; }
+    const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    urls.push(data.publicUrl);
+  }
+  return urls;
+}
+
+export async function deleteFotoNC(url: string): Promise<boolean> {
+  const marker = `/${BUCKET}/`;
+  const idx    = url.indexOf(marker);
+  if (idx === -1) return false;
+  const path = url.slice(idx + marker.length);
+  const { error } = await supabase.storage.from(BUCKET).remove([path]);
+  if (error) { console.error('deleteFotoNC:', error); return false; }
+  return true;
+}

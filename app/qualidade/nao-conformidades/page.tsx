@@ -7,6 +7,8 @@ import {
   createNaoConformidade,
   updateNaoConformidade,
   getHistoricoNC,
+  uploadFotosNC,
+  deleteFotoNC,
 } from "@/services/qualidade.service";
 import { formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
@@ -78,6 +80,10 @@ export default function NaoConformidadesPage() {
   const [form, setForm]             = useState<NaoConformidadeInsert>(BLANK_FORM);
   const [pedidos, setPedidos]       = useState<{ id: string; cliente_nome: string }[]>([]);
   const [usuario, setUsuario]       = useState<string>("");
+  const [fotosNovas, setFotosNovas]               = useState<File[]>([]);
+  const [fotosDetalhePendentes, setFotosDetalhePendentes] = useState<File[]>([]);
+  const [fotoVisualizando, setFotoVisualizando]   = useState<string | null>(null);
+  const [uploadando, setUploadando]               = useState(false);
 
   // Filtros
   const [filtroStatus, setFiltroStatus]     = useState<string>("todos");
@@ -123,14 +129,44 @@ export default function NaoConformidadesPage() {
     const payload: NaoConformidadeInsert = { ...form, registrado_por: usuario || null };
     const result = await createNaoConformidade(payload);
     if (result) {
+      if (fotosNovas.length > 0) {
+        setUploadando(true);
+        const urls = await uploadFotosNC(result.id, fotosNovas);
+        if (urls.length > 0) await updateNaoConformidade(result.id, { fotos_urls: urls });
+        setUploadando(false);
+      }
       toast(`${result.codigo} aberta com sucesso`);
       setModal(false);
       setForm(BLANK_FORM);
+      setFotosNovas([]);
       await load();
     } else {
       toast("Erro ao criar NC", "err");
     }
     setSalvando(false);
+  }
+
+  async function handleAdicionarFotos(nc: NaoConformidade) {
+    if (fotosDetalhePendentes.length === 0) return;
+    setUploadando(true);
+    const urls = await uploadFotosNC(nc.id, fotosDetalhePendentes);
+    if (urls.length > 0) {
+      const existentes = nc.fotos_urls ?? [];
+      const result = await updateNaoConformidade(nc.id, { fotos_urls: [...existentes, ...urls] }, usuario);
+      if (result) { setDetalhe(result); toast("Foto(s) adicionada(s)"); }
+      else toast("Erro ao salvar fotos", "err");
+    }
+    setFotosDetalhePendentes([]);
+    setUploadando(false);
+  }
+
+  async function handleDeletarFoto(nc: NaoConformidade, url: string) {
+    setUploadando(true);
+    await deleteFotoNC(url);
+    const novas = (nc.fotos_urls ?? []).filter(u => u !== url);
+    const result = await updateNaoConformidade(nc.id, { fotos_urls: novas.length > 0 ? novas : null }, usuario);
+    if (result) { setDetalhe(result); toast("Foto removida"); }
+    setUploadando(false);
   }
 
   async function handleMudarStatus(nc: NaoConformidade, novoStatus: StatusNaoConformidade) {
@@ -320,10 +356,35 @@ export default function NaoConformidadesPage() {
                 </div>
               </div>
 
+              {/* Fotos */}
+              <div className="fg">
+                <label className="fl">Fotos (opcional)</label>
+                <label style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:"6px", padding:"16px", border:"2px dashed var(--b2)", borderRadius:"8px", cursor:"pointer", background:"var(--surf2)", transition:"border-color .15s" }}
+                  onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = "var(--acc)"; }}
+                  onDragLeave={e => { e.currentTarget.style.borderColor = "var(--b2)"; }}
+                  onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = "var(--b2)"; const f = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/")); setFotosNovas(p => [...p, ...f]); }}>
+                  <span style={{ fontSize:"20px" }}>📷</span>
+                  <span style={{ fontSize:"11px", color:"var(--t3)" }}>Arraste imagens ou clique para selecionar</span>
+                  <input type="file" accept="image/*" multiple style={{ display:"none" }}
+                    onChange={e => { const f = Array.from(e.target.files ?? []); setFotosNovas(p => [...p, ...f]); e.target.value = ""; }} />
+                </label>
+                {fotosNovas.length > 0 && (
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:"8px", marginTop:"8px" }}>
+                    {fotosNovas.map((f, i) => (
+                      <div key={i} style={{ position:"relative", width:"72px", height:"72px" }}>
+                        <img src={URL.createObjectURL(f)} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", borderRadius:"6px", border:"1px solid var(--b2)" }} />
+                        <button onClick={() => setFotosNovas(p => p.filter((_, j) => j !== i))}
+                          style={{ position:"absolute", top:"-6px", right:"-6px", background:"var(--err)", border:"none", borderRadius:"50%", width:"18px", height:"18px", color:"#fff", fontSize:"10px", cursor:"pointer", lineHeight:"18px", padding:0 }}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end", marginTop:"6px" }}>
-                <button className="btn bg sm" onClick={() => setModal(false)}>Cancelar</button>
-                <button className="btn bp sm" onClick={handleSalvar} disabled={salvando}>
-                  {salvando ? "Salvando…" : "Registrar NC"}
+                <button className="btn bg sm" onClick={() => { setModal(false); setFotosNovas([]); }}>Cancelar</button>
+                <button className="btn bp sm" onClick={handleSalvar} disabled={salvando || uploadando}>
+                  {uploadando ? "Enviando fotos…" : salvando ? "Salvando…" : "Registrar NC"}
                 </button>
               </div>
             </div>
@@ -366,6 +427,53 @@ export default function NaoConformidadesPage() {
               {detalhe.obs && <div style={{ fontSize:"11px", color:"var(--t3)", marginTop:"8px" }}>{detalhe.obs}</div>}
             </div>
 
+            {/* Fotos */}
+            <div style={{ marginBottom:"14px" }}>
+              <div style={{ fontSize:"10px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:".07em", marginBottom:"8px" }}>Fotos</div>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:"8px" }}>
+                {(detalhe.fotos_urls ?? []).map((url, i) => (
+                  <div key={i} style={{ position:"relative", width:"80px", height:"80px" }}>
+                    <img src={url} alt="" onClick={() => setFotoVisualizando(url)}
+                      style={{ width:"100%", height:"100%", objectFit:"cover", borderRadius:"6px", border:"1px solid var(--b2)", cursor:"zoom-in" }} />
+                    {detalhe.status !== "Resolvida" && detalhe.status !== "Cancelada" && (
+                      <button onClick={() => handleDeletarFoto(detalhe, url)} disabled={uploadando}
+                        style={{ position:"absolute", top:"-6px", right:"-6px", background:"var(--err)", border:"none", borderRadius:"50%", width:"18px", height:"18px", color:"#fff", fontSize:"10px", cursor:"pointer", lineHeight:"18px", padding:0 }}>✕</button>
+                    )}
+                  </div>
+                ))}
+                {/* Adicionar fotos */}
+                {detalhe.status !== "Resolvida" && detalhe.status !== "Cancelada" && (
+                  <label style={{ width:"80px", height:"80px", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", border:"2px dashed var(--b2)", borderRadius:"6px", cursor:"pointer", background:"var(--surf2)", fontSize:"10px", color:"var(--t3)", gap:"4px" }}
+                    onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = "var(--acc)"; }}
+                    onDragLeave={e => { e.currentTarget.style.borderColor = "var(--b2)"; }}
+                    onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = "var(--b2)"; const f = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/")); setFotosDetalhePendentes(p => [...p, ...f]); }}>
+                    <span style={{ fontSize:"18px" }}>+</span>
+                    <span>foto</span>
+                    <input type="file" accept="image/*" multiple style={{ display:"none" }}
+                      onChange={e => { const f = Array.from(e.target.files ?? []); setFotosDetalhePendentes(p => [...p, ...f]); e.target.value = ""; }} />
+                  </label>
+                )}
+              </div>
+              {fotosDetalhePendentes.length > 0 && (
+                <div style={{ display:"flex", flexWrap:"wrap", gap:"8px", marginTop:"8px", alignItems:"center" }}>
+                  {fotosDetalhePendentes.map((f, i) => (
+                    <div key={i} style={{ position:"relative", width:"60px", height:"60px" }}>
+                      <img src={URL.createObjectURL(f)} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", borderRadius:"6px", border:"2px dashed var(--acc)", opacity:.8 }} />
+                      <button onClick={() => setFotosDetalhePendentes(p => p.filter((_, j) => j !== i))}
+                        style={{ position:"absolute", top:"-5px", right:"-5px", background:"var(--err)", border:"none", borderRadius:"50%", width:"16px", height:"16px", color:"#fff", fontSize:"9px", cursor:"pointer", lineHeight:"16px", padding:0 }}>✕</button>
+                    </div>
+                  ))}
+                  <button className="btn bp sm" onClick={() => handleAdicionarFotos(detalhe)} disabled={uploadando}
+                    style={{ fontSize:"11px" }}>
+                    {uploadando ? "Enviando…" : `Enviar ${fotosDetalhePendentes.length} foto(s)`}
+                  </button>
+                </div>
+              )}
+              {(detalhe.fotos_urls ?? []).length === 0 && fotosDetalhePendentes.length === 0 && (
+                <span style={{ fontSize:"11px", color:"var(--t3)" }}>Nenhuma foto anexada.</span>
+              )}
+            </div>
+
             {/* Ações de status */}
             {detalhe.status !== "Resolvida" && detalhe.status !== "Cancelada" && (
               <div style={{ display:"flex", gap:"6px", flexWrap:"wrap", marginBottom:"16px" }}>
@@ -402,6 +510,16 @@ export default function NaoConformidadesPage() {
               </div>
             )}
           </div>
+        </div>
+      )}
+      {/* ── Lightbox ───────────────────────────────────────────────────── */}
+      {fotoVisualizando && (
+        <div onClick={() => setFotoVisualizando(null)}
+          style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.92)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center", cursor:"zoom-out" }}>
+          <img src={fotoVisualizando} alt=""
+            style={{ maxWidth:"92vw", maxHeight:"92vh", objectFit:"contain", borderRadius:"8px", boxShadow:"0 8px 40px rgba(0,0,0,.6)" }} />
+          <button onClick={() => setFotoVisualizando(null)}
+            style={{ position:"fixed", top:"20px", right:"24px", background:"rgba(255,255,255,.12)", border:"none", color:"#fff", fontSize:"22px", cursor:"pointer", borderRadius:"50%", width:"36px", height:"36px", lineHeight:"36px", padding:0 }}>✕</button>
         </div>
       )}
     </AppLayout>
