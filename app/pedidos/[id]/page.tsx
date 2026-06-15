@@ -59,6 +59,8 @@ const CHAPAS_DIMS = [
   { w: 2150, h: 3660 }, { w: 3660, h: 2150 },
 ];
 
+const CONTAS = ["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"];
+
 function isChapaInteira(largura: number, altura: number): boolean {
   return CHAPAS_DIMS.some(c =>
     Math.abs(largura - c.w) < 50 && Math.abs(altura - c.h) < 50
@@ -106,12 +108,19 @@ interface ItemEdit {
   vidro_cliente: boolean;
 }
 
-// Estado de pagamento por parcela no painel financeiro
 interface PagamentoParcela {
   lancId: number;
   valorOriginal: number;
-  valorDigitado: number; // 0 = usa valorOriginal
+  valorDigitado: number;
   marcando: boolean;
+}
+
+// Estado de edição inline para lançamentos pagos
+interface EdicaoPago {
+  valor: number;
+  data: string;
+  conta: string;
+  salvando: boolean;
 }
 
 export default function PedidoDetalhe() {
@@ -147,8 +156,11 @@ export default function PedidoDetalhe() {
   const [editParcelas, setEditParcelas] = useState<ParcelaEdit[]>([]);
   const [editItens, setEditItens]       = useState<ItemEdit[]>([]);
 
-  // Estado de pagamento por parcela
+  // Estado de pagamento por parcela (A Receber)
   const [pagamentos, setPagamentos]     = useState<Record<number, PagamentoParcela>>({});
+
+  // Estado de edição inline dos lançamentos já pagos
+  const [editandoPago, setEditandoPago] = useState<Record<number, EdicaoPago>>({});
 
   useEffect(() => { load(); }, [id]);
 
@@ -191,7 +203,6 @@ export default function PedidoDetalhe() {
       const cred = await getCreditoCliente(data.cliente_id);
       setCreditoCliente(cred);
     }
-    // Inicializa estado de pagamento para parcelas A Receber
     const initPag: Record<number, PagamentoParcela> = {};
     for (const l of lancs) {
       if (l.status === "A Receber") {
@@ -199,6 +210,7 @@ export default function PedidoDetalhe() {
       }
     }
     setPagamentos(initPag);
+    setEditandoPago({});
     setLoading(false);
   }
 
@@ -322,8 +334,6 @@ export default function PedidoDetalhe() {
     }
     await recalcularRecebido(pedido.id);
 
-    // ── Lançamento de comissão ──────────────────────────────────────────────
-    // Busca qualquer lancamento de comissão existente para este pedido
     const lancComissao = lancamentos.find(
       l => l.tipo === "Saída" && (l as any).vendedor_id != null
     );
@@ -335,10 +345,8 @@ export default function PedidoDetalhe() {
 
     if (lancComissao) {
       if (!novoVendedorId) {
-        // Removeu o vendedor → apaga a comissão
         await supabase.from("lancamentos").delete().eq("id", lancComissao.id);
       } else {
-        // Atualizou → recalcula
         await supabase.from("lancamentos").update({
           descricao:   `Comissão — ${vendedor!.nome} — Pedido ${pedido.id}`,
           valor:        valorComissao,
@@ -346,7 +354,6 @@ export default function PedidoDetalhe() {
         } as never).eq("id", lancComissao.id);
       }
     } else if (novoVendedorId && vendedor && valorComissao > 0) {
-      // Novo vendedor → cria lançamento de saída
       await supabase.from("lancamentos").insert([{
         tipo:        "Saída",
         descricao:   `Comissão — ${vendedor.nome} — Pedido ${pedido.id}`,
@@ -365,35 +372,32 @@ export default function PedidoDetalhe() {
     await load();
   }
 
-  // Marcar parcela como paga (checkbox)
-async function handleMarcarPago(lancId: number) {
-  if (!pedido) return;
-  const pag = pagamentos[lancId];
-  if (!pag) return;
+  async function handleMarcarPago(lancId: number) {
+    if (!pedido) return;
+    const pag = pagamentos[lancId];
+    if (!pag) return;
 
-  setPagamentos(prev => ({ ...prev, [lancId]: { ...prev[lancId], marcando: true } }));
+    setPagamentos(prev => ({ ...prev, [lancId]: { ...prev[lancId], marcando: true } }));
 
-  const valorPagar = pag.valorDigitado > 0 ? pag.valorDigitado : pag.valorOriginal;
+    const valorPagar = pag.valorDigitado > 0 ? pag.valorDigitado : pag.valorOriginal;
 
-  // Marca o lançamento existente como Pago com o valor correto
-  await updateLancamento(lancId, {
-    status: "Pago",
-    valor: valorPagar,
-    vencimento: hoje(),
-  });
+    await updateLancamento(lancId, {
+      status: "Pago",
+      valor: valorPagar,
+      vencimento: hoje(),
+    });
 
-  // Recalcula valor_recebido do pedido somando só os Pagos
-  await recalcularRecebido(pedido.id);
+    await recalcularRecebido(pedido.id);
 
-  const excedente = Math.max(0, valorPagar - pag.valorOriginal);
-  if (excedente > 0.005 && pedido.cliente_id) {
-    const creditoAtual = await getCreditoCliente(pedido.cliente_id);
-    await atualizarCreditoCliente(pedido.cliente_id, creditoAtual + excedente);
+    const excedente = Math.max(0, valorPagar - pag.valorOriginal);
+    if (excedente > 0.005 && pedido.cliente_id) {
+      const creditoAtual = await getCreditoCliente(pedido.cliente_id);
+      await atualizarCreditoCliente(pedido.cliente_id, creditoAtual + excedente);
+    }
+
+    toast(`✓ ${formatBRL(valorPagar)} registrado`);
+    await load();
   }
-
-  toast(`✓ ${formatBRL(valorPagar)} registrado`);
-  await load();
-}
 
   async function handleDeletarLancamento(lancId: number) {
     if (!pedido) return;
@@ -405,6 +409,44 @@ async function handleMarcarPago(lancId: number) {
     toast("Lançamento removido");
     await load();
     setSalvando(false);
+  }
+
+  // Abre edição inline de um lançamento pago
+  function abrirEdicaoPago(l: Lancamento) {
+    setEditandoPago(prev => ({
+      ...prev,
+      [l.id]: {
+        valor: l.valor,
+        data: l.vencimento ?? "",
+        conta: (l as any).conta ?? "",
+        salvando: false,
+      },
+    }));
+  }
+
+  // Cancela edição inline de um lançamento pago
+  function cancelarEdicaoPago(lancId: number) {
+    setEditandoPago(prev => {
+      const next = { ...prev };
+      delete next[lancId];
+      return next;
+    });
+  }
+
+  // Salva edição inline de um lançamento pago
+  async function handleSalvarEdicaoPago(lancId: number) {
+    const ed = editandoPago[lancId];
+    if (!ed || !pedido) return;
+    setEditandoPago(prev => ({ ...prev, [lancId]: { ...prev[lancId], salvando: true } }));
+    await updateLancamento(lancId, ({
+      valor: ed.valor,
+      vencimento: ed.data,
+      ...(ed.conta ? { conta: ed.conta } : {}),
+    } as any));
+    await recalcularRecebido(pedido.id);
+    toast("✓ Pagamento atualizado");
+    cancelarEdicaoPago(lancId);
+    await load();
   }
 
   async function handleSalvarNC() {
@@ -710,7 +752,7 @@ async function handleMarcarPago(lancId: number) {
                 <div style={{ marginBottom:"16px" }}>
                   <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"8px" }}>PARCELAS A RECEBER</div>
                   <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
-                    {parcelasAReceber.map((l, idx) => {
+                    {parcelasAReceber.map((l) => {
                       const pag = pagamentos[l.id];
                       const marcando = pag?.marcando ?? false;
                       const valorDigitado = pag?.valorDigitado ?? 0;
@@ -718,7 +760,6 @@ async function handleMarcarPago(lancId: number) {
                       return (
                         <div key={l.id} style={{ background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px", border:`1px solid ${vencido ? "rgba(244,63,94,.3)" : "var(--b2)"}` }}>
                           <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
-                            {/* Checkbox */}
                             <input
                               type="checkbox"
                               disabled={marcando}
@@ -726,7 +767,6 @@ async function handleMarcarPago(lancId: number) {
                               style={{ width:"16px", height:"16px", accentColor:"var(--ok)", cursor:"pointer", flexShrink:0 }}
                               title="Marcar como pago"
                             />
-                            {/* Descrição */}
                             <div style={{ flex:1, minWidth:0 }}>
                               <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                                 {l.descricao}
@@ -735,11 +775,9 @@ async function handleMarcarPago(lancId: number) {
                                 {vencido ? "⚠ Vencido · " : ""}{formatDate(l.vencimento)}
                               </div>
                             </div>
-                            {/* Valor original */}
                             <div style={{ fontSize:"13px", fontWeight:700, color:"var(--t1)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>
                               {formatBRL(l.valor)}
                             </div>
-                            {/* Lixeira */}
                             <button
                               title="Remover parcela"
                               onClick={() => handleDeletarLancamento(l.id)}
@@ -748,7 +786,6 @@ async function handleMarcarPago(lancId: number) {
                               onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="transparent"; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
                             >🗑</button>
                           </div>
-                          {/* Campo valor diferente — aparece abaixo */}
                           <div style={{ marginTop:"8px", display:"flex", alignItems:"center", gap:"8px" }}>
                             <span style={{ fontSize:"10px", color:"var(--t3)", whiteSpace:"nowrap" }}>Valor diferente:</span>
                             <CurrencyInput
@@ -765,25 +802,128 @@ async function handleMarcarPago(lancId: number) {
                 </div>
               )}
 
-              {/* Histórico de pagamentos já feitos */}
+              {/* ── HISTÓRICO DE PAGAMENTOS JÁ FEITOS ── */}
               {lancamentosPagos.length > 0 && (
                 <div style={{ marginBottom:"16px" }}>
-                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"8px" }}>HISTÓRICO PAGO</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:"5px" }}>
-                    {lancamentosPagos.map(l => (
-                      <div key={l.id} style={{ display:"flex", alignItems:"center", gap:"8px", background:"var(--surf2)", borderRadius:"6px", padding:"8px 10px" }}>
-                        <span style={{ fontSize:"11px", color:"var(--ok)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>✓ Pago</span>
-                        <span style={{ fontSize:"13px", color:"var(--ok)", fontFamily:"'DM Mono', monospace", fontWeight:600, flex:1 }}>{formatBRL(l.valor)}</span>
-                        <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono', monospace" }}>{formatDate(l.vencimento)}</span>
-                        <button
-                          title="Remover"
-                          onClick={() => handleDeletarLancamento(l.id)}
-                          style={{ background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", fontSize:"11px", cursor:"pointer", padding:"3px 7px", transition:"all 0.15s", lineHeight:1 }}
-                          onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="rgba(244,63,94,.15)"; b.style.borderColor="var(--err)"; b.style.color="var(--err)"; }}
-                          onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="transparent"; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
-                        >🗑</button>
-                      </div>
-                    ))}
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"8px" }}>
+                    <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em" }}>HISTÓRICO PAGO</div>
+                    <div style={{ fontSize:"10px", color:"var(--t3)" }}>clique para editar</div>
+                  </div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
+                    {lancamentosPagos.map(l => {
+                      const ed = editandoPago[l.id];
+                      const isEditing = !!ed;
+                      return (
+                        <div
+                          key={l.id}
+                          style={{
+                            background: isEditing ? "var(--surf3)" : "var(--surf2)",
+                            borderRadius:"8px",
+                            border: `1px solid ${isEditing ? "var(--acc)" : "var(--b2)"}`,
+                            overflow:"hidden",
+                            transition:"border-color 0.15s, background 0.15s",
+                          }}
+                        >
+                          {/* Linha principal — clicável para editar */}
+                          <div
+                            onClick={() => { if (!isEditing) abrirEdicaoPago(l); }}
+                            style={{
+                              display:"flex", alignItems:"center", gap:"8px",
+                              padding:"9px 12px",
+                              cursor: isEditing ? "default" : "pointer",
+                            }}
+                            onMouseEnter={e => { if (!isEditing) (e.currentTarget as HTMLDivElement).style.background = "var(--surf3)"; }}
+                            onMouseLeave={e => { if (!isEditing) (e.currentTarget as HTMLDivElement).style.background = ""; }}
+                          >
+                            <span style={{ fontSize:"11px", color:"var(--ok)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>✓ Pago</span>
+                            <span style={{ fontSize:"13px", color:"var(--ok)", fontFamily:"'DM Mono',monospace", fontWeight:600, flex:1 }}>
+                              {formatBRL(l.valor)}
+                            </span>
+                            {/* Badge da conta */}
+                            {(l as any).conta && (
+                              <span style={{
+                                fontSize:"10px", color:"var(--acc2)", fontFamily:"'DM Mono',monospace",
+                                background:"rgba(0,200,255,.08)", border:"1px solid rgba(0,200,255,.2)",
+                                borderRadius:"4px", padding:"2px 7px", flexShrink:0, fontWeight:600,
+                              }}>
+                                {(l as any).conta}
+                              </span>
+                            )}
+                            <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>
+                              {formatDate(l.vencimento)}
+                            </span>
+                            {!isEditing && (
+                              <span style={{ fontSize:"10px", color:"var(--t3)", opacity:0.6 }} title="Clique para editar">✏</span>
+                            )}
+                            <button
+                              title="Remover"
+                              onClick={e => { e.stopPropagation(); handleDeletarLancamento(l.id); }}
+                              style={{ background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", fontSize:"11px", cursor:"pointer", padding:"3px 7px", transition:"all 0.15s", lineHeight:1, flexShrink:0 }}
+                              onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="rgba(244,63,94,.15)"; b.style.borderColor="var(--err)"; b.style.color="var(--err)"; }}
+                              onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="transparent"; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
+                            >🗑</button>
+                          </div>
+
+                          {/* Painel de edição inline — expande ao clicar */}
+                          {isEditing && (
+                            <div style={{
+                              borderTop:"1px solid var(--b2)",
+                              padding:"12px 12px 10px",
+                              background:"var(--surf2)",
+                              display:"flex", flexDirection:"column", gap:"10px",
+                            }}>
+                              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"8px" }}>
+                                {/* Valor */}
+                                <div>
+                                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, marginBottom:"4px", textTransform:"uppercase", letterSpacing:".04em" }}>Valor</div>
+                                  <CurrencyInput
+                                    value={ed.valor}
+                                    onChange={v => setEditandoPago(prev => ({ ...prev, [l.id]: { ...prev[l.id], valor: v } }))}
+                                    placeholder="R$ 0,00"
+                                    style={{ margin:0, fontSize:"12px", padding:"6px 8px" }}
+                                  />
+                                </div>
+                                {/* Data */}
+                                <div>
+                                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, marginBottom:"4px", textTransform:"uppercase", letterSpacing:".04em" }}>Data</div>
+                                  <DateInput
+                                    value={ed.data}
+                                    onChange={v => setEditandoPago(prev => ({ ...prev, [l.id]: { ...prev[l.id], data: v } }))}
+                                  />
+                                </div>
+                                {/* Conta bancária */}
+                                <div>
+                                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, marginBottom:"4px", textTransform:"uppercase", letterSpacing:".04em" }}>Conta</div>
+                                  <select
+                                    value={ed.conta}
+                                    onChange={e => setEditandoPago(prev => ({ ...prev, [l.id]: { ...prev[l.id], conta: e.target.value } }))}
+                                    style={{ ...fc, fontSize:"12px", padding:"6px 8px" }}
+                                  >
+                                    <option value="">— Selecione —</option>
+                                    {CONTAS.map(o => <option key={o} value={o}>{o}</option>)}
+                                  </select>
+                                </div>
+                              </div>
+                              <div style={{ display:"flex", gap:"6px", justifyContent:"flex-end" }}>
+                                <button
+                                  className="btn bg sm"
+                                  onClick={() => cancelarEdicaoPago(l.id)}
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  className="btn bp sm"
+                                  onClick={() => handleSalvarEdicaoPago(l.id)}
+                                  disabled={ed.salvando}
+                                >
+                                  {ed.salvando ? "Salvando..." : "✓ Salvar"}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -897,7 +1037,7 @@ async function handleMarcarPago(lancId: number) {
                     <label className="fl">Conta</label>
                     <select style={fc} value={editForm.conta} onChange={e => setEditForm(f => ({ ...f, conta: e.target.value }))}>
                       <option value="">Selecione...</option>
-                      {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(o => <option key={o}>{o}</option>)}
+                      {CONTAS.map(o => <option key={o}>{o}</option>)}
                     </select>
                   </div>
                 </div>
