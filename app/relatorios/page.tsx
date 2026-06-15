@@ -14,7 +14,7 @@ import type { FinanceiroCliente, FaturamentoMensal, Pedido, Lancamento } from "@
 
 const MESES_ABREV    = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MESES_COMPLETOS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-const TABS = ["Faturamento","Clientes","Pedidos","Eficiência","Fluxo de Caixa","Estoque","Orçamentos","Fechamento"];
+const TABS = ["Faturamento","Clientes","Pedidos","Produção","Eficiência","Fluxo de Caixa","Estoque","Orçamentos","Fechamento"];
 
 const STATUS_COR: Record<string, string> = {
   "Aguardando otimização":   "var(--warn)",
@@ -225,6 +225,18 @@ export default function RelatoriosPage() {
     [statsEtapas]
   );
 
+  // ── Pipeline atual: pedidos ativos ordenados por tempo na etapa atual ──────
+  const pedidosAtivos = useMemo(() => pedidos
+    .filter(p => !['Entregue', 'Cancelado'].includes(p.status))
+    .map(p => {
+      const history = (p.status_history ?? []) as { status: string; desde: string }[];
+      const last = history[history.length - 1];
+      const msThere = last ? Date.now() - new Date(last.desde).getTime() : 0;
+      return { ...p, msThere };
+    })
+    .sort((a, b) => b.msThere - a.msThere),
+  [pedidos]);
+
   // ── Fluxo de caixa – próximas 8 semanas ─────────────────────────────────
   const fluxoSemanas = useMemo(() => {
     const base = new Date(hoje + 'T12:00:00');
@@ -366,57 +378,22 @@ export default function RelatoriosPage() {
               </button>
             )}
           </div>
+          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+            <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>PDF:</span>
+            {([
+              { tipo: "gerencial" as TipoRelatorio,     label: "Gerencial",   cor: "#2d5fa6" },
+              { tipo: "inadimplencia" as TipoRelatorio, label: "Inadimpl.",   cor: "#c0392b" },
+              { tipo: "faturamento" as TipoRelatorio,   label: "Faturamento", cor: "#16a085" },
+            ] as const).map(r => (
+              <button key={r.tipo} onClick={() => imprimirRelatorio(r.tipo)}
+                style={{ fontSize: "10px", fontFamily: "'DM Mono', monospace", padding: "4px 10px", borderRadius: "5px", cursor: "pointer", fontWeight: 600, background: r.cor + "18", border: `1px solid ${r.cor}44`, color: r.cor }}>
+                ⎙ {r.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="con no-print">
-
-          {/* ── Emitir PDF ─────────────────────────────────────────────────── */}
-          <div className="card" style={{ marginBottom: "16px" }}>
-            <div className="ct">
-              Emitir Relatório PDF
-              <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>para imprimir ou salvar</span>
-            </div>
-            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-              {[
-                {
-                  tipo: "gerencial" as TipoRelatorio,
-                  icone: "📊",
-                  label: "Relatório Gerencial",
-                  desc: "Sumário executivo completo: KPIs, faturamento mensal, top clientes e pipeline de produção.",
-                  cor: "#2d5fa6",
-                },
-                {
-                  tipo: "inadimplencia" as TipoRelatorio,
-                  icone: "⚠",
-                  label: "Inadimplência",
-                  desc: "Devedores por risco, parcelas vencidas e análise de concentração de crédito.",
-                  cor: "#c0392b",
-                },
-                {
-                  tipo: "faturamento" as TipoRelatorio,
-                  icone: "📈",
-                  label: "Faturamento Analítico",
-                  desc: "Evolução mensal, variação vs mês anterior e ranking completo por cliente.",
-                  cor: "#16a085",
-                },
-              ].map(r => (
-                <div key={r.tipo!} style={{ flex: 1, minWidth: "220px", background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: "10px", padding: "16px 18px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ fontSize: "18px" }}>{r.icone}</span>
-                    <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--t1)" }}>{r.label}</span>
-                  </div>
-                  <div style={{ fontSize: "11px", color: "var(--t3)", lineHeight: 1.5 }}>{r.desc}</div>
-                  <button
-                    className="btn sm"
-                    onClick={() => imprimirRelatorio(r.tipo)}
-                    style={{ alignSelf: "flex-start", marginTop: "4px", background: r.cor + "22", border: `1px solid ${r.cor}55`, color: r.cor, fontWeight: 700 }}
-                  >
-                    ⎙ Gerar PDF
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
 
           {/* ── KPIs ─────────────────────────────────────────────────────── */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px", marginBottom: "16px" }}>
@@ -463,9 +440,9 @@ export default function RelatoriosPage() {
           {loading ? <div className="loading">Carregando relatórios...</div> : (
             <>
               {/* ── TABS ────────────────────────────────────────────────────── */}
-              <div style={{ display: "flex", gap: "4px", background: "var(--surf2)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "4px", marginBottom: "16px" }}>
+              <div style={{ display: "flex", gap: "3px", background: "var(--surf2)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "4px", marginBottom: "16px" }}>
                 {TABS.map((t, i) => (
-                  <div key={i} onClick={() => setTabIdx(i)} style={{ flex: 1, padding: "8px 14px", borderRadius: "7px", cursor: "pointer", fontSize: "13px", textAlign: "center", fontFamily: "'DM Mono', monospace", fontWeight: tabIdx === i ? 700 : 400, color: tabIdx === i ? "var(--t1)" : "var(--t3)", background: tabIdx === i ? "var(--surf)" : "transparent", boxShadow: tabIdx === i ? "0 1px 4px rgba(0,0,0,.3)" : "none", transition: "all 0.15s" }}>
+                  <div key={i} onClick={() => setTabIdx(i)} style={{ flex: 1, padding: "7px 6px", borderRadius: "7px", cursor: "pointer", fontSize: "11px", textAlign: "center", fontFamily: "'DM Mono', monospace", fontWeight: tabIdx === i ? 700 : 400, color: tabIdx === i ? "var(--t1)" : "var(--t3)", background: tabIdx === i ? "var(--surf)" : "transparent", boxShadow: tabIdx === i ? "0 1px 4px rgba(0,0,0,.3)" : "none", transition: "all 0.15s", whiteSpace: "nowrap" }}>
                     {t}
                   </div>
                 ))}
@@ -543,41 +520,53 @@ export default function RelatoriosPage() {
 
               {/* ══ TAB 1: CLIENTES ══ */}
               {tabIdx === 1 && (
-                <div className="card">
-                  <div className="ct">Ranking de Clientes <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>{financeiro.length} clientes</span></div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 100px 120px 120px 120px 70px 60px", gap: "10px", padding: "6px 12px", fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono', monospace", borderBottom: "1px solid var(--b1)" }}>
-                      <div>#</div><div>Cliente</div><div>% Total</div><div>Faturado</div><div>Recebido</div><div>A Receber</div><div>Risco</div><div>Pedidos</div>
-                    </div>
-                    {clientesOrdenados.map((f, i) => {
-                      const risco      = Number(f.faturado) > 0 ? Number(f.a_receber) / Number(f.faturado) : 0;
-                      const pctFat     = Number(f.faturado) / maxCliFat * 100;
-                      const pctRec     = Number(f.faturado) > 0 ? Number(f.recebido) / Number(f.faturado) * 100 : 0;
-                      const riscoLabel = risco === 0 ? "Zero" : risco < 0.5 ? "Médio" : "Alto";
-                      const riscoCor   = risco === 0 ? "var(--ok)" : risco < 0.5 ? "var(--warn)" : "var(--err)";
-                      const riscoBg    = risco === 0 ? "rgba(16,185,129,.1)" : risco < 0.5 ? "rgba(245,158,11,.1)" : "rgba(244,63,94,.1)";
-                      return (
-                        <div key={f.cliente_id} style={{ display: "flex", flexDirection: "column", gap: "5px", padding: "10px 12px", background: "var(--surf2)", borderRadius: "9px", border: "1px solid var(--b1)" }}>
-                          <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 100px 120px 120px 120px 70px 60px", gap: "10px", alignItems: "center" }}>
-                            <div style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{i + 1}°</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px" }}>
+                    {[
+                      { label: "Clientes Ativos",     value: String(financeiro.length),     color: "var(--acc2)", sub: "com faturamento no período" },
+                      { label: "Clientes em Débito",  value: String(devedores.length),      color: devedores.length > 0 ? "var(--warn)" : "var(--ok)", sub: formatBRL(totalDevedores) + " em aberto" },
+                      { label: "Concentração Top 3",  value: (() => {
+                        const top3 = clientesOrdenados.slice(0,3).reduce((a,f) => a + Number(f.faturado), 0);
+                        return fatTotal > 0 ? (top3 / fatTotal * 100).toFixed(1) + "%" : "—";
+                      })(), color: "var(--acc4)", sub: "do faturamento total" },
+                    ].map(card => (
+                      <div key={card.label} style={{ background: "var(--surf)", border: "1px solid var(--b1)", borderRadius: "12px", padding: "16px 18px" }}>
+                        <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".08em", fontWeight: 600, marginBottom: "6px" }}>{card.label}</div>
+                        <div style={{ fontSize: "22px", fontWeight: 700, color: card.color, fontFamily: "'DM Mono', monospace", marginBottom: "4px" }}>{card.value}</div>
+                        <div style={{ fontSize: "11px", color: "var(--t3)" }}>{card.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="card">
+                    <div className="ct">Ranking por Faturamento <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>{financeiro.length} clientes</span></div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      {clientesOrdenados.map((f, i) => {
+                        const pctFat = fatTotal > 0 ? Number(f.faturado) / fatTotal * 100 : 0;
+                        const pctRec = Number(f.faturado) > 0 ? Number(f.recebido) / Number(f.faturado) * 100 : 0;
+                        const emAberto = Number(f.a_receber) > 0;
+                        const riscoCor = emAberto ? (pctRec < 50 ? "var(--err)" : "var(--warn)") : "var(--ok)";
+                        return (
+                          <div key={f.cliente_id} style={{ display: "grid", gridTemplateColumns: "32px 1fr 130px 80px 80px 60px", gap: "10px", alignItems: "center", padding: "10px 12px", background: i % 2 === 0 ? "var(--surf2)" : "transparent", borderRadius: "8px" }}>
+                            <div style={{ fontSize: "12px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{i + 1}°</div>
                             <div>
                               <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--t1)" }}>{f.cliente_nome}</div>
-                              {(f as any).cidade && <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "1px" }}>{(f as any).cidade}</div>}
+                              <div style={{ height: "3px", borderRadius: "2px", background: "var(--surf3)", marginTop: "4px", overflow: "hidden" }}>
+                                <div style={{ height: "100%", width: `${pctRec}%`, background: riscoCor, borderRadius: "2px", transition: "width .4s" }} />
+                              </div>
                             </div>
-                            <div style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>{pctFat.toFixed(1)}%</div>
-                            <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", fontFamily: "'DM Mono', monospace" }}>{formatBRL(f.faturado)}</div>
-                            <div style={{ fontSize: "12px", color: "var(--ok)", fontFamily: "'DM Mono', monospace" }}>{formatBRL(f.recebido)}</div>
-                            <div style={{ fontSize: "12px", color: Number(f.a_receber) > 0 ? "var(--warn)" : "var(--t3)", fontFamily: "'DM Mono', monospace" }}>{Number(f.a_receber) > 0 ? formatBRL(f.a_receber) : "—"}</div>
-                            <div style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "5px", background: riscoBg, color: riscoCor, textAlign: "center", fontFamily: "'DM Mono', monospace" }}>{riscoLabel}</div>
-                            <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--t2)", textAlign: "center" }}>{f.total_pedidos}</div>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", fontFamily: "'DM Mono', monospace" }}>{formatBRL(f.faturado)}</div>
+                              <div style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>{pctFat.toFixed(1)}% do total</div>
+                            </div>
+                            <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--ok)", textAlign: "right" }}>{pctRec.toFixed(0)}% rec.</div>
+                            <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: emAberto ? "var(--warn)" : "var(--t3)", textAlign: "right", fontWeight: emAberto ? 700 : 400 }}>
+                              {emAberto ? formatBRL(f.a_receber) : "—"}
+                            </div>
+                            <div style={{ fontSize: "11px", fontFamily: "'DM Mono', monospace", color: "var(--t2)", textAlign: "center" }}>{f.total_pedidos} ped.</div>
                           </div>
-                          <div style={{ height: "4px", borderRadius: "2px", background: "var(--surf3)", overflow: "hidden", position: "relative" }}>
-                            <div style={{ position: "absolute", height: "100%", width: `${pctFat}%`, background: "var(--surf4)", borderRadius: "2px" }} />
-                            <div style={{ position: "absolute", height: "100%", width: `${pctRec * pctFat / 100}%`, background: pctRec < 50 ? "var(--err)" : pctRec < 100 ? "var(--warn)" : "var(--ok)", borderRadius: "2px", transition: "width 0.4s" }} />
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
@@ -628,8 +617,8 @@ export default function RelatoriosPage() {
                   </div>
                 </div>
               )}
-              {/* ══ TAB 3: EFICIÊNCIA ══ */}
-              {tabIdx === 3 && (
+              {/* ══ TAB 4: EFICIÊNCIA ══ */}
+              {tabIdx === 4 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px" }}>
                     {[
@@ -697,20 +686,18 @@ export default function RelatoriosPage() {
                 </div>
               )}
 
-              {/* ══ TEMPO POR ETAPA (dentro de Tab 3: Eficiência) ══ */}
+              {/* ══ TAB 3: PRODUÇÃO ══ */}
               {tabIdx === 3 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "14px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
 
-                  {/* KPIs de lead time */}
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px" }}>
+                  {/* KPIs */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px" }}>
                     {[
                       {
                         label: "Lead Time Médio",
                         value: leadTimeMedio ? formatDuracao(leadTimeMedio) : "—",
                         color: "var(--acc)",
-                        sub: leadTimeMedio
-                          ? `do 1º status até Finalizado/Entregue`
-                          : "Sem pedidos finalizados com histórico",
+                        sub: leadTimeMedio ? "do início ao Finalizado" : "Sem pedidos finalizados ainda",
                       },
                       {
                         label: "Etapa mais lenta",
@@ -719,89 +706,130 @@ export default function RelatoriosPage() {
                           return e ? e.replace('Em Produção – ', '') : "—";
                         })(),
                         color: "var(--err)",
-                        sub: maxEtapaMs > 1 ? `média ${formatDuracao(maxEtapaMs)}` : "Sem dados",
+                        sub: maxEtapaMs > 1 ? `média ${formatDuracao(maxEtapaMs)}` : "Sem dados históricos",
                       },
                       {
-                        label: "Pedidos com histórico",
-                        value: String(pedidos.filter(p => (p.status_history?.length ?? 0) >= 2).length),
+                        label: "Ativos no pipeline",
+                        value: String(pedidosAtivos.length),
                         color: "var(--acc2)",
-                        sub: `de ${pedidos.length} pedidos no total`,
+                        sub: `${pedidosAtivos.filter(p => p.msThere > 86400000 * 3).length} há mais de 3 dias na etapa`,
+                      },
+                      {
+                        label: "Com histórico",
+                        value: String(pedidos.filter(p => (p.status_history?.length ?? 0) >= 2).length),
+                        color: "var(--acc4)",
+                        sub: `de ${pedidos.length} pedidos totais`,
                       },
                     ].map(card => (
-                      <div key={card.label} style={{ background: "var(--surf)", border: "1px solid var(--b1)", borderRadius: "12px", padding: "18px 20px" }}>
-                        <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600, marginBottom: "8px" }}>{card.label}</div>
-                        <div style={{ fontSize: "22px", fontWeight: 700, color: card.color, fontFamily: "'DM Mono', monospace", lineHeight: 1.1, marginBottom: "6px" }}>{card.value}</div>
+                      <div key={card.label} style={{ background: "var(--surf)", border: "1px solid var(--b1)", borderRadius: "12px", padding: "16px 18px" }}>
+                        <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".08em", fontWeight: 600, marginBottom: "6px" }}>{card.label}</div>
+                        <div style={{ fontSize: "22px", fontWeight: 700, color: card.color, fontFamily: "'DM Mono', monospace", lineHeight: 1.1, marginBottom: "4px" }}>{card.value}</div>
                         <div style={{ fontSize: "11px", color: "var(--t3)" }}>{card.sub}</div>
                       </div>
                     ))}
                   </div>
 
-                  {/* Gráfico horizontal: média por etapa */}
-                  <div className="card">
-                    <div className="ct">
-                      Tempo Médio por Etapa de Produção
-                      <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>baseado em pedidos com histórico registrado</span>
-                    </div>
-                    {ETAPAS_FLUXO.filter(e => statsEtapas[e]).length === 0 ? (
-                      <div style={{ textAlign: "center", padding: "40px", color: "var(--t3)", fontSize: "12px" }}>
-                        Nenhum pedido com histórico de status ainda. Avance o status dos pedidos para acumular dados.
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+
+                    {/* Pipeline atual: pedidos ativos + tempo na etapa */}
+                    <div className="card">
+                      <div className="ct">
+                        Pipeline Atual
+                        <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>tempo na etapa atual · ordenado pelo mais atrasado</span>
                       </div>
-                    ) : (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                        {ETAPAS_FLUXO.filter(e => statsEtapas[e]).map(etapa => {
-                          const s = statsEtapas[etapa];
-                          const pct = maxEtapaMs > 0 ? (s.media / maxEtapaMs) * 100 : 0;
-                          const pctMediana = maxEtapaMs > 0 ? (s.mediana / maxEtapaMs) * 100 : 0;
-                          const isSlowest = s.media === maxEtapaMs;
-                          return (
-                            <div key={etapa} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                <span style={{ fontSize: "12px", color: isSlowest ? "var(--err)" : "var(--t1)", fontWeight: isSlowest ? 700 : 500 }}>
-                                  {etapa}
-                                </span>
-                                <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
-                                  <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>
-                                    med. {formatDuracao(s.mediana)}
-                                  </span>
-                                  <span style={{ fontSize: "13px", fontWeight: 700, color: isSlowest ? "var(--err)" : "var(--acc)", fontFamily: "'DM Mono', monospace" }}>
-                                    {formatDuracao(s.media)}
-                                  </span>
-                                  <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>
-                                    {s.count}x
-                                  </span>
+                      {pedidosAtivos.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "40px", color: "var(--t3)", fontSize: "12px" }}>Nenhum pedido ativo no momento.</div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "80px 1fr 90px 80px", gap: "8px", padding: "5px 10px", fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".07em", fontFamily: "'DM Mono', monospace", borderBottom: "1px solid var(--b1)" }}>
+                            <div>Pedido</div><div>Etapa atual</div><div style={{ textAlign: "right" }}>Tempo na etapa</div><div style={{ textAlign: "right" }}>m²</div>
+                          </div>
+                          {pedidosAtivos.slice(0, 15).map((p, i) => {
+                            const cor = STATUS_COR[p.status] ?? "var(--t3)";
+                            const alerta = p.msThere > 86400000 * 3;
+                            return (
+                              <div key={p.id} style={{ display: "grid", gridTemplateColumns: "80px 1fr 90px 80px", gap: "8px", padding: "8px 10px", borderRadius: "6px", background: i % 2 === 0 ? "var(--surf2)" : "transparent", alignItems: "center" }}>
+                                <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--acc)", fontWeight: 700 }}>{p.id}</div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                  <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: cor, flexShrink: 0 }} />
+                                  <span style={{ fontSize: "11px", color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.status}</span>
+                                </div>
+                                <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: alerta ? "var(--err)" : "var(--t2)", fontWeight: alerta ? 700 : 400, textAlign: "right" }}>
+                                  {p.msThere > 0 ? formatDuracao(p.msThere) : "—"}
+                                </div>
+                                <div style={{ fontSize: "11px", fontFamily: "'DM Mono', monospace", color: "var(--t3)", textAlign: "right" }}>{Number(p.m2_total).toFixed(1)}</div>
+                              </div>
+                            );
+                          })}
+                          {pedidosAtivos.length > 15 && (
+                            <div style={{ textAlign: "center", padding: "8px", fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>
+                              + {pedidosAtivos.length - 15} mais
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tempo médio histórico por etapa */}
+                    <div className="card">
+                      <div className="ct">
+                        Tempo Médio por Etapa
+                        <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>histórico de pedidos finalizados</span>
+                      </div>
+                      {ETAPAS_FLUXO.filter(e => statsEtapas[e]).length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "40px", color: "var(--t3)", fontSize: "12px" }}>
+                          Dados aparecem conforme pedidos são finalizados com histórico de status.
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                          {ETAPAS_FLUXO.filter(e => statsEtapas[e]).map(etapa => {
+                            const s = statsEtapas[etapa];
+                            const pct = maxEtapaMs > 0 ? (s.media / maxEtapaMs) * 100 : 0;
+                            const pctMed = maxEtapaMs > 0 ? (s.mediana / maxEtapaMs) * 100 : 0;
+                            const isSlowest = s.media === maxEtapaMs;
+                            return (
+                              <div key={etapa}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                                  <span style={{ fontSize: "11px", color: isSlowest ? "var(--err)" : "var(--t1)", fontWeight: isSlowest ? 700 : 400 }}>{etapa}</span>
+                                  <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                                    <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>med. {formatDuracao(s.mediana)}</span>
+                                    <span style={{ fontSize: "12px", fontWeight: 700, color: isSlowest ? "var(--err)" : "var(--acc)", fontFamily: "'DM Mono', monospace" }}>{formatDuracao(s.media)}</span>
+                                    <span style={{ fontSize: "9px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>{s.count}×</span>
+                                  </div>
+                                </div>
+                                <div style={{ position: "relative", height: "6px", borderRadius: "3px", background: "var(--surf2)", overflow: "hidden" }}>
+                                  <div style={{ position: "absolute", height: "100%", width: `${pct}%`, background: isSlowest ? "rgba(244,63,94,.35)" : "rgba(61,255,160,.3)", borderRadius: "3px" }} />
+                                  <div style={{ position: "absolute", height: "100%", width: `${pctMed}%`, background: isSlowest ? "rgba(244,63,94,.8)" : "rgba(61,255,160,.75)", borderRadius: "3px" }} />
                                 </div>
                               </div>
-                              <div style={{ position: "relative", height: "8px", borderRadius: "4px", background: "var(--surf2)", overflow: "hidden" }}>
-                                <div style={{ position: "absolute", height: "100%", width: `${pct}%`, background: isSlowest ? "rgba(244,63,94,.5)" : "rgba(61,255,160,.35)", borderRadius: "4px", transition: "width .4s" }} />
-                                <div style={{ position: "absolute", height: "100%", width: `${pctMediana}%`, background: isSlowest ? "rgba(244,63,94,.8)" : "rgba(61,255,160,.75)", borderRadius: "4px", transition: "width .4s" }} />
+                            );
+                          })}
+                          <div style={{ display: "flex", gap: "14px", marginTop: "4px" }}>
+                            {[{ color: "rgba(61,255,160,.75)", label: "Mediana" }, { color: "rgba(61,255,160,.3)", label: "Média" }].map(l => (
+                              <div key={l.label} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "10px", color: "var(--t3)" }}>
+                                <div style={{ width: "8px", height: "8px", borderRadius: "2px", background: l.color }} />{l.label}
                               </div>
-                            </div>
-                          );
-                        })}
-                        <div style={{ display: "flex", gap: "16px", marginTop: "4px" }}>
-                          {[{ color: "rgba(61,255,160,.75)", label: "Mediana" }, { color: "rgba(61,255,160,.35)", label: "Média" }].map(l => (
-                            <div key={l.label} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "10px", color: "var(--t2)" }}>
-                              <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: l.color }} />{l.label}
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
 
-                  {/* Tabela detalhada */}
+                  {/* Tabela de detalhamento */}
                   {ETAPAS_FLUXO.filter(e => statsEtapas[e]).length > 0 && (
                     <div className="card">
-                      <div className="ct">Detalhamento por Etapa</div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 100px 100px 100px 100px 60px", gap: "8px", padding: "6px 12px", fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontFamily: "'DM Mono', monospace", borderBottom: "1px solid var(--b1)" }}>
+                      <div className="ct">Estatísticas Detalhadas por Etapa</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 100px 100px 100px 100px 50px", gap: "8px", padding: "6px 12px", fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".07em", fontFamily: "'DM Mono', monospace", borderBottom: "1px solid var(--b1)" }}>
                         <div>Etapa</div><div style={{ textAlign: "right" }}>Média</div><div style={{ textAlign: "right" }}>Mediana</div><div style={{ textAlign: "right" }}>Mínimo</div><div style={{ textAlign: "right" }}>Máximo</div><div style={{ textAlign: "right" }}>N</div>
                       </div>
                       {ETAPAS_FLUXO.filter(e => statsEtapas[e]).map((etapa, i) => {
                         const s = statsEtapas[etapa];
+                        const isSlowest = s.media === maxEtapaMs;
                         return (
-                          <div key={etapa} style={{ display: "grid", gridTemplateColumns: "1fr 100px 100px 100px 100px 60px", gap: "8px", padding: "8px 12px", borderRadius: "6px", background: i % 2 === 0 ? "var(--surf2)" : "transparent" }}>
-                            <div style={{ fontSize: "12px", color: "var(--t1)", fontWeight: 500 }}>{etapa}</div>
-                            <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--acc)", fontWeight: 700, textAlign: "right" }}>{formatDuracao(s.media)}</div>
+                          <div key={etapa} style={{ display: "grid", gridTemplateColumns: "1fr 100px 100px 100px 100px 50px", gap: "8px", padding: "8px 12px", borderRadius: "6px", background: i % 2 === 0 ? "var(--surf2)" : "transparent" }}>
+                            <div style={{ fontSize: "12px", color: isSlowest ? "var(--err)" : "var(--t1)", fontWeight: isSlowest ? 700 : 400 }}>{etapa}</div>
+                            <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: isSlowest ? "var(--err)" : "var(--acc)", fontWeight: 700, textAlign: "right" }}>{formatDuracao(s.media)}</div>
                             <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--t2)", textAlign: "right" }}>{formatDuracao(s.mediana)}</div>
                             <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--ok)", textAlign: "right" }}>{formatDuracao(s.min)}</div>
                             <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--err)", textAlign: "right" }}>{formatDuracao(s.max)}</div>
@@ -814,8 +842,8 @@ export default function RelatoriosPage() {
                 </div>
               )}
 
-              {/* ══ TAB 4: FLUXO DE CAIXA ══ */}
-              {tabIdx === 4 && (
+              {/* ══ TAB 5: FLUXO DE CAIXA ══ */}
+              {tabIdx === 5 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px" }}>
                     {[
@@ -876,8 +904,8 @@ export default function RelatoriosPage() {
                 </div>
               )}
 
-              {/* ══ TAB 5: ESTOQUE ══ */}
-              {tabIdx === 5 && (
+              {/* ══ TAB 6: ESTOQUE ══ */}
+              {tabIdx === 6 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px" }}>
                     {[
@@ -935,8 +963,8 @@ export default function RelatoriosPage() {
                 </div>
               )}
 
-              {/* ══ TAB 7: FECHAMENTO ══ */}
-              {tabIdx === 7 && (
+              {/* ══ TAB 8: FECHAMENTO ══ */}
+              {tabIdx === 8 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
 
                   {/* Seletor de mês */}
@@ -1157,8 +1185,8 @@ export default function RelatoriosPage() {
                 </div>
               )}
 
-              {/* ══ TAB 6: ORÇAMENTOS ══ */}
-              {tabIdx === 6 && (
+              {/* ══ TAB 7: ORÇAMENTOS ══ */}
+              {tabIdx === 7 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px" }}>
                     {[
