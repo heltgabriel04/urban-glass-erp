@@ -113,11 +113,14 @@ function OtimizadorContent() {
       setCarregando(false);
       if (error || !data || data.length === 0) return;
       const map = new Map<string, Peca>();
+      let vcCount = 0;
       data.forEach((item: any) => {
+        if (item.vidro_cliente) { vcCount++; return; } // vidro do cliente: não entra no layout
         const key = `${item.largura}x${item.altura}x${item.produto_nome}`;
         if (map.has(key)) map.get(key)!.qtd += item.quantidade;
         else map.set(key, { l: item.largura, a: item.altura, qtd: item.quantidade, prod: item.produto_nome, pedidoId: pedidoParam });
       });
+      if (vcCount > 0) setMsg(`ℹ ${vcCount} item(ns) ignorado(s): vidro fornecido pelo cliente (não é estoque nosso).`);
       const carregadas = Array.from(map.values());
       setPecas(carregadas);
       setPedidoRef(pedidoParam);
@@ -191,6 +194,7 @@ function OtimizadorContent() {
 
         const map = new Map<string, Peca>();
         itens.forEach((item: any) => {
+          if (item.vidro_cliente) return; // vidro do cliente: não entra no layout
           const key = `${item.largura}x${item.altura}x${item.produto_nome}`;
           if (map.has(key)) map.get(key)!.qtd += item.quantidade;
           else map.set(key, { l: item.largura, a: item.altura, qtd: item.quantidade, prod: item.produto_nome, pedidoId: ped.id });
