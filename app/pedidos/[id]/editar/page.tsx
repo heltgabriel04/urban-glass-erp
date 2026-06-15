@@ -11,7 +11,7 @@ import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
 import { useToast } from "@/components/ui/toast";
-import type { Cliente, Produto, TabelaPreco, TabelaPrecoItem } from "@/types";
+import type { Cliente, Produto, TabelaPreco, TabelaPrecoItem, Vendedor } from "@/types";
 
 type ModoPedido = "m2" | "ml";
 
@@ -96,8 +96,10 @@ export default function EditarPedidoPage() {
   const [produtos, setProdutos]       = useState<Produto[]>([]);
   const [tabelas, setTabelas]         = useState<TabelaPreco[]>([]);
   const [tabelaItens, setTabelaItens] = useState<TabelaPrecoItem[]>([]);
+  const [vendedores, setVendedores]   = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
 
   const [clienteId, setClienteId]   = useState<number | null>(null);
+  const [vendedorId, setVendedorId] = useState<number | null>(null);
   const [dtPedido, setDtPedido]     = useState("");
   const [dtRetirada, setDtRetirada] = useState("");
   const [formaPgto, setFormaPgto]   = useState("");
@@ -117,13 +119,14 @@ export default function EditarPedidoPage() {
 
   async function load() {
     setLoading(true);
-    const [pedido, lancs, clis, prods, tabs, tabItens] = await Promise.all([
+    const [pedido, lancs, clis, prods, tabs, tabItens, vends] = await Promise.all([
       getPedidoById(id),
       getLancamentosPorPedido(id),
       supabase.from("clientes").select("*").eq("ativo", true).order("nome").then(r => r.data as Cliente[] ?? []),
       supabase.from("produtos").select("*").eq("ativo", true).then(r => r.data as Produto[] ?? []),
       supabase.from("tabelas_preco").select("*").eq("ativo", true).then(r => r.data as TabelaPreco[] ?? []),
       supabase.from("tabela_preco_itens").select("*").then(r => r.data as TabelaPrecoItem[] ?? []),
+      supabase.from("vendedores").select("id, nome, comissao_pct").eq("ativo", true).order("nome").then(r => r.data ?? []),
     ]);
 
     if (!pedido) { toast("Pedido não encontrado", "err"); router.back(); return; }
@@ -132,7 +135,9 @@ export default function EditarPedidoPage() {
     setProdutos(prods);
     setTabelas(tabs);
     setTabelaItens(tabItens);
+    setVendedores(vends as Pick<Vendedor, "id" | "nome" | "comissao_pct">[]);
     setClienteId(pedido.cliente_id);
+    setVendedorId(pedido.vendedor_id ?? null);
     setDtPedido(pedido.dt_pedido ?? "");
     setDtRetirada(pedido.dt_retirada ?? "");
     setFormaPgto(pedido.forma_pgto ?? "");
@@ -357,6 +362,7 @@ export default function EditarPedidoPage() {
 
     const result = await updatePedido(id, {
       cliente_id:   clienteId,
+      vendedor_id:  vendedorId,
       dt_pedido:    dtPedido,
       dt_retirada:  dtRetirada || null,
       forma_pgto:   formaPgto,
@@ -413,6 +419,39 @@ export default function EditarPedidoPage() {
     }
     await recalcularRecebido(id);
 
+    // ── Lançamento de comissão ──────────────────────────────────────
+    const lancsAtual2 = await getLancamentosPorPedido(id);
+    const lancComissao = lancsAtual2.find(
+      l => l.tipo === "Saída" && (l as any).vendedor_id != null
+    );
+    const vendedor = vendedorId ? vendedores.find(v => v.id === vendedorId) : null;
+    const valorComissao = vendedor
+      ? parseFloat((valorTotal * vendedor.comissao_pct / 100).toFixed(2))
+      : 0;
+
+    if (lancComissao) {
+      if (!vendedorId) {
+        await supabase.from("lancamentos").delete().eq("id", lancComissao.id);
+      } else {
+        await supabase.from("lancamentos").update({
+          descricao:   `Comissão — ${vendedor!.nome} — Pedido ${id}`,
+          valor:        valorComissao,
+          vendedor_id:  vendedorId,
+        } as never).eq("id", lancComissao.id);
+      }
+    } else if (vendedorId && vendedor && valorComissao > 0) {
+      await supabase.from("lancamentos").insert([{
+        tipo:        "Saída",
+        descricao:   `Comissão — ${vendedor.nome} — Pedido ${id}`,
+        valor:        valorComissao,
+        status:       "Pendente",
+        vencimento:   null,
+        pedido_id:    id,
+        cliente_id:   null,
+        vendedor_id:  vendedorId,
+      } as never]);
+    }
+
     toast("Pedido atualizado");
     router.push(`/pedidos/${id}`);
   }
@@ -452,6 +491,25 @@ export default function EditarPedidoPage() {
             <div className="fg" style={{ marginBottom:"10px" }}>
               <label className="fl">Cliente *</label>
               <AutocompleteInput options={clienteOpts} value={clienteId} onChange={id => setClienteId(id)} placeholder="Buscar cliente..." />
+            </div>
+
+            <div className="fg" style={{ marginBottom:"10px" }}>
+              <label className="fl">Vendedor / Comissão</label>
+              <div style={{ display:"flex", gap:"8px", alignItems:"center" }}>
+                <select className="fc" style={{ flex:1 }} value={vendedorId ?? ""} onChange={e => setVendedorId(e.target.value ? Number(e.target.value) : null)}>
+                  <option value="">— Sem vendedor —</option>
+                  {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome} ({v.comissao_pct}%)</option>)}
+                </select>
+                {vendedorId && (() => {
+                  const vend = vendedores.find(v => v.id === vendedorId);
+                  const val  = vend ? valorTotal * vend.comissao_pct / 100 : 0;
+                  return val > 0 ? (
+                    <span style={{ fontSize:"12px", color:"var(--warn)", fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap" }}>
+                      {vend!.comissao_pct}% = {val.toLocaleString("pt-BR", { style:"currency", currency:"BRL" })}
+                    </span>
+                  ) : null;
+                })()}
+              </div>
             </div>
 
             {clienteId && tab && (
