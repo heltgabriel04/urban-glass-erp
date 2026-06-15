@@ -436,6 +436,7 @@ export default function EditarPedidoPage() {
         await supabase.from("lancamentos").update({
           descricao:   `Comissão — ${vendedor!.nome} — Pedido ${id}`,
           valor:        valorComissao,
+          vencimento:   parcelasForm[0]?.data || null,
           vendedor_id:  vendedorId,
         } as never).eq("id", lancComissao.id);
       }
@@ -445,7 +446,7 @@ export default function EditarPedidoPage() {
         descricao:   `Comissão — ${vendedor.nome} — Pedido ${id}`,
         valor:        valorComissao,
         status:       "Pendente",
-        vencimento:   null,
+        vencimento:   parcelasForm[0]?.data || null,
         pedido_id:    id,
         cliente_id:   null,
         vendedor_id:  vendedorId,

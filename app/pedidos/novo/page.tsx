@@ -360,7 +360,7 @@ export default function NovoPedidoPage() {
             descricao:   `Comissão — ${vendedor.nome} — Pedido ${proximoId}`,
             valor:        valorComissao,
             status:       "Pendente",
-            vencimento:   null,
+            vencimento:   parcelasForm[0]?.data || null,
             pedido_id:    proximoId,
             cliente_id:   null,
             vendedor_id:  vendedorId,
