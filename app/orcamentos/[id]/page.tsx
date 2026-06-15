@@ -7,6 +7,8 @@ import { getOrcamentoById, updateOrcamento, aprovarOrcamento, rejeitarOrcamento 
 import { formatBRL, formatDate, formatM2 } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import { supabase } from "@/lib/supabase/client";
+import { preverLeadTime } from "@/lib/producao-stats";
+import type { Pedido } from "@/types";
 
 const CHIP: Record<string, string> = {
   "Rascunho":  "chip cgr",
@@ -25,6 +27,7 @@ export default function OrcamentoDetalhe() {
   const [orc, setOrc] = useState<any>(null);
   const [estoque, setEstoque] = useState<Map<number, { m2: number; chapas: number }>>(new Map());
   const [comprometido, setComprometido] = useState<Map<number, number>>(new Map());
+  const [previsao, setPrevisao] = useState<ReturnType<typeof preverLeadTime>>(null);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [modalRejeitar, setModalRejeitar] = useState(false);
@@ -37,9 +40,10 @@ export default function OrcamentoDetalhe() {
 
   async function load() {
     setLoading(true);
-    const [data, estRows] = await Promise.all([
+    const [data, estRows, histPedidos] = await Promise.all([
       getOrcamentoById(id),
       supabase.from("estoque").select("produto_id, m2_saldo, chapas_saldo").then(r => r.data ?? []),
+      supabase.from("pedidos").select("id, m2_total, status, status_history").in("status", ["Finalizado", "Entregue"]).then(r => (r.data ?? []) as Pedido[]),
     ]);
     setOrc(data);
     const em = new Map<number, { m2: number; chapas: number }>();
@@ -56,6 +60,10 @@ export default function OrcamentoDetalhe() {
       const cm = new Map<number, number>();
       (pendItens ?? []).forEach((r: any) => { cm.set(r.produto_id, (cm.get(r.produto_id) ?? 0) + Number(r.m2)); });
       setComprometido(cm);
+    }
+
+    if (data && histPedidos.length > 0) {
+      setPrevisao(preverLeadTime(histPedidos, Number(data.m2_total)));
     }
 
     setLoading(false);
@@ -237,6 +245,48 @@ export default function OrcamentoDetalhe() {
               )}
             </div>
           </div>
+
+          {/* Previsão de Entrega */}
+          {previsao && (
+            <div className="card" style={{ padding: "20px 24px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+                <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>PREVISÃO DE ENTREGA (baseada em dados reais)</div>
+                <span style={{
+                  fontSize: "10px", fontWeight: 700, padding: "3px 10px", borderRadius: "99px",
+                  color:       previsao.confianca === 'alta' ? "var(--ok)" : previsao.confianca === 'media' ? "var(--warn)" : "var(--t3)",
+                  background:  previsao.confianca === 'alta' ? "rgba(16,185,129,.1)" : previsao.confianca === 'media' ? "rgba(245,158,11,.1)" : "var(--surf2)",
+                  border: `1px solid ${previsao.confianca === 'alta' ? "rgba(16,185,129,.3)" : previsao.confianca === 'media' ? "rgba(245,158,11,.3)" : "var(--b1)"}`,
+                }}>
+                  Confiança {previsao.confianca === 'alta' ? 'alta' : previsao.confianca === 'media' ? 'média' : 'baixa'} · {previsao.count} pedido{previsao.count !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+                <div style={{ padding: "14px 16px", background: "var(--surf2)", borderRadius: "10px", border: "1px solid var(--b1)" }}>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".07em", fontWeight: 600, marginBottom: "6px" }}>Lead Time Mediano</div>
+                  <div style={{ fontSize: "24px", fontWeight: 700, color: "var(--acc)", fontFamily: "'DM Mono', monospace" }}>{previsao.diasMediana.toFixed(0)} dias</div>
+                  <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "4px" }}>valor central do histórico</div>
+                </div>
+                <div style={{ padding: "14px 16px", background: "var(--surf2)", borderRadius: "10px", border: "1px solid var(--b1)" }}>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".07em", fontWeight: 600, marginBottom: "6px" }}>Lead Time Médio</div>
+                  <div style={{ fontSize: "24px", fontWeight: 700, color: "var(--acc2)", fontFamily: "'DM Mono', monospace" }}>{previsao.diasMedia.toFixed(0)} dias</div>
+                  <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "4px" }}>média de todos os similares</div>
+                </div>
+                <div style={{ padding: "14px 16px", background: "var(--surf2)", borderRadius: "10px", border: "1px solid var(--b1)" }}>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".07em", fontWeight: 600, marginBottom: "6px" }}>Entrega Estimada</div>
+                  <div style={{ fontSize: "20px", fontWeight: 700, color: "var(--ok)", fontFamily: "'DM Mono', monospace" }}>
+                    {new Date(Date.now() + previsao.diasMediana * 86400000).toLocaleDateString("pt-BR")}
+                  </div>
+                  <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "4px" }}>a partir de hoje + mediana</div>
+                </div>
+              </div>
+              <div style={{ marginTop: "12px", fontSize: "11px", color: "var(--t3)", display: "flex", gap: "6px", alignItems: "center" }}>
+                <span>Base: pedidos de</span>
+                <strong style={{ color: "var(--t2)", fontFamily: "'DM Mono', monospace" }}>{previsao.m2Min.toFixed(1)} – {previsao.m2Max.toFixed(1)} m²</strong>
+                <span>· Tamanho deste orçamento:</span>
+                <strong style={{ color: "var(--acc)", fontFamily: "'DM Mono', monospace" }}>{Number(orc.m2_total).toFixed(2)} m²</strong>
+              </div>
+            </div>
+          )}
 
           {/* Disponibilidade de Estoque */}
           {estoque.size > 0 && itens.length > 0 && (() => {
