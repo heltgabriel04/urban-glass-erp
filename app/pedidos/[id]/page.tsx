@@ -59,7 +59,7 @@ const CHAPAS_DIMS = [
   { w: 2150, h: 3660 }, { w: 3660, h: 2150 },
 ];
 
-const CONTAS = ["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"];
+const CONTAS = ["ZRS","Banco Inter Urban Glass","Banco Inter Maxi Build","Caixa Econômica"];
 
 function isChapaInteira(largura: number, altura: number): boolean {
   return CHAPAS_DIMS.some(c =>
