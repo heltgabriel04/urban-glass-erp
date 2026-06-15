@@ -7,14 +7,15 @@ import { getPedidos } from "@/services/pedidos.service";
 import { getEstoque } from "@/services/estoque.service";
 import { getOrcamentos } from "@/services/orcamentos.service";
 import { getAllHistoricoOtimizador } from "@/services/otimizador.service";
+import { getResumoQualidade, getIndicadoresMensais } from "@/services/qualidade.service";
 import { formatBRL, formatPercent, formatDuracao } from "@/lib/formatters";
 import { calcStatsEtapas, ETAPAS_FLUXO, calcLeadTime } from "@/lib/producao-stats";
 import { supabase } from "@/lib/supabase/client";
-import type { FinanceiroCliente, FaturamentoMensal, Pedido, Lancamento } from "@/types";
+import type { FinanceiroCliente, FaturamentoMensal, Pedido, Lancamento, IndicadorQualidadeMensal } from "@/types";
 
 const MESES_ABREV    = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MESES_COMPLETOS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-const TABS = ["Faturamento","Clientes","Pedidos","Produção","Eficiência","Fluxo de Caixa","Estoque","Orçamentos","Fechamento"];
+const TABS = ["Faturamento","Clientes","Pedidos","Produção","Eficiência","Fluxo de Caixa","Estoque","Orçamentos","Fechamento","Qualidade"];
 
 const STATUS_COR: Record<string, string> = {
   "Aguardando otimização":   "var(--warn)",
@@ -102,6 +103,8 @@ export default function RelatoriosPage() {
   const [orcamentos, setOrcamentos]       = useState<any[]>([]);
   const [investimentos, setInvestimentos] = useState<any[]>([]);
   const [mesFechoSel, setMesFechoSel]     = useState<string>("");
+  const [qualResumo, setQualResumo]       = useState<{ ncsAbertas: number; ncsCriticas: number; m2PerdidoMes: number; valorPerdidoMes: number; retrabalhosAbertos: number } | null>(null);
+  const [qualIndicadores, setQualIndicadores] = useState<IndicadorQualidadeMensal[]>([]);
 
   const hoje     = new Date().toISOString().split("T")[0];
   const dtEmissao = new Date().toLocaleDateString("pt-BR");
@@ -110,7 +113,7 @@ export default function RelatoriosPage() {
 
   async function load() {
     setLoading(true);
-    const [fin, fat, peds, lancs, otimHist, estq, orcs, invRes] = await Promise.all([
+    const [fin, fat, peds, lancs, otimHist, estq, orcs, invRes, qualRes, qualInd] = await Promise.all([
       getFinanceiroClientes(),
       getFaturamentoMensal(2026),
       getPedidos(),
@@ -119,6 +122,8 @@ export default function RelatoriosPage() {
       getEstoque(),
       getOrcamentos(),
       supabase.from("investimentos").select("*").order("data", { ascending: true }),
+      getResumoQualidade(),
+      getIndicadoresMensais(),
     ]);
     setFinanceiro(fin); setFatMensal(fat); setPedidos(peds);
     setLancamentos(lancs as Lancamento[]);
@@ -126,6 +131,8 @@ export default function RelatoriosPage() {
     setEstoque(estq);
     setOrcamentos(orcs as any[]);
     setInvestimentos((invRes.data ?? []) as any[]);
+    setQualResumo(qualRes);
+    setQualIndicadores(qualInd);
     setLoading(false);
     const mesAtual = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
     setMesSel(new Date().getMonth() + 1);
@@ -1265,6 +1272,112 @@ export default function RelatoriosPage() {
                         })}
                       </div>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ══ TAB 9: QUALIDADE ══ */}
+              {tabIdx === 9 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  {/* KPIs */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: "12px" }}>
+                    {[
+                      { label: "NCs em Aberto",       value: String(qualResumo?.ncsAbertas ?? 0),                              color: (qualResumo?.ncsAbertas ?? 0) > 0 ? "var(--warn)" : "var(--ok)", sub: "aguardando resolução" },
+                      { label: "NCs Críticas",         value: String(qualResumo?.ncsCriticas ?? 0),                             color: (qualResumo?.ncsCriticas ?? 0) > 0 ? "var(--err)" : "var(--ok)",  sub: "prioridade máxima" },
+                      { label: "m² Perdido (mês)",     value: (qualResumo?.m2PerdidoMes ?? 0).toFixed(2) + " m²",              color: (qualResumo?.m2PerdidoMes ?? 0) > 0 ? "var(--warn)" : "var(--t3)", sub: "quebras no mês atual" },
+                      { label: "Perda Financeira (mês)", value: formatBRL(qualResumo?.valorPerdidoMes ?? 0),                    color: (qualResumo?.valorPerdidoMes ?? 0) > 0 ? "var(--err)" : "var(--t3)", sub: "custo de quebras" },
+                      { label: "Retrabalhos Ativos",   value: String(qualResumo?.retrabalhosAbertos ?? 0),                      color: (qualResumo?.retrabalhosAbertos ?? 0) > 0 ? "var(--warn)" : "var(--ok)", sub: "em execução" },
+                    ].map(card => (
+                      <div key={card.label} style={{ background: "var(--surf)", border: "1px solid var(--b1)", borderRadius: "12px", padding: "18px 20px" }}>
+                        <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600, marginBottom: "8px" }}>{card.label}</div>
+                        <div style={{ fontSize: "22px", fontWeight: 700, color: card.color, fontFamily: "'DM Mono', monospace", lineHeight: 1.1, marginBottom: "6px" }}>{card.value}</div>
+                        <div style={{ fontSize: "11px", color: "var(--t3)" }}>{card.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Histórico mensal */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                    <div className="card">
+                      <div className="ct">NCs por Mês</div>
+                      {qualIndicadores.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "30px", color: "var(--t3)", fontSize: "12px" }}>Nenhum dado disponível.</div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          {qualIndicadores.map((ind, i) => {
+                            const maxNcs = Math.max(...qualIndicadores.map(x => Number(x.total_ncs ?? 0)), 1);
+                            const pct = (Number(ind.total_ncs ?? 0) / maxNcs) * 100;
+                            return (
+                              <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                                <span style={{ fontSize: "11px", color: "var(--t3)", minWidth: "40px", fontFamily: "'DM Mono', monospace" }}>{ind.mes?.slice(5) ?? ""}</span>
+                                <div style={{ flex: 1, height: "14px", borderRadius: "4px", background: "var(--surf2)", overflow: "hidden" }}>
+                                  <div style={{ height: "100%", width: `${pct}%`, background: "rgba(239,68,68,.6)", borderRadius: "4px", transition: "width .3s" }} />
+                                </div>
+                                <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--t1)", fontFamily: "'DM Mono', monospace", minWidth: "24px", textAlign: "right" }}>{ind.total_ncs ?? 0}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    <div className="card">
+                      <div className="ct">Perda Financeira por Mês</div>
+                      {qualIndicadores.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "30px", color: "var(--t3)", fontSize: "12px" }}>Nenhum dado disponível.</div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          {qualIndicadores.map((ind, i) => {
+                            const maxVal = Math.max(...qualIndicadores.map(x => Number(x.valor_perda_total ?? 0)), 1);
+                            const pct = (Number(ind.valor_perda_total ?? 0) / maxVal) * 100;
+                            return (
+                              <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                                <span style={{ fontSize: "11px", color: "var(--t3)", minWidth: "40px", fontFamily: "'DM Mono', monospace" }}>{ind.mes?.slice(5) ?? ""}</span>
+                                <div style={{ flex: 1, height: "14px", borderRadius: "4px", background: "var(--surf2)", overflow: "hidden" }}>
+                                  <div style={{ height: "100%", width: `${pct}%`, background: "rgba(249,115,22,.6)", borderRadius: "4px", transition: "width .3s" }} />
+                                </div>
+                                <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--t1)", fontFamily: "'DM Mono', monospace", minWidth: "80px", textAlign: "right" }}>{formatBRL(Number(ind.valor_perda_total ?? 0))}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Tabela detalhada */}
+                  <div className="card">
+                    <div className="ct">Histórico Mensal de Qualidade</div>
+                    {qualIndicadores.length === 0 ? (
+                      <div style={{ textAlign: "center", padding: "30px", color: "var(--t3)", fontSize: "12px" }}>Nenhum dado disponível. Execute a migração SQL e registre NCs para ver os indicadores.</div>
+                    ) : (
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                        <thead>
+                          <tr>
+                            {["Mês","Total NCs","Resolvidas","Críticas","m² Perdido","Custo Retrab.","Retrabalhos","Perda Total"].map((h, i) => (
+                              <th key={i} style={{ padding: "8px 10px", borderBottom: "1px solid var(--b1)", textAlign: i === 0 ? "left" : "right", color: "var(--t3)", fontWeight: 600, fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {qualIndicadores.map((ind, i) => (
+                            <tr key={i} style={{ background: i % 2 === 0 ? "transparent" : "var(--surf2)" }}>
+                              <td style={{ padding: "8px 10px", fontWeight: 600, color: "var(--t1)", fontFamily: "'DM Mono', monospace" }}>{ind.mes}</td>
+                              <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "'DM Mono', monospace" }}>{ind.total_ncs ?? 0}</td>
+                              <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: "var(--ok)" }}>{ind.resolvidas ?? 0}</td>
+                              <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: Number(ind.criticas ?? 0) > 0 ? "var(--err)" : "var(--t3)" }}>{ind.criticas ?? 0}</td>
+                              <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "'DM Mono', monospace" }}>{Number(ind.m2_perdido ?? 0).toFixed(2)}</td>
+                              <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "'DM Mono', monospace" }}>{formatBRL(Number(ind.custo_retrabalho ?? 0))}</td>
+                              <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "'DM Mono', monospace" }}>{ind.total_retrabalhos ?? 0}</td>
+                              <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: Number(ind.valor_perda_total ?? 0) > 0 ? "var(--err)" : "var(--t3)", fontWeight: 600 }}>{formatBRL(Number(ind.valor_perda_total ?? 0))}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+
+                  <div style={{ padding: "12px 16px", background: "var(--surf2)", borderRadius: "10px", border: "1px solid var(--b1)", fontSize: "12px", color: "var(--t3)" }}>
+                    Para detalhes completos, acesse o módulo <strong style={{ color: "var(--acc)" }}>Qualidade</strong> na barra lateral: cadastro de NCs, controle de quebras e retrabalhos.
                   </div>
                 </div>
               )}

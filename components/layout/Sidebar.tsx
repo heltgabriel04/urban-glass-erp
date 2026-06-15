@@ -27,6 +27,7 @@ const NAV = [
       { href: "/producao",   label: "Produção",             icon: "⬡" },
       { href: "/estoque",    label: "Estoque · Chapas",     icon: "▣" },
       { href: "/retalhos",   label: "Retalhos",             icon: "▤" },
+      { href: "/qualidade",  label: "Qualidade",            icon: "◉" },
     ],
   },
   {

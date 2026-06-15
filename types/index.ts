@@ -446,6 +446,154 @@ export interface DashboardKPIs {
   aproveitamentoMedio: number;
 }
 
+// ─── QUALIDADE — ENUMS ─────────────────────────────────────
+export type StatusNaoConformidade =
+  | 'Aberta'
+  | 'Em Análise'
+  | 'Aguardando Correção'
+  | 'Resolvida'
+  | 'Cancelada';
+
+export type GravidadeNC = 'Baixa' | 'Média' | 'Alta' | 'Crítica';
+
+export type TipoNC =
+  | 'Quebra de vidro'
+  | 'Medida incorreta'
+  | 'Corte errado'
+  | 'Lapidação incorreta'
+  | 'Furo em posição errada'
+  | 'Mancha ou risco'
+  | 'Peça trincada'
+  | 'Material com defeito'
+  | 'Erro de separação'
+  | 'Erro de conferência'
+  | 'Retrabalho necessário'
+  | 'Perda de matéria-prima'
+  | 'Perda operacional'
+  | 'Outro';
+
+export type SetorQualidade =
+  | 'Corte'
+  | 'Lapidação'
+  | 'Furação'
+  | 'Separação'
+  | 'Expedição'
+  | 'Recebimento';
+
+export type StatusRetrabalho = 'Pendente' | 'Em Execução' | 'Concluído' | 'Cancelado';
+
+// ─── NÃO CONFORMIDADE ──────────────────────────────────────
+export interface NaoConformidade {
+  id: number;
+  codigo: string;                        // NC-001, NC-002…
+  pedido_id: string | null;
+  cliente_id: number | null;
+  produto_nome: string | null;
+  item_pedido_id: number | null;
+  etapa: string;
+  tipo: TipoNC;
+  gravidade: GravidadeNC;
+  status: StatusNaoConformidade;
+  descricao: string;
+  obs: string | null;
+  fotos_urls: string[] | null;
+  registrado_por: string | null;
+  responsavel_analise: string | null;
+  dt_ocorrencia: string;
+  dt_resolucao: string | null;
+  created_at: string;
+  updated_at: string;
+  // joins opcionais
+  pedidos?: Pick<Pedido, 'id'>;
+  clientes?: Pick<Cliente, 'id' | 'nome'>;
+}
+
+export type NaoConformidadeInsert = Omit<NaoConformidade, 'id' | 'created_at' | 'updated_at' | 'pedidos' | 'clientes'>;
+export type NaoConformidadeUpdate = Partial<NaoConformidadeInsert>;
+
+// ─── HISTÓRICO DE NC ────────────────────────────────────────
+export interface HistoricoNC {
+  id: number;
+  nc_id: number;
+  usuario: string | null;
+  campo_alterado: string | null;
+  valor_anterior: string | null;
+  valor_novo: string | null;
+  obs: string | null;
+  created_at: string;
+}
+
+export type HistoricoNCInsert = Omit<HistoricoNC, 'id' | 'created_at'>;
+
+// ─── QUEBRA ────────────────────────────────────────────────
+export interface Quebra {
+  id: number;
+  nc_id: number | null;
+  pedido_id: string | null;
+  cliente_id: number | null;
+  produto_nome: string;
+  espessura: string | null;
+  cor: string | null;
+  chapa_referencia: string | null;
+  largura_mm: number | null;
+  altura_mm: number | null;
+  m2_perdido: number;
+  custo_m2: number | null;
+  valor_perda: number | null;
+  motivo: string;
+  setor: SetorQualidade | null;
+  maquina: string | null;
+  responsavel: string | null;
+  baixa_estoque: boolean;
+  dt_quebra: string;
+  created_at: string;
+  // joins
+  pedidos?: Pick<Pedido, 'id'>;
+  clientes?: Pick<Cliente, 'id' | 'nome'>;
+}
+
+export type QuebraInsert = Omit<Quebra, 'id' | 'created_at' | 'valor_perda' | 'pedidos' | 'clientes'>;
+export type QuebraUpdate = Partial<QuebraInsert>;
+
+// ─── RETRABALHO ────────────────────────────────────────────
+export interface Retrabalho {
+  id: number;
+  nc_id: number | null;
+  pedido_id: string | null;
+  cliente_id: number | null;
+  produto_nome: string | null;
+  motivo: string;
+  etapa_origem: string;
+  etapa_correcao: string;
+  responsavel_original: string | null;
+  responsavel_correcao: string | null;
+  tempo_adicional_min: number | null;
+  custo_adicional: number | null;
+  quantidade: number;
+  status: StatusRetrabalho;
+  dt_retrabalho: string;
+  dt_conclusao: string | null;
+  created_at: string;
+  // joins
+  pedidos?: Pick<Pedido, 'id'>;
+  clientes?: Pick<Cliente, 'id' | 'nome'>;
+}
+
+export type RetrabalhoInsert = Omit<Retrabalho, 'id' | 'created_at' | 'pedidos' | 'clientes'>;
+export type RetrabalhoUpdate = Partial<RetrabalhoInsert>;
+
+// ─── INDICADORES MENSAIS DE QUALIDADE (view) ───────────────
+export interface IndicadorQualidadeMensal {
+  mes: string;               // ISO date truncado por mês
+  total_ncs: number;
+  resolvidas: number;
+  criticas: number;
+  m2_perdido: number | null;
+  valor_perda_total: number | null;
+  total_retrabalhos: number;
+  custo_retrabalho: number | null;
+}
+
 // ─── DATABASE TYPES (Supabase) ─────────────────────────────
 export type Database = {
   public: {
@@ -468,10 +616,15 @@ export type Database = {
       config_fiscal_produtos:  { Row: ConfigFiscalProduto                                                     };
       config_fiscal_padrao:    { Row: ConfigFiscalPadrao                                                      };
       checklist_expedicao:     { Row: ChecklistExpedicao; Insert: Omit<ChecklistExpedicao, 'id' | 'created_at' | 'updated_at'>; Update: Partial<Omit<ChecklistExpedicao, 'id' | 'created_at'>> };
+      nao_conformidades:       { Row: NaoConformidade;   Insert: NaoConformidadeInsert; Update: NaoConformidadeUpdate };
+      historico_nc:            { Row: HistoricoNC;        Insert: HistoricoNCInsert      };
+      quebras:                 { Row: Quebra;             Insert: QuebraInsert;          Update: QuebraUpdate          };
+      retrabalhos:             { Row: Retrabalho;         Insert: RetrabalhoInsert;      Update: RetrabalhoUpdate      };
     };
     Views: {
-      financeiro_clientes: { Row: FinanceiroCliente };
-      faturamento_mensal:  { Row: FaturamentoMensal  };
+      financeiro_clientes:              { Row: FinanceiroCliente         };
+      faturamento_mensal:               { Row: FaturamentoMensal         };
+      view_indicadores_qualidade_mensal:{ Row: IndicadorQualidadeMensal  };
     };
   };
 };

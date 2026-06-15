@@ -6,13 +6,29 @@ import AppLayout from "@/components/layout/AppLayout";
 import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido } from "@/services/pedidos.service";
 import { getLancamentosPorPedido, deletarLancamento, createLancamento, updateLancamento } from "@/services/financeiro.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
+import { createNaoConformidade, getNaoConformidadesPorPedido } from "@/services/qualidade.service";
 import { formatBRL, formatDate, formatDuracao } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
-import type { Pedido, Lancamento, Vendedor } from "@/types";
+import type { Pedido, Lancamento, Vendedor, NaoConformidade, NaoConformidadeInsert, TipoNC, GravidadeNC, StatusNaoConformidade } from "@/types";
 import type { HistoricoOtimizador } from "@/services/otimizador.service";
 import { supabase } from "@/lib/supabase/client";
+
+const TIPOS_NC: TipoNC[] = [
+  "Quebra de vidro","Medida incorreta","Corte errado","Lapidação incorreta",
+  "Furo em posição errada","Mancha ou risco","Peça trincada","Material com defeito",
+  "Erro de separação","Erro de conferência","Retrabalho necessário",
+  "Perda de matéria-prima","Perda operacional","Outro",
+];
+
+const GRAVIDADE_COR_NC: Record<GravidadeNC, string> = {
+  Baixa:"var(--ok)", Média:"var(--warn)", Alta:"#f97316", Crítica:"var(--err)",
+};
+
+const STATUS_COR_NC: Record<StatusNaoConformidade, string> = {
+  "Aberta":"var(--warn)","Em Análise":"var(--acc2)","Aguardando Correção":"#f97316","Resolvida":"var(--ok)","Cancelada":"var(--t3)",
+};
 
 const CHIP: Record<string, string> = {
   "Aguardando otimização":   "chip cy",
@@ -114,6 +130,13 @@ export default function PedidoDetalhe() {
   const [loading, setLoading]           = useState(true);
   const [salvando, setSalvando]         = useState(false);
 
+  // Qualidade
+  const [ncs, setNcs]               = useState<NaoConformidade[]>([]);
+  const [modalNC, setModalNC]       = useState(false);
+  const [ncForm, setNcForm]         = useState<Partial<NaoConformidadeInsert>>({
+    tipo: "Quebra de vidro", gravidade: "Média", status: "Aberta", descricao: "", obs: null,
+  });
+
   const [editando, setEditando]         = useState(false);
   const [editForm, setEditForm]         = useState({
     cliente_id: 0, vendedor_id: null as number | null,
@@ -149,18 +172,20 @@ export default function PedidoDetalhe() {
 
   async function load() {
     setLoading(true);
-    const [data, lancs, otims, clis, vends] = await Promise.all([
+    const [data, lancs, otims, clis, vends, ncsData] = await Promise.all([
       getPedidoById(id),
       getLancamentosPorPedido(id),
       getOtimizacoesPorPedido(id),
       supabase.from("clientes").select("id, nome").eq("ativo", true).order("nome").then(r => r.data ?? []),
       supabase.from("vendedores").select("id, nome, comissao_pct").eq("ativo", true).order("nome").then(r => r.data ?? []),
+      getNaoConformidadesPorPedido(id),
     ]);
     setPedido(data);
     setLancamentos(lancs);
     setOtimizacoes(otims);
     setClientes(clis as { id: number; nome: string }[]);
     setVendedores(vends as Pick<Vendedor, "id" | "nome" | "comissao_pct">[]);
+    setNcs(ncsData);
     if (data?.cliente_id) {
       const cred = await getCreditoCliente(data.cliente_id);
       setCreditoCliente(cred);
@@ -381,6 +406,40 @@ async function handleMarcarPago(lancId: number) {
     setSalvando(false);
   }
 
+  async function handleSalvarNC() {
+    if (!pedido) return;
+    if (!ncForm.descricao?.trim()) { toast("Descrição obrigatória", "warn"); return; }
+    setSalvando(true);
+    const payload: NaoConformidadeInsert = {
+      codigo: "",
+      pedido_id: pedido.id,
+      cliente_id: pedido.cliente_id,
+      produto_nome: ncForm.produto_nome ?? null,
+      item_pedido_id: null,
+      etapa: pedido.status,
+      tipo: ncForm.tipo as TipoNC ?? "Outro",
+      gravidade: ncForm.gravidade as GravidadeNC ?? "Média",
+      status: "Aberta",
+      descricao: ncForm.descricao!,
+      obs: ncForm.obs ?? null,
+      fotos_urls: null,
+      registrado_por: null,
+      responsavel_analise: ncForm.responsavel_analise ?? null,
+      dt_ocorrencia: new Date().toISOString(),
+      dt_resolucao: null,
+    };
+    const result = await createNaoConformidade(payload);
+    if (result) {
+      toast(`${result.codigo} registrada`);
+      setModalNC(false);
+      setNcForm({ tipo: "Quebra de vidro", gravidade: "Média", status: "Aberta", descricao: "", obs: null });
+      await load();
+    } else {
+      toast("Erro ao registrar NC", "err");
+    }
+    setSalvando(false);
+  }
+
   async function handleAvancar() {
     if (!pedido) return;
     if (pedido.status === "Aguardando otimização" && otimizacoes.length === 0 && !todosVidroCliente && !todosChapa) {
@@ -485,6 +544,14 @@ async function handleMarcarPago(lancId: number) {
             onClick={() => podeRomaneio && handlePrintRomaneio()}
             style={{ background: podeRomaneio ? "rgba(16,185,129,.15)" : "transparent", border: "1px solid " + (podeRomaneio ? "var(--ok)" : "var(--b2)"), color: podeRomaneio ? "var(--ok)" : "var(--t3)", fontWeight:700, cursor: podeRomaneio ? "pointer" : "default", opacity: podeRomaneio ? 1 : 0.35, transition:"all 0.2s" }}
           >R</button>
+          <button
+            className="btn sm"
+            onClick={() => setModalNC(true)}
+            title="Registrar Não Conformidade"
+            style={{ background: ncs.filter(n => ["Aberta","Em Análise","Aguardando Correção"].includes(n.status)).length > 0 ? "rgba(244,63,94,.12)" : "transparent", border: `1px solid ${ncs.filter(n => ["Aberta","Em Análise","Aguardando Correção"].includes(n.status)).length > 0 ? "rgba(244,63,94,.5)" : "var(--b2)"}`, color: ncs.filter(n => ["Aberta","Em Análise","Aguardando Correção"].includes(n.status)).length > 0 ? "var(--err)" : "var(--t3)", fontWeight:700 }}
+          >
+            ⚑ NC{ncs.length > 0 ? ` (${ncs.length})` : ""}
+          </button>
           {podeAvancar && (
             <button className="btn bp sm" onClick={handleAvancar} disabled={salvando || bloqueadoSemOtim} style={bloqueadoSemOtim ? { opacity:0.45, cursor:"not-allowed" } : {}}>
               {salvando ? "Salvando..." : bloqueadoSemOtim ? "⚠ Otimização pendente" : "Avançar Status →"}
@@ -913,6 +980,73 @@ async function handleMarcarPago(lancId: number) {
                     {salvando ? "Salvando..." : "Salvar Alterações"}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── MODAL NC ─── */}
+        {modalNC && (
+          <div className="modal-backdrop" onClick={() => setModalNC(false)}>
+            <div className="modal" style={{ maxWidth:"540px", width:"100%" }} onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 style={{ margin:0, fontSize:"15px" }}>Registrar Não Conformidade</h3>
+                <button className="btn-ghost" onClick={() => setModalNC(false)} style={{ fontSize:"18px", lineHeight:1 }}>×</button>
+              </div>
+              <div className="modal-body" style={{ display:"flex", flexDirection:"column", gap:"14px" }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"12px" }}>
+                  <div className="form-group" style={{ gridColumn:"1 / -1" }}>
+                    <label className="form-label">Tipo *</label>
+                    <select className="form-input" value={ncForm.tipo ?? "Quebra de vidro"} onChange={e => setNcForm(f => ({ ...f, tipo: e.target.value as TipoNC }))}>
+                      {TIPOS_NC.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Gravidade *</label>
+                    <select className="form-input" value={ncForm.gravidade ?? "Média"} onChange={e => setNcForm(f => ({ ...f, gravidade: e.target.value as GravidadeNC }))}>
+                      {(["Baixa","Média","Alta","Crítica"] as GravidadeNC[]).map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Etapa (setor)</label>
+                    <input className="form-input" value={ncForm.etapa ?? pedido?.status ?? ""} onChange={e => setNcForm(f => ({ ...f, etapa: e.target.value }))} placeholder={pedido?.status ?? "Ex: Corte"} />
+                  </div>
+                  <div className="form-group" style={{ gridColumn:"1 / -1" }}>
+                    <label className="form-label">Produto/peça</label>
+                    <input className="form-input" value={ncForm.produto_nome ?? ""} onChange={e => setNcForm(f => ({ ...f, produto_nome: e.target.value || null }))} placeholder="Nome do produto ou peça afetada" />
+                  </div>
+                  <div className="form-group" style={{ gridColumn:"1 / -1" }}>
+                    <label className="form-label">Descrição *</label>
+                    <textarea className="form-input" rows={3} value={ncForm.descricao ?? ""} onChange={e => setNcForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Descreva o problema encontrado..." style={{ resize:"vertical" }} />
+                  </div>
+                  <div className="form-group" style={{ gridColumn:"1 / -1" }}>
+                    <label className="form-label">Observações</label>
+                    <textarea className="form-input" rows={2} value={ncForm.obs ?? ""} onChange={e => setNcForm(f => ({ ...f, obs: e.target.value || null }))} placeholder="Observações adicionais..." style={{ resize:"vertical" }} />
+                  </div>
+                  <div className="form-group" style={{ gridColumn:"1 / -1" }}>
+                    <label className="form-label">Responsável pela análise</label>
+                    <input className="form-input" value={ncForm.responsavel_analise ?? ""} onChange={e => setNcForm(f => ({ ...f, responsavel_analise: e.target.value || null }))} placeholder="Nome do responsável pela investigação" />
+                  </div>
+                </div>
+                {ncs.length > 0 && (
+                  <div style={{ borderTop:"1px solid var(--border)", paddingTop:"12px" }}>
+                    <div style={{ fontSize:"12px", color:"var(--t3)", fontWeight:600, marginBottom:"8px" }}>NCs deste pedido ({ncs.length})</div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:"6px", maxHeight:"120px", overflowY:"auto" }}>
+                      {ncs.map(nc => (
+                        <div key={nc.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"6px 8px", background:"var(--bg2)", borderRadius:"6px" }}>
+                          <span style={{ fontSize:"11px", fontWeight:700, color:"var(--acc)", minWidth:"72px" }}>{nc.codigo}</span>
+                          <span style={{ flex:1, fontSize:"11px", color:"var(--t2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{nc.tipo}</span>
+                          <span style={{ fontSize:"11px", fontWeight:600, color: STATUS_COR_NC[nc.status] }}>{nc.status}</span>
+                          <span style={{ fontSize:"11px", fontWeight:600, color: GRAVIDADE_COR_NC[nc.gravidade] }}>{nc.gravidade}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className="btn secondary" onClick={() => setModalNC(false)}>Cancelar</button>
+                <button className="btn primary" onClick={handleSalvarNC} disabled={salvando}>{salvando ? "Salvando..." : "Registrar NC"}</button>
               </div>
             </div>
           </div>
