@@ -17,6 +17,7 @@ const NAV = [
       { href: "/orcamentos", label: "Orçamentos",          icon: "◻" },
       { href: "/pedidos",    label: "Pedidos",              icon: "◈" },
       { href: "/clientes",   label: "Clientes",             icon: "◎" },
+      { href: "/vendedores", label: "Vendedores",           icon: "◉" },
     ],
   },
   {

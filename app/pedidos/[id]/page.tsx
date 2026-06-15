@@ -10,7 +10,7 @@ import { formatBRL, formatDate, formatDuracao } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
-import type { Pedido, Lancamento } from "@/types";
+import type { Pedido, Lancamento, Vendedor } from "@/types";
 import type { HistoricoOtimizador } from "@/services/otimizador.service";
 import { supabase } from "@/lib/supabase/client";
 
@@ -109,13 +109,15 @@ export default function PedidoDetalhe() {
   const [lancamentos, setLancamentos]   = useState<Lancamento[]>([]);
   const [otimizacoes, setOtimizacoes]   = useState<HistoricoOtimizador[]>([]);
   const [clientes, setClientes]         = useState<{ id: number; nome: string }[]>([]);
+  const [vendedores, setVendedores]     = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
   const [creditoCliente, setCreditoCliente] = useState(0);
   const [loading, setLoading]           = useState(true);
   const [salvando, setSalvando]         = useState(false);
 
   const [editando, setEditando]         = useState(false);
   const [editForm, setEditForm]         = useState({
-    cliente_id: 0, dt_pedido: "", dt_retirada: "",
+    cliente_id: 0, vendedor_id: null as number | null,
+    dt_pedido: "", dt_retirada: "",
     forma_pgto: "", conta: "", parcelas: 1, obs: "",
   });
   const [editParcelas, setEditParcelas] = useState<ParcelaEdit[]>([]);
@@ -147,16 +149,18 @@ export default function PedidoDetalhe() {
 
   async function load() {
     setLoading(true);
-    const [data, lancs, otims, clis] = await Promise.all([
+    const [data, lancs, otims, clis, vends] = await Promise.all([
       getPedidoById(id),
       getLancamentosPorPedido(id),
       getOtimizacoesPorPedido(id),
       supabase.from("clientes").select("id, nome").eq("ativo", true).order("nome").then(r => r.data ?? []),
+      supabase.from("vendedores").select("id, nome, comissao_pct").eq("ativo", true).order("nome").then(r => r.data ?? []),
     ]);
     setPedido(data);
     setLancamentos(lancs);
     setOtimizacoes(otims);
     setClientes(clis as { id: number; nome: string }[]);
+    setVendedores(vends as Pick<Vendedor, "id" | "nome" | "comissao_pct">[]);
     if (data?.cliente_id) {
       const cred = await getCreditoCliente(data.cliente_id);
       setCreditoCliente(cred);
@@ -176,6 +180,7 @@ export default function PedidoDetalhe() {
     if (!pedido) return;
     setEditForm({
       cliente_id:  pedido.cliente_id,
+      vendedor_id: pedido.vendedor_id ?? null,
       dt_pedido:   pedido.dt_pedido,
       dt_retirada: pedido.dt_retirada ?? "",
       forma_pgto:  pedido.forma_pgto ?? "",
@@ -246,6 +251,7 @@ export default function PedidoDetalhe() {
 
     const result = await updatePedido(pedido.id, {
       cliente_id:   editForm.cliente_id,
+      vendedor_id:  editForm.vendedor_id,
       dt_pedido:    editForm.dt_pedido,
       dt_retirada:  editForm.dt_retirada || null,
       forma_pgto:   editForm.forma_pgto,
@@ -289,6 +295,43 @@ export default function PedidoDetalhe() {
       });
     }
     await recalcularRecebido(pedido.id);
+
+    // ── Lançamento de comissão ──────────────────────────────────────────────
+    // Busca qualquer lancamento de comissão existente para este pedido
+    const lancComissao = lancamentos.find(
+      l => l.tipo === "Saída" && (l as any).vendedor_id != null
+    );
+    const novoVendedorId = editForm.vendedor_id;
+    const vendedor = novoVendedorId ? vendedores.find(v => v.id === novoVendedorId) : null;
+    const valorComissao = vendedor
+      ? parseFloat((valorTotalEditado * vendedor.comissao_pct / 100).toFixed(2))
+      : 0;
+
+    if (lancComissao) {
+      if (!novoVendedorId) {
+        // Removeu o vendedor → apaga a comissão
+        await supabase.from("lancamentos").delete().eq("id", lancComissao.id);
+      } else {
+        // Atualizou → recalcula
+        await supabase.from("lancamentos").update({
+          descricao:   `Comissão — ${vendedor!.nome} — Pedido ${pedido.id}`,
+          valor:        valorComissao,
+          vendedor_id:  novoVendedorId,
+        } as never).eq("id", lancComissao.id);
+      }
+    } else if (novoVendedorId && vendedor && valorComissao > 0) {
+      // Novo vendedor → cria lançamento de saída
+      await supabase.from("lancamentos").insert([{
+        tipo:        "Saída",
+        descricao:   `Comissão — ${vendedor.nome} — Pedido ${pedido.id}`,
+        valor:        valorComissao,
+        status:       "Pendente",
+        vencimento:   null,
+        pedido_id:    pedido.id,
+        cliente_id:   null,
+        vendedor_id:  novoVendedorId,
+      } as never]);
+    }
 
     toast("Pedido atualizado");
     setSalvando(false);
@@ -549,6 +592,22 @@ async function handleMarcarPago(lancId: number) {
                 <Row label={(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml total" : "m² total"} value={Number(pedido.m2_total).toFixed(2) + " " + ((pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml" : "m²")} />
                 <Row label="Forma de pagamento" value={pedido.forma_pgto || "—"} />
                 {pedido.parcelas > 1 && <Row label="Parcelas" value={pedido.parcelas + "×"} />}
+                {(() => {
+                  const lancComissao = lancamentos.find(l => l.tipo === "Saída" && (l as any).vendedor_id != null);
+                  const vend = vendedores.find(v => v.id === pedido.vendedor_id);
+                  if (!pedido.vendedor_id && !lancComissao) return null;
+                  const nome = vend?.nome ?? (lancamentos.find(l => (l as any).vendedor_id != null) as any)?.descricao?.split("—")[1]?.trim() ?? "—";
+                  const pct  = vend ? vend.comissao_pct : null;
+                  const valCom = lancComissao ? lancComissao.valor : null;
+                  return (
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderTop:"1px solid var(--b1)" }}>
+                      <span style={{ fontSize:"12px", color:"var(--t3)" }}>Vendedor</span>
+                      <span style={{ fontSize:"12px", fontWeight:700, color:"var(--warn)", fontFamily:"'DM Mono',monospace" }}>
+                        {nome}{pct != null ? ` · ${pct}%` : ""}{valCom != null ? ` = ${valCom.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}` : ""}
+                      </span>
+                    </div>
+                  );
+                })()}
                 {pedido.obs && <Row label="Observações" value={pedido.obs} />}
               </div>
             </div>
@@ -730,6 +789,24 @@ async function handleMarcarPago(lancId: number) {
                   <select style={fc} value={editForm.cliente_id} onChange={e => setEditForm(f => ({ ...f, cliente_id: Number(e.target.value) }))}>
                     {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                   </select>
+                </div>
+                <div className="fg">
+                  <label className="fl">Vendedor / Comissão</label>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <select style={{ ...fc, flex: 1 }} value={editForm.vendedor_id ?? ""} onChange={e => setEditForm(f => ({ ...f, vendedor_id: e.target.value ? Number(e.target.value) : null }))}>
+                      <option value="">— Sem vendedor —</option>
+                      {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome} ({v.comissao_pct}%)</option>)}
+                    </select>
+                    {editForm.vendedor_id && (() => {
+                      const vend = vendedores.find(v => v.id === editForm.vendedor_id);
+                      const val  = vend ? valorTotalEditado * vend.comissao_pct / 100 : 0;
+                      return val > 0 ? (
+                        <span style={{ fontSize: "12px", color: "var(--warn)", fontFamily: "'DM Mono', monospace", whiteSpace: "nowrap" }}>
+                          {vend!.comissao_pct}% = {val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                        </span>
+                      ) : null;
+                    })()}
+                  </div>
                 </div>
                 <div className="fr">
                   <div className="fg"><label className="fl">Data do Pedido</label><DateInput value={editForm.dt_pedido} onChange={v => setEditForm(f => ({ ...f, dt_pedido: v }))} /></div>

@@ -60,6 +60,22 @@ export interface Cliente {
 export type ClienteInsert = Omit<Cliente, 'id' | 'created_at'>;
 export type ClienteUpdate = Partial<ClienteInsert>;
 
+// ─── VENDEDOR ──────────────────────────────────────────────
+export interface Vendedor {
+  id: number;
+  nome: string;
+  email: string | null;
+  telefone: string | null;
+  cpf: string | null;
+  comissao_pct: number;
+  ativo: boolean;
+  obs: string | null;
+  created_at: string;
+}
+
+export type VendedorInsert = Omit<Vendedor, 'id' | 'created_at'>;
+export type VendedorUpdate = Partial<VendedorInsert>;
+
 // ─── FORNECEDOR ────────────────────────────────────────────
 export interface Fornecedor {
   id: number;
@@ -150,6 +166,7 @@ export interface StatusHistoryEntry {
 export interface Pedido {
   id: string;
   cliente_id: number;
+  vendedor_id: number | null;
   dt_pedido: string;
   dt_retirada: string | null;
   datas_pgto: string[];
@@ -166,6 +183,7 @@ export interface Pedido {
   created_at: string;
   updated_at: string;
   clientes?: Cliente;
+  vendedores?: Vendedor;
   itens_pedido?: ItemPedido[];
 }
 
@@ -292,9 +310,11 @@ export interface Lancamento {
   vencimento: string | null;
   pedido_id: string | null;
   cliente_id: number | null;
+  vendedor_id: number | null;
   created_at: string;
   pedidos?: Pick<Pedido, 'id'>;
   clientes?: Pick<Cliente, 'id' | 'nome'>;
+  vendedores?: Pick<Vendedor, 'id' | 'nome'>;
 }
 
 export type LancamentoInsert = Omit<Lancamento, 'id' | 'created_at' | 'pedidos' | 'clientes'>;
@@ -431,6 +451,7 @@ export type Database = {
   public: {
     Tables: {
       clientes:                { Row: Cliente;             Insert: ClienteInsert;      Update: ClienteUpdate  };
+      vendedores:              { Row: Vendedor;            Insert: VendedorInsert;     Update: VendedorUpdate };
       fornecedores:            { Row: Fornecedor;          Insert: FornecedorInsert;   Update: FornecedorUpdate };
       produtos:                { Row: Produto;             Insert: ProdutoInsert;      Update: ProdutoUpdate  };
       pedidos:                 { Row: Pedido;              Insert: PedidoInsert;       Update: PedidoUpdate   };
