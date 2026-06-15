@@ -31,46 +31,57 @@ const STATUS_COR: Record<string, string> = {
 type TipoRelatorio = "gerencial" | "inadimplencia" | "faturamento" | null;
 
 // ── helpers de estilo PDF ────────────────────────────────────────────────────
+const AZUL  = "#1a3d6b";
+const AZUL2 = "#2d5fa6";
 const S = {
-  page:   { padding: "22px 28px", fontFamily: "Arial, sans-serif", color: "#111", background: "white", width: "210mm", boxSizing: "border-box" as const },
-  hdr:    { display: "flex", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: "14px", borderBottom: "3px solid #2d5fa6", marginBottom: "18px" },
-  logo:   { fontSize: "24px", fontWeight: 900, color: "#2d5fa6", letterSpacing: "-1px" } as React.CSSProperties,
-  sub1:   { fontSize: "9px", color: "#555", textTransform: "uppercase" as const, letterSpacing: "1.5px", marginTop: "2px" },
-  sec:    { fontSize: "9px", fontWeight: 800, color: "#2d5fa6", textTransform: "uppercase" as const, letterSpacing: "1.5px", marginBottom: "8px", paddingBottom: "4px", borderBottom: "1px solid #d0daf0", marginTop: "18px" },
-  th:     { padding: "7px 8px", fontWeight: 800, fontSize: "9px", textTransform: "uppercase" as const, letterSpacing: "0.5px", color: "white", background: "#2d5fa6" },
-  td:     { padding: "6px 8px", fontSize: "10px", fontWeight: 600, color: "#222", borderBottom: "1px solid #eef0f5" },
-  tdR:    { padding: "6px 8px", fontSize: "10px", fontWeight: 700, color: "#222", fontFamily: "monospace", borderBottom: "1px solid #eef0f5", textAlign: "right" as const },
-  kpi:    { background: "#f0f4ff", borderRadius: "8px", padding: "12px 14px", border: "1px solid #d0daf0", flex: 1 },
-  kpiL:   { fontSize: "8px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" as const, letterSpacing: "1px", marginBottom: "4px" },
-  kpiV:   { fontSize: "18px", fontWeight: 900, color: "#2d5fa6", fontFamily: "monospace", lineHeight: 1.1 } as React.CSSProperties,
-  kpiS:   { fontSize: "9px", color: "#6b7280", marginTop: "2px" },
-  footer: { borderTop: "2px solid #2d5fa6", paddingTop: "8px", display: "flex", justifyContent: "space-between", fontSize: "8px", color: "#888", marginTop: "20px" },
+  page:    { padding: "0", fontFamily: "'Arial', sans-serif", color: "#111", background: "white", width: "210mm", boxSizing: "border-box" as const },
+  body:    { padding: "20px 28px 28px" },
+  sec:     { fontSize: "8px", fontWeight: 800, color: AZUL2, textTransform: "uppercase" as const, letterSpacing: "2px", marginBottom: "8px", paddingBottom: "5px", borderBottom: `2px solid ${AZUL2}`, marginTop: "20px", display: "flex", alignItems: "center", gap: "6px" },
+  th:      { padding: "8px 10px", fontWeight: 800, fontSize: "9px", textTransform: "uppercase" as const, letterSpacing: "0.5px", color: "white", background: AZUL },
+  thAlt:   { padding: "8px 10px", fontWeight: 800, fontSize: "9px", textTransform: "uppercase" as const, letterSpacing: "0.5px", color: "white", background: "#c0392b" },
+  thWarn:  { padding: "8px 10px", fontWeight: 800, fontSize: "9px", textTransform: "uppercase" as const, letterSpacing: "0.5px", color: "white", background: "#856404" },
+  td:      { padding: "7px 10px", fontSize: "10px", fontWeight: 500, color: "#222", borderBottom: "1px solid #eef0f5" },
+  tdB:     { padding: "7px 10px", fontSize: "10px", fontWeight: 700, color: "#222", borderBottom: "1px solid #eef0f5" },
+  tdR:     { padding: "7px 10px", fontSize: "10px", fontWeight: 600, color: "#333", fontFamily: "monospace", borderBottom: "1px solid #eef0f5", textAlign: "right" as const },
+  tdTotal: { padding: "8px 10px", fontSize: "10px", fontWeight: 800, background: "#eef3ff", borderTop: "2px solid #c8d8f0" },
+  kpi:     { background: "#f4f7ff", borderRadius: "10px", padding: "14px 16px", border: `1px solid #dce6f5`, flex: 1 },
+  kpiL:    { fontSize: "8px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" as const, letterSpacing: "1.2px", marginBottom: "6px" },
+  kpiV:    { fontSize: "20px", fontWeight: 900, color: AZUL, fontFamily: "monospace", lineHeight: 1 } as React.CSSProperties,
+  kpiS:    { fontSize: "9px", color: "#6b7280", marginTop: "5px" },
+  insight: { background: "#f0f6ff", borderLeft: `4px solid ${AZUL2}`, padding: "8px 12px", marginBottom: "6px", fontSize: "10px", color: "#1e3a5f", lineHeight: 1.5 },
+  badge:   { display: "inline-block", fontSize: "8px", fontWeight: 800, padding: "2px 7px", borderRadius: "4px" },
+  footer:  { background: AZUL, padding: "10px 28px", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "24px" },
 };
 
-function PdfHeader({ titulo, subtitulo, emissao }: { titulo: string; subtitulo: string; emissao: string }) {
+function PdfHeader({ titulo, subtitulo, emissao, cor = AZUL }: { titulo: string; subtitulo: string; emissao: string; cor?: string }) {
   return (
-    <div style={S.hdr}>
-      <div>
-        <div style={S.logo}>urbanglass</div>
-        <div style={S.sub1}>Urban Glass Comércio Ltda</div>
-        <div style={{ ...S.sub1, marginTop: "1px" }}>CNPJ: 65.668.970/0001-05</div>
-        <div style={{ ...S.sub1, marginTop: "1px" }}>Av. Vereador Raymundo Hargreaves, 1250 – Fontesville – JF/MG</div>
+    <div style={{ marginBottom: "0" }}>
+      {/* Banda superior */}
+      <div style={{ background: cor, padding: "14px 28px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div style={{ color: "white", fontSize: "20px", fontWeight: 900, letterSpacing: "-0.5px", lineHeight: 1 }}>urbanglass</div>
+          <div style={{ color: "rgba(255,255,255,.6)", fontSize: "8px", textTransform: "uppercase", letterSpacing: "2px", marginTop: "3px" }}>Urban Glass Comércio Ltda · CNPJ 65.668.970/0001-05</div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ color: "rgba(255,255,255,.5)", fontSize: "8px", textTransform: "uppercase", letterSpacing: "2px", marginBottom: "3px" }}>{subtitulo}</div>
+          <div style={{ color: "white", fontSize: "16px", fontWeight: 900, letterSpacing: "-0.3px" }}>{titulo}</div>
+          <div style={{ color: "rgba(255,255,255,.7)", fontSize: "9px", marginTop: "3px" }}>Emitido em {emissao}</div>
+        </div>
       </div>
-      <div style={{ textAlign: "right" }}>
-        <div style={{ fontSize: "10px", color: "#888", textTransform: "uppercase", letterSpacing: "2px", marginBottom: "4px" }}>{subtitulo}</div>
-        <div style={{ fontSize: "18px", fontWeight: 900, color: "#2d5fa6", letterSpacing: "-0.5px" }}>{titulo}</div>
-        <div style={{ fontSize: "10px", color: "#555", marginTop: "6px" }}>Emissão: <strong>{emissao}</strong></div>
-        <div style={{ fontSize: "9px", color: "#888", marginTop: "2px" }}>Exercício 2026 · Uso Interno</div>
+      {/* Linha de identificação */}
+      <div style={{ background: "#f0f4fb", padding: "6px 28px", borderBottom: "1px solid #dce6f5", display: "flex", justifyContent: "space-between", fontSize: "8px", color: "#6b7280" }}>
+        <span>Av. Vereador Raymundo Hargreaves, 1250 – Fontesville – Juiz de Fora/MG</span>
+        <span style={{ color: "#c0392b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px" }}>Documento Confidencial · Uso Interno</span>
       </div>
     </div>
   );
 }
 
-function PdfFooter({ emissao }: { emissao: string }) {
+function PdfFooter({ emissao, pagina = "1" }: { emissao: string; pagina?: string }) {
   return (
     <div style={S.footer}>
-      <div>Urban Glass Comércio Ltda · CNPJ 65.668.970/0001-05 · Fontesville – Juiz de Fora/MG</div>
-      <div style={{ color: "#c00", fontStyle: "italic" }}>Documento confidencial · Emitido em {emissao}</div>
+      <div style={{ color: "rgba(255,255,255,.7)", fontSize: "8px" }}>Urban Glass Comércio Ltda · CNPJ 65.668.970/0001-05</div>
+      <div style={{ color: "rgba(255,255,255,.5)", fontSize: "8px" }}>Emitido em {emissao} · Pág. {pagina}</div>
     </div>
   );
 }
@@ -1266,151 +1277,193 @@ export default function RelatoriosPage() {
         ════════════════════════════════════════════════════════════════════ */}
         {reporteAtivo === "gerencial" && (
           <div className="print-area" style={S.page}>
-            <PdfHeader titulo="Relatório Gerencial" subtitulo="Sumário Executivo" emissao={dtEmissao} />
+            <PdfHeader titulo="Relatório Gerencial" subtitulo="Sumário Executivo 2026" emissao={dtEmissao} />
+            <div style={S.body}>
 
-            {/* KPIs executivos */}
-            <div style={S.sec}>Sumário Executivo · 2026</div>
-            <div style={{ display: "flex", gap: "10px", marginBottom: "18px" }}>
-              {[
-                { label: "Faturamento Total",     value: formatBRL(fatTotal),       sub: `${mesesComDados.length} meses com receita` },
-                { label: "Total Recebido",         value: formatBRL(recTotal),       sub: `${fatTotal > 0 ? (recTotal/fatTotal*100).toFixed(1) : 0}% do faturado` },
-                { label: "A Receber",              value: formatBRL(aReceber),       sub: `${devedores.length} cliente(s) em aberto` },
-                { label: "Pedidos Realizados",     value: String(pedidos.length),    sub: `Ticket médio ${formatBRL(ticketMedio)}` },
-                { label: "m² Processado",          value: m2Total.toFixed(2) + " m²", sub: `${pedidos.filter(p => p.status === "Entregue").length} pedidos entregues` },
-              ].map(k => (
-                <div key={k.label} style={S.kpi}>
-                  <div style={S.kpiL}>{k.label}</div>
-                  <div style={S.kpiV}>{k.value}</div>
-                  <div style={S.kpiS}>{k.sub}</div>
-                </div>
-              ))}
+              {/* Destaques para o Diretor */}
+              {(() => {
+                const taxaRec   = fatTotal > 0 ? recTotal / fatTotal * 100 : 0;
+                const pedAtivos = pedidos.filter(p => !["Entregue", "Cancelado"].includes(p.status));
+                const valAtivos = pedAtivos.reduce((a, p) => a + Number(p.valor_total), 0);
+                const inadRate  = financeiro.length > 0 ? (devedores.length / financeiro.length * 100) : 0;
+                const mesesAti  = meses.filter(m => m.faturado > 0);
+                const fatMed    = mesesAti.length > 0 ? mesesAti.reduce((a, m) => a + m.faturado, 0) / mesesAti.length : 0;
+                const insights = [
+                  fatTotal > 0 ? `Faturamento acumulado de ${formatBRL(fatTotal)} em ${mesesComDados.length} mes${mesesComDados.length !== 1 ? "es" : ""} ativos (média ${formatBRL(fatMed)}/mês). Melhor mês: ${melhorMes.mesCompleto} — ${formatBRL(melhorMes.faturado)}.` : null,
+                  fatTotal > 0 ? `Taxa de recebimento: ${taxaRec.toFixed(1)}% — ${taxaRec >= 90 ? "situação saudável (acima de 90%)." : taxaRec >= 70 ? "atenção: abaixo da meta de 90%. Reforçar cobrança." : "alerta crítico: recebimento comprometido."} Saldo a receber: ${formatBRL(aReceber)}.` : null,
+                  devedores.length > 0 ? `${devedores.length} cliente${devedores.length > 1 ? "s" : ""} com valores em aberto (${inadRate.toFixed(0)}% da base ativa). Exposição total: ${formatBRL(totalDevedores)}.${inadimplentes.length > 0 ? ` ${inadimplentes.length} sem nenhum pagamento — prioridade de cobrança.` : ""}` : "Carteira saudável — nenhum cliente com valores em aberto no período.",
+                  pedidos.length > 0 ? `Pipeline: ${pedAtivos.length} pedido${pedAtivos.length !== 1 ? "s" : ""} em produção${valAtivos > 0 ? ` (${formatBRL(valAtivos)} em valor)` : ""}. Ticket médio: ${formatBRL(ticketMedio)}. Volume processado: ${m2Total.toFixed(1)} m².` : null,
+                ].filter(Boolean);
+                return insights.length > 0 ? (
+                  <div style={{ marginBottom: "20px" }}>
+                    <div style={{ ...S.sec, marginTop: "0" }}>Destaques para o Diretor</div>
+                    {insights.map((t, i) => (
+                      <div key={i} style={S.insight}><strong style={{ color: AZUL2, marginRight: "5px" }}>◆</strong>{t}</div>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
+
+              {/* KPIs */}
+              <div style={S.sec}>Indicadores do Período</div>
+              <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+                {[
+                  { label: "Faturamento Total",  value: formatBRL(fatTotal),             sub: `${mesesComDados.length} meses com receita`,            alert: false },
+                  { label: "Total Recebido",      value: formatBRL(recTotal),             sub: `${fatTotal > 0 ? (recTotal/fatTotal*100).toFixed(1) : 0}% do faturado`, alert: false },
+                  { label: "A Receber",           value: formatBRL(aReceber),             sub: `${devedores.length} cliente(s) em aberto`,             alert: aReceber > 0 },
+                  { label: "Pedidos Realizados",  value: String(pedidos.length),          sub: `Ticket médio ${formatBRL(ticketMedio)}`,               alert: false },
+                  { label: "m² Processado",       value: m2Total.toFixed(1) + " m²",     sub: `${pedidos.filter(p => p.status === "Entregue").length} pedidos entregues`, alert: false },
+                ].map(k => (
+                  <div key={k.label} style={{ ...S.kpi, ...(k.alert ? { background: "#fff5f0", border: "1px solid #f5c6cb" } : {}) }}>
+                    <div style={S.kpiL}>{k.label}</div>
+                    <div style={{ ...S.kpiV, color: k.alert ? "#c0392b" : AZUL }}>{k.value}</div>
+                    <div style={S.kpiS}>{k.sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Faturamento Mensal */}
+              <div style={S.sec}>Evolução de Faturamento Mensal</div>
+              <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "20px" }}>
+                <thead>
+                  <tr>
+                    {["Mês","Faturado","Recebido","A Receber","% Recebido","Variação","Status"].map((h, i) => (
+                      <th key={i} style={{ ...S.th, textAlign: i >= 1 ? "right" : "left" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {meses.map((m, i) => {
+                    const pct       = m.faturado > 0 ? (m.recebido / m.faturado * 100) : 0;
+                    const ant       = i > 0 ? meses[i - 1].faturado : 0;
+                    const varM      = ant > 0 ? ((m.faturado - ant) / ant * 100) : null;
+                    const status    = m.faturado === 0 ? "—" : pct >= 100 ? "Quitado" : pct > 0 ? "Parcial" : "Pendente";
+                    const sCor      = pct >= 100 ? "#155724" : pct > 0 ? "#856404" : m.faturado === 0 ? "#888" : "#721c24";
+                    const sBg       = pct >= 100 ? "#d4edda" : pct > 0 ? "#fff3cd" : m.faturado === 0 ? "#f0f0f0" : "#f8d7da";
+                    const isBest    = m.mesCompleto === melhorMes.mesCompleto && m.faturado > 0;
+                    return (
+                      <tr key={i} style={{ background: isBest ? "#eef6ff" : i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
+                        <td style={{ ...S.tdB }}>{m.mesCompleto}{isBest ? "  ★" : ""}</td>
+                        <td style={{ ...S.tdR, color: m.faturado > 0 ? AZUL2 : "#bbb" }}>{m.faturado > 0 ? formatBRL(m.faturado) : "—"}</td>
+                        <td style={{ ...S.tdR, color: m.recebido > 0 ? "#155724" : "#bbb" }}>{m.recebido > 0 ? formatBRL(m.recebido) : "—"}</td>
+                        <td style={{ ...S.tdR, color: (m.faturado - m.recebido) > 0 ? "#856404" : "#bbb" }}>{m.faturado > m.recebido ? formatBRL(m.faturado - m.recebido) : "—"}</td>
+                        <td style={{ ...S.tdR }}>{m.faturado > 0 ? pct.toFixed(1) + "%" : "—"}</td>
+                        <td style={{ ...S.tdR, color: varM === null ? "#bbb" : varM >= 0 ? "#155724" : "#721c24" }}>
+                          {varM !== null && m.faturado > 0 ? (varM >= 0 ? "↑ +" : "↓ ") + Math.abs(varM).toFixed(1) + "%" : "—"}
+                        </td>
+                        <td style={{ ...S.td, textAlign: "center" }}>
+                          <span style={{ ...S.badge, background: sBg, color: sCor }}>{status}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  <tr>
+                    <td style={{ ...S.tdTotal, color: AZUL, fontWeight: 800 }}>TOTAL ACUMULADO 2026</td>
+                    <td style={{ ...S.tdTotal, textAlign: "right", color: AZUL, fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(fatTotal)}</td>
+                    <td style={{ ...S.tdTotal, textAlign: "right", color: "#155724", fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(recTotal)}</td>
+                    <td style={{ ...S.tdTotal, textAlign: "right", color: "#856404", fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(aReceber)}</td>
+                    <td style={{ ...S.tdTotal, textAlign: "right", fontWeight: 800, fontFamily: "monospace" }}>{fatTotal > 0 ? (recTotal/fatTotal*100).toFixed(1) + "%" : "—"}</td>
+                    <td style={{ ...S.tdTotal, textAlign: "right" }}>—</td>
+                    <td style={S.tdTotal} />
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Top Clientes */}
+              {(() => {
+                const top3Fat = clientesOrdenados.slice(0, 3).reduce((a, f) => a + Number(f.faturado), 0);
+                const conc    = fatTotal > 0 ? top3Fat / fatTotal * 100 : 0;
+                return (
+                  <>
+                    <div style={S.sec}>Ranking de Clientes por Faturamento</div>
+                    {conc > 60 && (
+                      <div style={{ ...S.insight, background: "#fff8e1", borderLeftColor: "#856404", marginBottom: "10px" }}>
+                        <strong style={{ color: "#856404" }}>⚠ Alerta de Concentração:</strong> Os 3 maiores clientes representam {conc.toFixed(1)}% do faturamento — risco de dependência elevado.
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+              <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "20px" }}>
+                <thead>
+                  <tr>
+                    {["#","Cliente","Cidade","Faturado","% Receita","Recebido","A Receber","% Rec.","Risco"].map((h, i) => (
+                      <th key={i} style={{ ...S.th, textAlign: i >= 3 ? "right" : "left" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientesOrdenados.slice(0, 12).map((f, i) => {
+                    const pctFat = fatTotal > 0 ? Number(f.faturado) / fatTotal * 100 : 0;
+                    const pctRec = Number(f.faturado) > 0 ? Number(f.recebido) / Number(f.faturado) * 100 : 0;
+                    const risco  = Number(f.faturado) > 0 ? Number(f.a_receber) / Number(f.faturado) : 0;
+                    const rLabel = risco === 0 ? "Quitado" : risco < 0.5 ? "Parcial" : "Alto";
+                    const rCor   = risco === 0 ? "#155724" : risco < 0.5 ? "#856404" : "#721c24";
+                    const rBg    = risco === 0 ? "#d4edda" : risco < 0.5 ? "#fff3cd" : "#f8d7da";
+                    return (
+                      <tr key={f.cliente_id} style={{ background: i < 3 ? "#f4f8ff" : i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
+                        <td style={{ ...S.td, color: i < 3 ? AZUL2 : "#888", textAlign: "center", fontWeight: i < 3 ? 800 : 400 }}>{i + 1}°</td>
+                        <td style={{ ...S.tdB, color: i < 3 ? AZUL : "#222" }}>{f.cliente_nome}</td>
+                        <td style={{ ...S.td, color: "#555" }}>{(f as any).cidade || "—"}</td>
+                        <td style={{ ...S.tdR, color: AZUL2 }}>{formatBRL(f.faturado)}</td>
+                        <td style={{ ...S.tdR, color: i < 3 ? AZUL2 : "#555", fontWeight: i < 3 ? 700 : 400 }}>{pctFat.toFixed(1)}%</td>
+                        <td style={{ ...S.tdR, color: "#155724" }}>{formatBRL(f.recebido)}</td>
+                        <td style={{ ...S.tdR, color: Number(f.a_receber) > 0 ? "#856404" : "#aaa" }}>{Number(f.a_receber) > 0 ? formatBRL(f.a_receber) : "—"}</td>
+                        <td style={{ ...S.tdR }}>{pctRec.toFixed(1)}%</td>
+                        <td style={{ ...S.td, textAlign: "center" }}>
+                          <span style={{ ...S.badge, background: rBg, color: rCor }}>{rLabel}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              {/* Pipeline */}
+              {(() => {
+                const ativos  = pedidos.filter(p => !["Entregue", "Cancelado"].includes(p.status));
+                const valAtiv = ativos.reduce((a, p) => a + Number(p.valor_total), 0);
+                return (
+                  <>
+                    <div style={S.sec}>Pipeline de Produção · Status Atual</div>
+                    {valAtiv > 0 && (
+                      <div style={{ ...S.insight, marginBottom: "10px" }}>
+                        <strong style={{ color: AZUL2 }}>◆</strong> {ativos.length} pedido{ativos.length !== 1 ? "s" : ""} em andamento — valor total em processamento: <strong>{formatBRL(valAtiv)}</strong>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    {["Status","Qtd.","% Total","Valor Total","Ticket Médio"].map((h, i) => (
+                      <th key={i} style={{ ...S.th, textAlign: i >= 1 ? "right" : "left" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {statusCount.map(([status, count], i) => {
+                    const grupo  = pedidos.filter(p => p.status === status);
+                    const vTotal = grupo.reduce((a, p) => a + Number(p.valor_total), 0);
+                    const vMed   = count > 0 ? vTotal / count : 0;
+                    const isAtiv = !["Entregue", "Cancelado"].includes(status);
+                    return (
+                      <tr key={status} style={{ background: i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
+                        <td style={{ ...S.tdB, color: status === "Entregue" ? "#155724" : status === "Cancelado" ? "#888" : AZUL2 }}>
+                          {isAtiv && <span style={{ fontSize: "8px" }}>● </span>}{status}
+                        </td>
+                        <td style={S.tdR}>{count}</td>
+                        <td style={S.tdR}>{(count / pedidos.length * 100).toFixed(1)}%</td>
+                        <td style={{ ...S.tdR, color: AZUL2 }}>{formatBRL(vTotal)}</td>
+                        <td style={{ ...S.tdR, color: "#555" }}>{formatBRL(vMed)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
             </div>
-
-            {/* Faturamento mensal */}
-            <div style={S.sec}>Evolução de Faturamento Mensal</div>
-            <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px", fontSize: "10px" }}>
-              <thead>
-                <tr>
-                  {["Mês","Faturado","Recebido","A Receber","% Recebido","Variação","Status"].map((h, i) => (
-                    <th key={i} style={{ ...S.th, textAlign: i >= 1 ? "right" : "left" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {meses.map((m, i) => {
-                  const pct    = m.faturado > 0 ? (m.recebido / m.faturado * 100) : 0;
-                  const ant    = i > 0 ? meses[i - 1].faturado : 0;
-                  const varM   = ant > 0 ? ((m.faturado - ant) / ant * 100) : null;
-                  const status = m.faturado === 0 ? "—" : pct >= 100 ? "Quitado" : pct > 0 ? "Parcial" : "Pendente";
-                  const statusCor = pct >= 100 ? "#155724" : pct > 0 ? "#856404" : m.faturado === 0 ? "#888" : "#721c24";
-                  const statusBg  = pct >= 100 ? "#d4edda" : pct > 0 ? "#fff3cd" : m.faturado === 0 ? "#f0f0f0" : "#f8d7da";
-                  return (
-                    <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
-                      <td style={{ ...S.td, fontWeight: 700 }}>{m.mesCompleto}</td>
-                      <td style={{ ...S.tdR, color: m.faturado > 0 ? "#2d5fa6" : "#bbb" }}>{m.faturado > 0 ? formatBRL(m.faturado) : "—"}</td>
-                      <td style={{ ...S.tdR, color: m.recebido > 0 ? "#155724" : "#bbb" }}>{m.recebido > 0 ? formatBRL(m.recebido) : "—"}</td>
-                      <td style={{ ...S.tdR, color: (m.faturado - m.recebido) > 0 ? "#856404" : "#bbb" }}>{m.faturado > m.recebido ? formatBRL(m.faturado - m.recebido) : "—"}</td>
-                      <td style={{ ...S.tdR }}>{m.faturado > 0 ? pct.toFixed(1) + "%" : "—"}</td>
-                      <td style={{ ...S.tdR, color: varM === null ? "#bbb" : varM >= 0 ? "#155724" : "#721c24" }}>
-                        {varM !== null && m.faturado > 0 ? (varM >= 0 ? "↑ +" : "↓ ") + Math.abs(varM).toFixed(1) + "%" : "—"}
-                      </td>
-                      <td style={{ ...S.td, textAlign: "center" }}>
-                        <span style={{ fontSize: "8px", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: statusBg, color: statusCor }}>{status}</span>
-                      </td>
-                    </tr>
-                  );
-                })}
-                <tr style={{ background: "#eef3ff" }}>
-                  <td style={{ ...S.td, fontWeight: 800, color: "#2d5fa6" }}>TOTAL</td>
-                  <td style={{ ...S.tdR, color: "#2d5fa6", fontWeight: 800 }}>{formatBRL(fatTotal)}</td>
-                  <td style={{ ...S.tdR, color: "#155724", fontWeight: 800 }}>{formatBRL(recTotal)}</td>
-                  <td style={{ ...S.tdR, color: "#856404", fontWeight: 800 }}>{formatBRL(aReceber)}</td>
-                  <td style={{ ...S.tdR, fontWeight: 800 }}>{fatTotal > 0 ? (recTotal/fatTotal*100).toFixed(1) + "%" : "—"}</td>
-                  <td style={S.tdR}>—</td>
-                  <td style={S.td} />
-                </tr>
-              </tbody>
-            </table>
-
-            {/* Top clientes */}
-            <div style={S.sec}>Ranking de Clientes por Faturamento</div>
-            <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px", fontSize: "10px" }}>
-              <thead>
-                <tr>
-                  {["#","Cliente","Cidade","Faturado","Recebido","A Receber","% Rec.","Pedidos","Risco"].map((h, i) => (
-                    <th key={i} style={{ ...S.th, textAlign: i >= 3 ? "right" : "left" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {clientesOrdenados.slice(0, 15).map((f, i) => {
-                  const pctRec  = Number(f.faturado) > 0 ? Number(f.recebido) / Number(f.faturado) * 100 : 0;
-                  const risco   = Number(f.faturado) > 0 ? Number(f.a_receber) / Number(f.faturado) : 0;
-                  const rLabel  = risco === 0 ? "Zero" : risco < 0.5 ? "Médio" : "Alto";
-                  const rCor    = risco === 0 ? "#155724" : risco < 0.5 ? "#856404" : "#721c24";
-                  const rBg     = risco === 0 ? "#d4edda" : risco < 0.5 ? "#fff3cd" : "#f8d7da";
-                  return (
-                    <tr key={f.cliente_id} style={{ background: i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
-                      <td style={{ ...S.td, color: "#888", textAlign: "center" }}>{i + 1}°</td>
-                      <td style={{ ...S.td, fontWeight: 700 }}>{f.cliente_nome}</td>
-                      <td style={{ ...S.td, color: "#555" }}>{(f as any).cidade || "—"}</td>
-                      <td style={{ ...S.tdR, color: "#2d5fa6" }}>{formatBRL(f.faturado)}</td>
-                      <td style={{ ...S.tdR, color: "#155724" }}>{formatBRL(f.recebido)}</td>
-                      <td style={{ ...S.tdR, color: Number(f.a_receber) > 0 ? "#856404" : "#aaa" }}>{Number(f.a_receber) > 0 ? formatBRL(f.a_receber) : "—"}</td>
-                      <td style={{ ...S.tdR }}>{pctRec.toFixed(1)}%</td>
-                      <td style={{ ...S.tdR }}>{f.total_pedidos}</td>
-                      <td style={{ ...S.td, textAlign: "center" }}>
-                        <span style={{ fontSize: "8px", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: rBg, color: rCor }}>{rLabel}</span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            {/* Pipeline */}
-            <div style={S.sec}>Pipeline de Produção</div>
-            <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px", fontSize: "10px" }}>
-              <thead>
-                <tr>
-                  {["Status","Qtd. Pedidos","% do Total","Valor Total"].map((h, i) => (
-                    <th key={i} style={{ ...S.th, textAlign: i >= 1 ? "right" : "left" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {statusCount.map(([status, count], i) => {
-                  const valTotal = pedidos.filter(p => p.status === status).reduce((a, p) => a + Number(p.valor_total), 0);
-                  return (
-                    <tr key={status} style={{ background: i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
-                      <td style={{ ...S.td, fontWeight: 700 }}>{status}</td>
-                      <td style={{ ...S.tdR }}>{count}</td>
-                      <td style={{ ...S.tdR }}>{(count / pedidos.length * 100).toFixed(1)}%</td>
-                      <td style={{ ...S.tdR, color: "#2d5fa6" }}>{formatBRL(valTotal)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            {/* Análise */}
-            <div style={S.sec}>Análise e Destaques</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", fontSize: "10px", marginBottom: "14px" }}>
-              {[
-                { label: "Melhor Mês",              value: melhorMes.mesCompleto + " — " + formatBRL(melhorMes.faturado) },
-                { label: "Taxa Média de Recebimento", value: fatTotal > 0 ? (recTotal / fatTotal * 100).toFixed(1) + "%" : "—" },
-                { label: "Clientes com Débito",      value: devedores.length + " de " + financeiro.length + " (" + (financeiro.length > 0 ? (devedores.length/financeiro.length*100).toFixed(0) : 0) + "%)" },
-                { label: "Total m² Processado",      value: m2Total.toFixed(2) + " m²" },
-                { label: "Pedidos Ativos em Prod.",  value: String(pedidos.filter(p => !["Entregue","Cancelado"].includes(p.status)).length) },
-                { label: "Valor Médio por Pedido",   value: formatBRL(ticketMedio) },
-              ].map(item => (
-                <div key={item.label} style={{ padding: "8px 12px", background: "#f0f4ff", borderRadius: "6px", borderLeft: "3px solid #2d5fa6", display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "#555", fontWeight: 600 }}>{item.label}</span>
-                  <strong style={{ color: "#2d5fa6", fontFamily: "monospace" }}>{item.value}</strong>
-                </div>
-              ))}
-            </div>
-
             <PdfFooter emissao={dtEmissao} />
           </div>
         )}
@@ -1420,135 +1473,218 @@ export default function RelatoriosPage() {
         ════════════════════════════════════════════════════════════════════ */}
         {reporteAtivo === "inadimplencia" && (
           <div className="print-area" style={S.page}>
-            <PdfHeader titulo="Relatório de Inadimplência" subtitulo="Análise de Crédito e Devedores" emissao={dtEmissao} />
+            <PdfHeader titulo="Relatório de Inadimplência" subtitulo="Análise de Crédito e Risco" emissao={dtEmissao} cor="#7b1818" />
+            <div style={S.body}>
 
-            {/* Resumo executivo */}
-            <div style={S.sec}>Resumo da Situação de Crédito</div>
-            <div style={{ display: "flex", gap: "10px", marginBottom: "18px" }}>
-              {[
-                { label: "Total em Aberto",          value: formatBRL(totalDevedores),            sub: `${devedores.length} clientes`, bg: "#fff0f0", border: "#f5c6cb" },
-                { label: "Clientes Sem Pagamento",   value: String(inadimplentes.length),          sub: formatBRL(inadimplentes.reduce((a,f)=>a+Number(f.a_receber),0)), bg: "#fff0f0", border: "#f5c6cb" },
-                { label: "Clientes Parcialmente Ok", value: String(devedores.length - inadimplentes.length), sub: "pagamento incompleto", bg: "#fff8e1", border: "#ffeeba" },
-                { label: "Parcelas Vencidas",        value: String(parcelasVencidas.length),       sub: formatBRL(totalVencido) + " atrasado", bg: "#fff0f0", border: "#f5c6cb" },
-                { label: "Total Faturado (base)",    value: formatBRL(fatTotal),                   sub: formatBRL(recTotal) + " recebido", bg: "#f0f4ff", border: "#d0daf0" },
-              ].map(k => (
-                <div key={k.label} style={{ ...S.kpi, background: k.bg, borderColor: k.border }}>
-                  <div style={S.kpiL}>{k.label}</div>
-                  <div style={{ ...S.kpiV, color: k.bg === "#f0f4ff" ? "#2d5fa6" : "#c0392b" }}>{k.value}</div>
-                  <div style={S.kpiS}>{k.sub}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Clientes inadimplentes totais */}
-            {inadimplentes.length > 0 && (
-              <>
-                <div style={S.sec}>⚠ Alto Risco — Sem Nenhum Pagamento</div>
-                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px", fontSize: "10px" }}>
-                  <thead>
-                    <tr>{["#","Cliente","Cidade","Faturado","Recebido","Em Aberto","% Rec.","Pedidos"].map((h,i) => <th key={i} style={{ ...S.th, background: "#c0392b", textAlign: i >= 3 ? "right" : "left" }}>{h}</th>)}</tr>
-                  </thead>
-                  <tbody>
-                    {inadimplentes.map((f, i) => (
-                      <tr key={f.cliente_id} style={{ background: i % 2 === 0 ? "#fff5f5" : "#fff" }}>
-                        <td style={{ ...S.td, color: "#888", textAlign: "center" }}>{i + 1}</td>
-                        <td style={{ ...S.td, fontWeight: 700, color: "#c0392b" }}>{f.cliente_nome}</td>
-                        <td style={{ ...S.td, color: "#555" }}>{(f as any).cidade || "—"}</td>
-                        <td style={{ ...S.tdR, color: "#2d5fa6" }}>{formatBRL(f.faturado)}</td>
-                        <td style={{ ...S.tdR, color: "#aaa" }}>—</td>
-                        <td style={{ ...S.tdR, color: "#c0392b", fontWeight: 800 }}>{formatBRL(f.a_receber)}</td>
-                        <td style={{ ...S.tdR, color: "#c0392b" }}>0%</td>
-                        <td style={{ ...S.tdR }}>{f.total_pedidos}</td>
-                      </tr>
+              {/* Diagnóstico Executivo */}
+              {(() => {
+                const taxaInad = financeiro.length > 0 ? (devedores.length / financeiro.length * 100) : 0;
+                const taxaExp  = fatTotal > 0 ? (totalDevedores / fatTotal * 100) : 0;
+                const piorDev  = devedores.length > 0 ? devedores[0] : null;
+                const insights = [
+                  devedores.length > 0
+                    ? `${devedores.length} cliente${devedores.length > 1 ? "s" : ""} com saldo devedor (${taxaInad.toFixed(0)}% da base ativa). Exposição total: ${formatBRL(totalDevedores)}${taxaExp > 0 ? ` — ${taxaExp.toFixed(1)}% do faturamento` : ""}.`
+                    : "Carteira saudável — nenhum cliente com saldo devedor no período.",
+                  inadimplentes.length > 0
+                    ? `${inadimplentes.length} cliente${inadimplentes.length > 1 ? "s" : ""} sem nenhum pagamento (inadimplência total): ${formatBRL(inadimplentes.reduce((a, f) => a + Number(f.a_receber), 0))} em risco máximo. Ação imediata recomendada.`
+                    : null,
+                  parcelasVencidas.length > 0
+                    ? `${parcelasVencidas.length} parcela${parcelasVencidas.length > 1 ? "s" : ""} vencidas e não pagas, totalizando ${formatBRL(totalVencido)}${fatTotal > 0 ? ` (${(totalVencido/fatTotal*100).toFixed(1)}% do faturamento)` : ""}.`
+                    : "Nenhuma parcela vencida identificada.",
+                  piorDev ? `Maior devedor: ${piorDev.cliente_nome} — ${formatBRL(piorDev.a_receber)} em aberto.` : null,
+                ].filter(Boolean);
+                return (
+                  <div style={{ marginBottom: "20px" }}>
+                    <div style={{ ...S.sec, marginTop: "0", borderBottomColor: "#c0392b", color: "#c0392b" }}>Diagnóstico de Crédito</div>
+                    {insights.map((t, i) => (
+                      <div key={i} style={{ ...S.insight, background: "#fff5f5", borderLeftColor: "#c0392b" }}>
+                        <strong style={{ color: "#c0392b", marginRight: "5px" }}>◆</strong>{t}
+                      </div>
                     ))}
-                    <tr style={{ background: "#f8d7da" }}>
-                      <td colSpan={3} style={{ ...S.td, fontWeight: 800, color: "#721c24" }}>SUBTOTAL INADIMPLENTES</td>
-                      <td style={{ ...S.tdR, color: "#2d5fa6", fontWeight: 800 }}>{formatBRL(inadimplentes.reduce((a,f)=>a+Number(f.faturado),0))}</td>
-                      <td style={S.tdR}>—</td>
-                      <td style={{ ...S.tdR, color: "#c0392b", fontWeight: 800 }}>{formatBRL(inadimplentes.reduce((a,f)=>a+Number(f.a_receber),0))}</td>
-                      <td colSpan={2} style={S.tdR} />
-                    </tr>
-                  </tbody>
-                </table>
-              </>
-            )}
+                  </div>
+                );
+              })()}
 
-            {/* Clientes com pagamento parcial */}
-            {devedores.filter(f => Number(f.recebido) > 0).length > 0 && (
-              <>
-                <div style={S.sec}>Médio Risco — Pagamento Parcial</div>
-                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px", fontSize: "10px" }}>
-                  <thead>
-                    <tr>{["#","Cliente","Cidade","Faturado","Recebido","Em Aberto","% Rec.","Pedidos"].map((h,i) => <th key={i} style={{ ...S.th, background: "#856404", textAlign: i >= 3 ? "right" : "left" }}>{h}</th>)}</tr>
-                  </thead>
-                  <tbody>
-                    {devedores.filter(f => Number(f.recebido) > 0).map((f, i) => {
-                      const pctRec = Number(f.faturado) > 0 ? Number(f.recebido) / Number(f.faturado) * 100 : 0;
-                      return (
-                        <tr key={f.cliente_id} style={{ background: i % 2 === 0 ? "#fffdf0" : "#fff" }}>
-                          <td style={{ ...S.td, color: "#888", textAlign: "center" }}>{i + 1}</td>
-                          <td style={{ ...S.td, fontWeight: 700 }}>{f.cliente_nome}</td>
-                          <td style={{ ...S.td, color: "#555" }}>{(f as any).cidade || "—"}</td>
-                          <td style={{ ...S.tdR, color: "#2d5fa6" }}>{formatBRL(f.faturado)}</td>
-                          <td style={{ ...S.tdR, color: "#155724" }}>{formatBRL(f.recebido)}</td>
-                          <td style={{ ...S.tdR, color: "#856404", fontWeight: 700 }}>{formatBRL(f.a_receber)}</td>
-                          <td style={{ ...S.tdR, color: "#856404" }}>{pctRec.toFixed(1)}%</td>
-                          <td style={{ ...S.tdR }}>{f.total_pedidos}</td>
+              {/* KPIs */}
+              <div style={{ ...S.sec, borderBottomColor: "#c0392b", color: "#c0392b" }}>Resumo da Situação de Crédito</div>
+              <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+                {[
+                  { label: "Total em Aberto",       value: formatBRL(totalDevedores),                                                              sub: `${devedores.length} clientes`,    alert: true },
+                  { label: "Sem Nenhum Pagamento",   value: String(inadimplentes.length),                                                          sub: formatBRL(inadimplentes.reduce((a,f)=>a+Number(f.a_receber),0)),  alert: inadimplentes.length > 0 },
+                  { label: "Pagamento Parcial",      value: String(devedores.filter(f => Number(f.recebido) > 0).length),                          sub: "abaixo de 100%",                  alert: false },
+                  { label: "Parcelas Vencidas",      value: String(parcelasVencidas.length),                                                       sub: formatBRL(totalVencido) + " atrasado", alert: parcelasVencidas.length > 0 },
+                  { label: "Taxa de Recebimento",    value: fatTotal > 0 ? (recTotal/fatTotal*100).toFixed(1) + "%" : "—",                         sub: `de ${formatBRL(fatTotal)} fat.`, alert: fatTotal > 0 && recTotal/fatTotal < 0.8 },
+                ].map(k => (
+                  <div key={k.label} style={{ ...S.kpi, ...(k.alert ? { background: "#fff5f5", border: "1px solid #f5c6cb" } : {}) }}>
+                    <div style={S.kpiL}>{k.label}</div>
+                    <div style={{ ...S.kpiV, color: k.alert ? "#c0392b" : "#155724" }}>{k.value}</div>
+                    <div style={S.kpiS}>{k.sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Aging Analysis */}
+              {parcelasVencidas.length > 0 && (() => {
+                const calcDias = (venc: string | null) =>
+                  venc ? Math.floor((new Date(hoje).getTime() - new Date(venc + "T12:00:00").getTime()) / 86400000) : 0;
+                const faixas = [
+                  { label: "1 – 30 dias",   cor: "#856404", bg: "#fff3cd", ok: (d: number) => d >= 1  && d <= 30,  niv: "Leve"    },
+                  { label: "31 – 60 dias",  cor: "#c0392b", bg: "#fddede", ok: (d: number) => d >= 31 && d <= 60,  niv: "Atenção" },
+                  { label: "61 – 90 dias",  cor: "#721c24", bg: "#f8d7da", ok: (d: number) => d >= 61 && d <= 90,  niv: "Grave"   },
+                  { label: "Acima de 90d", cor: "#4a0404", bg: "#f5c6cb", ok: (d: number) => d > 90,               niv: "Crítico" },
+                ];
+                const aging = faixas.map(f => {
+                  const itens = parcelasVencidas.filter(l => f.ok(calcDias(l.vencimento)));
+                  return { ...f, count: itens.length, valor: itens.reduce((a, l) => a + Number(l.valor), 0) };
+                });
+                return (
+                  <>
+                    <div style={{ ...S.sec, borderBottomColor: "#c0392b", color: "#c0392b" }}>Análise de Aging — Parcelas Vencidas por Faixa de Atraso</div>
+                    <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "20px" }}>
+                      <thead>
+                        <tr>
+                          {["Faixa de Atraso","Nº Parcelas","Valor Total","% do Vencido","Nível de Risco"].map((h, i) => (
+                            <th key={i} style={{ ...S.thAlt, textAlign: i >= 1 ? "right" : "left" }}>{h}</th>
+                          ))}
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </>
-            )}
-
-            {/* Parcelas vencidas */}
-            {parcelasVencidas.length > 0 && (
-              <>
-                <div style={S.sec}>Parcelas Vencidas e Não Pagas</div>
-                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px", fontSize: "10px" }}>
-                  <thead>
-                    <tr>{["Vencimento","Dias Atraso","Cliente","Pedido","Descrição","Valor"].map((h,i) => <th key={i} style={{ ...S.th, background: "#721c24", textAlign: i >= 5 ? "right" : "left" }}>{h}</th>)}</tr>
-                  </thead>
-                  <tbody>
-                    {parcelasVencidas.map((l, i) => {
-                      const dias = l.vencimento ? Math.floor((new Date(hoje).getTime() - new Date(l.vencimento + "T12:00:00").getTime()) / 86400000) : 0;
-                      return (
-                        <tr key={l.id} style={{ background: i % 2 === 0 ? "#fff5f5" : "#fff" }}>
-                          <td style={{ ...S.td, fontFamily: "monospace", color: "#c0392b", fontWeight: 700 }}>
-                            {l.vencimento ? new Date(l.vencimento + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
-                          </td>
-                          <td style={{ ...S.tdR, color: dias > 30 ? "#c0392b" : "#856404" }}>{dias}d</td>
-                          <td style={{ ...S.td, fontWeight: 600 }}>{(l as any).clientes?.nome ?? "—"}</td>
-                          <td style={{ ...S.td, fontFamily: "monospace", color: "#2d5fa6" }}>{l.pedido_id ?? "—"}</td>
-                          <td style={{ ...S.td, color: "#444" }}>{l.descricao}</td>
-                          <td style={{ ...S.tdR, color: "#c0392b", fontWeight: 800 }}>{formatBRL(l.valor)}</td>
+                      </thead>
+                      <tbody>
+                        {aging.map((a, i) => (
+                          <tr key={i} style={{ background: a.count > 0 ? a.bg + "55" : "#fff" }}>
+                            <td style={{ ...S.tdB, color: a.cor }}>{a.label}</td>
+                            <td style={{ ...S.tdR, color: a.count > 0 ? a.cor : "#aaa" }}>{a.count > 0 ? a.count : "—"}</td>
+                            <td style={{ ...S.tdR, color: a.count > 0 ? a.cor : "#aaa", fontWeight: a.count > 0 ? 700 : 400 }}>{a.count > 0 ? formatBRL(a.valor) : "—"}</td>
+                            <td style={{ ...S.tdR, color: a.count > 0 ? a.cor : "#aaa" }}>{a.count > 0 && totalVencido > 0 ? (a.valor / totalVencido * 100).toFixed(1) + "%" : "—"}</td>
+                            <td style={{ ...S.td, textAlign: "center" }}>
+                              {a.count > 0 && <span style={{ ...S.badge, background: a.bg, color: a.cor }}>{a.niv}</span>}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr>
+                          <td style={{ ...S.tdTotal, color: "#c0392b", fontWeight: 800 }}>TOTAL VENCIDO</td>
+                          <td style={{ ...S.tdTotal, textAlign: "right", color: "#c0392b", fontWeight: 800, fontFamily: "monospace" }}>{parcelasVencidas.length}</td>
+                          <td style={{ ...S.tdTotal, textAlign: "right", color: "#c0392b", fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(totalVencido)}</td>
+                          <td style={{ ...S.tdTotal, textAlign: "right", fontWeight: 800, fontFamily: "monospace" }}>100%</td>
+                          <td style={S.tdTotal} />
                         </tr>
-                      );
-                    })}
-                    <tr style={{ background: "#f8d7da" }}>
-                      <td colSpan={5} style={{ ...S.td, fontWeight: 800, color: "#721c24" }}>TOTAL VENCIDO</td>
-                      <td style={{ ...S.tdR, color: "#c0392b", fontWeight: 800 }}>{formatBRL(totalVencido)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </>
-            )}
+                      </tbody>
+                    </table>
+                  </>
+                );
+              })()}
 
-            {/* Totais finais */}
-            <div style={{ display: "flex", gap: "10px", marginBottom: "14px" }}>
-              {[
-                { label: "Total em Aberto",      value: formatBRL(totalDevedores),  cor: "#c0392b" },
-                { label: "Total Vencido",         value: formatBRL(totalVencido),    cor: "#721c24" },
-                { label: "% Recebimento Geral",   value: fatTotal > 0 ? (recTotal/fatTotal*100).toFixed(1) + "%" : "—", cor: "#2d5fa6" },
-              ].map(k => (
-                <div key={k.label} style={{ flex: 1, padding: "12px 14px", background: "#f8f9fa", border: `2px solid ${k.cor}44`, borderRadius: "8px" }}>
-                  <div style={{ fontSize: "9px", fontWeight: 700, color: "#666", textTransform: "uppercase", letterSpacing: "1px" }}>{k.label}</div>
-                  <div style={{ fontSize: "22px", fontWeight: 900, color: k.cor, fontFamily: "monospace", marginTop: "4px" }}>{k.value}</div>
-                </div>
-              ))}
+              {/* Alto Risco */}
+              {inadimplentes.length > 0 && (
+                <>
+                  <div style={{ ...S.sec, borderBottomColor: "#c0392b", color: "#c0392b" }}>⚠ Alto Risco — Clientes Sem Nenhum Pagamento</div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "20px" }}>
+                    <thead>
+                      <tr>{["#","Cliente","Cidade","Faturado","Em Aberto","% do Devedor","Pedidos"].map((h,i) => <th key={i} style={{ ...S.thAlt, textAlign: i >= 3 ? "right" : "left" }}>{h}</th>)}</tr>
+                    </thead>
+                    <tbody>
+                      {inadimplentes.map((f, i) => {
+                        const pctDev = totalDevedores > 0 ? Number(f.a_receber) / totalDevedores * 100 : 0;
+                        return (
+                          <tr key={f.cliente_id} style={{ background: i % 2 === 0 ? "#fff5f5" : "#fff" }}>
+                            <td style={{ ...S.td, color: "#888", textAlign: "center" }}>{i + 1}</td>
+                            <td style={{ ...S.tdB, color: "#c0392b" }}>{f.cliente_nome}</td>
+                            <td style={{ ...S.td, color: "#555" }}>{(f as any).cidade || "—"}</td>
+                            <td style={{ ...S.tdR, color: AZUL2 }}>{formatBRL(f.faturado)}</td>
+                            <td style={{ ...S.tdR, color: "#c0392b", fontWeight: 800 }}>{formatBRL(f.a_receber)}</td>
+                            <td style={{ ...S.tdR, color: "#c0392b" }}>{pctDev.toFixed(1)}%</td>
+                            <td style={{ ...S.tdR }}>{f.total_pedidos}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr>
+                        <td colSpan={3} style={{ ...S.tdTotal, color: "#721c24", fontWeight: 800 }}>SUBTOTAL INADIMPLENTES</td>
+                        <td style={{ ...S.tdTotal, textAlign: "right", color: AZUL2, fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(inadimplentes.reduce((a,f)=>a+Number(f.faturado),0))}</td>
+                        <td style={{ ...S.tdTotal, textAlign: "right", color: "#c0392b", fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(inadimplentes.reduce((a,f)=>a+Number(f.a_receber),0))}</td>
+                        <td colSpan={2} style={S.tdTotal} />
+                      </tr>
+                    </tbody>
+                  </table>
+                </>
+              )}
+
+              {/* Médio Risco */}
+              {devedores.filter(f => Number(f.recebido) > 0).length > 0 && (
+                <>
+                  <div style={{ ...S.sec, borderBottomColor: "#856404", color: "#856404" }}>Médio Risco — Clientes com Pagamento Parcial</div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "20px" }}>
+                    <thead>
+                      <tr>{["#","Cliente","Cidade","Faturado","Recebido","Em Aberto","% Recebido"].map((h,i) => <th key={i} style={{ ...S.thWarn, textAlign: i >= 3 ? "right" : "left" }}>{h}</th>)}</tr>
+                    </thead>
+                    <tbody>
+                      {devedores.filter(f => Number(f.recebido) > 0).map((f, i) => {
+                        const pctRec = Number(f.faturado) > 0 ? Number(f.recebido) / Number(f.faturado) * 100 : 0;
+                        return (
+                          <tr key={f.cliente_id} style={{ background: i % 2 === 0 ? "#fffdf0" : "#fff" }}>
+                            <td style={{ ...S.td, color: "#888", textAlign: "center" }}>{i + 1}</td>
+                            <td style={{ ...S.tdB }}>{f.cliente_nome}</td>
+                            <td style={{ ...S.td, color: "#555" }}>{(f as any).cidade || "—"}</td>
+                            <td style={{ ...S.tdR, color: AZUL2 }}>{formatBRL(f.faturado)}</td>
+                            <td style={{ ...S.tdR, color: "#155724" }}>{formatBRL(f.recebido)}</td>
+                            <td style={{ ...S.tdR, color: "#856404", fontWeight: 700 }}>{formatBRL(f.a_receber)}</td>
+                            <td style={{ ...S.tdR, color: "#856404" }}>{pctRec.toFixed(1)}%</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </>
+              )}
+
+              {/* Parcelas Vencidas */}
+              {parcelasVencidas.length > 0 && (
+                <>
+                  <div style={{ ...S.sec, borderBottomColor: "#721c24", color: "#721c24" }}>Detalhamento de Parcelas Vencidas</div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "20px" }}>
+                    <thead>
+                      <tr>{["Vencimento","Dias Atraso","Cliente","Pedido","Descrição","Valor"].map((h,i) => <th key={i} style={{ ...S.th, background: "#721c24", textAlign: i >= 5 ? "right" : "left" }}>{h}</th>)}</tr>
+                    </thead>
+                    <tbody>
+                      {parcelasVencidas.map((l, i) => {
+                        const dias = l.vencimento ? Math.floor((new Date(hoje).getTime() - new Date(l.vencimento + "T12:00:00").getTime()) / 86400000) : 0;
+                        const cor  = dias > 90 ? "#4a0404" : dias > 60 ? "#721c24" : dias > 30 ? "#c0392b" : "#856404";
+                        return (
+                          <tr key={l.id} style={{ background: i % 2 === 0 ? "#fff5f5" : "#fff" }}>
+                            <td style={{ ...S.td, fontFamily: "monospace", color: "#c0392b", fontWeight: 700 }}>
+                              {l.vencimento ? new Date(l.vencimento + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
+                            </td>
+                            <td style={{ ...S.tdR, color: cor, fontWeight: 700 }}>{dias}d</td>
+                            <td style={{ ...S.tdB }}>{(l as any).clientes?.nome ?? "—"}</td>
+                            <td style={{ ...S.td, fontFamily: "monospace", color: AZUL2 }}>{l.pedido_id ?? "—"}</td>
+                            <td style={{ ...S.td, color: "#444" }}>{l.descricao}</td>
+                            <td style={{ ...S.tdR, color: "#c0392b", fontWeight: 800 }}>{formatBRL(l.valor)}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr>
+                        <td colSpan={5} style={{ ...S.tdTotal, color: "#721c24", fontWeight: 800 }}>TOTAL VENCIDO</td>
+                        <td style={{ ...S.tdTotal, textAlign: "right", color: "#c0392b", fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(totalVencido)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </>
+              )}
+
+              {/* Painel Resumo */}
+              <div style={{ display: "flex", gap: "12px" }}>
+                {[
+                  { label: "Total em Aberto",      value: formatBRL(totalDevedores),                                                                cor: "#c0392b" },
+                  { label: "Total Vencido",         value: formatBRL(totalVencido),                                                                  cor: "#721c24" },
+                  { label: "Taxa de Recebimento",   value: fatTotal > 0 ? (recTotal/fatTotal*100).toFixed(1) + "%" : "—",                           cor: fatTotal > 0 && recTotal/fatTotal >= 0.9 ? "#155724" : "#c0392b" },
+                  { label: "Clientes em Risco",     value: devedores.length + " / " + financeiro.length,                                            cor: "#856404" },
+                ].map(k => (
+                  <div key={k.label} style={{ flex: 1, padding: "14px 16px", background: "#f8f9fa", border: `2px solid ${k.cor}44`, borderRadius: "8px" }}>
+                    <div style={{ fontSize: "8px", fontWeight: 700, color: "#666", textTransform: "uppercase" as const, letterSpacing: "1px", marginBottom: "6px" }}>{k.label}</div>
+                    <div style={{ fontSize: "20px", fontWeight: 900, color: k.cor, fontFamily: "monospace" }}>{k.value}</div>
+                  </div>
+                ))}
+              </div>
+
             </div>
-
             <PdfFooter emissao={dtEmissao} />
           </div>
         )}
@@ -1559,112 +1695,174 @@ export default function RelatoriosPage() {
         {reporteAtivo === "faturamento" && (
           <div className="print-area" style={S.page}>
             <PdfHeader titulo="Relatório de Faturamento" subtitulo="Análise Analítica 2026" emissao={dtEmissao} />
+            <div style={S.body}>
 
-            {/* Sumário */}
-            <div style={S.sec}>Resumo do Exercício 2026</div>
-            <div style={{ display: "flex", gap: "10px", marginBottom: "18px" }}>
-              {[
-                { label: "Faturamento Total",        value: formatBRL(fatTotal),      sub: `${mesesComDados.length} meses` },
-                { label: "Total Recebido",            value: formatBRL(recTotal),      sub: (fatTotal > 0 ? (recTotal/fatTotal*100).toFixed(1) : 0) + "% do fat." },
-                { label: "A Receber",                 value: formatBRL(aReceber),      sub: `${devedores.length} clientes` },
-                { label: "Ticket Médio",              value: formatBRL(ticketMedio),   sub: `${pedidos.length} pedidos` },
-                { label: "Melhor Mês",                value: melhorMes.mes,            sub: formatBRL(melhorMes.faturado) },
-              ].map(k => (
-                <div key={k.label} style={S.kpi}>
-                  <div style={S.kpiL}>{k.label}</div>
-                  <div style={S.kpiV}>{k.value}</div>
-                  <div style={S.kpiS}>{k.sub}</div>
-                </div>
-              ))}
-            </div>
+              {/* Análise de Desempenho */}
+              {(() => {
+                const taxaRec  = fatTotal > 0 ? recTotal / fatTotal * 100 : 0;
+                const top1Pct  = fatTotal > 0 && clientesOrdenados.length > 0 ? Number(clientesOrdenados[0].faturado) / fatTotal * 100 : 0;
+                const top3Fat  = clientesOrdenados.slice(0, 3).reduce((a, f) => a + Number(f.faturado), 0);
+                const top3Pct  = fatTotal > 0 ? top3Fat / fatTotal * 100 : 0;
+                const mesesAti = meses.filter(m => m.faturado > 0);
+                const fatMed   = mesesAti.length > 0 ? mesesAti.reduce((a, m) => a + m.faturado, 0) / mesesAti.length : 0;
+                const crescMes = mesesAti.length >= 2 ? (() => {
+                  const u = mesesAti[mesesAti.length - 1].faturado;
+                  const p = mesesAti[mesesAti.length - 2].faturado;
+                  return p > 0 ? ((u - p) / p * 100) : null;
+                })() : null;
+                const insights = [
+                  fatTotal > 0 ? `Faturamento acumulado de ${formatBRL(fatTotal)} em ${mesesComDados.length} mes${mesesComDados.length !== 1 ? "es" : ""} ativos (média ${formatBRL(fatMed)}/mês).${crescMes !== null ? ` Tendência do último mês: ${crescMes >= 0 ? "↑ +" : "↓ "}${Math.abs(crescMes).toFixed(1)}%.` : ""}` : null,
+                  fatTotal > 0 ? `Taxa de recebimento: ${taxaRec.toFixed(1)}%. Melhor mês: ${melhorMes.mesCompleto} (${formatBRL(melhorMes.faturado)}). Saldo a receber: ${formatBRL(aReceber)}.` : null,
+                  top3Pct > 0 ? `Concentração de receita — top 3 clientes: ${top3Pct.toFixed(1)}% do faturamento.${top3Pct > 70 ? " Dependência elevada — revisar estratégia comercial." : top3Pct > 50 ? " Nível moderado; buscar diversificação de carteira." : " Carteira bem distribuída."}` : null,
+                  top1Pct > 30 ? `Maior cliente individual (${clientesOrdenados[0]?.cliente_nome}): ${top1Pct.toFixed(1)}% da receita total — monitorar risco de concentração.` : null,
+                ].filter(Boolean);
+                return insights.length > 0 ? (
+                  <div style={{ marginBottom: "20px" }}>
+                    <div style={{ ...S.sec, marginTop: "0" }}>Análise de Desempenho Comercial</div>
+                    {insights.map((t, i) => (
+                      <div key={i} style={S.insight}><strong style={{ color: AZUL2, marginRight: "5px" }}>◆</strong>{t}</div>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
 
-            {/* Faturamento mensal detalhado */}
-            <div style={S.sec}>Faturamento Mensal Analítico</div>
-            <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px", fontSize: "10px" }}>
-              <thead>
-                <tr>
-                  {["Mês","Faturado","Recebido","A Receber","% Recebido","Var. Mês","% Acum. Faturado"].map((h, i) => (
-                    <th key={i} style={{ ...S.th, textAlign: i >= 1 ? "right" : "left" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(() => {
-                  let acumFat = 0;
-                  return meses.map((m, i) => {
-                    acumFat += m.faturado;
-                    const pctRec = m.faturado > 0 ? (m.recebido / m.faturado * 100) : 0;
-                    const ant    = i > 0 ? meses[i-1].faturado : 0;
-                    const varM   = ant > 0 ? ((m.faturado - ant) / ant * 100) : null;
-                    const pctAcum = fatTotal > 0 ? (acumFat / fatTotal * 100) : 0;
-                    const isEmpty = m.faturado === 0;
+              {/* KPIs */}
+              <div style={S.sec}>Indicadores do Exercício 2026</div>
+              <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+                {[
+                  { label: "Faturamento Total",  value: formatBRL(fatTotal),                                  sub: `${mesesComDados.length} meses ativos` },
+                  { label: "Total Recebido",      value: formatBRL(recTotal),                                  sub: (fatTotal > 0 ? (recTotal/fatTotal*100).toFixed(1) : 0) + "% do faturado" },
+                  { label: "A Receber",           value: formatBRL(aReceber),                                  sub: `${devedores.length} clientes` },
+                  { label: "Ticket Médio",        value: formatBRL(ticketMedio),                               sub: `${pedidos.length} pedidos` },
+                  { label: "Melhor Mês",          value: melhorMes.mes,                                        sub: formatBRL(melhorMes.faturado) },
+                ].map(k => (
+                  <div key={k.label} style={S.kpi}>
+                    <div style={S.kpiL}>{k.label}</div>
+                    <div style={S.kpiV}>{k.value}</div>
+                    <div style={S.kpiS}>{k.sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Faturamento Mensal Analítico */}
+              <div style={S.sec}>Faturamento Mensal Analítico</div>
+              <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "20px" }}>
+                <thead>
+                  <tr>
+                    {["Mês","Faturado","Recebido","A Receber","% Recebido","Var. Mês","% Acum."].map((h, i) => (
+                      <th key={i} style={{ ...S.th, textAlign: i >= 1 ? "right" : "left" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(() => {
+                    let acumFat = 0;
+                    return meses.map((m, i) => {
+                      acumFat += m.faturado;
+                      const pctRec  = m.faturado > 0 ? (m.recebido / m.faturado * 100) : 0;
+                      const ant     = i > 0 ? meses[i-1].faturado : 0;
+                      const varM    = ant > 0 ? ((m.faturado - ant) / ant * 100) : null;
+                      const pctAcum = fatTotal > 0 ? (acumFat / fatTotal * 100) : 0;
+                      const isEmpty = m.faturado === 0;
+                      const isBest  = m.mesCompleto === melhorMes.mesCompleto && !isEmpty;
+                      return (
+                        <tr key={i} style={{ background: isBest ? "#eef6ff" : isEmpty ? "#fafafa" : i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
+                          <td style={{ ...S.tdB, color: isEmpty ? "#bbb" : "#222" }}>{m.mesCompleto}{isBest ? "  ★" : ""}</td>
+                          <td style={{ ...S.tdR, color: isEmpty ? "#bbb" : AZUL2 }}>{isEmpty ? "—" : formatBRL(m.faturado)}</td>
+                          <td style={{ ...S.tdR, color: isEmpty ? "#bbb" : "#155724" }}>{isEmpty ? "—" : formatBRL(m.recebido)}</td>
+                          <td style={{ ...S.tdR, color: (m.faturado - m.recebido) > 0 ? "#856404" : "#bbb" }}>{(m.faturado - m.recebido) > 0 ? formatBRL(m.faturado - m.recebido) : "—"}</td>
+                          <td style={{ ...S.tdR, color: isEmpty ? "#bbb" : pctRec >= 100 ? "#155724" : pctRec > 50 ? "#856404" : "#c0392b" }}>{isEmpty ? "—" : pctRec.toFixed(1) + "%"}</td>
+                          <td style={{ ...S.tdR, color: varM === null || isEmpty ? "#bbb" : varM >= 0 ? "#155724" : "#c0392b" }}>
+                            {!isEmpty && varM !== null ? (varM >= 0 ? "↑ +" : "↓ ") + Math.abs(varM).toFixed(1) + "%" : "—"}
+                          </td>
+                          <td style={{ ...S.tdR, color: isEmpty ? "#bbb" : "#555" }}>{isEmpty ? "—" : pctAcum.toFixed(1) + "%"}</td>
+                        </tr>
+                      );
+                    });
+                  })()}
+                  <tr>
+                    <td style={{ ...S.tdTotal, color: AZUL, fontWeight: 800 }}>TOTAL 2026</td>
+                    <td style={{ ...S.tdTotal, textAlign: "right", color: AZUL, fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(fatTotal)}</td>
+                    <td style={{ ...S.tdTotal, textAlign: "right", color: "#155724", fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(recTotal)}</td>
+                    <td style={{ ...S.tdTotal, textAlign: "right", color: "#856404", fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(aReceber)}</td>
+                    <td style={{ ...S.tdTotal, textAlign: "right", fontWeight: 800, fontFamily: "monospace" }}>{fatTotal > 0 ? (recTotal/fatTotal*100).toFixed(1) + "%" : "—"}</td>
+                    <td style={{ ...S.tdTotal, textAlign: "right" }}>—</td>
+                    <td style={{ ...S.tdTotal, textAlign: "right", fontWeight: 800, fontFamily: "monospace" }}>100%</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Concentração de Receita */}
+              {clientesOrdenados.length >= 3 && (() => {
+                const top1  = clientesOrdenados.slice(0, 1).reduce((a, f) => a + Number(f.faturado), 0);
+                const top3  = clientesOrdenados.slice(0, 3).reduce((a, f) => a + Number(f.faturado), 0);
+                const top5  = clientesOrdenados.slice(0, 5).reduce((a, f) => a + Number(f.faturado), 0);
+                const p1    = fatTotal > 0 ? top1 / fatTotal * 100 : 0;
+                const p3    = fatTotal > 0 ? top3 / fatTotal * 100 : 0;
+                const p5    = fatTotal > 0 ? top5 / fatTotal * 100 : 0;
+                const pRest = Math.max(100 - p5, 0);
+                return (
+                  <>
+                    <div style={S.sec}>Análise de Concentração de Receita</div>
+                    <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+                      {[
+                        { label: "1º Cliente",       value: p1.toFixed(1) + "%",    sub: formatBRL(top1),               cor: p1 > 30 ? "#c0392b" : AZUL2 },
+                        { label: "Top 3 Clientes",   value: p3.toFixed(1) + "%",    sub: formatBRL(top3),               cor: p3 > 60 ? "#c0392b" : p3 > 40 ? "#856404" : AZUL2 },
+                        { label: "Top 5 Clientes",   value: p5.toFixed(1) + "%",    sub: formatBRL(top5),               cor: p5 > 80 ? "#c0392b" : p5 > 60 ? "#856404" : AZUL2 },
+                        { label: "Demais Clientes",  value: pRest.toFixed(1) + "%", sub: formatBRL(Math.max(fatTotal - top5, 0)), cor: "#155724" },
+                      ].map(k => (
+                        <div key={k.label} style={{ ...S.kpi, flex: 1 }}>
+                          <div style={S.kpiL}>{k.label}</div>
+                          <div style={{ ...S.kpiV, color: k.cor }}>{k.value}</div>
+                          <div style={S.kpiS}>{k.sub}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
+
+              {/* Faturamento por Cliente */}
+              <div style={S.sec}>Faturamento por Cliente — Ranking Completo</div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    {["#","Cliente","Cidade","Faturado","% Total","Recebido","A Receber","% Rec.","Pedidos"].map((h, i) => (
+                      <th key={i} style={{ ...S.th, textAlign: i >= 3 ? "right" : "left" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientesOrdenados.map((f, i) => {
+                    const pctFat = fatTotal > 0 ? Number(f.faturado) / fatTotal * 100 : 0;
+                    const pctRec = Number(f.faturado) > 0 ? Number(f.recebido) / Number(f.faturado) * 100 : 0;
                     return (
-                      <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#f7f9ff", opacity: isEmpty ? 0.5 : 1 }}>
-                        <td style={{ ...S.td, fontWeight: 700 }}>{m.mesCompleto}</td>
-                        <td style={{ ...S.tdR, color: isEmpty ? "#bbb" : "#2d5fa6" }}>{isEmpty ? "—" : formatBRL(m.faturado)}</td>
-                        <td style={{ ...S.tdR, color: isEmpty ? "#bbb" : "#155724" }}>{isEmpty ? "—" : formatBRL(m.recebido)}</td>
-                        <td style={{ ...S.tdR, color: (m.faturado-m.recebido) > 0 ? "#856404" : "#bbb" }}>{(m.faturado - m.recebido) > 0 ? formatBRL(m.faturado - m.recebido) : "—"}</td>
-                        <td style={{ ...S.tdR, color: isEmpty ? "#bbb" : pctRec >= 100 ? "#155724" : pctRec > 50 ? "#856404" : "#c0392b" }}>{isEmpty ? "—" : pctRec.toFixed(1) + "%"}</td>
-                        <td style={{ ...S.tdR, color: varM === null || isEmpty ? "#bbb" : varM >= 0 ? "#155724" : "#c0392b" }}>
-                          {!isEmpty && varM !== null ? (varM >= 0 ? "↑ +" : "↓ ") + Math.abs(varM).toFixed(1) + "%" : "—"}
-                        </td>
-                        <td style={{ ...S.tdR, color: "#555" }}>{isEmpty ? "—" : pctAcum.toFixed(1) + "%"}</td>
+                      <tr key={f.cliente_id} style={{ background: i < 3 ? "#f4f8ff" : i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
+                        <td style={{ ...S.td, color: i < 3 ? AZUL2 : "#888", textAlign: "center", fontWeight: i < 3 ? 800 : 400 }}>{i + 1}</td>
+                        <td style={{ ...S.tdB, color: i < 3 ? AZUL : "#222" }}>{f.cliente_nome}</td>
+                        <td style={{ ...S.td, color: "#555" }}>{(f as any).cidade || "—"}</td>
+                        <td style={{ ...S.tdR, color: AZUL2, fontWeight: 700 }}>{formatBRL(f.faturado)}</td>
+                        <td style={{ ...S.tdR, color: i < 3 ? AZUL2 : "#555", fontWeight: i < 3 ? 700 : 400 }}>{pctFat.toFixed(1)}%</td>
+                        <td style={{ ...S.tdR, color: "#155724" }}>{formatBRL(f.recebido)}</td>
+                        <td style={{ ...S.tdR, color: Number(f.a_receber) > 0 ? "#856404" : "#aaa" }}>{Number(f.a_receber) > 0 ? formatBRL(f.a_receber) : "—"}</td>
+                        <td style={{ ...S.tdR, color: pctRec >= 100 ? "#155724" : pctRec > 50 ? "#856404" : "#c0392b" }}>{pctRec.toFixed(1)}%</td>
+                        <td style={{ ...S.tdR }}>{f.total_pedidos}</td>
                       </tr>
                     );
-                  });
-                })()}
-                <tr style={{ background: "#eef3ff" }}>
-                  <td style={{ ...S.td, fontWeight: 800, color: "#2d5fa6" }}>TOTAL 2026</td>
-                  <td style={{ ...S.tdR, color: "#2d5fa6", fontWeight: 800 }}>{formatBRL(fatTotal)}</td>
-                  <td style={{ ...S.tdR, color: "#155724", fontWeight: 800 }}>{formatBRL(recTotal)}</td>
-                  <td style={{ ...S.tdR, color: "#856404", fontWeight: 800 }}>{formatBRL(aReceber)}</td>
-                  <td style={{ ...S.tdR, fontWeight: 800 }}>{fatTotal > 0 ? (recTotal/fatTotal*100).toFixed(1) + "%" : "—"}</td>
-                  <td style={S.tdR}>—</td>
-                  <td style={{ ...S.tdR, fontWeight: 800 }}>100%</td>
-                </tr>
-              </tbody>
-            </table>
+                  })}
+                  <tr>
+                    <td colSpan={3} style={{ ...S.tdTotal, color: AZUL, fontWeight: 800 }}>TOTAL</td>
+                    <td style={{ ...S.tdTotal, textAlign: "right", color: AZUL, fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(fatTotal)}</td>
+                    <td style={{ ...S.tdTotal, textAlign: "right", fontWeight: 800, fontFamily: "monospace" }}>100%</td>
+                    <td style={{ ...S.tdTotal, textAlign: "right", color: "#155724", fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(recTotal)}</td>
+                    <td style={{ ...S.tdTotal, textAlign: "right", color: "#856404", fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(aReceber)}</td>
+                    <td style={{ ...S.tdTotal, textAlign: "right", fontWeight: 800, fontFamily: "monospace" }}>{fatTotal > 0 ? (recTotal/fatTotal*100).toFixed(1) + "%" : "—"}</td>
+                    <td style={{ ...S.tdTotal, textAlign: "right", fontWeight: 800, fontFamily: "monospace" }}>{pedidos.length}</td>
+                  </tr>
+                </tbody>
+              </table>
 
-            {/* Clientes por faturamento */}
-            <div style={S.sec}>Faturamento por Cliente</div>
-            <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px", fontSize: "10px" }}>
-              <thead>
-                <tr>
-                  {["#","Cliente","Cidade","Faturado","% Total","Recebido","A Receber","% Rec.","Pedidos"].map((h, i) => (
-                    <th key={i} style={{ ...S.th, textAlign: i >= 3 ? "right" : "left" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {clientesOrdenados.map((f, i) => {
-                  const pctFat = fatTotal > 0 ? Number(f.faturado) / fatTotal * 100 : 0;
-                  const pctRec = Number(f.faturado) > 0 ? Number(f.recebido) / Number(f.faturado) * 100 : 0;
-                  return (
-                    <tr key={f.cliente_id} style={{ background: i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
-                      <td style={{ ...S.td, color: "#888", textAlign: "center" }}>{i + 1}</td>
-                      <td style={{ ...S.td, fontWeight: 700 }}>{f.cliente_nome}</td>
-                      <td style={{ ...S.td, color: "#555" }}>{(f as any).cidade || "—"}</td>
-                      <td style={{ ...S.tdR, color: "#2d5fa6", fontWeight: 700 }}>{formatBRL(f.faturado)}</td>
-                      <td style={{ ...S.tdR, color: "#555" }}>{pctFat.toFixed(1)}%</td>
-                      <td style={{ ...S.tdR, color: "#155724" }}>{formatBRL(f.recebido)}</td>
-                      <td style={{ ...S.tdR, color: Number(f.a_receber) > 0 ? "#856404" : "#aaa" }}>{Number(f.a_receber) > 0 ? formatBRL(f.a_receber) : "—"}</td>
-                      <td style={{ ...S.tdR, color: pctRec >= 100 ? "#155724" : pctRec > 50 ? "#856404" : "#c0392b" }}>{pctRec.toFixed(1)}%</td>
-                      <td style={{ ...S.tdR }}>{f.total_pedidos}</td>
-                    </tr>
-                  );
-                })}
-                <tr style={{ background: "#eef3ff" }}>
-                  <td colSpan={3} style={{ ...S.td, fontWeight: 800, color: "#2d5fa6" }}>TOTAL</td>
-                  <td style={{ ...S.tdR, color: "#2d5fa6", fontWeight: 800 }}>{formatBRL(fatTotal)}</td>
-                  <td style={{ ...S.tdR, fontWeight: 800 }}>100%</td>
-                  <td style={{ ...S.tdR, color: "#155724", fontWeight: 800 }}>{formatBRL(recTotal)}</td>
-                  <td style={{ ...S.tdR, color: "#856404", fontWeight: 800 }}>{formatBRL(aReceber)}</td>
-                  <td style={{ ...S.tdR, fontWeight: 800 }}>{fatTotal > 0 ? (recTotal/fatTotal*100).toFixed(1) + "%" : "—"}</td>
-                  <td style={{ ...S.tdR, fontWeight: 800 }}>{pedidos.length}</td>
-                </tr>
-              </tbody>
-            </table>
-
+            </div>
             <PdfFooter emissao={dtEmissao} />
           </div>
         )}
