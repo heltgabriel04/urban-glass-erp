@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
+import { roleFromJwt } from "@/lib/auth/role";
 
 function ultimaMeianoiteBRT(): Date {
   const nowUTC = new Date();
@@ -22,7 +23,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const response = NextResponse.next();
+  const response = NextResponse.next({
+    request: { headers: request.headers },
+  });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -40,6 +43,7 @@ export async function middleware(request: NextRequest) {
           }[]
         ) {
           cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value);
             response.cookies.set(name, value, options);
           });
         },
@@ -52,7 +56,10 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.redirect(new URL("/auth/login", request.url));
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/auth/login";
+    loginUrl.searchParams.set("redirect", pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
   // Encerra sessão se o último login ocorreu antes da meia-noite de hoje (BRT)
@@ -70,9 +77,26 @@ export async function middleware(request: NextRequest) {
     return redirect;
   }
 
+  // RBAC: perfil "producao" só acessa a tela de produção do pedido
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const role = roleFromJwt(session?.access_token);
+
+  if (role === "producao") {
+    const podeAcessar = /^\/pedidos\/[^/]+\/producao(\/.*)?$/.test(pathname);
+    if (!podeAcessar) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/login/acesso-negado";
+      return NextResponse.redirect(url);
+    }
+  }
+
   return response;
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // Todas as páginas (login + RBAC enforçados), exceto estáticos, /auth e /api.
+  // As rotas /api são protegidas individualmente nos próprios handlers.
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|auth).*)"],
 };

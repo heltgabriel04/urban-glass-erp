@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireRole } from "@/lib/auth/api-guard";
 
 const CANONICO = "Itaú Maxibuild";
 
 export async function POST() {
+  const denied = await requireRole(["admin"]);
+  if (denied) return denied;
+
   try {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,

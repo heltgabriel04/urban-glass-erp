@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth/api-guard";
 
 function getBaseUrl(): string {
   return (process.env.FOCUSNFE_AMBIENTE ?? "homologacao") === "producao"
@@ -11,6 +12,9 @@ function basicAuth(token: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await requireAuth();
+  if (denied) return denied;
+
   const { ref, payload } = await req.json();
 
   const token = process.env.FOCUSNFE_TOKEN ?? "";

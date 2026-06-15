@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireAuth } from "@/lib/auth/api-guard";
 
 function adminClient() {
   return createClient(
@@ -9,6 +10,10 @@ function adminClient() {
 }
 
 export async function GET() {
+  // TODO: restringir a "admin" quando o claim de perfil estiver configurado.
+  const denied = await requireAuth();
+  if (denied) return denied;
+
   const { data, error } = await adminClient()
     .from("log_atividades")
     .select("*")
@@ -23,6 +28,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await requireAuth();
+  if (denied) return denied;
+
   const body = await req.json();
   const { error } = await adminClient()
     .from("log_atividades")
