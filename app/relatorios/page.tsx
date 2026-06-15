@@ -7,7 +7,8 @@ import { getPedidos } from "@/services/pedidos.service";
 import { getEstoque } from "@/services/estoque.service";
 import { getOrcamentos } from "@/services/orcamentos.service";
 import { getAllHistoricoOtimizador } from "@/services/otimizador.service";
-import { formatBRL, formatPercent } from "@/lib/formatters";
+import { formatBRL, formatPercent, formatDuracao } from "@/lib/formatters";
+import { calcStatsEtapas, ETAPAS_FLUXO, calcLeadTime } from "@/lib/producao-stats";
 import { supabase } from "@/lib/supabase/client";
 import type { FinanceiroCliente, FaturamentoMensal, Pedido, Lancamento } from "@/types";
 
@@ -207,6 +208,22 @@ export default function RelatoriosPage() {
   const perdaGeral  = eficienciaMensal.length ? eficienciaMensal.reduce((a, m) => a + m.perdaMedia, 0) / eficienciaMensal.length : 0;
   const totalOtims  = otimHistorico.length;
   const totalRetalh = otimHistorico.reduce((a, h) => a + Number(h.retalhos_gerados), 0);
+
+  // ── Tempo por etapa de produção ──────────────────────────────────────────
+  const statsEtapas = useMemo(() => calcStatsEtapas(pedidos), [pedidos]);
+
+  const leadTimeMedio = useMemo(() => {
+    const lts = pedidos
+      .map(p => calcLeadTime(p))
+      .filter((v): v is number => v !== null);
+    if (!lts.length) return null;
+    return lts.reduce((a, b) => a + b, 0) / lts.length;
+  }, [pedidos]);
+
+  const maxEtapaMs = useMemo(
+    () => Math.max(...ETAPAS_FLUXO.map(e => statsEtapas[e]?.media ?? 0), 1),
+    [statsEtapas]
+  );
 
   // ── Fluxo de caixa – próximas 8 semanas ─────────────────────────────────
   const fluxoSemanas = useMemo(() => {
@@ -675,6 +692,123 @@ export default function RelatoriosPage() {
                           ))}
                         </div>
                       </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ══ TEMPO POR ETAPA (dentro de Tab 3: Eficiência) ══ */}
+              {tabIdx === 3 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "14px" }}>
+
+                  {/* KPIs de lead time */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px" }}>
+                    {[
+                      {
+                        label: "Lead Time Médio",
+                        value: leadTimeMedio ? formatDuracao(leadTimeMedio) : "—",
+                        color: "var(--acc)",
+                        sub: leadTimeMedio
+                          ? `do 1º status até Finalizado/Entregue`
+                          : "Sem pedidos finalizados com histórico",
+                      },
+                      {
+                        label: "Etapa mais lenta",
+                        value: (() => {
+                          const e = ETAPAS_FLUXO.find(et => statsEtapas[et]?.media === maxEtapaMs);
+                          return e ? e.replace('Em Produção – ', '') : "—";
+                        })(),
+                        color: "var(--err)",
+                        sub: maxEtapaMs > 1 ? `média ${formatDuracao(maxEtapaMs)}` : "Sem dados",
+                      },
+                      {
+                        label: "Pedidos com histórico",
+                        value: String(pedidos.filter(p => (p.status_history?.length ?? 0) >= 2).length),
+                        color: "var(--acc2)",
+                        sub: `de ${pedidos.length} pedidos no total`,
+                      },
+                    ].map(card => (
+                      <div key={card.label} style={{ background: "var(--surf)", border: "1px solid var(--b1)", borderRadius: "12px", padding: "18px 20px" }}>
+                        <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600, marginBottom: "8px" }}>{card.label}</div>
+                        <div style={{ fontSize: "22px", fontWeight: 700, color: card.color, fontFamily: "'DM Mono', monospace", lineHeight: 1.1, marginBottom: "6px" }}>{card.value}</div>
+                        <div style={{ fontSize: "11px", color: "var(--t3)" }}>{card.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Gráfico horizontal: média por etapa */}
+                  <div className="card">
+                    <div className="ct">
+                      Tempo Médio por Etapa de Produção
+                      <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>baseado em pedidos com histórico registrado</span>
+                    </div>
+                    {ETAPAS_FLUXO.filter(e => statsEtapas[e]).length === 0 ? (
+                      <div style={{ textAlign: "center", padding: "40px", color: "var(--t3)", fontSize: "12px" }}>
+                        Nenhum pedido com histórico de status ainda. Avance o status dos pedidos para acumular dados.
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                        {ETAPAS_FLUXO.filter(e => statsEtapas[e]).map(etapa => {
+                          const s = statsEtapas[etapa];
+                          const pct = maxEtapaMs > 0 ? (s.media / maxEtapaMs) * 100 : 0;
+                          const pctMediana = maxEtapaMs > 0 ? (s.mediana / maxEtapaMs) * 100 : 0;
+                          const isSlowest = s.media === maxEtapaMs;
+                          return (
+                            <div key={etapa} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <span style={{ fontSize: "12px", color: isSlowest ? "var(--err)" : "var(--t1)", fontWeight: isSlowest ? 700 : 500 }}>
+                                  {etapa}
+                                </span>
+                                <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+                                  <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>
+                                    med. {formatDuracao(s.mediana)}
+                                  </span>
+                                  <span style={{ fontSize: "13px", fontWeight: 700, color: isSlowest ? "var(--err)" : "var(--acc)", fontFamily: "'DM Mono', monospace" }}>
+                                    {formatDuracao(s.media)}
+                                  </span>
+                                  <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>
+                                    {s.count}x
+                                  </span>
+                                </div>
+                              </div>
+                              <div style={{ position: "relative", height: "8px", borderRadius: "4px", background: "var(--surf2)", overflow: "hidden" }}>
+                                <div style={{ position: "absolute", height: "100%", width: `${pct}%`, background: isSlowest ? "rgba(244,63,94,.5)" : "rgba(61,255,160,.35)", borderRadius: "4px", transition: "width .4s" }} />
+                                <div style={{ position: "absolute", height: "100%", width: `${pctMediana}%`, background: isSlowest ? "rgba(244,63,94,.8)" : "rgba(61,255,160,.75)", borderRadius: "4px", transition: "width .4s" }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div style={{ display: "flex", gap: "16px", marginTop: "4px" }}>
+                          {[{ color: "rgba(61,255,160,.75)", label: "Mediana" }, { color: "rgba(61,255,160,.35)", label: "Média" }].map(l => (
+                            <div key={l.label} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "10px", color: "var(--t2)" }}>
+                              <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: l.color }} />{l.label}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Tabela detalhada */}
+                  {ETAPAS_FLUXO.filter(e => statsEtapas[e]).length > 0 && (
+                    <div className="card">
+                      <div className="ct">Detalhamento por Etapa</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 100px 100px 100px 100px 60px", gap: "8px", padding: "6px 12px", fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontFamily: "'DM Mono', monospace", borderBottom: "1px solid var(--b1)" }}>
+                        <div>Etapa</div><div style={{ textAlign: "right" }}>Média</div><div style={{ textAlign: "right" }}>Mediana</div><div style={{ textAlign: "right" }}>Mínimo</div><div style={{ textAlign: "right" }}>Máximo</div><div style={{ textAlign: "right" }}>N</div>
+                      </div>
+                      {ETAPAS_FLUXO.filter(e => statsEtapas[e]).map((etapa, i) => {
+                        const s = statsEtapas[etapa];
+                        return (
+                          <div key={etapa} style={{ display: "grid", gridTemplateColumns: "1fr 100px 100px 100px 100px 60px", gap: "8px", padding: "8px 12px", borderRadius: "6px", background: i % 2 === 0 ? "var(--surf2)" : "transparent" }}>
+                            <div style={{ fontSize: "12px", color: "var(--t1)", fontWeight: 500 }}>{etapa}</div>
+                            <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--acc)", fontWeight: 700, textAlign: "right" }}>{formatDuracao(s.media)}</div>
+                            <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--t2)", textAlign: "right" }}>{formatDuracao(s.mediana)}</div>
+                            <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--ok)", textAlign: "right" }}>{formatDuracao(s.min)}</div>
+                            <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--err)", textAlign: "right" }}>{formatDuracao(s.max)}</div>
+                            <div style={{ fontSize: "12px", fontFamily: "'DM Mono', monospace", color: "var(--t3)", textAlign: "right" }}>{s.count}</div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
