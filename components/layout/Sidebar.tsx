@@ -20,6 +20,12 @@ const NAV = [
     ],
   },
   {
+    grupo: "COMPRAS",
+    items: [
+      { href: "/fornecedores", label: "Fornecedores",        icon: "⬢" },
+    ],
+  },
+  {
     grupo: "OPERAÇÃO",
     items: [
       { href: "/otimizador", label: "Otimizador de Corte", icon: "◇" },

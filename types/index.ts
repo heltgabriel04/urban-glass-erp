@@ -60,6 +60,25 @@ export interface Cliente {
 export type ClienteInsert = Omit<Cliente, 'id' | 'created_at'>;
 export type ClienteUpdate = Partial<ClienteInsert>;
 
+// ─── FORNECEDOR ────────────────────────────────────────────
+export interface Fornecedor {
+  id: number;
+  nome: string;
+  cnpj: string;
+  tel: string;
+  email: string;
+  contato: string;
+  cidade: string;
+  uf: string;
+  categoria: string;
+  obs: string;
+  ativo: boolean;
+  created_at: string;
+}
+
+export type FornecedorInsert = Omit<Fornecedor, 'id' | 'created_at'>;
+export type FornecedorUpdate = Partial<FornecedorInsert>;
+
 // ─── TABELA DE PREÇO ───────────────────────────────────────
 export interface TabelaPreco {
   id: number;
@@ -411,6 +430,7 @@ export type Database = {
   public: {
     Tables: {
       clientes:                { Row: Cliente;             Insert: ClienteInsert;      Update: ClienteUpdate  };
+      fornecedores:            { Row: Fornecedor;          Insert: FornecedorInsert;   Update: FornecedorUpdate };
       produtos:                { Row: Produto;             Insert: ProdutoInsert;      Update: ProdutoUpdate  };
       pedidos:                 { Row: Pedido;              Insert: PedidoInsert;       Update: PedidoUpdate   };
       itens_pedido:            { Row: ItemPedido;          Insert: ItemPedidoInsert                           };
