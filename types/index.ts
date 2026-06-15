@@ -166,7 +166,7 @@ export interface StatusHistoryEntry {
 export interface Pedido {
   id: string;
   cliente_id: number;
-  vendedor_id: number | null;
+  vendedor_id?: number | null;
   dt_pedido: string;
   dt_retirada: string | null;
   datas_pgto: string[];
@@ -310,7 +310,7 @@ export interface Lancamento {
   vencimento: string | null;
   pedido_id: string | null;
   cliente_id: number | null;
-  vendedor_id: number | null;
+  vendedor_id?: number | null;
   created_at: string;
   pedidos?: Pick<Pedido, 'id'>;
   clientes?: Pick<Cliente, 'id' | 'nome'>;
