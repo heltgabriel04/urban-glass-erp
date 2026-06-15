@@ -330,6 +330,7 @@ export default function PedidoDetalhe() {
         descricao: editForm.parcelas === 1 ? `Recebimento · ${pedido.id}` : `Parcela ${i + 1}/${editForm.parcelas} · ${pedido.id}`,
         valor: p.valor, status: "A Receber", vencimento: p.data,
         pedido_id: pedido.id, cliente_id: editForm.cliente_id,
+        conta: editForm.conta || CONTAS[0],
       });
     }
     await recalcularRecebido(pedido.id);
@@ -418,7 +419,7 @@ export default function PedidoDetalhe() {
       [l.id]: {
         valor: l.valor,
         data: l.vencimento ?? "",
-        conta: (l as any).conta ?? "",
+        conta: l.conta ?? "",
         salvando: false,
       },
     }));
@@ -434,15 +435,23 @@ export default function PedidoDetalhe() {
   }
 
   // Salva edição inline de um lançamento pago
-  async function handleSalvarEdicaoPago(lancId: number) {
+   async function handleSalvarEdicaoPago(lancId: number) {
     const ed = editandoPago[lancId];
     if (!ed || !pedido) return;
     setEditandoPago(prev => ({ ...prev, [lancId]: { ...prev[lancId], salvando: true } }));
-    await updateLancamento(lancId, ({
+
+    const atualizado = await updateLancamento(lancId, {
       valor: ed.valor,
       vencimento: ed.data,
-      ...(ed.conta ? { conta: ed.conta } : {}),
-    } as any));
+      conta: ed.conta || null,
+    });
+
+    if (!atualizado) {
+      toast("Erro ao salvar", "err");
+      setEditandoPago(prev => ({ ...prev, [lancId]: { ...prev[lancId], salvando: false } }));
+      return;
+    }
+
     await recalcularRecebido(pedido.id);
     toast("✓ Pagamento atualizado");
     cancelarEdicaoPago(lancId);
@@ -840,13 +849,13 @@ export default function PedidoDetalhe() {
                               {formatBRL(l.valor)}
                             </span>
                             {/* Badge da conta */}
-                            {(l as any).conta && (
+                            {l.conta && (
                               <span style={{
                                 fontSize:"10px", color:"var(--acc2)", fontFamily:"'DM Mono',monospace",
                                 background:"rgba(0,200,255,.08)", border:"1px solid rgba(0,200,255,.2)",
                                 borderRadius:"4px", padding:"2px 7px", flexShrink:0, fontWeight:600,
                               }}>
-                                {(l as any).conta}
+                                {l.conta}
                               </span>
                             )}
                             <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>

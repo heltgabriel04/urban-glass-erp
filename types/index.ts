@@ -308,6 +308,7 @@ export interface Lancamento {
   valor: number;
   status: StatusLancamento;
   vencimento: string | null;
+  conta: string | null;
   pedido_id: string | null;
   cliente_id: number | null;
   vendedor_id?: number | null;

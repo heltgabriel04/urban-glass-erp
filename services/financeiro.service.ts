@@ -165,6 +165,7 @@ export async function criarLancamentosParcelados({
         : `Parcela ${i + 1}/${total} · ${pedidoId}`,
       valor: p.valor,
       status: 'A Receber' as const,
+      conta: '',
       vencimento: p.data,
       pedido_id: pedidoId,
       cliente_id: clienteId,
