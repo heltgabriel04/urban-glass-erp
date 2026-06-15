@@ -764,7 +764,8 @@ function OtimizadorContent() {
       consumoPorProd.set(r.prod, { chapas: prev.chapas + 1, m2: prev.m2 + (r.W * r.H) / 1e6 });
     });
     for (const [prodNome, consumo] of consumoPorProd.entries()) {
-      await baixarChapasEstoque(prodNome, consumo.chapas, parseFloat(consumo.m2.toFixed(4)));
+      const prodId = produtos.find(pr => pr.nome === prodNome)?.id;
+      await baixarChapasEstoque(prodNome, consumo.chapas, parseFloat(consumo.m2.toFixed(4)), prodId);
     }
     router.push("/pedidos/" + pedidoRef);
   }
