@@ -1,0 +1,59 @@
+import { supabase } from '@/lib/supabase/client';
+
+export interface MargemPedido {
+  pedido_id: string;
+  cliente_nome: string;
+  dt_pedido: string;
+  receita: number;
+  custo: number;       // CMV aproximado (Σ m² × custo_m2 atual)
+  margem: number;      // receita − custo
+  margemPct: number;   // margem / receita × 100
+  semCusto: boolean;   // true se nenhum item teve custo (custo_m2 ausente)
+}
+
+/**
+ * Margem bruta por pedido (aproximada):
+ *   receita = pedidos.valor_total
+ *   custo   = Σ (item.m2 × custo_m2 do produto), exceto itens de vidro do cliente
+ * Limitações: usa o custo_m2 ATUAL do estoque (não o do momento da venda) e
+ * NÃO inclui custo de lapidação.
+ */
+export async function getMargemPorPedido(): Promise<MargemPedido[]> {
+  const [estoqueRes, pedidosRes, itensRes] = await Promise.all([
+    supabase.from('estoque').select('produto_id, custo_m2'),
+    supabase.from('pedidos').select('id, dt_pedido, valor_total, status, clientes ( nome )').neq('status', 'Cancelado'),
+    supabase.from('itens_pedido').select('pedido_id, produto_id, m2, vidro_cliente'),
+  ]);
+
+  if (pedidosRes.error) { console.error('getMargemPorPedido:', pedidosRes.error); return []; }
+
+  const custoM2PorProduto = new Map<number, number>();
+  for (const e of (estoqueRes.data ?? []) as Array<{ produto_id: number | null; custo_m2: number }>) {
+    if (e.produto_id != null) custoM2PorProduto.set(e.produto_id, Number(e.custo_m2) || 0);
+  }
+
+  const custoPorPedido = new Map<string, number>();
+  const temCustoPorPedido = new Map<string, boolean>();
+  for (const it of (itensRes.data ?? []) as Array<{ pedido_id: string; produto_id: number | null; m2: number; vidro_cliente: boolean }>) {
+    if (it.vidro_cliente) continue; // cliente trouxe o vidro → sem custo de chapa
+    const custoM2 = it.produto_id != null ? (custoM2PorProduto.get(it.produto_id) ?? 0) : 0;
+    custoPorPedido.set(it.pedido_id, (custoPorPedido.get(it.pedido_id) ?? 0) + Number(it.m2) * custoM2);
+    if (custoM2 > 0) temCustoPorPedido.set(it.pedido_id, true);
+  }
+
+  return ((pedidosRes.data ?? []) as Array<{ id: string; dt_pedido: string; valor_total: number; clientes?: { nome?: string } }>)
+    .map(p => {
+      const receita = Number(p.valor_total) || 0;
+      const custo   = parseFloat((custoPorPedido.get(p.id) ?? 0).toFixed(2));
+      const margem  = parseFloat((receita - custo).toFixed(2));
+      return {
+        pedido_id:    p.id,
+        cliente_nome: p.clientes?.nome ?? '—',
+        dt_pedido:    p.dt_pedido,
+        receita, custo, margem,
+        margemPct:    receita > 0 ? (margem / receita) * 100 : 0,
+        semCusto:     !temCustoPorPedido.get(p.id),
+      };
+    })
+    .sort((a, b) => b.margem - a.margem);
+}

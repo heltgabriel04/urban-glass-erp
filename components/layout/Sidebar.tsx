@@ -53,6 +53,7 @@ const NAV = [
       { href: "/produtos",   label: "Produtos",             icon: "◫" },
       { href: "/tabelas",    label: "Tabelas de Preço",     icon: "▦" },
       { href: "/relatorios", label: "Relatórios & BI",      icon: "◭" },
+      { href: "/margem",     label: "Margem & CMV",         icon: "⬗" },
       { href: "/logs",       label: "Histórico",            icon: "◷" },
     ],
   },
