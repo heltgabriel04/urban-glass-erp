@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getOrcamentos, updateOrcamento, aprovarOrcamento, rejeitarOrcamento, deletarOrcamento } from "@/services/orcamentos.service";
-import { formatBRL, formatDate } from "@/lib/formatters";
+import { formatBRL, formatDate, formatPercent } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 
 const CHIP: Record<string, string> = {
@@ -83,6 +83,9 @@ export default function OrcamentosPage() {
   const totalAprovados  = orcamentos.filter(o => o.status === "Aprovado").length;
   const totalPendentes  = orcamentos.filter(o => ["Rascunho", "Enviado"].includes(o.status)).length;
   const totalRejeitados = orcamentos.filter(o => o.status === "Rejeitado").length;
+  // Taxa de conversão: aprovados ÷ decididos (aprovados + rejeitados); ignora pendentes.
+  const decididos     = totalAprovados + totalRejeitados;
+  const taxaConversao = decididos > 0 ? (totalAprovados / decididos) * 100 : 0;
 
   function btnAcao(corHover: string, bgHover: string, titulo: string, icone: string, onClick: () => void) {
     return (
@@ -116,13 +119,14 @@ export default function OrcamentosPage() {
       <div className="con">
 
         {/* CARDS */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:"12px", marginBottom:"20px" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:"12px", marginBottom:"20px" }}>
           {[
             { label:"Total",       value: String(orcamentos.length), color:"var(--t1)",   sub:"orçamentos" },
             { label:"Valor Total", value: formatBRL(totalValor),     color:"var(--acc)",  sub:"soma geral" },
             { label:"Aprovados",   value: String(totalAprovados),    color:"var(--ok)",   sub:"convertidos" },
             { label:"Pendentes",   value: String(totalPendentes),    color:"var(--warn)", sub:"rascunho + enviado" },
             { label:"Rejeitados",  value: String(totalRejeitados),   color:"var(--err)",  sub:"não aprovados" },
+            { label:"Conversão",   value: formatPercent(taxaConversao, 0), color:"var(--acc2)", sub:"aprov. ÷ decididos" },
           ].map(card => (
             <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
               <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>

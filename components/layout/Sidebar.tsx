@@ -20,6 +20,12 @@ const NAV = [
     ],
   },
   {
+    grupo: "COMPRAS",
+    items: [
+      { href: "/fornecedores", label: "Fornecedores",        icon: "⬢" },
+    ],
+  },
+  {
     grupo: "OPERAÇÃO",
     items: [
       { href: "/otimizador", label: "Otimizador de Corte", icon: "◇" },
@@ -32,6 +38,7 @@ const NAV = [
     grupo: "FINANCEIRO",
     items: [
       { href: "/financeiro",    label: "Gestão de Contas",   icon: "◉" },
+      { href: "/dre",           label: "DRE · Resultado",    icon: "◈" },
       { href: "/investimentos", label: "Investimentos",      icon: "◆" },
       // Oculto temporariamente a pedido — rota /investimentos/apresentacao continua existindo.
       // Para reexibir, basta descomentar a linha abaixo:
@@ -47,6 +54,8 @@ const NAV = [
       { href: "/produtos",   label: "Produtos",             icon: "◫" },
       { href: "/tabelas",    label: "Tabelas de Preço",     icon: "▦" },
       { href: "/relatorios", label: "Relatórios & BI",      icon: "◭" },
+      { href: "/margem",     label: "Margem & CMV",         icon: "⬗" },
+      { href: "/giro",       label: "Giro & Cobertura",     icon: "↻" },
       { href: "/logs",       label: "Histórico",            icon: "◷" },
     ],
   },

@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireRole } from "@/lib/auth/api-guard";
 
 export async function POST() {
+  const denied = await requireRole(["admin"]);
+  if (denied) return denied;
+
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SECRET_KEY!,

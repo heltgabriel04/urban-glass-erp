@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
-import { getPedidos, avancarStatusPedido, retrocederStatusPedido, deletarPedido } from "@/services/pedidos.service";
+import { getPedidosPaginado, getPedidosTotais, avancarStatusPedido, retrocederStatusPedido, deletarPedido, type PedidosTotais } from "@/services/pedidos.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import { supabase } from "@/lib/supabase/client";
@@ -33,31 +33,54 @@ function isChapaInteira(largura: number, altura: number): boolean {
   );
 }
 
+const PAGE_SIZE = 50;
+
 export default function PedidosPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [pedidos, setPedidos]             = useState<Pedido[]>([]);
   const [loading, setLoading]             = useState(true);
   const [filtro, setFiltro]               = useState("");
+  const [page, setPage]                   = useState(0); // 0-based
+  const [total, setTotal]                 = useState(0);
+  const [totais, setTotais]               = useState<PedidosTotais>({ count: 0, valorTotal: 0, recebido: 0, emProducao: 0 });
   const [comOtimizacao, setComOtimizacao] = useState<Set<string>>(new Set());
   const [pedidosChapa, setPedidosChapa]   = useState<Set<string>>(new Set());
   const [pedidosVidroCliente, setPedidosVidroCliente] = useState<Set<string>>(new Set());
 
-  useEffect(() => { load(); }, []);
+  // Recarrega ao mudar página ou busca (busca com debounce de 300ms).
+  useEffect(() => {
+    const t = setTimeout(() => { load(); }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, filtro]);
 
   async function load() {
     setLoading(true);
-    const [data, otimRows, itensRows] = await Promise.all([
-      getPedidos(),
-      supabase.from("historico_otimizador").select("pedido_id"),
-      supabase.from("itens_pedido").select("pedido_id, largura, altura, vidro_cliente"),
+    const [{ rows, total: tot }, totaisGlobais] = await Promise.all([
+      getPedidosPaginado({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, busca: filtro }),
+      getPedidosTotais(),
     ]);
-    setPedidos(data);
+    setPedidos(rows);
+    setTotal(tot);
+    setTotais(totaisGlobais);
 
-    const ids = new Set<string>(
-      (otimRows.data ?? []).map((r: any) => r.pedido_id as string)
-    );
-    setComOtimizacao(ids);
+    // Badges (otimização / chapa inteira / vidro do cliente) só da página visível
+    const ids = rows.map(p => p.id);
+    if (ids.length === 0) {
+      setComOtimizacao(new Set());
+      setPedidosChapa(new Set());
+      setPedidosVidroCliente(new Set());
+      setLoading(false);
+      return;
+    }
+
+    const [otimRows, itensRows] = await Promise.all([
+      supabase.from("historico_otimizador").select("pedido_id").in("pedido_id", ids),
+      supabase.from("itens_pedido").select("pedido_id, largura, altura, vidro_cliente").in("pedido_id", ids),
+    ]);
+
+    setComOtimizacao(new Set<string>((otimRows.data ?? []).map((r: any) => r.pedido_id as string)));
 
     // Agrupa itens por pedido
     const itensPorPedido: Record<string, any[]> = {};
@@ -102,17 +125,8 @@ export default function PedidosPage() {
     else toast("Erro ao excluir pedido", "err");
   }
 
-  const totalValor    = pedidos.reduce((a, p) => a + Number(p.valor_total), 0);
-  const totalRecebido = pedidos.reduce((a, p) => a + Number(p.valor_recebido), 0);
-  const totalAberto   = totalValor - totalRecebido;
-  const emProducao    = pedidos.filter(p => p.status.startsWith("Em Produção")).length;
-
-  const filtrados = pedidos.filter(p =>
-    !filtro ||
-    p.id.toLowerCase().includes(filtro.toLowerCase()) ||
-    p.clientes?.nome.toLowerCase().includes(filtro.toLowerCase()) ||
-    p.status.toLowerCase().includes(filtro.toLowerCase())
-  );
+  const totalAberto = totais.valorTotal - totais.recebido;
+  const totalPages  = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   function btnAcao(corHover: string, bgHover: string, titulo: string, icone: string, onClick: () => void) {
     return (
@@ -152,7 +166,7 @@ export default function PedidosPage() {
           <input
             placeholder="Buscar pedido ou cliente..."
             value={filtro}
-            onChange={e => setFiltro(e.target.value)}
+            onChange={e => { setFiltro(e.target.value); setPage(0); }}
           />
         </div>
         <a href="/pedidos/novo" className="btn bp sm">+ Novo Pedido</a>
@@ -162,11 +176,11 @@ export default function PedidosPage() {
 
         <div style={{ display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:"12px", marginBottom:"20px" }}>
           {[
-            { label:"Total",       value: String(pedidos.length),    color:"var(--t1)",   sub:"pedidos" },
-            { label:"Valor Total", value: formatBRL(totalValor),     color:"var(--acc)",  sub:"soma geral" },
-            { label:"Recebido",    value: formatBRL(totalRecebido),  color:"var(--ok)",   sub:"pagamentos" },
-            { label:"A Receber",   value: formatBRL(totalAberto),    color:"var(--warn)", sub:"em aberto" },
-            { label:"Em Produção", value: String(emProducao),        color:"var(--acc2)", sub:"em andamento" },
+            { label:"Total",       value: String(totais.count),        color:"var(--t1)",   sub:"pedidos" },
+            { label:"Valor Total", value: formatBRL(totais.valorTotal), color:"var(--acc)",  sub:"soma geral" },
+            { label:"Recebido",    value: formatBRL(totais.recebido),   color:"var(--ok)",   sub:"pagamentos" },
+            { label:"A Receber",   value: formatBRL(totalAberto),       color:"var(--warn)", sub:"em aberto" },
+            { label:"Em Produção", value: String(totais.emProducao),    color:"var(--acc2)", sub:"em andamento" },
           ].map(card => (
             <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
               <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
@@ -196,14 +210,14 @@ export default function PedidosPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtrados.length === 0 && (
+                {pedidos.length === 0 && (
                   <tr>
                     <td colSpan={10} style={{ textAlign:"center", color:"var(--t3)", padding:"32px" }}>
                       Nenhum pedido encontrado
                     </td>
                   </tr>
                 )}
-                {filtrados.map(p => {
+                {pedidos.map(p => {
                   const aberto        = p.valor_total - p.valor_recebido;
                   const quitado       = aberto <= 0;
                   const finalizado    = ["Entregue","Cancelado"].includes(p.status);
@@ -304,6 +318,27 @@ export default function PedidosPage() {
                 })}
               </tbody>
             </table>
+
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:"16px", fontSize:"12px", color:"var(--t3)" }}>
+              <span>
+                {total === 0
+                  ? "0 pedidos"
+                  : `Mostrando ${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, total)} de ${total}`}
+              </span>
+              <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
+                <button
+                  onClick={() => setPage(p => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  style={{ padding:"6px 12px", borderRadius:"6px", border:"1px solid var(--b2)", background:"transparent", color: page === 0 ? "var(--t4,#555)" : "var(--t2)", cursor: page === 0 ? "not-allowed" : "pointer" }}
+                >◀ Anterior</button>
+                <span className="mono">{page + 1} / {totalPages}</span>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                  disabled={page >= totalPages - 1}
+                  style={{ padding:"6px 12px", borderRadius:"6px", border:"1px solid var(--b2)", background:"transparent", color: page >= totalPages - 1 ? "var(--t4,#555)" : "var(--t2)", cursor: page >= totalPages - 1 ? "not-allowed" : "pointer" }}
+                >Próxima ▶</button>
+              </div>
+            </div>
           </div>
         )}
       </div>

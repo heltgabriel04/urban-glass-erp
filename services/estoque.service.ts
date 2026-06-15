@@ -54,21 +54,30 @@ export async function getEstoqueByProdutoNome(produtoNome: string): Promise<Esto
 export async function baixarChapasEstoque(
   produtoNome: string,
   chapasUsadas: number,
-  m2Consumido: number
+  m2Consumido: number,
+  produtoId?: number
 ): Promise<boolean> {
-  // Busca o item de estoque pelo nome do produto
-  const { data: estoqueItems, error: errBusca } = await supabase
-    .from('estoque')
-    .select('id, chapas_saldo, m2_saldo, m2_consumido, produtos!inner(nome)')
-    .eq('produtos.nome', produtoNome)
-    .limit(1);
+  // Prefere a busca por produto_id (FK — robusta a renome/duplicidade de nome).
+  // Cai para a busca por nome quando o id não é conhecido (ex.: sincronização
+  // a partir do histórico de otimizações, que só guarda o nome do produto).
+  const { data: estoqueItems, error: errBusca } = produtoId != null
+    ? await supabase
+        .from('estoque')
+        .select('id, chapas_saldo, m2_saldo, m2_consumido')
+        .eq('produto_id', produtoId)
+        .limit(1)
+    : await supabase
+        .from('estoque')
+        .select('id, chapas_saldo, m2_saldo, m2_consumido, produtos!inner(nome)')
+        .eq('produtos.nome', produtoNome)
+        .limit(1);
 
   if (errBusca || !estoqueItems || estoqueItems.length === 0) {
-    console.warn('baixarChapasEstoque: produto não encontrado no estoque:', produtoNome);
+    console.warn('baixarChapasEstoque: produto não encontrado no estoque:', produtoNome, produtoId ?? '');
     return false;
   }
 
-  const item = estoqueItems[0];
+  const item = estoqueItems[0] as { id: number; chapas_saldo: number; m2_saldo: number; m2_consumido: number };
   const novoSaldoChapas = Math.max(0, Number(item.chapas_saldo) - chapasUsadas);
   const novoSaldoM2     = Math.max(0, parseFloat((Number(item.m2_saldo) - m2Consumido).toFixed(4)));
   const novoConsumido   = parseFloat((Number(item.m2_consumido) + m2Consumido).toFixed(4));

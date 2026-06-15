@@ -243,6 +243,21 @@ export default function EstoquePage() {
   const chapasTotal  = estoque.reduce((a, e) => a + Number(e.chapas_saldo), 0);
   const valorEstoque = estoque.reduce((a, e) => a + Number(e.m2_saldo) * Number(e.custo_m2), 0);
 
+  // Ruptura: saldo de chapas no nível ou abaixo do mínimo definido (mínimo > 0)
+  function emRuptura(e: EstoqueItem): boolean {
+    const min = Number(e.estoque_minimo_chapas ?? 0);
+    return min > 0 && Number(e.chapas_saldo) <= min;
+  }
+  const emRupturaCount = estoque.filter(emRuptura).length;
+
+  async function salvarMinimo(item: EstoqueItem, valor: number) {
+    const v = Math.max(0, Math.floor(valor || 0));
+    if (v === Number(item.estoque_minimo_chapas ?? 0)) return;
+    const { error } = await supabase.from("estoque").update({ estoque_minimo_chapas: v } as never).eq("id", item.id);
+    if (error) { alert("Erro ao salvar mínimo: " + error.message); return; }
+    setEstoque(prev => prev.map(e => e.id === item.id ? { ...e, estoque_minimo_chapas: v } : e));
+  }
+
   function nivelChip(pct: number) {
     if (pct >= 60) return <span className="chip cg">Alto</span>;
     if (pct >= 30) return <span className="chip cy">Médio</span>;
@@ -402,11 +417,12 @@ export default function EstoquePage() {
         )}
 
         {/* Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginBottom: "20px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "20px" }}>
           {[
             { label: "m² em Estoque",     value: formatM2(m2Total),      color: "var(--acc)",  sub: "m² disponíveis" },
             { label: "Chapas em Estoque", value: String(chapasTotal),     color: "var(--acc2)", sub: "chapas disponíveis" },
             { label: "Valor do Estoque",  value: formatBRL(valorEstoque), color: "var(--acc5)", sub: "custo de aquisição" },
+            { label: "Em Ruptura",        value: String(emRupturaCount),  color: emRupturaCount > 0 ? "var(--err)" : "var(--ok)", sub: "no/abaixo do mínimo" },
           ].map(card => (
             <div key={card.label} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: "4px" }}>
               <div style={{ fontSize: "11px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{card.label}</div>
@@ -424,13 +440,14 @@ export default function EstoquePage() {
                   <tr>
                     <th>Produto</th><th>Código</th><th>Chapas Entrada</th>
                     <th>m² Entrada</th><th>m² Consumido</th><th>Chapas Saldo</th>
+                    <th>Mín.</th>
                     <th>m² Saldo</th><th>Custo/m²</th><th>Valor Total</th><th>Nível</th>
                     <th>Ações</th><th style={{ width: "40px" }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {estoque.length === 0 && (
-                    <tr><td colSpan={12} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>Nenhum item no estoque — registre uma entrada acima</td></tr>
+                    <tr><td colSpan={13} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>Nenhum item no estoque — registre uma entrada acima</td></tr>
                   )}
                   {estoque.map(e => {
                     const pct = Number(e.m2_entrada) > 0 ? (Number(e.m2_saldo) / Number(e.m2_entrada)) * 100 : 0;
@@ -444,7 +461,19 @@ export default function EstoquePage() {
                         <td className="mono">{e.chapas_entrada}</td>
                         <td className="mono">{formatM2(e.m2_entrada)}</td>
                         <td className="mono" style={{ color: "var(--warn)" }}>{formatM2(e.m2_consumido)}</td>
-                        <td className="mono">{e.chapas_saldo}</td>
+                        <td className="mono" style={{ color: emRuptura(e) ? "var(--err)" : undefined }}>
+                          {e.chapas_saldo}
+                          {emRuptura(e) && <span title="No/abaixo do estoque mínimo" style={{ marginLeft: "4px" }}>⚠</span>}
+                        </td>
+                        <td>
+                          <input
+                            type="number" min="0"
+                            defaultValue={Number(e.estoque_minimo_chapas ?? 0)}
+                            onBlur={ev => salvarMinimo(e, parseInt(ev.target.value || "0"))}
+                            title="Estoque mínimo (chapas) — alerta de ruptura"
+                            style={{ ...inp, width: "56px", padding: "4px 6px", fontSize: "12px" }}
+                          />
+                        </td>
                         <td className="mono" style={{ color: "var(--acc)" }}>{formatM2(e.m2_saldo)}</td>
                         <td className="mono">{formatBRL(e.custo_m2)}</td>
                         <td className="mono">{formatBRL(Number(e.m2_saldo) * Number(e.custo_m2))}</td>
