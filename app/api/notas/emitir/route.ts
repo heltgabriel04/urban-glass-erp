@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/api-guard";
+import { emitirNotaSchema } from "@/lib/validation/api";
 
 function getBaseUrl(): string {
   return (process.env.FOCUSNFE_AMBIENTE ?? "homologacao") === "producao"
@@ -15,7 +16,15 @@ export async function POST(req: NextRequest) {
   const denied = await requireAuth();
   if (denied) return denied;
 
-  const { ref, payload } = await req.json();
+  let raw: unknown;
+  try { raw = await req.json(); }
+  catch { return NextResponse.json({ message: "JSON inválido" }, { status: 400 }); }
+
+  const parsed = emitirNotaSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json({ message: "Payload inválido", detalhes: parsed.error.flatten() }, { status: 400 });
+  }
+  const { ref, payload } = parsed.data;
 
   const token = process.env.FOCUSNFE_TOKEN ?? "";
 

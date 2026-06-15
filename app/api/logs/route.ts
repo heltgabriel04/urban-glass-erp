@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { requireAuth } from "@/lib/auth/api-guard";
+import { logEntrySchema } from "@/lib/validation/api";
 
 function adminClient() {
   return createClient(
@@ -31,10 +32,18 @@ export async function POST(req: NextRequest) {
   const denied = await requireAuth();
   if (denied) return denied;
 
-  const body = await req.json();
+  let raw: unknown;
+  try { raw = await req.json(); }
+  catch { return NextResponse.json({ error: "JSON inválido" }, { status: 400 }); }
+
+  const parsed = logEntrySchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Payload inválido", detalhes: parsed.error.flatten() }, { status: 400 });
+  }
+
   const { error } = await adminClient()
     .from("log_atividades")
-    .insert(body as never);
+    .insert(parsed.data as never);
 
   if (error) {
     console.error("POST /api/logs:", error.message);
