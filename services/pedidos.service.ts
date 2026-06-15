@@ -16,6 +16,58 @@ export async function getPedidos(filtroStatus?: StatusPedido) {
   return data as Pedido[];
 }
 
+export interface PedidosPagina {
+  rows: Pedido[];
+  total: number; // total de registros que casam com a busca (para paginação)
+}
+
+/** Lista paginada com busca server-side por id do pedido, status ou nome do cliente. */
+export async function getPedidosPaginado(
+  { limit, offset, busca }: { limit: number; offset: number; busca?: string }
+): Promise<PedidosPagina> {
+  let query = supabase
+    .from('pedidos')
+    .select(`*, clientes ( id, nome, cidade, tel )`, { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  const termo = busca?.trim();
+  if (termo) {
+    // Busca por nome do cliente: resolve os ids primeiro (própria coluna cliente_id)
+    const { data: cli } = await supabase.from('clientes').select('id').ilike('nome', `%${termo}%`);
+    const ids = (cli ?? []).map(c => (c as { id: number }).id);
+    // Sanitiza para o filtro .or() (vírgula e parênteses são sintaxe do PostgREST)
+    const safe = termo.replace(/[,()]/g, ' ');
+    const ors = [`id.ilike.%${safe}%`, `status.ilike.%${safe}%`];
+    if (ids.length) ors.push(`cliente_id.in.(${ids.join(',')})`);
+    query = query.or(ors.join(','));
+  }
+
+  const { data, error, count } = await query;
+  if (error) { console.error('getPedidosPaginado:', error); return { rows: [], total: 0 }; }
+  return { rows: (data ?? []) as Pedido[], total: count ?? 0 };
+}
+
+export interface PedidosTotais {
+  count: number;
+  valorTotal: number;
+  recebido: number;
+  emProducao: number;
+}
+
+/** Totais globais (todos os pedidos) para os cards — payload leve, sem joins. */
+export async function getPedidosTotais(): Promise<PedidosTotais> {
+  const { data, error } = await supabase.from('pedidos').select('valor_total, valor_recebido, status');
+  if (error) { console.error('getPedidosTotais:', error); return { count: 0, valorTotal: 0, recebido: 0, emProducao: 0 }; }
+  const rows = (data ?? []) as Array<{ valor_total: number; valor_recebido: number; status: string }>;
+  return {
+    count:      rows.length,
+    valorTotal: rows.reduce((a, r) => a + Number(r.valor_total), 0),
+    recebido:   rows.reduce((a, r) => a + Number(r.valor_recebido), 0),
+    emProducao: rows.filter(r => r.status.startsWith('Em Produção')).length,
+  };
+}
+
 export async function getPedidoById(id: string) {
   const { data, error } = await supabase
     .from('pedidos')
