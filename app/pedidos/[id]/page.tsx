@@ -112,6 +112,8 @@ interface PagamentoParcela {
   lancId: number;
   valorOriginal: number;
   valorDigitado: number;
+  dataPagamento: string;
+  conta: string;
   marcando: boolean;
 }
 
@@ -206,7 +208,14 @@ export default function PedidoDetalhe() {
     const initPag: Record<number, PagamentoParcela> = {};
     for (const l of lancs) {
       if (l.status === "A Receber") {
-        initPag[l.id] = { lancId: l.id, valorOriginal: Number(l.valor), valorDigitado: 0, marcando: false };
+        initPag[l.id] = {
+          lancId: l.id,
+          valorOriginal: Number(l.valor),
+          valorDigitado: 0,
+          dataPagamento: hoje(),
+          conta: data?.conta ?? "",
+          marcando: false,
+        };
       }
     }
     setPagamentos(initPag);
@@ -381,22 +390,39 @@ export default function PedidoDetalhe() {
     setPagamentos(prev => ({ ...prev, [lancId]: { ...prev[lancId], marcando: true } }));
 
     const valorPagar = pag.valorDigitado > 0 ? pag.valorDigitado : pag.valorOriginal;
+    const dataPgto   = pag.dataPagamento || hoje();
 
     await updateLancamento(lancId, {
       status: "Pago",
       valor: valorPagar,
-      vencimento: hoje(),
+      vencimento: dataPgto,
+      conta: pag.conta || undefined,
     });
 
     await recalcularRecebido(pedido.id);
 
-    const excedente = Math.max(0, valorPagar - pag.valorOriginal);
-    if (excedente > 0.005 && pedido.cliente_id) {
-      const creditoAtual = await getCreditoCliente(pedido.cliente_id);
-      await atualizarCreditoCliente(pedido.cliente_id, creditoAtual + excedente);
+    const restante = parseFloat((pag.valorOriginal - valorPagar).toFixed(2));
+    if (restante > 0.005) {
+      const lancOriginal = lancamentos.find(l => l.id === lancId);
+      await createLancamento({
+        tipo: "Entrada",
+        descricao: lancOriginal?.descricao ?? `Recebimento · ${pedido.id}`,
+        valor: restante,
+        status: "A Receber",
+        vencimento: dataPgto,
+        pedido_id: pedido.id,
+        cliente_id: pedido.cliente_id,
+      });
+      toast(`✓ ${formatBRL(valorPagar)} recebido · Saldo ${formatBRL(restante)} gerado`);
+    } else {
+      const excedente = Math.max(0, valorPagar - pag.valorOriginal);
+      if (excedente > 0.005 && pedido.cliente_id) {
+        const creditoAtual = await getCreditoCliente(pedido.cliente_id);
+        await atualizarCreditoCliente(pedido.cliente_id, creditoAtual + excedente);
+      }
+      toast(`✓ ${formatBRL(valorPagar)} registrado`);
     }
 
-    toast(`✓ ${formatBRL(valorPagar)} registrado`);
     await load();
   }
 
@@ -760,14 +786,17 @@ export default function PedidoDetalhe() {
               {parcelasAReceber.length > 0 && (
                 <div style={{ marginBottom:"16px" }}>
                   <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"8px" }}>PARCELAS A RECEBER</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
+                  <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
                     {parcelasAReceber.map((l) => {
                       const pag = pagamentos[l.id];
                       const marcando = pag?.marcando ?? false;
                       const valorDigitado = pag?.valorDigitado ?? 0;
                       const vencido = l.vencimento && l.vencimento < hoje();
+                      const isParcial = valorDigitado > 0 && valorDigitado < l.valor;
+                      const restante  = isParcial ? parseFloat((l.valor - valorDigitado).toFixed(2)) : 0;
                       return (
                         <div key={l.id} style={{ background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px", border:`1px solid ${vencido ? "rgba(244,63,94,.3)" : "var(--b2)"}` }}>
+                          {/* linha topo: checkbox + descrição + valor original + lixeira */}
                           <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
                             <input
                               type="checkbox"
@@ -781,7 +810,7 @@ export default function PedidoDetalhe() {
                                 {l.descricao}
                               </div>
                               <div style={{ fontSize:"10px", color: vencido ? "var(--err)" : "var(--t3)", fontFamily:"'DM Mono',monospace", marginTop:"2px" }}>
-                                {vencido ? "⚠ Vencido · " : ""}{formatDate(l.vencimento)}
+                                {vencido ? "⚠ Vencido · " : "Vence: "}{formatDate(l.vencimento)}
                               </div>
                             </div>
                             <div style={{ fontSize:"13px", fontWeight:700, color:"var(--t1)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>
@@ -795,15 +824,44 @@ export default function PedidoDetalhe() {
                               onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="transparent"; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
                             >🗑</button>
                           </div>
-                          <div style={{ marginTop:"8px", display:"flex", alignItems:"center", gap:"8px" }}>
-                            <span style={{ fontSize:"10px", color:"var(--t3)", whiteSpace:"nowrap" }}>Valor diferente:</span>
-                            <CurrencyInput
-                              value={valorDigitado}
-                              onChange={v => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], valorDigitado: v } }))}
-                              placeholder={`deixe 0 para usar ${formatBRL(l.valor)}`}
-                              style={{ margin:0, fontSize:"11px", padding:"5px 8px", flex:1 }}
-                            />
+
+                          {/* campos inline: data pgto · conta · valor pago */}
+                          <div style={{ marginTop:"10px", display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"8px" }}>
+                            <div>
+                              <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Data pgto</div>
+                              <DateInput
+                                value={pag?.dataPagamento ?? hoje()}
+                                onChange={v => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], dataPagamento: v } }))}
+                              />
+                            </div>
+                            <div>
+                              <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Conta</div>
+                              <select
+                                value={pag?.conta ?? ""}
+                                onChange={e => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], conta: e.target.value } }))}
+                                style={{ ...fc, fontSize:"12px", padding:"7px 8px" }}
+                              >
+                                <option value="">— Conta —</option>
+                                {CONTAS.map(c => <option key={c} value={c}>{c}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Valor pago</div>
+                              <CurrencyInput
+                                value={valorDigitado}
+                                onChange={v => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], valorDigitado: v } }))}
+                                placeholder={formatBRL(l.valor)}
+                                style={{ margin:0, fontSize:"12px", padding:"7px 8px" }}
+                              />
+                            </div>
                           </div>
+
+                          {/* aviso de pagamento parcial */}
+                          {isParcial && (
+                            <div style={{ marginTop:"8px", fontSize:"11px", color:"var(--warn)", fontFamily:"'DM Mono',monospace", background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)", borderRadius:"6px", padding:"6px 10px" }}>
+                              ⚡ Parcial — saldo de {formatBRL(restante)} será gerado automaticamente
+                            </div>
+                          )}
                         </div>
                       );
                     })}
