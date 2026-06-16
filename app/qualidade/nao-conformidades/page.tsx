@@ -161,6 +161,7 @@ export default function NaoConformidadesPage() {
   }
 
   async function handleDeletarFoto(nc: NaoConformidade, url: string) {
+    if (!confirm("Remover esta foto permanentemente?")) return;
     setUploadando(true);
     await deleteFotoNC(url);
     const novas = (nc.fotos_urls ?? []).filter(u => u !== url);

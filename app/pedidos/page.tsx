@@ -47,6 +47,7 @@ export default function PedidosPage() {
   const [comOtimizacao, setComOtimizacao] = useState<Set<string>>(new Set());
   const [pedidosChapa, setPedidosChapa]   = useState<Set<string>>(new Set());
   const [pedidosVidroCliente, setPedidosVidroCliente] = useState<Set<string>>(new Set());
+  const [deletando, setDeletando]         = useState<Set<string>>(new Set());
 
   // Recarrega ao mudar página ou busca (busca com debounce de 300ms).
   useEffect(() => {
@@ -119,10 +120,12 @@ export default function PedidosPage() {
   }
 
   async function handleDeletar(id: string) {
-    if (!confirm(`Excluir pedido ${id} permanentemente?`)) return;
-    const ok = await deletarPedido(id);
-    if (ok) { toast(`${id} excluído`); load(); }
-    else toast("Erro ao excluir pedido", "err");
+    if (!confirm(`Excluir pedido ${id} permanentemente? Esta ação não pode ser desfeita.`)) return;
+    setDeletando(prev => new Set(prev).add(id));
+    const { ok, erro } = await deletarPedido(id);
+    setDeletando(prev => { const n = new Set(prev); n.delete(id); return n; });
+    if (ok) { toast(`Pedido ${id} excluído`); load(); }
+    else toast(erro ? `Erro ao excluir: ${erro}` : "Erro ao excluir pedido", "err");
   }
 
   const totalAberto = totais.valorTotal - totais.recebido;
@@ -307,11 +310,12 @@ export default function PedidosPage() {
                       <td style={{ width:"40px", textAlign:"center" }}>
                         <button
                           title="Excluir pedido"
+                          disabled={deletando.has(p.id)}
                           onClick={e => { e.stopPropagation(); handleDeletar(p.id); }}
-                          style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", cursor:"pointer", transition:"all 0.15s" }}
-                          onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
-                          onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
-                        >🗑</button>
+                          style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color: deletando.has(p.id) ? "var(--err)" : "var(--t3)", fontSize:deletando.has(p.id) ? "9px" : "13px", cursor: deletando.has(p.id) ? "not-allowed" : "pointer", transition:"all 0.15s", opacity: deletando.has(p.id) ? 0.6 : 1 }}
+                          onMouseEnter={e => { if (!deletando.has(p.id)) { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; } }}
+                          onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = deletando.has(p.id) ? "var(--err)" : "var(--t3)"; }}
+                        >{deletando.has(p.id) ? "..." : "🗑"}</button>
                       </td>
                     </tr>
                   );

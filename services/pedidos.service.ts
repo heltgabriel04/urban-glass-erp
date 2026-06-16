@@ -181,7 +181,7 @@ export async function retrocederStatusPedido(id: string, statusAtual: StatusPedi
   return res;
 }
 
-export async function deletarPedido(pedidoId: string): Promise<boolean> {
+export async function deletarPedido(pedidoId: string): Promise<{ ok: boolean; erro?: string }> {
   // Calcula o estoque a devolver (chapas consumidas pela otimização deste pedido).
   // A devolução + toda a cascata de exclusão são aplicadas atomicamente pela RPC.
   const revert: Array<{ prod: string; chapas: number; m2: number }> = [];
@@ -191,9 +191,7 @@ export async function deletarPedido(pedidoId: string): Promise<boolean> {
       otimizacoes[0].chapas_json ?? [];
     const consumoPorProd = new Map<string, { chapas: number; m2: number }>();
     for (const chapa of chapasJson) {
-      // Skip retalho sheets — those never touched stock
       if (chapa.retalhoId) continue;
-      // Only count sheets that actually had pieces from this pedido
       if (!chapa.placed || chapa.placed.length === 0) continue;
       const prev = consumoPorProd.get(chapa.prod) ?? { chapas: 0, m2: 0 };
       consumoPorProd.set(chapa.prod, {
@@ -210,10 +208,13 @@ export async function deletarPedido(pedidoId: string): Promise<boolean> {
     p_pedido_id: pedidoId,
     p_estoque_revert: revert,
   });
-  if (error) { console.error('deletarPedido:', error); return false; }
+  if (error) {
+    console.error('deletarPedido:', error);
+    return { ok: false, erro: error.message };
+  }
 
   registrarLog({ acao: "excluiu", tabela: "pedidos", registro_id: pedidoId, descricao: `Excluiu pedido ${pedidoId}` });
-  return true;
+  return { ok: true };
 }
 
 export async function getCreditoCliente(clienteId: number): Promise<number> {
