@@ -12,7 +12,7 @@ import { baixarChapasEstoque, salvarRetalhos } from "@/services/estoque.service"
 import type { Produto, Retalho } from "@/types";
 import { CHAPAS_PADRAO, PRODUTO_CHAPA, isChapaInteira } from "@/lib/chapas";
 import {
-  empacotar, calcAproveitamento,
+  empacotar, empacotarTodas, calcAproveitamento,
   type Peca, type ResultadoChapa, type RetalhoGerado,
 } from "@/lib/otimizador";
 
@@ -338,9 +338,8 @@ function OtimizadorContent() {
       const CH = chapa ? chapa.h : chapaH;
       const W = CW - bord * 2;
       const H = CH - bord * 2;
-      // empacotar() já testa várias ordens internamente; não precisa pré-ordenar aqui.
+      // Retalhos de estoque: aloca peças nos retalhos primeiro (MAXRECTS single-sheet)
       let rem = [...grupo];
-
       if (useRetalhos) {
         const retDoProd = retalhosDisponiveis.filter(r => r.produto_nome === prodNome);
         for (const ret of retDoProd) {
@@ -353,13 +352,12 @@ function OtimizadorContent() {
         }
       }
 
-      let ci = 0;
-      while (rem.length > 0 && ci < 100) {
-        const { placed, usados, free } = empacotar(W, H, rem, kerf);
-        if (placed.length === 0) break;
-        results.push({ W: CW, H: CH, prod: prodNome, placed, free });
-        rem = rem.filter((_, i) => !usados.has(i));
-        ci++;
+      // FFD global: distribui TODAS as peças restantes pelas chapas de uma vez
+      // (Best-Fit Decreasing multi-chapa, 7 ordenações, fica com a melhor)
+      if (rem.length > 0) {
+        empacotarTodas(W, H, rem, kerf).forEach(c =>
+          results.push({ W: CW, H: CH, prod: prodNome, placed: c.placed, free: c.free })
+        );
       }
     });
 
