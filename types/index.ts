@@ -313,10 +313,17 @@ export interface Lancamento {
   pedido_id: string | null;
   cliente_id: number | null;
   vendedor_id?: number | null;
+  plano_contas_id?: number | null;
+  documento?: string | null;
+  dt_emissao?: string | null;
+  dt_pagamento?: string | null;
+  fornecedor?: string | null;
+  obs?: string | null;
   created_at: string;
   pedidos?: Pick<Pedido, 'id'>;
   clientes?: Pick<Cliente, 'id' | 'nome'>;
   vendedores?: Pick<Vendedor, 'id' | 'nome'>;
+  plano_contas?: { id: number; codigo_estruturado: string; descricao: string } | null;
 }
 
 export type LancamentoInsert = Omit<Lancamento, 'id' | 'created_at' | 'pedidos' | 'clientes'>;

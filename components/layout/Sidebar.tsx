@@ -34,6 +34,7 @@ const NAV = [
     grupo: "FINANCEIRO",
     items: [
       { href: "/financeiro",    label: "Gestão de Contas",   icon: "◉" },
+      { href: "/contas-pagar",  label: "Contas a Pagar",     icon: "↓" },
       { href: "/investimentos", label: "Investimentos",      icon: "◆" },
       // Oculto temporariamente a pedido — rota /investimentos/apresentacao continua existindo.
       // Para reexibir, basta descomentar a linha abaixo:
