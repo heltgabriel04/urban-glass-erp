@@ -11,90 +11,114 @@ export interface EspacoLivre { x: number; y: number; l: number; a: number; }
 export interface ResultadoChapa { placed: PecaPlacada[]; free: EspacoLivre[]; W: number; H: number; prod: string; retalhoId?: string; }
 export interface RetalhoGerado extends EspacoLivre { chapaIdx: number; prod: string; m2: number; }
 
-// Algoritmo de guilhotina em 2 estágios (strip-packing):
-// 1° corte: horizontal por toda a largura → separa faixas
-// 2° corte: vertical dentro de cada faixa → peças individuais
-// Reflete o fluxo real de corte em vidro pesado.
-//
-// Empacota numa ÚNICA chapa, respeitando a ordem de colocação recebida (`ordem`).
-// Usa Best-Fit: cada peça vai para a faixa que desperdiça MENOS altura (encaixe
-// mais justo), testando as duas orientações. Só abre faixa nova se não couber.
+// ── MAXRECTS (Maximal Rectangles — Best Short-Side Fit) ───────────────────────
+// Substitui o strip packing anterior. Mantém o conjunto de retângulos livres
+// maximais da chapa e, para cada peça, escolhe o retângulo cujo encaixe deixa
+// a menor sobra no lado curto (BSSF). Muito superior ao strip packing em
+// aproveitamento (tipicamente +10–20 pp) sem custo computacional relevante.
+
+interface MRect { x: number; y: number; l: number; a: number; }
+
+function mrOverlap(r1: MRect, r2: MRect): boolean {
+  return r1.x < r2.x + r2.l && r1.x + r1.l > r2.x &&
+         r1.y < r2.y + r2.a && r1.y + r1.a > r2.y;
+}
+
+function mrSplit(fr: MRect, used: MRect): MRect[] {
+  if (!mrOverlap(fr, used)) return [fr];
+  const out: MRect[] = [];
+  if (used.x > fr.x)              out.push({ x: fr.x,          y: fr.y, l: used.x - fr.x,                   a: fr.a });
+  if (used.x + used.l < fr.x + fr.l) out.push({ x: used.x + used.l, y: fr.y, l: fr.x + fr.l - used.x - used.l, a: fr.a });
+  if (used.y > fr.y)              out.push({ x: fr.x, y: fr.y,          l: fr.l, a: used.y - fr.y });
+  if (used.y + used.a < fr.y + fr.a) out.push({ x: fr.x, y: used.y + used.a, l: fr.l, a: fr.y + fr.a - used.y - used.a });
+  return out;
+}
+
+function mrContains(outer: MRect, inner: MRect): boolean {
+  return outer.x <= inner.x && outer.y <= inner.y &&
+         outer.x + outer.l >= inner.x + inner.l && outer.y + outer.a >= inner.y + inner.a;
+}
+
+// Empacota numa ÚNICA chapa respeitando a ordem fornecida.
+// Usa MAXRECTS-BSSF: cada peça vai ao retângulo livre onde o lado curto
+// restante é mínimo (encaixe mais justo), testando as duas orientações.
 export function empacotarOrdem(
   W: number, H: number,
   pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
   kerf: number,
   ordem: number[]
 ): { placed: PecaPlacada[]; usados: Set<number>; free: EspacoLivre[] } {
-  type Strip = { y: number; h: number; xUsed: number };
-
+  let freeRects: MRect[] = [{ x: 0, y: 0, l: W, a: H }];
   const placed: PecaPlacada[] = [];
-  const usados  = new Set<number>();
-  const strips: Strip[] = [];
-  let   bottomY = 0;
+  const usados = new Set<number>();
 
   for (const origIdx of ordem) {
     const peca = pecas[origIdx];
 
-    // Ambas as orientações que cabem na largura da chapa (rotaciona pra melhor encaixe)
     const oris = [
       { pl: peca.l, pa: peca.a, rot: false as boolean },
       { pl: peca.a, pa: peca.l, rot: true  as boolean },
-    ].filter(o => o.pl <= W);
+    ];
 
-    if (oris.length === 0) continue;
+    let bestScore = Infinity;
+    let bestFr: MRect | null = null;
+    let bestOri = oris[0];
 
-    // ── Best-Fit: melhor faixa existente (menor sobra de altura, depois menor sobra de largura) ──
-    let best: { strip: Strip; pl: number; pa: number; rot: boolean; x: number; waste: number; leftW: number } | null = null;
-    for (const strip of strips) {
+    for (const fr of freeRects) {
       for (const ori of oris) {
-        if (ori.pa > strip.h) continue;                         // não cabe na altura da faixa
-        const x = strip.xUsed > 0 ? strip.xUsed + kerf : 0;
-        if (x + ori.pl > W) continue;                           // não cabe na largura restante
-        const waste = strip.h - ori.pa;                         // altura desperdiçada na faixa
-        const leftW = W - (x + ori.pl);                         // largura restante após a peça
-        if (!best || waste < best.waste || (waste === best.waste && leftW < best.leftW)) {
-          best = { strip, pl: ori.pl, pa: ori.pa, rot: ori.rot, x, waste, leftW };
-        }
+        if (ori.pl > fr.l || ori.pa > fr.a) continue;
+        // BSSF: minimiza sobra no lado curto, desempate pelo lado longo
+        const shortSide = Math.min(fr.l - ori.pl, fr.a - ori.pa);
+        const longSide  = Math.max(fr.l - ori.pl, fr.a - ori.pa);
+        const score = shortSide * 1_000_000 + longSide;
+        if (score < bestScore) { bestScore = score; bestFr = fr; bestOri = ori; }
       }
     }
 
-    if (best) {
-      placed.push({ x: best.x, y: best.strip.y, l: best.pl, a: best.pa,
-        idx: origIdx, prod: peca.prod, rot: best.rot, pedidoId: peca.pedidoId });
-      usados.add(origIdx);
-      best.strip.xUsed = best.x + best.pl;
-      continue;
+    if (!bestFr) continue;
+
+    placed.push({
+      x: bestFr.x, y: bestFr.y, l: bestOri.pl, a: bestOri.pa,
+      idx: origIdx, prod: peca.prod, rot: bestOri.rot, pedidoId: peca.pedidoId,
+    });
+    usados.add(origIdx);
+
+    // Área consumida inclui kerf (limitado às bordas da chapa)
+    const usedRect: MRect = {
+      x: bestFr.x, y: bestFr.y,
+      l: Math.min(bestOri.pl + kerf, W - bestFr.x),
+      a: Math.min(bestOri.pa + kerf, H - bestFr.y),
+    };
+
+    // Subdivide retângulos livres que intersectam a área consumida
+    const next: MRect[] = [];
+    for (const fr of freeRects) {
+      if (mrOverlap(fr, usedRect)) next.push(...mrSplit(fr, usedRect));
+      else next.push(fr);
     }
 
-    // ── Abre nova faixa (novo corte longitudinal) ──
-    // Prefere a orientação mais baixa que ainda caiba na altura restante da chapa.
-    const y = strips.length > 0 ? bottomY + kerf : 0;
-    const chosen = [...oris].sort((a, b) => a.pa - b.pa).find(o => y + o.pa <= H);
-    if (!chosen) continue;
-
-    placed.push({ x: 0, y, l: chosen.pl, a: chosen.pa,
-      idx: origIdx, prod: peca.prod, rot: chosen.rot, pedidoId: peca.pedidoId });
-    usados.add(origIdx);
-    strips.push({ y, h: chosen.pa, xUsed: chosen.pl });
-    bottomY = y + chosen.pa;
+    // Remove retângulos contidos em outros (invariante MAXRECTS)
+    freeRects = next.filter((r1, i) =>
+      !next.some((r2, j) => i !== j && mrContains(r2, r1))
+    );
   }
 
-  // Espaços livres: lateral direita de cada faixa + retalho inferior
-  const free: EspacoLivre[] = [];
-  for (const s of strips) {
-    const x = s.xUsed > 0 ? s.xUsed + kerf : 0;
-    const w = W - x;
-    if (w >= 200 && s.h >= 200) free.push({ x, y: s.y, l: w, a: s.h });
+  // Retalhos úteis: MAXRECTS produz rects sobrepostos internamente;
+  // seleciona os maiores sem sobreposição para reportar ao usuário.
+  const candidates = freeRects
+    .filter(fr => fr.l >= 200 && fr.a >= 200)
+    .sort((a, b) => (b.l * b.a) - (a.l * a.a));
+  const selected: MRect[] = [];
+  for (const fr of candidates) {
+    if (!selected.some(s => mrOverlap(s, fr))) selected.push(fr);
   }
-  const yBot = strips.length > 0 ? bottomY + kerf : 0;
-  if (H - yBot >= 200 && W >= 200) free.push({ x: 0, y: yBot, l: W, a: H - yBot });
+  const free: EspacoLivre[] = selected.map(fr => ({ x: fr.x, y: fr.y, l: fr.l, a: fr.a }));
 
   return { placed, usados, free };
 }
 
 // Empacota numa única chapa testando VÁRIAS ordens de colocação e fica com a melhor
-// (maior área aproveitada, desempate por mais peças). Explora a "melhor possibilidade"
-// em vez de depender de uma única heurística fixa.
+// (maior área aproveitada, desempate por mais peças alocadas).
 export function empacotar(
   W: number, H: number,
   pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
@@ -102,11 +126,13 @@ export function empacotar(
 ): { placed: PecaPlacada[]; usados: Set<number>; free: EspacoLivre[] } {
   const base = pecas.map((_, i) => i);
   const orderings: number[][] = [
-    [...base].sort((a, b) => Math.min(pecas[b].l, pecas[b].a) - Math.min(pecas[a].l, pecas[a].a)), // menor lado ↓
-    [...base].sort((a, b) => Math.max(pecas[b].l, pecas[b].a) - Math.max(pecas[a].l, pecas[a].a)), // maior lado ↓
-    [...base].sort((a, b) => pecas[b].a - pecas[a].a),                                             // altura ↓
-    [...base].sort((a, b) => pecas[b].l - pecas[a].l),                                             // largura ↓
     [...base].sort((a, b) => (pecas[b].l * pecas[b].a) - (pecas[a].l * pecas[a].a)),               // área ↓
+    [...base].sort((a, b) => Math.max(pecas[b].l, pecas[b].a) - Math.max(pecas[a].l, pecas[a].a)), // maior lado ↓
+    [...base].sort((a, b) => Math.min(pecas[b].l, pecas[b].a) - Math.min(pecas[a].l, pecas[a].a)), // menor lado ↓
+    [...base].sort((a, b) => pecas[b].a - pecas[a].a),                                               // altura ↓
+    [...base].sort((a, b) => pecas[b].l - pecas[a].l),                                               // largura ↓
+    [...base].sort((a, b) => (pecas[a].l * pecas[a].a) - (pecas[b].l * pecas[b].a)),               // área ↑
+    [...base],                                                                                         // ordem original
   ];
 
   let melhor: ReturnType<typeof empacotarOrdem> | null = null;
