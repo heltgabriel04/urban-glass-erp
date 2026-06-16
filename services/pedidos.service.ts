@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase/client';
 import type { Pedido, PedidoInsert, PedidoUpdate, ItemPedidoInsert, StatusPedido } from '@/types';
 import { registrarLog } from './log.service';
 import { getOtimizacoesPorPedido } from './otimizador.service';
+import { reverterBaixaEstoque } from './estoque.service';
 
 export async function getPedidos(filtroStatus?: StatusPedido) {
   let query = supabase
@@ -182,12 +183,10 @@ export async function retrocederStatusPedido(id: string, statusAtual: StatusPedi
 }
 
 export async function deletarPedido(pedidoId: string): Promise<{ ok: boolean; erro?: string }> {
-  // Calcula o estoque a devolver (chapas consumidas pela otimização deste pedido).
-  // A devolução + toda a cascata de exclusão são aplicadas atomicamente pela RPC.
-  const revert: Array<{ prod: string; chapas: number; m2: number }> = [];
+  // 1. Revert stock consumed by this pedido's optimizations
   const otimizacoes = await getOtimizacoesPorPedido(pedidoId);
   if (otimizacoes.length > 0) {
-    const chapasJson: Array<{ W: number; H: number; prod: string; placed: any[]; retalhoId?: string | null }> =
+    const chapasJson: Array<{ W: number; H: number; prod: string; placed: unknown[]; retalhoId?: string | null }> =
       otimizacoes[0].chapas_json ?? [];
     const consumoPorProd = new Map<string, { chapas: number; m2: number }>();
     for (const chapa of chapasJson) {
@@ -200,14 +199,24 @@ export async function deletarPedido(pedidoId: string): Promise<{ ok: boolean; er
       });
     }
     for (const [prod, consumo] of consumoPorProd.entries()) {
-      revert.push({ prod, chapas: consumo.chapas, m2: parseFloat(consumo.m2.toFixed(4)) });
+      await reverterBaixaEstoque(prod, consumo.chapas, parseFloat(consumo.m2.toFixed(4)));
     }
   }
 
-  const { error } = await supabase.rpc('delete_pedido_cascade', {
-    p_pedido_id: pedidoId,
-    p_estoque_revert: revert,
-  });
+  // 2. Delete child records in FK-safe order
+  await supabase.from('lancamentos').delete().eq('pedido_id', pedidoId);
+  await supabase.from('retrabalhos').delete().eq('pedido_id', pedidoId);
+  await supabase.from('quebras').delete().eq('pedido_id', pedidoId);
+  await supabase.from('nao_conformidades').delete().eq('pedido_id', pedidoId);
+  await supabase.from('retalhos_uso').delete().eq('pedido_id', pedidoId);
+  await supabase.from('itens_pedido').delete().eq('pedido_id', pedidoId);
+  await supabase.from('historico_otimizador').delete().eq('pedido_id', pedidoId);
+  await supabase.from('checklist_expedicao').delete().eq('pedido_id', pedidoId);
+  // notas_fiscais: nullify FK instead of deleting (NF may need to persist)
+  await supabase.from('notas_fiscais').update({ pedido_id: null } as never).eq('pedido_id', pedidoId);
+
+  // 3. Delete the pedido itself
+  const { error } = await supabase.from('pedidos').delete().eq('id', pedidoId);
   if (error) {
     console.error('deletarPedido:', error);
     return { ok: false, erro: error.message };
