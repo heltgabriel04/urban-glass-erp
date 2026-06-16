@@ -206,6 +206,152 @@ function bfdRun(
   return sheets;
 }
 
+// ── Repack Group: empacota um conjunto de PecaPlacada em ≤ maxSheets chapas ─────
+// Tenta múltiplas ordenações e retorna null se não couber dentro do limite.
+// Diferente do BFD normal, opera sobre peças JÁ colocadas (com rot já definida)
+// e considera ambas as orientações ao remontar.
+
+function repackGroup(
+  W: number, H: number,
+  pieces: PecaPlacada[],
+  kerf: number,
+  maxSheets: number
+): SheetState[] | null {
+  const orderings: PecaPlacada[][] = [
+    [...pieces].sort((a, b) => b.l * b.a - a.l * a.a),
+    [...pieces].sort((a, b) => Math.max(b.l, b.a) - Math.max(a.l, a.a)),
+    [...pieces].sort((a, b) => Math.min(b.l, b.a) - Math.min(a.l, a.a)),
+    [...pieces].sort((a, b) => (b.l / b.a) - (a.l / a.a)),
+    [...pieces].sort((a, b) => a.l * a.a - b.l * b.a),
+    [...pieces],
+  ];
+
+  for (const ordem of orderings) {
+    const sheets: SheetState[] = [];
+    let failed = false;
+
+    for (const piece of ordem) {
+      const oris = [
+        { pl: piece.l, pa: piece.a, rot: piece.rot },
+        { pl: piece.a, pa: piece.l, rot: !piece.rot },
+      ];
+
+      let bestScore = Infinity, bestSi = -1, bestFr: MRect | null = null, bestOri = oris[0];
+
+      for (let si = 0; si < sheets.length; si++) {
+        for (const ori of oris) {
+          const fit = mrBestFit(sheets[si].freeRects, ori.pl, ori.pa);
+          if (fit && fit.score < bestScore) {
+            bestScore = fit.score; bestSi = si; bestFr = fit.fr; bestOri = ori;
+          }
+        }
+      }
+
+      if (bestFr === null) {
+        if (sheets.length >= maxSheets) { failed = true; break; }
+        sheets.push({ freeRects: [{ x: 0, y: 0, l: W, a: H }], placed: [] });
+        bestSi = sheets.length - 1;
+        bestScore = Infinity;
+        for (const ori of oris) {
+          const fit = mrBestFit(sheets[bestSi].freeRects, ori.pl, ori.pa);
+          if (fit && fit.score < bestScore) {
+            bestScore = fit.score; bestFr = fit.fr; bestOri = ori;
+          }
+        }
+        if (bestFr === null) { failed = true; break; }
+      }
+
+      sheets[bestSi].placed.push({
+        ...piece,
+        x: bestFr!.x, y: bestFr!.y,
+        l: bestOri.pl, a: bestOri.pa, rot: bestOri.rot,
+      });
+      sheets[bestSi].freeRects = mrPlace(
+        sheets[bestSi].freeRects, bestFr!, bestOri.pl, bestOri.pa, kerf, W, H
+      );
+    }
+
+    if (!failed && sheets.length <= maxSheets) return sheets;
+  }
+
+  return null;
+}
+
+// ── k-Eliminate: tenta eliminar chapas remontando grupos de 2 ou 3 do zero ──────
+// A diferença crítica em relação ao Sheet Merging:
+//   Merging usa o espaço livre fragmentado atual das outras chapas (frequentemente falha).
+//   kEliminate repõe as chapas do grupo do ZERO — elimina a fragmentação completamente.
+// Tenta pares (2→1) e triplas (3→2) começando pelas chapas com menor carga.
+
+function kEliminate(
+  W: number, H: number,
+  sheets: SheetState[],
+  kerf: number,
+  deadline: number
+): SheetState[] {
+  let current = sheets;
+  let improved = true;
+
+  while (improved && current.length > 1 && Date.now() < deadline) {
+    improved = false;
+
+    const byLoad = current
+      .map((s, i) => ({ i, area: s.placed.reduce((sum, p) => sum + p.l * p.a, 0) }))
+      .sort((a, b) => a.area - b.area);
+
+    const sheetArea = W * H;
+    const n = byLoad.length;
+
+    // ── Tentativa 1: par de chapas → 1 chapa (2→1) ──
+    outerPair: for (let ai = 0; ai < n && !improved; ai++) {
+      for (let aj = ai + 1; aj < n && !improved; aj++) {
+        if (Date.now() >= deadline) break outerPair;
+        if (byLoad[ai].area + byLoad[aj].area > sheetArea * 0.995) continue;
+
+        const pieces = [
+          ...current[byLoad[ai].i].placed,
+          ...current[byLoad[aj].i].placed,
+        ];
+        const result = repackGroup(W, H, pieces, kerf, 1);
+        if (result) {
+          const kill = new Set([byLoad[ai].i, byLoad[aj].i]);
+          const rest = current.filter((_, k) => !kill.has(k));
+          current = mergeSheets(W, H, [...rest, ...result], kerf);
+          improved = true;
+        }
+      }
+    }
+
+    if (improved) continue;
+
+    // ── Tentativa 2: tripla de chapas → 2 chapas (3→2) ──
+    outerTriple: for (let ai = 0; ai < n && !improved; ai++) {
+      for (let aj = ai + 1; aj < n && !improved; aj++) {
+        for (let ak = aj + 1; ak < n && !improved; ak++) {
+          if (Date.now() >= deadline) break outerTriple;
+          const combined = byLoad[ai].area + byLoad[aj].area + byLoad[ak].area;
+          if (combined > sheetArea * 1.99) continue;
+
+          const pieces = [
+            ...current[byLoad[ai].i].placed,
+            ...current[byLoad[aj].i].placed,
+            ...current[byLoad[ak].i].placed,
+          ];
+          const result = repackGroup(W, H, pieces, kerf, 2);
+          if (result) {
+            const kill = new Set([byLoad[ai].i, byLoad[aj].i, byLoad[ak].i]);
+            const rest = current.filter((_, k) => !kill.has(k));
+            current = mergeSheets(W, H, [...rest, ...result], kerf);
+            improved = true;
+          }
+        }
+      }
+    }
+  }
+
+  return current;
+}
+
 // ── Sheet Merging (elimina chapas pouco ocupadas redistribuindo suas peças) ─────
 // Após o BFD produzir N chapas, tenta eliminar a menos carregada colocando
 // cada uma de suas peças na melhor posição disponível nas N-1 restantes.
@@ -281,22 +427,32 @@ export function empacotarTodas(
   if (pecas.length === 0) return [];
   const base = pecas.map((_, i) => i);
 
-  // Ordenações determinísticas base
+  // Ordenações fixas diversificadas — cobrem diferentes heurísticas conhecidas
   const fixas: number[][] = [
-    [...base].sort((a, b) => (pecas[b].l * pecas[b].a) - (pecas[a].l * pecas[a].a)),
-    [...base].sort((a, b) => Math.max(pecas[b].l, pecas[b].a) - Math.max(pecas[a].l, pecas[a].a)),
-    [...base].sort((a, b) => Math.min(pecas[b].l, pecas[b].a) - Math.min(pecas[a].l, pecas[a].a)),
-    [...base].sort((a, b) => pecas[b].a - pecas[a].a),
-    [...base].sort((a, b) => pecas[b].l - pecas[a].l),
-    [...base].sort((a, b) => (pecas[a].l * pecas[a].a) - (pecas[b].l * pecas[b].a)),
-    [...base],
+    [...base].sort((a, b) => (pecas[b].l * pecas[b].a) - (pecas[a].l * pecas[a].a)),          // área dec
+    [...base].sort((a, b) => Math.max(pecas[b].l, pecas[b].a) - Math.max(pecas[a].l, pecas[a].a)), // lado maior dec
+    [...base].sort((a, b) => Math.min(pecas[b].l, pecas[b].a) - Math.min(pecas[a].l, pecas[a].a)), // lado menor dec
+    [...base].sort((a, b) => pecas[b].a - pecas[a].a),                                          // altura dec
+    [...base].sort((a, b) => pecas[b].l - pecas[a].l),                                          // largura dec
+    [...base].sort((a, b) => (pecas[a].l * pecas[a].a) - (pecas[b].l * pecas[b].a)),           // área asc
+    [...base].sort((a, b) => 2*(pecas[b].l + pecas[b].a) - 2*(pecas[a].l + pecas[a].a)),       // perímetro dec
+    [...base].sort((a, b) => {                                                                    // razão asp dec (mais retangular)
+      const rA = Math.max(pecas[a].l, pecas[a].a) / Math.min(pecas[a].l, pecas[a].a);
+      const rB = Math.max(pecas[b].l, pecas[b].a) / Math.min(pecas[b].l, pecas[b].a);
+      return rB - rA;
+    }),
+    [...base].sort((a, b) => {                                                                    // razão asp asc (mais quadrado)
+      const rA = Math.max(pecas[a].l, pecas[a].a) / Math.min(pecas[a].l, pecas[a].a);
+      const rB = Math.max(pecas[b].l, pecas[b].a) / Math.min(pecas[b].l, pecas[b].a);
+      return rA - rB;
+    }),
+    [...base],                                                                                     // ordem original
   ];
 
   let melhorSheets: SheetState[] | null = null;
   let melhorN = Infinity, melhorAprov = -1;
 
-  function avaliar(ordem: number[]) {
-    const sheets = mergeSheets(W, H, bfdRun(W, H, pecas, kerf, ordem), kerf);
+  function avaliar(sheets: SheetState[]) {
     const n = sheets.length;
     if (n === 0) return;
     const usedArea = sheets.reduce((s, sh) => s + sh.placed.reduce((a, p) => a + p.l * p.a, 0), 0);
@@ -306,11 +462,22 @@ export function empacotarTodas(
     }
   }
 
-  // Passa 1: ordenações fixas
-  for (const ordem of fixas) avaliar(ordem);
+  function avaliarOrdem(ordem: number[]) {
+    avaliar(mergeSheets(W, H, bfdRun(W, H, pecas, kerf, ordem), kerf));
+  }
 
-  // Passa 2: random restarts até o limite de tempo (LCG rápido, sem overhead de Math.random)
-  const deadline = Date.now() + Math.max(0, timeLimitMs - 50);
+  // ── Fase 1: ordenações fixas ──────────────────────────────────────────────────
+  for (const ordem of fixas) avaliarOrdem(ordem);
+  if (melhorN === 1) {
+    const early: SheetState[] = melhorSheets ?? [];
+    return early.map(sheet => ({ W, H, prod: sheet.placed[0]?.prod ?? '', placed: sheet.placed, free: mrFreeRects(sheet.freeRects) }));
+  }
+
+  // ── Fase 2: random restarts (LCG, 60% do tempo) ──────────────────────────────
+  const tStart = Date.now();
+  const tTotal = Math.max(0, timeLimitMs - 80);
+  const deadlineRestarts = tStart + Math.floor(tTotal * 0.60);
+
   let seed = 0x9e3779b9 ^ (W * 31) ^ H;
   function lcg() {
     seed = Math.imul(seed ^ (seed >>> 16), 0x45d9f3b);
@@ -318,15 +485,23 @@ export function empacotarTodas(
     return ((seed ^ (seed >>> 16)) >>> 0) / 0x100000000;
   }
 
-  while (Date.now() < deadline) {
+  while (Date.now() < deadlineRestarts) {
     const ordem = [...base];
     for (let i = ordem.length - 1; i > 0; i--) {
       const j = Math.floor(lcg() * (i + 1));
       const t = ordem[i]; ordem[i] = ordem[j]; ordem[j] = t;
     }
-    avaliar(ordem);
-    // Se já encontrou o ótimo teórico (1 chapa ou aproveitamento perfeito) para de buscar
+    avaliarOrdem(ordem);
     if (melhorN === 1) break;
+  }
+
+  // ── Fase 3: kEliminate (40% do tempo) ────────────────────────────────────────
+  // Remonta grupos de 2-3 chapas do zero para eliminar a fragmentação.
+  // Muito mais eficaz que random restarts para os últimos 1-2 chapas.
+  if (melhorN > 1 && melhorSheets !== null) {
+    const deadlineK = tStart + tTotal;
+    const improved = kEliminate(W, H, melhorSheets, kerf, deadlineK);
+    avaliar(improved);
   }
 
   const sheets: SheetState[] = melhorSheets ?? [];
