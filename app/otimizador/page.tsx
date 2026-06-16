@@ -868,6 +868,14 @@ function OtimizadorContent() {
     );
   }
 
+  function copiarUrlTeste() {
+    const validas = pecas.filter(p => p.l > 0 && p.a > 0 && p.qtd > 0);
+    if (validas.length === 0) return;
+    const payload = validas.map(p => ({ l: p.l, a: p.a, qtd: p.qtd, prod: p.prod }));
+    const url = `${window.location.origin}/otimizador?pecas=${btoa(JSON.stringify(payload))}&cw=${chapaW}&ch=${chapaH}`;
+    navigator.clipboard.writeText(url).then(() => setMsg("URL de teste copiada!")).catch(() => setMsg(url));
+  }
+
   return (
     <AppLayout>
       <div className="tb">
@@ -893,6 +901,9 @@ function OtimizadorContent() {
           )}
           {resultado && (
             <button className="btn bg sm" onClick={handleImprimirTeste}>🖨 Imprimir Plano</button>
+          )}
+          {pecas.some(p => p.l > 0 && p.a > 0) && (
+            <button className="btn bg sm" onClick={copiarUrlTeste} title="Copia URL com as peças atuais para reusar sem redigitar">🔗 Copiar URL</button>
           )}
           {pedidoRef && <a href={"/pedidos/" + pedidoRef} className="btn bg sm">← Voltar ao Pedido</a>}
         </div>
