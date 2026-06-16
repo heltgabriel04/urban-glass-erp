@@ -164,6 +164,9 @@ export default function PedidoDetalhe() {
   // Estado de edição inline dos lançamentos já pagos
   const [editandoPago, setEditandoPago] = useState<Record<number, EdicaoPago>>({});
 
+  // Forma de pagamento editável inline
+  const [formaPgto, setFormaPgto] = useState("");
+
   useEffect(() => { load(); }, [id]);
 
   function handlePrintRomaneio() {
@@ -196,6 +199,7 @@ export default function PedidoDetalhe() {
       getNaoConformidadesPorPedido(id),
     ]);
     setPedido(data);
+    setFormaPgto(data?.forma_pgto ?? "");
     setLancamentos(lancs);
     setOtimizacoes(otims);
     setClientes(clis as { id: number; nome: string }[]);
@@ -431,12 +435,26 @@ export default function PedidoDetalhe() {
     const lanc = lancamentos.find(l => l.id === lancId);
     if (!lanc) return;
 
-    // Lançamento já pago: desfaz o recebimento restaurando para "A Receber"
-    // (garante que o valor volta ao saldo devedor corretamente)
+    // Lançamento já pago: desfaz o recebimento consolidando com eventuais
+    // saldos parciais gerados automaticamente (mesma descrição, mesmo pedido)
     if (lanc.status === "Pago") {
-      if (!confirm("Desfazer este recebimento? O valor voltará para 'A Receber'.")) return;
+      if (!confirm("Desfazer este recebimento? O lançamento voltará ao valor original.")) return;
       setSalvando(true);
-      const ok = await updateLancamento(lancId, { status: "A Receber", conta: null });
+
+      // Restos "A Receber" gerados pelo pagamento parcial (mesma descrição)
+      const restos = lancamentos.filter(l =>
+        l.id !== lancId &&
+        l.status === "A Receber" &&
+        l.pedido_id === pedido.id &&
+        l.descricao === lanc.descricao
+      );
+      const valorConsolidado = parseFloat((lanc.valor + restos.reduce((a, l) => a + l.valor, 0)).toFixed(2));
+
+      // Remove os restos parciais
+      for (const r of restos) await deletarLancamento(r.id);
+
+      // Restaura o lançamento original com o valor total consolidado
+      const ok = await updateLancamento(lancId, { status: "A Receber", conta: null, valor: valorConsolidado });
       if (!ok) { toast("Erro ao desfazer recebimento", "err"); setSalvando(false); return; }
       await recalcularRecebido(pedido.id);
       toast("Recebimento desfeito");
@@ -499,6 +517,12 @@ export default function PedidoDetalhe() {
     toast("✓ Pagamento atualizado");
     cancelarEdicaoPago(lancId);
     await load();
+  }
+
+  async function handleSalvarFormaPgto(valor: string) {
+    setFormaPgto(valor);
+    await updatePedido(id, { forma_pgto: valor });
+    toast("Forma de pagamento atualizada");
   }
 
   async function handleSalvarNC() {
@@ -757,7 +781,6 @@ export default function PedidoDetalhe() {
                 <Row label="Data do pedido"     value={formatDate(pedido.dt_pedido)} />
                 <Row label="Retirada prevista"  value={formatDate(pedido.dt_retirada)} />
                 <Row label={(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml total" : "m² total"} value={Number(pedido.m2_total).toFixed(2) + " " + ((pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml" : "m²")} />
-                <Row label="Forma de pagamento" value={pedido.forma_pgto || "—"} />
                 {pedido.parcelas > 1 && <Row label="Parcelas" value={pedido.parcelas + "×"} />}
                 {(() => {
                   const lancComissao = lancamentos.find(l => l.tipo === "Saída" && (l as any).vendedor_id != null);
@@ -780,21 +803,41 @@ export default function PedidoDetalhe() {
             </div>
 
             <div className="card" style={{ padding:"20px 24px" }}>
-              <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, marginBottom:"16px", letterSpacing:".06em" }}>FINANCEIRO</div>
+              {/* Cabeçalho com forma de pagamento inline */}
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px", gap:"12px" }}>
+                <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em", flexShrink:0 }}>FINANCEIRO</div>
+                <select
+                  value={formaPgto}
+                  onChange={e => handleSalvarFormaPgto(e.target.value)}
+                  style={{ ...fc, fontSize:"12px", padding:"6px 10px", width:"auto", flex:1, maxWidth:"200px", fontWeight:600 }}
+                >
+                  <option value="">— Forma de pagamento —</option>
+                  {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
+                </select>
+              </div>
 
-              {/* Resumo */}
-              <div style={{ display:"flex", flexDirection:"column", gap:"8px", marginBottom:"16px" }}>
-                <Row label="Valor total" value={formatBRL(pedido.valor_total)} accent />
-                <Row label="Recebido"    value={formatBRL(pedido.valor_recebido)} color={pedido.valor_recebido > 0 ? "var(--ok)" : "var(--t2)"} />
-                <Row label="Em aberto"   value={formatBRL(Math.max(0, aberto))} color={quitado ? "var(--ok)" : "var(--err)"} />
+              {/* Resumo em 3 colunas */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"8px", marginBottom:"14px" }}>
+                <div style={{ background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px", border:"1px solid var(--b2)" }}>
+                  <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", textTransform:"uppercase", marginBottom:"4px" }}>Total</div>
+                  <div style={{ fontSize:"14px", fontWeight:800, color:"var(--acc)", fontFamily:"'DM Mono',monospace" }}>{formatBRL(pedido.valor_total)}</div>
+                </div>
+                <div style={{ background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px", border:"1px solid var(--b2)" }}>
+                  <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", textTransform:"uppercase", marginBottom:"4px" }}>Recebido</div>
+                  <div style={{ fontSize:"14px", fontWeight:800, color: pedido.valor_recebido > 0 ? "var(--ok)" : "var(--t3)", fontFamily:"'DM Mono',monospace" }}>{formatBRL(pedido.valor_recebido)}</div>
+                </div>
+                <div style={{ background: quitado ? "rgba(16,185,129,.08)" : "rgba(244,63,94,.06)", borderRadius:"8px", padding:"10px 12px", border:`1px solid ${quitado ? "rgba(16,185,129,.3)" : "rgba(244,63,94,.2)"}` }}>
+                  <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", textTransform:"uppercase", marginBottom:"4px" }}>{quitado ? "Quitado ✓" : "Em aberto"}</div>
+                  <div style={{ fontSize:"14px", fontWeight:800, color: quitado ? "var(--ok)" : "var(--err)", fontFamily:"'DM Mono',monospace" }}>{formatBRL(Math.max(0, aberto))}</div>
+                </div>
               </div>
 
               {/* Barra de progresso */}
               <div style={{ marginBottom:"16px" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", fontSize:"11px", color:"var(--t3)", marginBottom:"6px" }}>
-                  <span>Recebimento</span><span>{pctRec.toFixed(0)}%</span>
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:"10px", color:"var(--t3)", marginBottom:"5px" }}>
+                  <span>Recebimento</span><span style={{ fontFamily:"'DM Mono',monospace", fontWeight:600 }}>{pctRec.toFixed(0)}%</span>
                 </div>
-                <div style={{ height:"6px", borderRadius:"3px", background:"var(--surf3)", overflow:"hidden" }}>
+                <div style={{ height:"5px", borderRadius:"3px", background:"var(--surf3)", overflow:"hidden" }}>
                   <div style={{ height:"100%", borderRadius:"3px", width:`${pctRec}%`, background: quitado ? "var(--ok)" : "var(--acc)", transition:"width .3s" }} />
                 </div>
               </div>
