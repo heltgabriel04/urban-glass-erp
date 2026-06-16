@@ -432,50 +432,91 @@ export default function NovoPedidoPage() {
               <div className="fg"><label className="fl">Data do Pedido</label><DateInput value={dtPedido} onChange={setDtPedido} /></div>
               <div className="fg"><label className="fl">Previsão Retirada</label><DateInput value={dtRetirada} onChange={setDtRetirada} /></div>
             </div>
-            <div className="fr">
-              <div className="fg">
-                <label className="fl">Forma de Pagamento</label>
-                <select className="fc" value={formaPgto} onChange={e => setFormaPgto(e.target.value)}>
-                  <option value="">Selecione...</option>
-                  {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
-                </select>
-              </div>
-              <div className="fg">
-                <label className="fl">Conta</label>
-                <select className="fc" value={conta} onChange={e => setConta(e.target.value)}>
-                  <option value="">Selecione...</option>
-                  {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => <option key={c}>{c}</option>)}
-                </select>
-              </div>
-            </div>
+            {/* ── FINANCEIRO ── */}
+            <div style={{ marginTop: "14px", borderTop: "1px solid var(--b1)", paddingTop: "14px" }}>
+              <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, marginBottom: "12px", letterSpacing: ".06em" }}>FINANCEIRO</div>
 
-            <div className="fr">
-              <div className="fg">
-                <label className="fl">Parcelas</label>
-                <select className="fc" value={parcelas} onChange={e => setParcelas(Number(e.target.value))}>
-                  {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div style={{ marginTop: "10px", padding: "12px 14px", background: "var(--surf2)", borderRadius: "8px", border: "1px solid var(--b2)" }}>
-              <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", marginBottom: "10px", textTransform: "uppercase" }}>
-                {parcelas === 1 ? "Pagamento" : `Parcelas (${parcelas}x)`}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                {parcelasForm.map((p, idx) => (
-                  <div key={idx} style={{ display: "grid", gridTemplateColumns: parcelas > 1 ? "60px 1fr 120px" : "1fr 120px", gap: "8px", alignItems: "center" }}>
-                    {parcelas > 1 && <span style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>{idx + 1}ª</span>}
-                    <DateInput value={p.data} onChange={v => idx === 0 ? handlePrimeiraDtPgto(v) : handleDtPgto(idx, v)} />
-                    <CurrencyInput value={p.valor} onChange={v => handleValorParcela(idx, v)} placeholder="R$ 0,00" style={{ margin: 0 }} />
-                  </div>
-                ))}
-              </div>
-              {valorTotal > 0 && !parcelasOk && (
-                <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--warn, #f59e0b)", fontFamily: "'DM Mono', monospace" }}>
-                  ⚠ Soma das parcelas ({formatBRL(somaParcelas)}) difere do total ({formatBRL(valorTotal)})
+              {/* 3 boxes */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+                <div style={{ background: "var(--surf2)", borderRadius: "8px", padding: "10px 12px", border: "1px solid var(--b2)" }}>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: "4px" }}>Total</div>
+                  <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--acc)", fontFamily: "'DM Mono',monospace" }}>{formatBRL(valorTotal)}</div>
                 </div>
-              )}
+                <div style={{ background: "var(--surf2)", borderRadius: "8px", padding: "10px 12px", border: "1px solid var(--b2)" }}>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: "4px" }}>m² Total</div>
+                  <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--t2)", fontFamily: "'DM Mono',monospace" }}>{formatM2(m2Total)}</div>
+                </div>
+                <div style={{ background: "var(--surf2)", borderRadius: "8px", padding: "10px 12px", border: "1px solid var(--b2)" }}>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: "4px" }}>
+                    {parcelas > 1 ? `${parcelas}× Parcelas` : "Pagamento"}
+                  </div>
+                  <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--t1)", fontFamily: "'DM Mono',monospace" }}>
+                    {parcelas > 1 ? formatBRL(valorTotal / parcelas) : (formaPgto || "—")}
+                  </div>
+                </div>
+              </div>
+
+              {/* Forma · Conta · Parcelas */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 72px", gap: "8px", marginBottom: "12px" }}>
+                <div>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "4px" }}>Forma Pgto</div>
+                  <select className="fc" style={{ margin: 0 }} value={formaPgto} onChange={e => setFormaPgto(e.target.value)}>
+                    <option value="">— Forma —</option>
+                    {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "4px" }}>Conta</div>
+                  <select className="fc" style={{ margin: 0 }} value={conta} onChange={e => setConta(e.target.value)}>
+                    <option value="">— Conta —</option>
+                    {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "4px" }}>Parcelas</div>
+                  <select className="fc" style={{ margin: 0 }} value={parcelas} onChange={e => setParcelas(Number(e.target.value))}>
+                    {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Cards de parcela */}
+              <div>
+                <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", marginBottom: "8px" }}>
+                  {parcelas === 1 ? "VENCIMENTO" : "A PAGAR"}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {parcelasForm.map((p, idx) => (
+                    <div key={idx} style={{ background: "var(--surf2)", borderRadius: "8px", padding: "10px 12px", border: "1px solid var(--b2)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+                        <div style={{ flex: 1, fontSize: "12px", color: "var(--t1)", fontWeight: 600 }}>
+                          {parcelas > 1 ? `${idx + 1}ª Parcela` : "Pagamento"}
+                        </div>
+                        <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", fontFamily: "'DM Mono',monospace" }}>
+                          {formatBRL(p.valor)}
+                        </div>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                        <div>
+                          <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "4px" }}>
+                            {parcelas > 1 ? "Vencimento" : "Data Pgto"}
+                          </div>
+                          <DateInput value={p.data} onChange={v => idx === 0 ? handlePrimeiraDtPgto(v) : handleDtPgto(idx, v)} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "4px" }}>Valor</div>
+                          <CurrencyInput value={p.valor} onChange={v => handleValorParcela(idx, v)} placeholder="R$ 0,00" style={{ margin: 0 }} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {valorTotal > 0 && !parcelasOk && (
+                  <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--warn)", fontFamily: "'DM Mono',monospace", background: "rgba(245,158,11,.08)", border: "1px solid rgba(245,158,11,.25)", borderRadius: "6px", padding: "6px 10px" }}>
+                    ⚠ Soma das parcelas ({formatBRL(somaParcelas)}) difere do total ({formatBRL(valorTotal)})
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="fg" style={{ marginTop: "10px" }}>

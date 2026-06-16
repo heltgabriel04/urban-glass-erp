@@ -334,35 +334,61 @@ export default function NovoOrcamentoPage() {
                 </select>
               </div>
             </div>
-            <div className="fr">
-              <div className="fg">
-                <label className="fl">Forma de Pagamento</label>
-                <select tabIndex={-1} className="fc" value={formaPgto} onChange={e => setFormaPgto(e.target.value)}>
-                  <option value="">Selecione...</option>
-                  {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
-                </select>
+            {/* ── FINANCEIRO ── */}
+            <div style={{ marginTop: "14px", borderTop: "1px solid var(--b1)", paddingTop: "14px" }}>
+              <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, marginBottom: "12px", letterSpacing: ".06em" }}>FINANCEIRO</div>
+
+              {/* 3 boxes */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+                <div style={{ background: "var(--surf2)", borderRadius: "8px", padding: "10px 12px", border: "1px solid var(--b2)" }}>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: "4px" }}>Total</div>
+                  <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--acc)", fontFamily: "'DM Mono',monospace" }}>{formatBRL(valorTotal)}</div>
+                </div>
+                <div style={{ background: "var(--surf2)", borderRadius: "8px", padding: "10px 12px", border: "1px solid var(--b2)" }}>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: "4px" }}>m² Total</div>
+                  <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--t2)", fontFamily: "'DM Mono',monospace" }}>{formatM2(m2Total)}</div>
+                </div>
+                <div style={{ background: "var(--surf2)", borderRadius: "8px", padding: "10px 12px", border: "1px solid var(--b2)" }}>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: "4px" }}>
+                    {parcelas > 1 ? `${parcelas}× Parcelas` : "Pagamento"}
+                  </div>
+                  <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--t1)", fontFamily: "'DM Mono',monospace" }}>
+                    {parcelas > 1 ? formatBRL(valorTotal / parcelas) : (formaPgto || "—")}
+                  </div>
+                </div>
               </div>
-              <div className="fg">
-                <label className="fl">Conta</label>
-                <select tabIndex={-1} className="fc" value={conta} onChange={e => setConta(e.target.value)}>
-                  <option value="">Selecione...</option>
-                  {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => <option key={c}>{c}</option>)}
-                </select>
+
+              {/* Forma · Conta · Parcelas · Desconto */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+                <div>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "4px" }}>Forma Pgto</div>
+                  <select tabIndex={-1} className="fc" style={{ margin: 0 }} value={formaPgto} onChange={e => setFormaPgto(e.target.value)}>
+                    <option value="">— Forma —</option>
+                    {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "4px" }}>Conta</div>
+                  <select tabIndex={-1} className="fc" style={{ margin: 0 }} value={conta} onChange={e => setConta(e.target.value)}>
+                    <option value="">— Conta —</option>
+                    {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "72px 1fr", gap: "8px" }}>
+                <div>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "4px" }}>Parcelas</div>
+                  <select tabIndex={-1} className="fc" style={{ margin: 0 }} value={parcelas} onChange={e => setParcelas(Number(e.target.value))}>
+                    {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "4px" }}>Desconto Global (%)</div>
+                  <input tabIndex={-1} className="fc" style={{ margin: 0 }} type="number" min="0" max="100" step="0.5" value={desconto || ""} onChange={e => setDesconto(parseFloat(e.target.value) || 0)} placeholder="0" />
+                </div>
               </div>
             </div>
-            <div className="fr">
-              <div className="fg">
-                <label className="fl">Parcelas</label>
-                <select tabIndex={-1} className="fc" value={parcelas} onChange={e => setParcelas(Number(e.target.value))}>
-                  {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
-                </select>
-              </div>
-              <div className="fg">
-                <label className="fl">Desconto Global (%)</label>
-                <input tabIndex={-1} className="fc" type="number" min="0" max="100" step="0.5" value={desconto || ""} onChange={e => setDesconto(parseFloat(e.target.value) || 0)} placeholder="0" />
-              </div>
-            </div>
-            <div className="fg">
+            <div className="fg" style={{ marginTop: "10px" }}>
               <label className="fl">Observações</label>
               <textarea tabIndex={-1} className="fc" value={obs} onChange={e => setObs(e.target.value)} placeholder="Observações do orçamento..." />
             </div>
