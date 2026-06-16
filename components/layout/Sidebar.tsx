@@ -33,7 +33,6 @@ const NAV = [
   {
     grupo: "FINANCEIRO",
     items: [
-      { href: "/financeiro",    label: "Gestão de Contas",   icon: "◉" },
       { href: "/contas-receber", label: "Contas a Receber",   icon: "↑" },
       { href: "/contas-pagar",  label: "Contas a Pagar",     icon: "↓" },
       { href: "/investimentos", label: "Investimentos",      icon: "◆" },
