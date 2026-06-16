@@ -12,6 +12,43 @@ import CurrencyInput from "@/components/ui/CurrencyInput";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
 import type { Cliente, Produto, TabelaPreco, TabelaPrecoItem } from "@/types";
 
+interface ParcelaForm {
+  data: string;
+  valor: number;
+  editado: boolean;
+  conta: string;
+  formaPgto: string;
+}
+
+function addMeses(dateStr: string, meses: number): string {
+  if (!dateStr || dateStr.length < 10) return "";
+  const d = new Date(dateStr + "T12:00:00");
+  if (isNaN(d.getTime())) return "";
+  d.setMonth(d.getMonth() + meses);
+  if (isNaN(d.getTime())) return "";
+  return d.toISOString().split("T")[0];
+}
+
+function redistribuirParcelas(parcelas: ParcelaForm[], valorTotal: number, idxEditado?: number): ParcelaForm[] {
+  if (parcelas.length === 0) return parcelas;
+  const fixadas = parcelas.filter((p, i) => p.editado && i !== idxEditado);
+  const somaFixadas = fixadas.reduce((a, p) => a + p.valor, 0);
+  const restante = Math.max(0, valorTotal - somaFixadas);
+  const qtdLivres = parcelas.filter((p, i) => !p.editado || i === idxEditado).length;
+  if (qtdLivres === 0) return parcelas;
+  const valorBase = parseFloat((restante / qtdLivres).toFixed(2));
+  const somaBase  = parseFloat((valorBase * qtdLivres).toFixed(2));
+  const diff      = parseFloat((restante - somaBase).toFixed(2));
+  let lastFreeIdx = -1;
+  for (let i = parcelas.length - 1; i >= 0; i--) {
+    if (!parcelas[i].editado || i === idxEditado) { lastFreeIdx = i; break; }
+  }
+  return parcelas.map((p, i) => {
+    if (p.editado && i !== idxEditado) return p;
+    return { ...p, valor: i === lastFreeIdx ? parseFloat((valorBase + diff).toFixed(2)) : valorBase };
+  });
+}
+
 interface ItemForm {
   produto_id: number | null;
   produto_nome: string;
@@ -61,6 +98,7 @@ export default function NovoOrcamentoPage() {
   const [loading, setLoading]         = useState(true);
   const [salvando, setSalvando]       = useState(false);
   const [totalPedidoInput, setTotalPedidoInput] = useState(0);
+  const [parcelasForm, setParcelasForm] = useState<ParcelaForm[]>([{ data: "", valor: 0, editado: false, conta: "", formaPgto: "" }]);
 
   const largRefs   = useRef<(HTMLInputElement | null)[]>([]);
   const altRefs    = useRef<(HTMLInputElement | null)[]>([]);
@@ -112,8 +150,64 @@ export default function NovoOrcamentoPage() {
   useEffect(() => {
     if (!clienteId) return;
     const cli = clientes.find(c => c.id === clienteId);
-    if (cli) setFormaPgto(cli.pgto || "");
+    if (cli) {
+      const pgto = cli.pgto || "";
+      setFormaPgto(pgto);
+      setParcelasForm(prev => prev.map(p => ({ ...p, formaPgto: pgto })));
+    }
   }, [clienteId, clientes]);
+
+  const m2Total       = itens.reduce((a, i) => a + calcM2Item(i), 0);
+  const subtotalBruto = itens.reduce((a, i) => a + calcSubtotal(i), 0);
+  const valorDesconto = subtotalBruto * (desconto / 100);
+  const valorTotal    = subtotalBruto - valorDesconto;
+
+  useEffect(() => {
+    setParcelasForm(prev => {
+      const novaPrimeira   = prev[0]?.data      || "";
+      const defaultConta   = prev[0]?.conta     ?? "";
+      const defaultForma   = prev[0]?.formaPgto ?? "";
+      const novas: ParcelaForm[] = Array.from({ length: parcelas }, (_, i) => ({
+        data:      novaPrimeira ? (i === 0 ? novaPrimeira : addMeses(novaPrimeira, i)) : "",
+        valor: 0, editado: false,
+        conta:     prev[i]?.conta     ?? defaultConta,
+        formaPgto: prev[i]?.formaPgto ?? defaultForma,
+      }));
+      return redistribuirParcelas(novas, valorTotal);
+    });
+  }, [parcelas]);
+
+  useEffect(() => {
+    setParcelasForm(prev => redistribuirParcelas(prev, valorTotal));
+  }, [valorTotal]);
+
+  function handlePrimeiraDtPgto(data: string) {
+    setParcelasForm(prev => prev.map((p, i) => ({
+      ...p, data: !data ? "" : (i === 0 ? data : addMeses(data, i)),
+    })));
+  }
+
+  function handleDtPgto(idx: number, data: string) {
+    setParcelasForm(prev => prev.map((p, i) => i === idx ? { ...p, data } : p));
+  }
+
+  function handleValorParcela(idx: number, valor: number) {
+    setParcelasForm(prev => {
+      const atualizado = prev.map((p, i) => i === idx ? { ...p, valor, editado: true } : p);
+      return redistribuirParcelas(atualizado, valorTotal, idx);
+    });
+  }
+
+  function handleFormaParc(idx: number, forma: string) {
+    setParcelasForm(prev => prev.map((p, i) => i === idx ? { ...p, formaPgto: forma } : p));
+  }
+
+  function handleContaParc(idx: number, c: string) {
+    setParcelasForm(prev => prev.map((p, i) => i === idx ? { ...p, conta: c } : p));
+  }
+
+  const somaParcelas = parcelasForm.reduce((a, p) => a + p.valor, 0);
+  const parcelasOk   = Math.abs(somaParcelas - valorTotal) < 0.02;
 
   function getTabela(): TabelaPreco | null {
     if (!clienteId) return tabelas[0] || null;
@@ -225,11 +319,6 @@ export default function NovoOrcamentoPage() {
     setTotalPedidoInput(0);
   }
 
-  const m2Total       = itens.reduce((a, i) => a + calcM2Item(i), 0);
-  const subtotalBruto = itens.reduce((a, i) => a + calcSubtotal(i), 0);
-  const valorDesconto = subtotalBruto * (desconto / 100);
-  const valorTotal    = subtotalBruto - valorDesconto;
-
   // Agrega m² necessário por produto (para checar contra estoque)
   const m2NecPorProduto = new Map<number, number>();
   for (const item of itens) {
@@ -271,8 +360,9 @@ export default function NovoOrcamentoPage() {
       dt_orcamento: dtOrcamento,
       dt_validade: dtValidade || null,
       dt_entrega: dtEntrega || null,
-      forma_pgto: formaPgto,
-      conta, parcelas, frete, obs,
+      forma_pgto: parcelasForm[0]?.formaPgto || formaPgto,
+      conta: parcelasForm[0]?.conta || conta,
+      parcelas, frete, obs,
       m2_total: m2Total,
       valor_total: valorTotal,
       desconto,
@@ -353,39 +443,64 @@ export default function NovoOrcamentoPage() {
                     {parcelas > 1 ? `${parcelas}× Parcelas` : "Pagamento"}
                   </div>
                   <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--t1)", fontFamily: "'DM Mono',monospace" }}>
-                    {parcelas > 1 ? formatBRL(valorTotal / parcelas) : (formaPgto || "—")}
+                    {parcelas > 1 ? formatBRL(valorTotal / parcelas) : (parcelasForm[0]?.formaPgto || formaPgto || "—")}
                   </div>
                 </div>
               </div>
 
-              {/* Forma · Conta · Parcelas · Desconto */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
-                <div>
-                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "4px" }}>Forma Pgto</div>
-                  <select tabIndex={-1} className="fc" style={{ margin: 0 }} value={formaPgto} onChange={e => setFormaPgto(e.target.value)}>
-                    <option value="">— Forma —</option>
-                    {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "4px" }}>Conta</div>
-                  <select tabIndex={-1} className="fc" style={{ margin: 0 }} value={conta} onChange={e => setConta(e.target.value)}>
-                    <option value="">— Conta —</option>
-                    {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
+              {/* Parcelas + Desconto */}
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em" }}>Parcelas</div>
+                <select tabIndex={-1} className="fc" style={{ margin: 0, width: "72px" }} value={parcelas} onChange={e => setParcelas(Number(e.target.value))}>
+                  {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
+                </select>
+                <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginLeft: "8px" }}>Desconto (%)</div>
+                <input tabIndex={-1} className="fc" style={{ margin: 0, width: "72px" }} type="number" min="0" max="100" step="0.5" value={desconto || ""} onChange={e => setDesconto(parseFloat(e.target.value) || 0)} placeholder="0" />
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "72px 1fr", gap: "8px" }}>
-                <div>
-                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "4px" }}>Parcelas</div>
-                  <select tabIndex={-1} className="fc" style={{ margin: 0 }} value={parcelas} onChange={e => setParcelas(Number(e.target.value))}>
-                    {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
-                  </select>
+
+              {/* Tabela de parcelas — tudo em linha */}
+              <div>
+                <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 1fr 1fr 110px", gap: "6px", padding: "0 12px 6px 12px" }}>
+                  {["#","DATA PGTO","FORMA PGTO","CONTA","VALOR"].map(h => (
+                    <div key={h} style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>{h}</div>
+                  ))}
                 </div>
-                <div>
-                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "4px" }}>Desconto Global (%)</div>
-                  <input tabIndex={-1} className="fc" style={{ margin: 0 }} type="number" min="0" max="100" step="0.5" value={desconto || ""} onChange={e => setDesconto(parseFloat(e.target.value) || 0)} placeholder="0" />
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {parcelasForm.map((p, idx) => (
+                    <div key={idx} style={{ display: "grid", gridTemplateColumns: "28px 1fr 1fr 1fr 110px", gap: "6px", alignItems: "center", background: "var(--surf2)", borderRadius: "8px", padding: "8px 12px", border: "1px solid var(--b2)" }}>
+                      <div style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", fontWeight: 600 }}>
+                        {parcelas > 1 ? `${idx + 1}ª` : "·"}
+                      </div>
+                      <DateInput value={p.data} onChange={v => idx === 0 ? handlePrimeiraDtPgto(v) : handleDtPgto(idx, v)} />
+                      <select
+                        tabIndex={-1}
+                        className="fc"
+                        style={{ margin: 0, fontSize: "12px", padding: "7px 8px" }}
+                        value={p.formaPgto}
+                        onChange={e => handleFormaParc(idx, e.target.value)}
+                      >
+                        <option value="">— Forma —</option>
+                        {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
+                      </select>
+                      <select
+                        tabIndex={-1}
+                        className="fc"
+                        style={{ margin: 0, fontSize: "12px", padding: "7px 8px" }}
+                        value={p.conta}
+                        onChange={e => handleContaParc(idx, e.target.value)}
+                      >
+                        <option value="">— Conta —</option>
+                        {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => <option key={c}>{c}</option>)}
+                      </select>
+                      <CurrencyInput value={p.valor} onChange={v => handleValorParcela(idx, v)} placeholder="R$ 0,00" style={{ margin: 0, fontSize: "12px", padding: "7px 8px" }} />
+                    </div>
+                  ))}
                 </div>
+                {valorTotal > 0 && !parcelasOk && (
+                  <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--warn)", fontFamily: "'DM Mono',monospace", background: "rgba(245,158,11,.08)", border: "1px solid rgba(245,158,11,.25)", borderRadius: "6px", padding: "6px 10px" }}>
+                    ⚠ Soma das parcelas ({formatBRL(somaParcelas)}) difere do total ({formatBRL(valorTotal)})
+                  </div>
+                )}
               </div>
             </div>
             <div className="fg" style={{ marginTop: "10px" }}>
