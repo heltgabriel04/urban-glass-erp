@@ -82,7 +82,7 @@ export default function ContasPagarPage() {
         .order("vencimento", { ascending: true }),
       supabase.from("plano_contas").select("id, codigo_estruturado, descricao").order("codigo"),
     ]);
-    setContas((cs ?? []) as Conta[]);
+    setContas((cs ?? []) as unknown as Conta[]);
     setPlanos((pls ?? []) as PlanoItem[]);
     setLoading(false);
   }
