@@ -275,27 +275,30 @@ function mergeSheets(W: number, H: number, sheets: SheetState[], kerf: number): 
 export function empacotarTodas(
   W: number, H: number,
   pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
-  kerf: number
+  kerf: number,
+  timeLimitMs = 500
 ): ResultadoChapa[] {
   if (pecas.length === 0) return [];
   const base = pecas.map((_, i) => i);
-  const orderings: number[][] = [
-    [...base].sort((a, b) => (pecas[b].l * pecas[b].a) - (pecas[a].l * pecas[a].a)),               // área ↓
-    [...base].sort((a, b) => Math.max(pecas[b].l, pecas[b].a) - Math.max(pecas[a].l, pecas[a].a)), // maior lado ↓
-    [...base].sort((a, b) => Math.min(pecas[b].l, pecas[b].a) - Math.min(pecas[a].l, pecas[a].a)), // menor lado ↓
-    [...base].sort((a, b) => pecas[b].a - pecas[a].a),                                               // altura ↓
-    [...base].sort((a, b) => pecas[b].l - pecas[a].l),                                               // largura ↓
-    [...base].sort((a, b) => (pecas[a].l * pecas[a].a) - (pecas[b].l * pecas[b].a)),               // área ↑
-    [...base],                                                                                         // original
+
+  // Ordenações determinísticas base
+  const fixas: number[][] = [
+    [...base].sort((a, b) => (pecas[b].l * pecas[b].a) - (pecas[a].l * pecas[a].a)),
+    [...base].sort((a, b) => Math.max(pecas[b].l, pecas[b].a) - Math.max(pecas[a].l, pecas[a].a)),
+    [...base].sort((a, b) => Math.min(pecas[b].l, pecas[b].a) - Math.min(pecas[a].l, pecas[a].a)),
+    [...base].sort((a, b) => pecas[b].a - pecas[a].a),
+    [...base].sort((a, b) => pecas[b].l - pecas[a].l),
+    [...base].sort((a, b) => (pecas[a].l * pecas[a].a) - (pecas[b].l * pecas[b].a)),
+    [...base],
   ];
 
   let melhorSheets: SheetState[] | null = null;
   let melhorN = Infinity, melhorAprov = -1;
 
-  for (const ordem of orderings) {
+  function avaliar(ordem: number[]) {
     const sheets = mergeSheets(W, H, bfdRun(W, H, pecas, kerf, ordem), kerf);
     const n = sheets.length;
-    if (n === 0) continue;
+    if (n === 0) return;
     const usedArea = sheets.reduce((s, sh) => s + sh.placed.reduce((a, p) => a + p.l * p.a, 0), 0);
     const aprov = usedArea / (n * W * H);
     if (n < melhorN || (n === melhorN && aprov > melhorAprov)) {
@@ -303,7 +306,31 @@ export function empacotarTodas(
     }
   }
 
-  return (melhorSheets ?? []).map(sheet => ({
+  // Passa 1: ordenações fixas
+  for (const ordem of fixas) avaliar(ordem);
+
+  // Passa 2: random restarts até o limite de tempo (LCG rápido, sem overhead de Math.random)
+  const deadline = Date.now() + Math.max(0, timeLimitMs - 50);
+  let seed = 0x9e3779b9 ^ (W * 31) ^ H;
+  function lcg() {
+    seed = Math.imul(seed ^ (seed >>> 16), 0x45d9f3b);
+    seed = Math.imul(seed ^ (seed >>> 16), 0x45d9f3b);
+    return ((seed ^ (seed >>> 16)) >>> 0) / 0x100000000;
+  }
+
+  while (Date.now() < deadline) {
+    const ordem = [...base];
+    for (let i = ordem.length - 1; i > 0; i--) {
+      const j = Math.floor(lcg() * (i + 1));
+      const t = ordem[i]; ordem[i] = ordem[j]; ordem[j] = t;
+    }
+    avaliar(ordem);
+    // Se já encontrou o ótimo teórico (1 chapa ou aproveitamento perfeito) para de buscar
+    if (melhorN === 1) break;
+  }
+
+  const sheets: SheetState[] = melhorSheets ?? [];
+  return sheets.map(sheet => ({
     W, H,
     prod: sheet.placed[0]?.prod ?? '',
     placed: sheet.placed,
