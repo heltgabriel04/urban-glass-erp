@@ -38,7 +38,8 @@ const EMPTY_FORM = {
 function hoje() { return new Date().toISOString().split("T")[0]; }
 function fmtData(s: string | null) {
   if (!s) return "—";
-  return new Date(s + "T12:00:00").toLocaleDateString("pt-BR");
+  const d = s.includes("T") ? new Date(s) : new Date(s + "T12:00:00");
+  return d.toLocaleDateString("pt-BR");
 }
 
 function getStatusEfetivo(r: Recebivel): "Recebido" | "Vencido" | "A Receber" {
