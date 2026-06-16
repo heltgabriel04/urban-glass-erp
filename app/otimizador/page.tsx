@@ -54,6 +54,7 @@ function OtimizadorContent() {
   const router = useRouter();
   const pedidoParam = searchParams.get("pedido");
   const pecasParam  = searchParams.get("pecas");
+  const prodParam   = searchParams.get("prod");
   const cwParam     = searchParams.get("cw");
   const chParam     = searchParams.get("ch");
 
@@ -110,18 +111,33 @@ function OtimizadorContent() {
     });
   }, []);
 
-  // Carrega peças a partir do parâmetro ?pecas=<base64-json> na URL (modo AVULSO)
+  // Carrega peças a partir do parâmetro ?pecas= na URL (modo AVULSO)
+  // Formatos suportados:
+  //   CSV: "l,a,qtd|l,a,qtd|..." (com ?prod=nome opcional)
+  //   Legacy base64-JSON: btoa(JSON.stringify([{l,a,qtd,prod},...]))
   useEffect(() => {
     if (!pecasParam || pedidoParam) return;
     try {
-      const decoded = JSON.parse(atob(pecasParam)) as Array<{ l: number; a: number; qtd: number; prod: string }>;
-      if (Array.isArray(decoded) && decoded.length > 0) {
-        setPecas(decoded.map(p => ({ l: p.l, a: p.a, qtd: p.qtd ?? 1, prod: p.prod ?? "" })));
-        if (decoded[0]?.prod) autoSetChapa(decoded[0].prod);
+      let items: Array<{ l: number; a: number; qtd: number; prod: string }> = [];
+      const defaultProd = prodParam ?? "";
+      if (pecasParam.includes(",")) {
+        // formato CSV
+        items = pecasParam.split("|").map(seg => {
+          const [l, a, qtd] = seg.split(",").map(Number);
+          return { l, a, qtd: qtd || 1, prod: defaultProd };
+        }).filter(p => p.l > 0 && p.a > 0);
+      } else {
+        // formato legacy base64-JSON
+        items = JSON.parse(atob(pecasParam)) as Array<{ l: number; a: number; qtd: number; prod: string }>;
+      }
+      if (items.length > 0) {
+        setPecas(items.map(p => ({ l: p.l, a: p.a, qtd: p.qtd ?? 1, prod: p.prod ?? defaultProd })));
+        const firstProd = items[0]?.prod || defaultProd;
+        if (firstProd) autoSetChapa(firstProd);
         setModoTeste(true);
       }
     } catch { /* URL inválida — ignora */ }
-  }, [pecasParam]);
+  }, [pecasParam, prodParam]);
 
   useEffect(() => {
     if (!pedidoParam) return;
@@ -873,8 +889,12 @@ function OtimizadorContent() {
   function copiarUrlTeste() {
     const validas = pecas.filter(p => p.l > 0 && p.a > 0 && p.qtd > 0);
     if (validas.length === 0) return;
-    const payload = validas.map(p => ({ l: p.l, a: p.a, qtd: p.qtd, prod: p.prod }));
-    const url = `${window.location.origin}/otimizador?pecas=${btoa(JSON.stringify(payload))}&cw=${chapaW}&ch=${chapaH}`;
+    // formato CSV compacto: l,a,qtd|l,a,qtd|...  (muito mais curto que base64-JSON)
+    const csv = validas.map(p => `${p.l},${p.a},${p.qtd}`).join("|");
+    const prod = validas[0]?.prod ?? "";
+    const params = new URLSearchParams({ pecas: csv, cw: String(chapaW), ch: String(chapaH) });
+    if (prod) params.set("prod", prod);
+    const url = `${window.location.origin}/otimizador?${params.toString()}`;
     navigator.clipboard.writeText(url).then(() => setMsg("URL de teste copiada!")).catch(() => setMsg(url));
   }
 
