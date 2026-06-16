@@ -19,32 +19,56 @@ export async function getPedidos(filtroStatus?: StatusPedido) {
 
 export interface PedidosPagina {
   rows: Pedido[];
-  total: number; // total de registros que casam com a busca (para paginação)
+  total: number;
 }
 
-/** Lista paginada com busca server-side por id do pedido, status ou nome do cliente. */
+export type TabPedidos = "todos" | "ativos" | "aberto" | "quitado" | "entregue" | "cancelado";
+
+/** Lista paginada com busca e aba financeira/status server-side. */
 export async function getPedidosPaginado(
-  { limit, offset, busca }: { limit: number; offset: number; busca?: string }
+  { limit, offset, busca, tab }: { limit: number; offset: number; busca?: string; tab?: TabPedidos }
 ): Promise<PedidosPagina> {
+  // Abas financeiras exigem pré-busca de IDs pois PostgREST não compara colunas entre si
+  let financialIds: string[] | null = null;
+  if (tab === 'aberto' || tab === 'quitado') {
+    const { data: all } = await supabase.from('pedidos').select('id, valor_total, valor_recebido');
+    financialIds = ((all ?? []) as Array<{ id: string; valor_total: number; valor_recebido: number }>)
+      .filter(r => tab === 'aberto'
+        ? Number(r.valor_recebido) < Number(r.valor_total)
+        : Number(r.valor_recebido) >= Number(r.valor_total))
+      .map(r => r.id);
+  }
+
   let query = supabase
     .from('pedidos')
     .select(`*, clientes ( id, nome, cidade, tel )`, { count: 'exact' })
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1);
+    .order('created_at', { ascending: false });
+
+  if (tab === 'ativos') {
+    query = query
+      .neq('status', 'Entregue')
+      .neq('status', 'Finalizado')
+      .neq('status', 'Cancelado');
+  } else if (tab === 'entregue') {
+    query = query.in('status', ['Entregue', 'Finalizado']);
+  } else if (tab === 'cancelado') {
+    query = query.eq('status', 'Cancelado');
+  } else if (financialIds !== null) {
+    if (financialIds.length === 0) return { rows: [], total: 0 };
+    query = query.in('id', financialIds);
+  }
 
   const termo = busca?.trim();
   if (termo) {
-    // Busca por nome do cliente: resolve os ids primeiro (própria coluna cliente_id)
     const { data: cli } = await supabase.from('clientes').select('id').ilike('nome', `%${termo}%`);
     const ids = (cli ?? []).map(c => (c as { id: number }).id);
-    // Sanitiza para o filtro .or() (vírgula e parênteses são sintaxe do PostgREST)
     const safe = termo.replace(/[,()]/g, ' ');
     const ors = [`id.ilike.%${safe}%`, `status.ilike.%${safe}%`];
     if (ids.length) ors.push(`cliente_id.in.(${ids.join(',')})`);
     query = query.or(ors.join(','));
   }
 
-  const { data, error, count } = await query;
+  const { data, error, count } = await query.range(offset, offset + limit - 1);
   if (error) { console.error('getPedidosPaginado:', error); return { rows: [], total: 0 }; }
   return { rows: (data ?? []) as Pedido[], total: count ?? 0 };
 }

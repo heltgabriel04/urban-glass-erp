@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
-import { getPedidosPaginado, getPedidosTotais, avancarStatusPedido, retrocederStatusPedido, deletarPedido, type PedidosTotais } from "@/services/pedidos.service";
+import { getPedidosPaginado, getPedidosTotais, avancarStatusPedido, retrocederStatusPedido, deletarPedido, type PedidosTotais, type TabPedidos } from "@/services/pedidos.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import { supabase } from "@/lib/supabase/client";
@@ -41,6 +41,7 @@ export default function PedidosPage() {
   const [pedidos, setPedidos]             = useState<Pedido[]>([]);
   const [loading, setLoading]             = useState(true);
   const [filtro, setFiltro]               = useState("");
+  const [tab, setTab]                     = useState<TabPedidos>("todos");
   const [page, setPage]                   = useState(0); // 0-based
   const [total, setTotal]                 = useState(0);
   const [totais, setTotais]               = useState<PedidosTotais>({ count: 0, valorTotal: 0, recebido: 0, emProducao: 0 });
@@ -49,17 +50,17 @@ export default function PedidosPage() {
   const [pedidosVidroCliente, setPedidosVidroCliente] = useState<Set<string>>(new Set());
   const [deletando, setDeletando]         = useState<Set<string>>(new Set());
 
-  // Recarrega ao mudar página ou busca (busca com debounce de 300ms).
+  // Recarrega ao mudar página, busca ou aba (busca com debounce de 300ms).
   useEffect(() => {
     const t = setTimeout(() => { load(); }, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, filtro]);
+  }, [page, filtro, tab]);
 
   async function load() {
     setLoading(true);
     const [{ rows, total: tot }, totaisGlobais] = await Promise.all([
-      getPedidosPaginado({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, busca: filtro }),
+      getPedidosPaginado({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, busca: filtro, tab }),
       getPedidosTotais(),
     ]);
     setPedidos(rows);
@@ -190,6 +191,24 @@ export default function PedidosPage() {
               <div style={{ fontSize:"22px", fontWeight:700, color:card.color, fontFamily:"'DM Mono', monospace", lineHeight:1.2 }}>{card.value}</div>
               <div style={{ fontSize:"11px", color:"var(--t3)" }}>{card.sub}</div>
             </div>
+          ))}
+        </div>
+
+        {/* Tabs de filtro */}
+        <div style={{ display: "flex", gap: "4px", borderBottom: "1px solid var(--b1)", marginBottom: "16px" }}>
+          {([
+            { key: "todos",    label: "Todos" },
+            { key: "ativos",   label: "Em Produção" },
+            { key: "aberto",   label: "Em Aberto" },
+            { key: "quitado",  label: "Quitados" },
+            { key: "entregue", label: "Entregues" },
+            { key: "cancelado",label: "Cancelados" },
+          ] as { key: TabPedidos; label: string }[]).map(t => (
+            <button key={t.key} onClick={() => { setTab(t.key); setPage(0); }} style={{
+              padding: "8px 16px", fontSize: "12px", fontWeight: 700, border: "none", cursor: "pointer",
+              background: "transparent", borderBottom: tab === t.key ? "2px solid var(--acc)" : "2px solid transparent",
+              color: tab === t.key ? "var(--acc)" : "var(--t3)", marginBottom: "-1px", letterSpacing: "0.04em",
+            }}>{t.label}</button>
           ))}
         </div>
 
