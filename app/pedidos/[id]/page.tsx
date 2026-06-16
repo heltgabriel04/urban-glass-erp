@@ -114,6 +114,7 @@ interface PagamentoParcela {
   valorDigitado: number;
   dataPagamento: string;
   conta: string;
+  formaPgto: string;
   marcando: boolean;
 }
 
@@ -122,6 +123,7 @@ interface EdicaoPago {
   valor: number;
   data: string;
   conta: string;
+  formaPgto: string;
   salvando: boolean;
 }
 
@@ -164,8 +166,6 @@ export default function PedidoDetalhe() {
   // Estado de edição inline dos lançamentos já pagos
   const [editandoPago, setEditandoPago] = useState<Record<number, EdicaoPago>>({});
 
-  // Forma de pagamento editável inline
-  const [formaPgto, setFormaPgto] = useState("");
 
   useEffect(() => { load(); }, [id]);
 
@@ -199,7 +199,6 @@ export default function PedidoDetalhe() {
       getNaoConformidadesPorPedido(id),
     ]);
     setPedido(data);
-    setFormaPgto(data?.forma_pgto ?? "");
     setLancamentos(lancs);
     setOtimizacoes(otims);
     setClientes(clis as { id: number; nome: string }[]);
@@ -217,7 +216,8 @@ export default function PedidoDetalhe() {
           valorOriginal: Number(l.valor),
           valorDigitado: 0,
           dataPagamento: hoje(),
-          conta: data?.conta ?? "",
+          conta: l.conta ?? data?.conta ?? "",
+          formaPgto: l.forma_pgto ?? data?.forma_pgto ?? "",
           marcando: false,
         };
       }
@@ -401,6 +401,7 @@ export default function PedidoDetalhe() {
       valor: valorPagar,
       vencimento: dataPgto,
       conta: pag.conta || undefined,
+      forma_pgto: pag.formaPgto || undefined,
     });
 
     await recalcularRecebido(pedido.id);
@@ -481,6 +482,7 @@ export default function PedidoDetalhe() {
         valor: l.valor,
         data: l.vencimento ?? "",
         conta: l.conta ?? "",
+        formaPgto: l.forma_pgto ?? "",
         salvando: false,
       },
     }));
@@ -505,6 +507,7 @@ export default function PedidoDetalhe() {
       valor: ed.valor,
       vencimento: ed.data,
       conta: ed.conta || null,
+      forma_pgto: ed.formaPgto || null,
     });
 
     if (!atualizado) {
@@ -519,10 +522,21 @@ export default function PedidoDetalhe() {
     await load();
   }
 
-  async function handleSalvarFormaPgto(valor: string) {
-    setFormaPgto(valor);
-    await updatePedido(id, { forma_pgto: valor });
-    toast("Forma de pagamento atualizada");
+  async function handleAdicionarParcela() {
+    if (!pedido) return;
+    const totalAReceber = parcelasAReceber.reduce((a, l) => a + l.valor, 0);
+    const restante = parseFloat((Math.max(0, pedido.valor_total - pedido.valor_recebido - totalAReceber)).toFixed(2));
+    await createLancamento({
+      tipo: "Entrada",
+      descricao: `Recebimento · ${pedido.id}`,
+      valor: restante > 0 ? restante : 0,
+      status: "A Receber",
+      vencimento: hoje(),
+      pedido_id: pedido.id,
+      cliente_id: pedido.cliente_id,
+    });
+    await load();
+    toast("Parcela adicionada");
   }
 
   async function handleSalvarNC() {
@@ -803,18 +817,8 @@ export default function PedidoDetalhe() {
             </div>
 
             <div className="card" style={{ padding:"20px 24px" }}>
-              {/* Cabeçalho com forma de pagamento inline */}
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px", gap:"12px" }}>
-                <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em", flexShrink:0 }}>FINANCEIRO</div>
-                <select
-                  value={formaPgto}
-                  onChange={e => handleSalvarFormaPgto(e.target.value)}
-                  style={{ ...fc, fontSize:"12px", padding:"6px 10px", width:"auto", flex:1, maxWidth:"200px", fontWeight:600 }}
-                >
-                  <option value="">— Forma de pagamento —</option>
-                  {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
-                </select>
-              </div>
+              {/* Cabeçalho */}
+              <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, marginBottom:"16px", letterSpacing:".06em" }}>FINANCEIRO</div>
 
               {/* Resumo em 3 colunas */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"8px", marginBottom:"14px" }}>
@@ -842,90 +846,115 @@ export default function PedidoDetalhe() {
                 </div>
               </div>
 
-              {/* Parcelas a receber com checkbox */}
-              {parcelasAReceber.length > 0 && (
+              {/* Parcelas a receber — sempre visível */}
+              {!quitado && (
                 <div style={{ marginBottom:"16px" }}>
-                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"8px" }}>PARCELAS A RECEBER</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
-                    {parcelasAReceber.map((l) => {
-                      const pag = pagamentos[l.id];
-                      const marcando = pag?.marcando ?? false;
-                      const valorDigitado = pag?.valorDigitado ?? 0;
-                      const vencido = l.vencimento && l.vencimento < hoje();
-                      const isParcial = valorDigitado > 0 && valorDigitado < l.valor;
-                      const restante  = isParcial ? parseFloat((l.valor - valorDigitado).toFixed(2)) : 0;
-                      return (
-                        <div key={l.id} style={{ background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px", border:`1px solid ${vencido ? "rgba(244,63,94,.3)" : "var(--b2)"}` }}>
-                          {/* linha topo: checkbox + descrição + valor original + lixeira */}
-                          <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
-                            <input
-                              type="checkbox"
-                              disabled={marcando}
-                              onChange={() => handleMarcarPago(l.id)}
-                              style={{ width:"16px", height:"16px", accentColor:"var(--ok)", cursor:"pointer", flexShrink:0 }}
-                              title="Marcar como pago"
-                            />
-                            <div style={{ flex:1, minWidth:0 }}>
-                              <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                                {l.descricao}
-                              </div>
-                              <div style={{ fontSize:"10px", color: vencido ? "var(--err)" : "var(--t3)", fontFamily:"'DM Mono',monospace", marginTop:"2px" }}>
-                                {vencido ? "⚠ Vencido · " : "Vence: "}{formatDate(l.vencimento)}
-                              </div>
-                            </div>
-                            <div style={{ fontSize:"13px", fontWeight:700, color:"var(--t1)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>
-                              {formatBRL(l.valor)}
-                            </div>
-                            <button
-                              title="Remover parcela"
-                              onClick={() => handleDeletarLancamento(l.id)}
-                              style={{ background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", fontSize:"11px", cursor:"pointer", padding:"3px 7px", transition:"all 0.15s", lineHeight:1, flexShrink:0 }}
-                              onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="rgba(244,63,94,.15)"; b.style.borderColor="var(--err)"; b.style.color="var(--err)"; }}
-                              onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="transparent"; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
-                            >🗑</button>
-                          </div>
-
-                          {/* campos inline: data pgto · conta · valor pago */}
-                          <div style={{ marginTop:"10px", display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"8px" }}>
-                            <div>
-                              <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Data pgto</div>
-                              <DateInput
-                                value={pag?.dataPagamento ?? hoje()}
-                                onChange={v => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], dataPagamento: v } }))}
-                              />
-                            </div>
-                            <div>
-                              <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Conta</div>
-                              <select
-                                value={pag?.conta ?? ""}
-                                onChange={e => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], conta: e.target.value } }))}
-                                style={{ ...fc, fontSize:"12px", padding:"7px 8px" }}
-                              >
-                                <option value="">— Conta —</option>
-                                {CONTAS.map(c => <option key={c} value={c}>{c}</option>)}
-                              </select>
-                            </div>
-                            <div>
-                              <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Valor pago</div>
-                              <CurrencyInput
-                                value={valorDigitado}
-                                onChange={v => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], valorDigitado: v } }))}
-                                placeholder={formatBRL(l.valor)}
-                                style={{ margin:0, fontSize:"12px", padding:"7px 8px" }}
-                              />
-                            </div>
-                          </div>
-
-                          {/* aviso de pagamento parcial */}
-                          {isParcial && (
-                            <div style={{ marginTop:"8px", fontSize:"11px", color:"var(--warn)", fontFamily:"'DM Mono',monospace", background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)", borderRadius:"6px", padding:"6px 10px" }}>
-                              ⚡ Parcial — saldo de {formatBRL(restante)} será gerado automaticamente
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"8px" }}>
+                    <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em" }}>A RECEBER</div>
+                    <button
+                      onClick={handleAdicionarParcela}
+                      style={{ fontSize:"11px", background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", cursor:"pointer", padding:"3px 9px", transition:"all 0.15s" }}
+                      onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor="var(--acc)"; b.style.color="var(--acc)"; }}
+                      onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
+                    >+ Parcela</button>
                   </div>
+
+                  {parcelasAReceber.length === 0 ? (
+                    <div style={{ padding:"14px 16px", background:"var(--surf2)", borderRadius:"8px", border:"1px dashed var(--b2)", textAlign:"center", fontSize:"12px", color:"var(--t3)" }}>
+                      Nenhuma parcela em aberto — clique em <strong>+ Parcela</strong> para registrar.
+                    </div>
+                  ) : (
+                    <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
+                      {parcelasAReceber.map((l) => {
+                        const pag = pagamentos[l.id];
+                        const marcando = pag?.marcando ?? false;
+                        const valorDigitado = pag?.valorDigitado ?? 0;
+                        const vencido = l.vencimento && l.vencimento < hoje();
+                        const isParcial = valorDigitado > 0 && valorDigitado < l.valor;
+                        const restante  = isParcial ? parseFloat((l.valor - valorDigitado).toFixed(2)) : 0;
+                        return (
+                          <div key={l.id} style={{ background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px", border:`1px solid ${vencido ? "rgba(244,63,94,.3)" : "var(--b2)"}` }}>
+                            {/* linha topo: checkbox + descrição + valor + lixeira */}
+                            <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
+                              <input
+                                type="checkbox"
+                                disabled={marcando}
+                                onChange={() => handleMarcarPago(l.id)}
+                                style={{ width:"16px", height:"16px", accentColor:"var(--ok)", cursor:"pointer", flexShrink:0 }}
+                                title="Marcar como pago"
+                              />
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                                  {l.descricao}
+                                </div>
+                                <div style={{ fontSize:"10px", color: vencido ? "var(--err)" : "var(--t3)", fontFamily:"'DM Mono',monospace", marginTop:"2px" }}>
+                                  {vencido ? "⚠ Vencido · " : "Vence: "}{formatDate(l.vencimento)}
+                                </div>
+                              </div>
+                              <div style={{ fontSize:"13px", fontWeight:700, color:"var(--t1)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>
+                                {formatBRL(l.valor)}
+                              </div>
+                              <button
+                                title="Remover parcela"
+                                onClick={() => handleDeletarLancamento(l.id)}
+                                style={{ background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", fontSize:"11px", cursor:"pointer", padding:"3px 7px", transition:"all 0.15s", lineHeight:1, flexShrink:0 }}
+                                onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="rgba(244,63,94,.15)"; b.style.borderColor="var(--err)"; b.style.color="var(--err)"; }}
+                                onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="transparent"; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
+                              >🗑</button>
+                            </div>
+
+                            {/* campos inline 2×2: data/conta · forma/valor */}
+                            <div style={{ marginTop:"10px", display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px" }}>
+                              <div>
+                                <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Data pgto</div>
+                                <DateInput
+                                  value={pag?.dataPagamento ?? hoje()}
+                                  onChange={v => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], dataPagamento: v } }))}
+                                />
+                              </div>
+                              <div>
+                                <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Conta</div>
+                                <select
+                                  value={pag?.conta ?? ""}
+                                  onChange={e => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], conta: e.target.value } }))}
+                                  style={{ ...fc, fontSize:"12px", padding:"7px 8px" }}
+                                >
+                                  <option value="">— Conta —</option>
+                                  {CONTAS.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Forma pgto</div>
+                                <select
+                                  value={pag?.formaPgto ?? ""}
+                                  onChange={e => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], formaPgto: e.target.value } }))}
+                                  style={{ ...fc, fontSize:"12px", padding:"7px 8px" }}
+                                >
+                                  <option value="">— Forma —</option>
+                                  {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Valor pago</div>
+                                <CurrencyInput
+                                  value={valorDigitado}
+                                  onChange={v => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], valorDigitado: v } }))}
+                                  placeholder={formatBRL(l.valor)}
+                                  style={{ margin:0, fontSize:"12px", padding:"7px 8px" }}
+                                />
+                              </div>
+                            </div>
+
+                            {isParcial && (
+                              <div style={{ marginTop:"8px", fontSize:"11px", color:"var(--warn)", fontFamily:"'DM Mono',monospace", background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)", borderRadius:"6px", padding:"6px 10px" }}>
+                                ⚡ Parcial — saldo de {formatBRL(restante)} será gerado automaticamente
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -966,7 +995,16 @@ export default function PedidoDetalhe() {
                             <span style={{ fontSize:"13px", color:"var(--ok)", fontFamily:"'DM Mono',monospace", fontWeight:600, flex:1 }}>
                               {formatBRL(l.valor)}
                             </span>
-                            {/* Badge da conta */}
+                            {/* Badges conta + forma */}
+                            {l.forma_pgto && (
+                              <span style={{
+                                fontSize:"10px", color:"var(--warn)", fontFamily:"'DM Mono',monospace",
+                                background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)",
+                                borderRadius:"4px", padding:"2px 7px", flexShrink:0, fontWeight:600,
+                              }}>
+                                {l.forma_pgto}
+                              </span>
+                            )}
                             {l.conta && (
                               <span style={{
                                 fontSize:"10px", color:"var(--acc2)", fontFamily:"'DM Mono',monospace",
@@ -999,8 +1037,7 @@ export default function PedidoDetalhe() {
                               background:"var(--surf2)",
                               display:"flex", flexDirection:"column", gap:"10px",
                             }}>
-                              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"8px" }}>
-                                {/* Valor */}
+                              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px" }}>
                                 <div>
                                   <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, marginBottom:"4px", textTransform:"uppercase", letterSpacing:".04em" }}>Valor</div>
                                   <CurrencyInput
@@ -1010,7 +1047,6 @@ export default function PedidoDetalhe() {
                                     style={{ margin:0, fontSize:"12px", padding:"6px 8px" }}
                                   />
                                 </div>
-                                {/* Data */}
                                 <div>
                                   <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, marginBottom:"4px", textTransform:"uppercase", letterSpacing:".04em" }}>Data</div>
                                   <DateInput
@@ -1018,7 +1054,6 @@ export default function PedidoDetalhe() {
                                     onChange={v => setEditandoPago(prev => ({ ...prev, [l.id]: { ...prev[l.id], data: v } }))}
                                   />
                                 </div>
-                                {/* Conta bancária */}
                                 <div>
                                   <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, marginBottom:"4px", textTransform:"uppercase", letterSpacing:".04em" }}>Conta</div>
                                   <select
@@ -1028,6 +1063,17 @@ export default function PedidoDetalhe() {
                                   >
                                     <option value="">— Selecione —</option>
                                     {CONTAS.map(o => <option key={o} value={o}>{o}</option>)}
+                                  </select>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, marginBottom:"4px", textTransform:"uppercase", letterSpacing:".04em" }}>Forma</div>
+                                  <select
+                                    value={ed.formaPgto}
+                                    onChange={e => setEditandoPago(prev => ({ ...prev, [l.id]: { ...prev[l.id], formaPgto: e.target.value } }))}
+                                    style={{ ...fc, fontSize:"12px", padding:"6px 8px" }}
+                                  >
+                                    <option value="">— Forma —</option>
+                                    {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
                                   </select>
                                 </div>
                               </div>
