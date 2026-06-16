@@ -28,11 +28,6 @@ interface PermutaV2     { pedidos: PedidoPermuta[]; status: "ativo" | "parcial" 
 interface Lancamento    { id: string; data: string; observacao: string; valor: number; }
 interface Investimento  { id: string; data: string; empresa: string; categoria: string | null; subcategoria: string | null; descricao: string; valor: number; observacoes: string | null; comprovante_url: string | null; created_at: string; }
 
-const LS_BANCOS_KEY    = "ug_bancos_v1";
-const LS_APORTES_G_KEY = "ug_aportes_g_v1";
-const LS_PERMUTA_KEY   = "ug_permuta_v5";
-const LS_LANC_KEY      = "ug_lancamentos_v2";
-
 const PERMUTA_DEFAULT: PermutaV2 = { pedidos: [], status: "ativo", observacoes: "", saldoManual: 0, totalAcordadoManual: 0, totalMovimentadoManual: 0 };
 
 const BANCOS_POSICAO_COR: Record<string, string> = {
@@ -43,10 +38,6 @@ const BANCOS_POSICAO_COR: Record<string, string> = {
   "Sicoob": "#006b3f", "Sicredi": "#007040", "C6 Bank": "#232323",
 };
 
-function lsLoad<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try { const v = localStorage.getItem(key); return v ? (JSON.parse(v) as T) : fallback; } catch { return fallback; }
-}
 const toBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
 const fmtData = (iso: string) => iso ? new Date(iso + "T00:00:00").toLocaleDateString("pt-BR") : "—";
 const labelMes = (yyyyMM: string) => {
@@ -72,13 +63,19 @@ export default function InvestimentosApresentacao() {
   const [lancamentos, setLanc]  = useState<Lancamento[]>([]);
 
   useEffect(() => {
-    setBancos(lsLoad<SaldoBanco[]>(LS_BANCOS_KEY, []));
-    setAportes(lsLoad<AporteGabriel[]>(LS_APORTES_G_KEY, []));
-    setPermuta(lsLoad<PermutaV2>(LS_PERMUTA_KEY, PERMUTA_DEFAULT));
-    setLanc(lsLoad<Lancamento[]>(LS_LANC_KEY, []));
     (async () => {
-      const { data } = await supabase.from("investimentos").select("*").order("data", { ascending: false });
-      setInvestimentos((data ?? []) as Investimento[]);
+      const [{ data: posData }, { data: invData }] = await Promise.all([
+        supabase.from("pos_financeira").select("chave, valor"),
+        supabase.from("investimentos").select("*").order("data", { ascending: false }),
+      ]);
+      if (posData) {
+        const map = Object.fromEntries(posData.map((r: { chave: string; valor: unknown }) => [r.chave, r.valor]));
+        if (map.saldos_bancarios) setBancos(map.saldos_bancarios as SaldoBanco[]);
+        if (map.aportes_gabriel) setAportes(map.aportes_gabriel as AporteGabriel[]);
+        if (map.permuta) setPermuta(map.permuta as PermutaV2);
+        if (map.lancamentos_pos) setLanc(map.lancamentos_pos as Lancamento[]);
+      }
+      setInvestimentos((invData ?? []) as Investimento[]);
       setLoading(false);
     })();
   }, []);

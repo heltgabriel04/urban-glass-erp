@@ -45,18 +45,8 @@ interface PedidoPermuta  { id: string; material: string; quantidadeTon: number; 
 interface PermutaV2      { pedidos: PedidoPermuta[]; status: "ativo" | "parcial" | "liquidado"; observacoes: string; saldoManual: number; totalAcordadoManual: number; totalMovimentadoManual: number; }
 interface Lancamento     { id: string; data: string; observacao: string; valor: number; }
 
-const LS_BANCOS_KEY    = "ug_bancos_v1";
-const LS_APORTES_G_KEY = "ug_aportes_g_v1";
-const LS_PERMUTA_KEY   = "ug_permuta_v5";
-const LS_LANC_KEY      = "ug_lancamentos_v2";
-
-function lsLoad<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try { const v = localStorage.getItem(key); return v ? (JSON.parse(v) as T) : fallback; } catch { return fallback; }
-}
-function lsSave(key: string, value: unknown): void {
-  if (typeof window === "undefined") return;
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* */ }
+async function savePosFinanceira(chave: string, valor: unknown) {
+  await supabase.from("pos_financeira").upsert({ chave, valor } as never);
 }
 
 const toBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
@@ -118,7 +108,7 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
   function addMov(pid: string) { setPermuta(p => ({ ...p, pedidos: p.pedidos.map(pd => pd.id === pid ? { ...pd, movimentacoes: [...pd.movimentacoes, { id: Date.now().toString(), data: new Date().toISOString().split("T")[0], valor: 0, numeroPedido: "", tipo: "PERMUTA" as const, empresa: "" }] } : pd) })); setSalvoPermuta(false); }
   function removeMov(pid: string, mid: string) { setPermuta(p => ({ ...p, pedidos: p.pedidos.map(pd => pd.id === pid ? { ...pd, movimentacoes: pd.movimentacoes.filter(m => m.id !== mid) } : pd) })); setSalvoPermuta(false); }
   function patchMov(pid: string, mid: string, patch: Partial<MovPedido>) { setPermuta(p => ({ ...p, pedidos: p.pedidos.map(pd => pd.id === pid ? { ...pd, movimentacoes: pd.movimentacoes.map(m => m.id === mid ? { ...m, ...patch } : m) } : pd) })); setSalvoPermuta(false); }
-  function salvarPermuta() { lsSave(LS_PERMUTA_KEY, permuta); setSalvoPermuta(true); setTimeout(() => setSalvoPermuta(false), 3000); }
+  function salvarPermuta() { savePosFinanceira("permuta", permuta); setSalvoPermuta(true); setTimeout(() => setSalvoPermuta(false), 3000); }
 
   const chevron = (aberto: boolean, onToggle: () => void) => (
     <button onClick={onToggle} style={{ width: "28px", height: "28px", borderRadius: "6px", background: "transparent", border: "1px solid var(--b2)", color: "var(--t3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", flexShrink: 0 }}>
@@ -298,7 +288,7 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
                 </span>
               )}
               <button
-                onClick={() => { lsSave(LS_APORTES_G_KEY, aportes); setSalvoAporte(true); setTimeout(() => setSalvoAporte(false), 3000); }}
+                onClick={() => { savePosFinanceira("aportes_gabriel", aportes); setSalvoAporte(true); setTimeout(() => setSalvoAporte(false), 3000); }}
                 style={{ fontSize: "12px", fontWeight: 700, padding: "7px 20px", borderRadius: "8px", border: "none", background: salvoAporte ? "var(--ok)" : "#3b82f6", color: "white", cursor: "pointer", transition: "background .3s", display: "flex", alignItems: "center", gap: "6px" }}>
                 {salvoAporte ? "✓ Salvo" : "💾 Salvar alterações"}
               </button>
@@ -630,16 +620,31 @@ export default function InvestimentosPage() {
   const [aportePos,  setAportePos]        = useState<AporteGabriel[]>([]);
   const [permutaPos, setPermutaPos]       = useState<PermutaV2>(PERMUTA_DEFAULT);
 
+  const posLoaded = useRef(false);
+
   useEffect(() => {
-    setBancosPos(lsLoad<SaldoBanco[]>(LS_BANCOS_KEY, BANCOS_POS_DEFAULT));
-    setAportePos(lsLoad<AporteGabriel[]>(LS_APORTES_G_KEY, []));
-    setPermutaPos(lsLoad<PermutaV2>(LS_PERMUTA_KEY, PERMUTA_DEFAULT));
-    setLancamentosPos(lsLoad<Lancamento[]>(LS_LANC_KEY, []));
+    (async () => {
+      const { data } = await supabase.from("pos_financeira").select("chave, valor");
+      if (data) {
+        const map = Object.fromEntries(data.map((r: { chave: string; valor: unknown }) => [r.chave, r.valor]));
+        if (map.saldos_bancarios) setBancosPos(map.saldos_bancarios as SaldoBanco[]);
+        if (map.aportes_gabriel) setAportePos(map.aportes_gabriel as AporteGabriel[]);
+        if (map.permuta) setPermutaPos(map.permuta as PermutaV2);
+        if (map.lancamentos_pos) setLancamentosPos(map.lancamentos_pos as Lancamento[]);
+      }
+      posLoaded.current = true;
+    })();
   }, []);
-  useEffect(() => { lsSave(LS_BANCOS_KEY,  bancosPos);  }, [bancosPos]);
-  useEffect(() => { lsSave(LS_APORTES_G_KEY, aportePos); }, [aportePos]);
-  useEffect(() => { lsSave(LS_PERMUTA_KEY, permutaPos); }, [permutaPos]);
-  useEffect(() => { lsSave(LS_LANC_KEY, lancamentosPos); }, [lancamentosPos]);
+
+  useEffect(() => {
+    if (!posLoaded.current) return;
+    savePosFinanceira("saldos_bancarios", bancosPos);
+  }, [bancosPos]);
+
+  useEffect(() => {
+    if (!posLoaded.current) return;
+    savePosFinanceira("lancamentos_pos", lancamentosPos);
+  }, [lancamentosPos]);
 
   useEffect(() => { load(); }, []);
 
