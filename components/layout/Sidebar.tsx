@@ -33,16 +33,16 @@ const NAV = [
   {
     grupo: "FINANCEIRO",
     items: [
-      { href: "/contas-receber", label: "Contas a Receber",   icon: "↑" },
-      { href: "/contas-pagar",  label: "Contas a Pagar",     icon: "↓" },
-      { href: "/investimentos", label: "Investimentos",      icon: "◆" },
+      { href: "/contas-receber",  label: "Contas a Receber",  icon: "↑" },
+      { href: "/contas-pagar",   label: "Contas a Pagar",    icon: "↓" },
+      { href: "/fluxo",          label: "Fluxo de Caixa",    icon: "◈" },
+      { href: "/movimentacoes",  label: "Movimentações",     icon: "≡" },
+      { href: "/investimentos",  label: "Investimentos",     icon: "◆" },
       // Oculto temporariamente a pedido — rota /investimentos/apresentacao continua existindo.
       // Para reexibir, basta descomentar a linha abaixo:
       // { href: "/investimentos/apresentacao", label: "Investimentos · Apresentação", icon: "◇" },
-      { href: "/fluxo",          label: "Fluxo de Caixa",         icon: "◈" },
-      { href: "/movimentacoes", label: "Movimentações",          icon: "≡" },
-      { href: "/notas",         label: "Notas Fiscais",          icon: "◧" },
-      { href: "/contabilidade", label: "Contabilidade",      icon: "◑" },
+      { href: "/notas",          label: "Notas Fiscais",     icon: "◧" },
+      { href: "/contabilidade",  label: "Contabilidade",     icon: "◑" },
     ],
   },
   {
