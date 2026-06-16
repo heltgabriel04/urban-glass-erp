@@ -226,6 +226,11 @@ function repackGroup(
     [...pieces],
   ];
 
+  // Retorna o MELHOR resultado entre todos (menor nº de chapas; em empate, maior rect livre)
+  let best: SheetState[] | null = null;
+  let bestN = Infinity;
+  let bestMaxFree = -1;
+
   for (const ordem of orderings) {
     const sheets: SheetState[] = [];
     let failed = false;
@@ -271,10 +276,72 @@ function repackGroup(
       );
     }
 
-    if (!failed && sheets.length <= maxSheets) return sheets;
+    if (!failed && sheets.length <= maxSheets) {
+      const n = sheets.length;
+      const maxFree = sheets.reduce((s, sh) =>
+        Math.max(s, sh.freeRects.reduce((a, r) => Math.max(a, r.l * r.a), 0)), 0);
+      if (n < bestN || (n === bestN && maxFree > bestMaxFree)) {
+        bestN = n; bestMaxFree = maxFree; best = sheets;
+      }
+    }
   }
 
-  return null;
+  return best;
+}
+
+// ── Per-Sheet Reoptimization ─────────────────────────────────────────────────
+// Para cada chapa, testa múltiplas ordenações das suas próprias peças e escolhe
+// a que maximiza o maior retângulo livre contíguo (proxy para "espaço mais útil").
+// Isto defragmenta o espaço interno das chapas, permitindo que o Sheet Merging
+// encontre espaço para as peças das chapas menos carregadas.
+
+function reoptimizeSheet(W: number, H: number, sheet: SheetState, kerf: number): SheetState {
+  const pieces = sheet.placed;
+  if (pieces.length <= 1) return sheet;
+
+  const orderings: PecaPlacada[][] = [
+    [...pieces].sort((a, b) => b.l * b.a - a.l * a.a),
+    [...pieces].sort((a, b) => Math.max(b.l, b.a) - Math.max(a.l, a.a)),
+    [...pieces].sort((a, b) => Math.min(b.l, b.a) - Math.min(a.l, a.a)),
+    [...pieces].sort((a, b) => (b.l / b.a) - (a.l / a.a)),
+    [...pieces].sort((a, b) => a.l * a.a - b.l * b.a),
+    [...pieces],
+  ];
+
+  let bestSheet = sheet;
+  let bestMaxFree = sheet.freeRects.reduce((s, r) => Math.max(s, r.l * r.a), 0);
+
+  for (const ordering of orderings) {
+    let frs: MRect[] = [{ x: 0, y: 0, l: W, a: H }];
+    const placed: PecaPlacada[] = [];
+    let ok = true;
+
+    for (const piece of ordering) {
+      const oris = [
+        { pl: piece.l, pa: piece.a, rot: piece.rot },
+        { pl: piece.a, pa: piece.l, rot: !piece.rot },
+      ];
+      let best: { fr: MRect; pl: number; pa: number; rot: boolean; score: number } | null = null;
+      for (const ori of oris) {
+        const fit = mrBestFit(frs, ori.pl, ori.pa);
+        if (fit && (!best || fit.score < best.score))
+          best = { fr: fit.fr, pl: ori.pl, pa: ori.pa, rot: ori.rot, score: fit.score };
+      }
+      if (!best) { ok = false; break; }
+      placed.push({ ...piece, x: best.fr.x, y: best.fr.y, l: best.pl, a: best.pa, rot: best.rot });
+      frs = mrPlace(frs, best.fr, best.pl, best.pa, kerf, W, H);
+    }
+
+    if (ok) {
+      const maxFree = frs.reduce((s, r) => Math.max(s, r.l * r.a), 0);
+      if (maxFree > bestMaxFree) {
+        bestMaxFree = maxFree;
+        bestSheet = { freeRects: frs, placed };
+      }
+    }
+  }
+
+  return bestSheet;
 }
 
 // ── k-Eliminate: tenta eliminar chapas remontando grupos de 2 ou 3 do zero ──────
@@ -495,13 +562,25 @@ export function empacotarTodas(
     if (melhorN === 1) break;
   }
 
-  // ── Fase 3: kEliminate (40% do tempo) ────────────────────────────────────────
-  // Remonta grupos de 2-3 chapas do zero para eliminar a fragmentação.
-  // Muito mais eficaz que random restarts para os últimos 1-2 chapas.
+  // ── Fase 3: Defragmentação + kEliminate (40% do tempo) ──────────────────────
+  // Pipline: reoptimize cada chapa → mergeSheets → kEliminate (grupos 2-3)
   if (melhorN > 1 && melhorSheets !== null) {
     const deadlineK = tStart + tTotal;
-    const improved = kEliminate(W, H, melhorSheets, kerf, deadlineK);
-    avaliar(improved);
+
+    // Passo A: reotimiza cada chapa individualmente para maximizar rect livre
+    const best0: SheetState[] = melhorSheets;
+    const reopt = best0.map(s => reoptimizeSheet(W, H, s, kerf));
+
+    // Passo B: tenta Sheet Merging com as chapas defragmentadas
+    const afterMerge = mergeSheets(W, H, reopt, kerf);
+    avaliar(afterMerge);
+
+    // Passo C: kEliminate (remonta grupos) sobre o melhor resultado
+    const base3: SheetState[] = melhorSheets as SheetState[];
+    if (base3.length > 1 && Date.now() < deadlineK) {
+      const kResult = kEliminate(W, H, base3, kerf, deadlineK);
+      avaliar(kResult);
+    }
   }
 
   const sheets: SheetState[] = melhorSheets ?? [];
