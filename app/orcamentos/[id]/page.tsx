@@ -217,19 +217,65 @@ export default function OrcamentoDetalhe() {
 
             <div className="card" style={{ padding: "20px 24px" }}>
               <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, marginBottom: "16px", letterSpacing: ".06em" }}>FINANCEIRO</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <Row label={itens.every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml Total" : "m² Total"} value={`${Number(orc.m2_total).toFixed(2)} ${itens.every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml" : "m²"}`} />
-                {orc.desconto > 0 && <Row label={`Desconto (${orc.desconto}%)`} value={`− ${formatBRL(orc.valor_total / (1 - orc.desconto/100) * orc.desconto/100)}`} color="var(--err)" />}
-                <Row label="Valor Total" value={formatBRL(orc.valor_total)} accent />
-                {orc.parcelas > 1 && <Row label="Por Parcela" value={formatBRL(orc.valor_total / orc.parcelas)} />}
+
+              {/* Resumo em 3 colunas */}
+              {(() => {
+                const isML = itens.every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true);
+                const unidade = isML ? "ml" : "m²";
+                const medida = `${Number(orc.m2_total).toFixed(2)} ${unidade}`;
+                return (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "14px" }}>
+                    <div style={{ background: "var(--surf2)", borderRadius: "8px", padding: "10px 12px", border: "1px solid var(--b2)" }}>
+                      <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: "4px" }}>Total</div>
+                      <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--acc)", fontFamily: "'DM Mono',monospace" }}>{formatBRL(orc.valor_total)}</div>
+                    </div>
+                    <div style={{ background: "var(--surf2)", borderRadius: "8px", padding: "10px 12px", border: "1px solid var(--b2)" }}>
+                      <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: "4px" }}>{unidade} Total</div>
+                      <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--t2)", fontFamily: "'DM Mono',monospace" }}>{medida}</div>
+                    </div>
+                    <div style={{ background: "var(--surf2)", borderRadius: "8px", padding: "10px 12px", border: "1px solid var(--b2)" }}>
+                      <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: "4px" }}>
+                        {orc.parcelas > 1 ? `${orc.parcelas}× Parcelas` : "Pagamento"}
+                      </div>
+                      <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--t1)", fontFamily: "'DM Mono',monospace" }}>
+                        {orc.parcelas > 1 ? formatBRL(orc.valor_total / orc.parcelas) : (orc.forma_pgto || "—")}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Desconto e detalhes adicionais */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+                {orc.desconto > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderTop: "1px solid var(--b1)" }}>
+                    <span style={{ fontSize: "12px", color: "var(--t3)" }}>Desconto ({orc.desconto}%)</span>
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--err)", fontFamily: "'DM Mono',monospace" }}>
+                      − {formatBRL(orc.valor_total / (1 - orc.desconto / 100) * orc.desconto / 100)}
+                    </span>
+                  </div>
+                )}
+                {orc.parcelas > 1 && orc.forma_pgto && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderTop: "1px solid var(--b1)" }}>
+                    <span style={{ fontSize: "12px", color: "var(--t3)" }}>Forma de Pagamento</span>
+                    <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--t1)" }}>{orc.forma_pgto}</span>
+                  </div>
+                )}
+                {orc.conta && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderTop: "1px solid var(--b1)" }}>
+                    <span style={{ fontSize: "12px", color: "var(--t3)" }}>Conta</span>
+                    <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--t1)" }}>{orc.conta}</span>
+                  </div>
+                )}
               </div>
+
               {orc.status === "Aprovado" && orc.pedido_id && (
-                <div style={{ marginTop: "20px", padding: "12px", background: "rgba(0,200,100,.08)", borderRadius: "8px", color: "var(--ok)", fontSize: "13px", textAlign: "center" }}>
+                <div style={{ marginTop: "16px", padding: "12px", background: "rgba(0,200,100,.08)", borderRadius: "8px", color: "var(--ok)", fontSize: "13px", textAlign: "center", border: "1px solid rgba(16,185,129,.2)" }}>
                   ✓ Aprovado · Pedido <strong>{orc.pedido_id}</strong> gerado
                 </div>
               )}
               {orc.status === "Rejeitado" && (
-                <div style={{ marginTop: "20px", padding: "14px 16px", background: "rgba(244,63,94,.08)", borderRadius: "8px", border: "1px solid rgba(244,63,94,.2)", display: "flex", flexDirection: "column", gap: "6px" }}>
+                <div style={{ marginTop: "16px", padding: "14px 16px", background: "rgba(244,63,94,.08)", borderRadius: "8px", border: "1px solid rgba(244,63,94,.2)", display: "flex", flexDirection: "column", gap: "6px" }}>
                   <div style={{ color: "var(--err)", fontSize: "13px", fontWeight: 700 }}>✕ Orçamento rejeitado</div>
                   {orc.motivo_rejeicao && (
                     <div style={{ fontSize: "12px", color: "var(--t2)" }}>
