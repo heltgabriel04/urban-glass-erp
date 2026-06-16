@@ -476,9 +476,9 @@ export default function EditarPedidoPage() {
   return (
     <AppLayout>
       <div className="tb">
-        <button className="btn bg sm" onClick={() => router.push(`/pedidos/${id}`)}>← Voltar</button>
+        <button className="btn bg sm" onClick={() => router.back()}>← Voltar</button>
         <div className="tb-title" style={{ flex:1 }}>Editar Pedido · <span style={{ color:"var(--acc)" }}>{id}</span></div>
-        <button className="btn bg sm" onClick={() => router.push(`/pedidos/${id}`)}>Cancelar</button>
+        <button className="btn bg sm" onClick={() => router.back()}>Cancelar</button>
         <button className="btn bp sm" onClick={salvar} disabled={salvando}>{salvando ? "Salvando..." : "✓ Salvar Alterações"}</button>
       </div>
 
