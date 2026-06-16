@@ -195,11 +195,6 @@ export default function ContasReceberPage() {
     { key: "vencido",  label: `Vencido${qtdVencidos > 0 ? ` (${qtdVencidos})` : ""}` },
   ];
 
-  const inputCls: React.CSSProperties = {
-    background: "var(--surf1)", border: "1px solid var(--b2)", borderRadius: "6px",
-    color: "var(--t1)", fontSize: "12px", padding: "6px 10px", fontFamily: "inherit", outline: "none",
-  };
-
   return (
     <AppLayout>
       <div className="tb">
@@ -254,7 +249,7 @@ export default function ContasReceberPage() {
             ].map(f => (
               <div key={f.label} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                 <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{f.label}</div>
-                <input type="date" style={inputCls} value={f.val} onChange={e => f.set(e.target.value)} />
+                <input type="date" className="fc" style={{ margin: 0 }} value={f.val} onChange={e => f.set(e.target.value)} />
               </div>
             ))}
             <button className="btn bg sm" onClick={() => { setFiltroEmisIni(""); setFiltroEmissFim(""); setFiltroVencIni(""); setFiltroVencFim(""); setFiltroPgtoIni(""); setFiltroPgtoFim(""); }}>✕ Limpar</button>
@@ -375,23 +370,23 @@ export default function ContasReceberPage() {
 
       {/* ── MODAL ADD/EDIT ── */}
       {(modal === "add" || modal === "edit") && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={e => e.target === e.currentTarget && closeModal()}>
-          <div style={{ background: "var(--surf1)", border: "1px solid var(--b2)", borderRadius: "14px", padding: "24px", width: "560px", maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", marginBottom: "20px" }}>
-              {modal === "add" ? "Novo Recebível" : "Editar Recebível"}
+        <div className="mov open" onClick={e => e.target === e.currentTarget && closeModal()}>
+          <div className="mod" style={{ width: "560px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
+            <div className="mhd">
+              <div className="mtit">{modal === "add" ? "Novo Recebível" : "Editar Recebível"}</div>
+              <button className="mcl" onClick={closeModal}>✕</button>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <div>
-                  <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Documento</div>
-                  <input className="fc" style={{ margin: 0, width: "100%" }} placeholder="NF, recibo..." value={form.documento as string}
+            <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px", overflowY: "auto", flex: 1 }}>
+              <div className="fr">
+                <div className="fg">
+                  <label className="fl">Documento</label>
+                  <input className="fc" placeholder="NF, recibo..." value={form.documento as string}
                     onChange={e => setForm(f => ({ ...f, documento: e.target.value }))} />
                 </div>
-                <div>
-                  <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Cliente</div>
-                  <select className="fc" style={{ margin: 0, width: "100%" }} value={form.cliente_id}
+                <div className="fg">
+                  <label className="fl">Cliente</label>
+                  <select className="fc" value={form.cliente_id}
                     onChange={e => setForm(f => ({ ...f, cliente_id: e.target.value }))}>
                     <option value="">Selecione...</option>
                     {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
@@ -399,46 +394,46 @@ export default function ContasReceberPage() {
                 </div>
               </div>
 
-              <div>
-                <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Descrição *</div>
-                <input className="fc" style={{ margin: 0, width: "100%" }} placeholder="Descrição do recebível" value={form.descricao}
+              <div className="fg">
+                <label className="fl">Descrição *</label>
+                <input className="fc" placeholder="Descrição do recebível" value={form.descricao}
                   onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} />
               </div>
 
-              <div>
-                <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Plano de Contas</div>
-                <select className="fc" style={{ margin: 0, width: "100%" }} value={form.plano_contas_id}
+              <div className="fg">
+                <label className="fl">Plano de Contas</label>
+                <select className="fc" value={form.plano_contas_id}
                   onChange={e => setForm(f => ({ ...f, plano_contas_id: e.target.value }))}>
                   <option value="">Selecione...</option>
                   {planos.map(p => <option key={p.id} value={p.id}>{p.codigo_estruturado} · {p.descricao}</option>)}
                 </select>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-                <div>
-                  <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Valor *</div>
-                  <CurrencyInput value={form.valor} onChange={v => setForm(f => ({ ...f, valor: v }))} style={{ margin: 0, width: "100%" }} />
+              <div className="fr3">
+                <div className="fg">
+                  <label className="fl">Valor *</label>
+                  <CurrencyInput value={form.valor} onChange={v => setForm(f => ({ ...f, valor: v }))} />
                 </div>
-                <div>
-                  <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Emissão</div>
+                <div className="fg">
+                  <label className="fl">Emissão</label>
                   <DateInput value={form.dt_emissao as string} onChange={v => setForm(f => ({ ...f, dt_emissao: v }))} />
                 </div>
-                <div>
-                  <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Vencimento</div>
+                <div className="fg">
+                  <label className="fl">Vencimento</label>
                   <DateInput value={form.vencimento as string} onChange={v => setForm(f => ({ ...f, vencimento: v }))} />
                 </div>
               </div>
 
-              <div>
-                <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Observação</div>
-                <input className="fc" style={{ margin: 0, width: "100%" }} placeholder="Observações..." value={form.obs as string}
+              <div className="fg">
+                <label className="fl">Observação</label>
+                <input className="fc" placeholder="Observações..." value={form.obs as string}
                   onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} />
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginTop: "20px" }}>
-              <button className="btn bg sm" onClick={closeModal}>Cancelar</button>
-              <button className="btn bp sm" onClick={salvarRecebivel} disabled={salvando || !form.descricao.trim() || form.valor <= 0}>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)", flexShrink: 0 }}>
+              <button className="btn bg" onClick={closeModal}>Cancelar</button>
+              <button className="btn bp" onClick={salvarRecebivel} disabled={salvando || !form.descricao.trim() || form.valor <= 0}>
                 {salvando ? "Salvando..." : modal === "add" ? "Adicionar" : "Salvar alterações"}
               </button>
             </div>
@@ -448,20 +443,24 @@ export default function ContasReceberPage() {
 
       {/* ── MODAL RECEBIMENTO ── */}
       {modal === "receber" && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={e => e.target === e.currentTarget && closeModal()}>
-          <div style={{ background: "var(--surf1)", border: "1px solid var(--b2)", borderRadius: "14px", padding: "24px", width: "340px" }}>
-            <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", marginBottom: "6px" }}>Confirmar Recebimento</div>
-            <div style={{ fontSize: "12px", color: "var(--t3)", marginBottom: "20px" }}>
-              {recebiveis.find(r => r.id === receberId)?.descricao}
+        <div className="mov open" onClick={e => e.target === e.currentTarget && closeModal()}>
+          <div className="mod" style={{ width: "380px" }}>
+            <div className="mhd">
+              <div className="mtit">Confirmar Recebimento</div>
+              <button className="mcl" onClick={closeModal}>✕</button>
             </div>
-            <div>
-              <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Data do Recebimento</div>
-              <DateInput value={dtRec} onChange={setDtRec} />
+            <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div style={{ fontSize: "12px", color: "var(--t3)" }}>
+                {recebiveis.find(r => r.id === receberId)?.descricao}
+              </div>
+              <div className="fg">
+                <label className="fl">Data do Recebimento</label>
+                <DateInput value={dtRec} onChange={setDtRec} />
+              </div>
             </div>
-            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginTop: "20px" }}>
-              <button className="btn bg sm" onClick={closeModal}>Cancelar</button>
-              <button className="btn bp sm" onClick={confirmarRecebimento} disabled={salvando || !dtRec}>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
+              <button className="btn bg" onClick={closeModal}>Cancelar</button>
+              <button className="btn bp" onClick={confirmarRecebimento} disabled={salvando || !dtRec}>
                 {salvando ? "Salvando..." : "Confirmar"}
               </button>
             </div>

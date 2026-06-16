@@ -157,21 +157,6 @@ export default function PlanoContasPage() {
   const totalCredito = planos.filter(p => p.pc_categorias?.indicador === "Crédito").length;
   const totalDebito  = planos.filter(p => p.pc_categorias?.indicador === "Débito").length;
 
-  const inputStyle: React.CSSProperties = {
-    background: "var(--surf1)", border: "1px solid var(--b2)", borderRadius: "6px",
-    color: "var(--t1)", fontSize: "12px", padding: "5px 9px", outline: "none",
-    fontFamily: "inherit",
-  };
-
-  function FormRow({ label, children }: { label: string; children: React.ReactNode }) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-        <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
-        {children}
-      </div>
-    );
-  }
-
   return (
     <AppLayout>
       <div className="tb">
@@ -236,38 +221,47 @@ export default function PlanoContasPage() {
                 )}
               </div>
 
-              {/* Formulário de adição/edição */}
+              {/* Modal plano add/edit */}
               {(planoAdding || planoEditId !== null) && (
-                <div style={{ background: "var(--surf1)", border: "1px solid var(--acc)", borderRadius: "10px", padding: "16px", marginBottom: "14px" }}>
-                  <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--acc)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "14px" }}>
-                    {planoEditId ? "Editar Plano de Contas" : "Novo Plano de Contas"}
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "80px 120px 1fr 240px", gap: "12px", alignItems: "end" }}>
-                    <FormRow label="Código">
-                      <input type="number" style={{ ...inputStyle, width: "100%" }} value={planoForm.codigo || ""}
-                        onChange={e => setPlanoForm(f => ({ ...f, codigo: Number(e.target.value) }))} placeholder="69" />
-                    </FormRow>
-                    <FormRow label="Cód. Estruturado">
-                      <input style={{ ...inputStyle, width: "100%", fontFamily: "'DM Mono', monospace" }} value={planoForm.codigo_estruturado}
-                        onChange={e => setPlanoForm(f => ({ ...f, codigo_estruturado: e.target.value }))} placeholder="7.13" />
-                    </FormRow>
-                    <FormRow label="Descrição">
-                      <input style={{ ...inputStyle, width: "100%" }} value={planoForm.descricao}
-                        onChange={e => setPlanoForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Nome do plano de contas" />
-                    </FormRow>
-                    <FormRow label="Categoria">
-                      <select style={{ ...inputStyle, width: "100%" }} value={planoForm.categoria_id ?? ""}
-                        onChange={e => setPlanoForm(f => ({ ...f, categoria_id: e.target.value ? Number(e.target.value) : null }))}>
-                        <option value="">Selecione...</option>
-                        {categorias.map(c => <option key={c.id} value={c.id}>{c.codigo} · {c.descricao}</option>)}
-                      </select>
-                    </FormRow>
-                  </div>
-                  <div style={{ display: "flex", gap: "8px", marginTop: "14px", justifyContent: "flex-end" }}>
-                    <button className="btn bg sm" onClick={cancelPlano}>Cancelar</button>
-                    <button className="btn bp sm" onClick={savePlano} disabled={planoSalvando || !planoForm.descricao || !planoForm.codigo || !planoForm.codigo_estruturado}>
-                      {planoSalvando ? "Salvando..." : planoEditId ? "Salvar alterações" : "Adicionar"}
-                    </button>
+                <div className="mov open" onClick={e => e.target === e.currentTarget && cancelPlano()}>
+                  <div className="mod" style={{ width: "540px" }}>
+                    <div className="mhd">
+                      <div className="mtit">{planoEditId ? "Editar Plano de Contas" : "Novo Plano de Contas"}</div>
+                      <button className="mcl" onClick={cancelPlano}>✕</button>
+                    </div>
+                    <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
+                      <div className="fr">
+                        <div className="fg" style={{ maxWidth: "90px" }}>
+                          <label className="fl">Código</label>
+                          <input type="number" className="fc" value={planoForm.codigo || ""}
+                            onChange={e => setPlanoForm(f => ({ ...f, codigo: Number(e.target.value) }))} placeholder="69" />
+                        </div>
+                        <div className="fg" style={{ maxWidth: "140px" }}>
+                          <label className="fl">Cód. Estruturado</label>
+                          <input className="fc" style={{ fontFamily: "'DM Mono', monospace" }} value={planoForm.codigo_estruturado}
+                            onChange={e => setPlanoForm(f => ({ ...f, codigo_estruturado: e.target.value }))} placeholder="7.13" />
+                        </div>
+                      </div>
+                      <div className="fg">
+                        <label className="fl">Descrição</label>
+                        <input className="fc" value={planoForm.descricao}
+                          onChange={e => setPlanoForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Nome do plano de contas" />
+                      </div>
+                      <div className="fg">
+                        <label className="fl">Categoria</label>
+                        <select className="fc" value={planoForm.categoria_id ?? ""}
+                          onChange={e => setPlanoForm(f => ({ ...f, categoria_id: e.target.value ? Number(e.target.value) : null }))}>
+                          <option value="">Selecione...</option>
+                          {categorias.map(c => <option key={c.id} value={c.id}>{c.codigo} · {c.descricao}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
+                      <button className="btn bg" onClick={cancelPlano}>Cancelar</button>
+                      <button className="btn bp" onClick={savePlano} disabled={planoSalvando || !planoForm.descricao || !planoForm.codigo || !planoForm.codigo_estruturado}>
+                        {planoSalvando ? "Salvando..." : planoEditId ? "Salvar alterações" : "Adicionar"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -326,40 +320,49 @@ export default function PlanoContasPage() {
           // ABA: CATEGORIAS
           // ══════════════════════════════════════════════════════
             <div>
-              {/* Formulário */}
+              {/* Modal categoria add/edit */}
               {(catAdding || catEditId !== null) && (
-                <div style={{ background: "var(--surf1)", border: "1px solid var(--acc)", borderRadius: "10px", padding: "16px", marginBottom: "14px" }}>
-                  <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--acc)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "14px" }}>
-                    {catEditId ? "Editar Categoria" : "Nova Categoria"}
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "80px 1fr 140px 1fr", gap: "12px", alignItems: "end" }}>
-                    <FormRow label="Código">
-                      <input type="number" style={{ ...inputStyle, width: "100%" }} value={catForm.codigo || ""}
-                        onChange={e => setCatForm(f => ({ ...f, codigo: Number(e.target.value) }))} placeholder="19" />
-                    </FormRow>
-                    <FormRow label="Descrição">
-                      <input style={{ ...inputStyle, width: "100%" }} value={catForm.descricao}
-                        onChange={e => setCatForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Nome da categoria" />
-                    </FormRow>
-                    <FormRow label="Indicador">
-                      <select style={{ ...inputStyle, width: "100%" }} value={catForm.indicador}
-                        onChange={e => setCatForm(f => ({ ...f, indicador: e.target.value as "Crédito" | "Débito" }))}>
-                        <option value="Crédito">Crédito</option>
-                        <option value="Débito">Débito</option>
-                      </select>
-                    </FormRow>
-                    <FormRow label="Faixa no DRE">
-                      <select style={{ ...inputStyle, width: "100%" }} value={catForm.faixa_dre}
-                        onChange={e => setCatForm(f => ({ ...f, faixa_dre: e.target.value }))}>
-                        {FAIXAS_DRE.map(f => <option key={f} value={f}>{f}</option>)}
-                      </select>
-                    </FormRow>
-                  </div>
-                  <div style={{ display: "flex", gap: "8px", marginTop: "14px", justifyContent: "flex-end" }}>
-                    <button className="btn bg sm" onClick={cancelCat}>Cancelar</button>
-                    <button className="btn bp sm" onClick={saveCat} disabled={catSalvando || !catForm.descricao || !catForm.codigo}>
-                      {catSalvando ? "Salvando..." : catEditId ? "Salvar alterações" : "Adicionar"}
-                    </button>
+                <div className="mov open" onClick={e => e.target === e.currentTarget && cancelCat()}>
+                  <div className="mod" style={{ width: "500px" }}>
+                    <div className="mhd">
+                      <div className="mtit">{catEditId ? "Editar Categoria" : "Nova Categoria"}</div>
+                      <button className="mcl" onClick={cancelCat}>✕</button>
+                    </div>
+                    <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
+                      <div className="fr">
+                        <div className="fg" style={{ maxWidth: "90px" }}>
+                          <label className="fl">Código</label>
+                          <input type="number" className="fc" value={catForm.codigo || ""}
+                            onChange={e => setCatForm(f => ({ ...f, codigo: Number(e.target.value) }))} placeholder="19" />
+                        </div>
+                        <div className="fg">
+                          <label className="fl">Indicador</label>
+                          <select className="fc" value={catForm.indicador}
+                            onChange={e => setCatForm(f => ({ ...f, indicador: e.target.value as "Crédito" | "Débito" }))}>
+                            <option value="Crédito">Crédito</option>
+                            <option value="Débito">Débito</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="fg">
+                        <label className="fl">Descrição</label>
+                        <input className="fc" value={catForm.descricao}
+                          onChange={e => setCatForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Nome da categoria" />
+                      </div>
+                      <div className="fg">
+                        <label className="fl">Faixa no DRE</label>
+                        <select className="fc" value={catForm.faixa_dre}
+                          onChange={e => setCatForm(f => ({ ...f, faixa_dre: e.target.value }))}>
+                          {FAIXAS_DRE.map(f => <option key={f} value={f}>{f}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
+                      <button className="btn bg" onClick={cancelCat}>Cancelar</button>
+                      <button className="btn bp" onClick={saveCat} disabled={catSalvando || !catForm.descricao || !catForm.codigo}>
+                        {catSalvando ? "Salvando..." : catEditId ? "Salvar alterações" : "Adicionar"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
