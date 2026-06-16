@@ -621,6 +621,36 @@ export default function InvestimentosPage() {
   const [permutaPos, setPermutaPos]       = useState<PermutaV2>(PERMUTA_DEFAULT);
 
   const posLoaded = useRef(false);
+  const [recuperando, setRecuperando] = useState(false);
+  const [recuperado,  setRecuperado]  = useState(false);
+
+  async function recuperarLocalStorage() {
+    setRecuperando(true);
+    try {
+      const bancos   = localStorage.getItem("ug_bancos_v1");
+      const aportes  = localStorage.getItem("ug_aportes_g_v1");
+      const permuta  = localStorage.getItem("ug_permuta_v5");
+      const lanc     = localStorage.getItem("ug_lancamentos_v2");
+      const saves: Promise<unknown>[] = [];
+      if (bancos)  saves.push(savePosFinanceira("saldos_bancarios", JSON.parse(bancos)));
+      if (aportes) saves.push(savePosFinanceira("aportes_gabriel",  JSON.parse(aportes)));
+      if (permuta) saves.push(savePosFinanceira("permuta",          JSON.parse(permuta)));
+      if (lanc)    saves.push(savePosFinanceira("lancamentos_pos",  JSON.parse(lanc)));
+      await Promise.all(saves);
+      // recarrega do Supabase após salvar
+      const { data } = await supabase.from("pos_financeira").select("chave, valor");
+      if (data) {
+        const map = Object.fromEntries(data.map((r: { chave: string; valor: unknown }) => [r.chave, r.valor]));
+        if (map.saldos_bancarios) setBancosPos(map.saldos_bancarios as SaldoBanco[]);
+        if (map.aportes_gabriel)  setAportePos(map.aportes_gabriel  as AporteGabriel[]);
+        if (map.permuta)          setPermutaPos(map.permuta          as PermutaV2);
+        if (map.lancamentos_pos)  setLancamentosPos(map.lancamentos_pos as Lancamento[]);
+      }
+      setRecuperado(true);
+    } finally {
+      setRecuperando(false);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -1011,6 +1041,15 @@ export default function InvestimentosPage() {
             <button className="btn cy sm" onClick={corrigirBancos} disabled={corrigindo} title="Normalizar nomes duplicados de bancos">
               {corrigindo ? "Corrigindo..." : "⚠ Corrigir Bancos"}
             </button>
+          )}
+          {!recuperado && (
+            <button className="btn cy sm" onClick={recuperarLocalStorage} disabled={recuperando}
+              title="Recupera dados salvos localmente no navegador e os grava no servidor">
+              {recuperando ? "Recuperando..." : "⟳ Recuperar dados locais"}
+            </button>
+          )}
+          {recuperado && (
+            <span style={{ fontSize: "11px", color: "var(--ok)", fontWeight: 700, padding: "0 6px" }}>✓ Dados recuperados</span>
           )}
           <button className="btn bg sm" onClick={handlePDF} disabled={!filtered.length}>⬡ PDF</button>
           <button className="btn bg sm" onClick={handleExcel} disabled={!filtered.length}>↓ Excel</button>
