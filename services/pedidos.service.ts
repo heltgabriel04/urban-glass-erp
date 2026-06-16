@@ -78,24 +78,18 @@ export interface PedidosTotais {
   valorTotal: number;
   recebido: number;
   emProducao: number;
-  /** Soma real dos saldos pendentes: só pedidos com valor_recebido < valor_total */
-  saldoAberto: number;
-  countAberto: number;
 }
 
 /** Totais globais (todos os pedidos) para os cards — payload leve, sem joins. */
 export async function getPedidosTotais(): Promise<PedidosTotais> {
   const { data, error } = await supabase.from('pedidos').select('valor_total, valor_recebido, status');
-  if (error) { console.error('getPedidosTotais:', error); return { count: 0, valorTotal: 0, recebido: 0, emProducao: 0, saldoAberto: 0, countAberto: 0 }; }
+  if (error) { console.error('getPedidosTotais:', error); return { count: 0, valorTotal: 0, recebido: 0, emProducao: 0 }; }
   const rows = (data ?? []) as Array<{ valor_total: number; valor_recebido: number; status: string }>;
-  const abertoRows = rows.filter(r => Number(r.valor_recebido) < Number(r.valor_total));
   return {
     count:      rows.length,
     valorTotal: rows.reduce((a, r) => a + Number(r.valor_total), 0),
     recebido:   rows.reduce((a, r) => a + Number(r.valor_recebido), 0),
     emProducao: rows.filter(r => r.status.startsWith('Em Produção')).length,
-    saldoAberto: abertoRows.reduce((a, r) => a + Number(r.valor_total) - Number(r.valor_recebido), 0),
-    countAberto: abertoRows.length,
   };
 }
 

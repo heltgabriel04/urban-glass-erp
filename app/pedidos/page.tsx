@@ -44,7 +44,7 @@ export default function PedidosPage() {
   const [tab, setTab]                     = useState<TabPedidos>("todos");
   const [page, setPage]                   = useState(0); // 0-based
   const [total, setTotal]                 = useState(0);
-  const [totais, setTotais]               = useState<PedidosTotais>({ count: 0, valorTotal: 0, recebido: 0, emProducao: 0, saldoAberto: 0, countAberto: 0 });
+  const [totais, setTotais]               = useState<PedidosTotais>({ count: 0, valorTotal: 0, recebido: 0, emProducao: 0 });
   const [comOtimizacao, setComOtimizacao] = useState<Set<string>>(new Set());
   const [pedidosChapa, setPedidosChapa]   = useState<Set<string>>(new Set());
   const [pedidosVidroCliente, setPedidosVidroCliente] = useState<Set<string>>(new Set());
@@ -129,6 +129,7 @@ export default function PedidosPage() {
     else toast(erro ? `Erro ao excluir: ${erro}` : "Erro ao excluir pedido", "err");
   }
 
+  const totalAberto = totais.valorTotal - totais.recebido;
   const totalPages  = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   function btnAcao(corHover: string, bgHover: string, titulo: string, icone: string, onClick: () => void) {
@@ -179,11 +180,11 @@ export default function PedidosPage() {
 
         <div style={{ display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:"12px", marginBottom:"20px" }}>
           {[
-            { label:"Total",       value: String(totais.count),         color:"var(--t1)",   sub:"pedidos" },
-            { label:"Valor Total", value: formatBRL(totais.valorTotal),  color:"var(--acc)",  sub:"soma geral" },
-            { label:"Recebido",    value: formatBRL(totais.recebido),    color:"var(--ok)",   sub:"pagamentos" },
-            { label:"A Receber",   value: formatBRL(totais.saldoAberto), color:"var(--warn)", sub:`${totais.countAberto} pedido(s)` },
-            { label:"Em Produção", value: String(totais.emProducao),     color:"var(--acc2)", sub:"em andamento" },
+            { label:"Total",       value: String(totais.count),        color:"var(--t1)",   sub:"pedidos" },
+            { label:"Valor Total", value: formatBRL(totais.valorTotal), color:"var(--acc)",  sub:"soma geral" },
+            { label:"Recebido",    value: formatBRL(totais.recebido),   color:"var(--ok)",   sub:"pagamentos" },
+            { label:"A Receber",   value: formatBRL(totalAberto),       color:"var(--warn)", sub:"em aberto" },
+            { label:"Em Produção", value: String(totais.emProducao),    color:"var(--acc2)", sub:"em andamento" },
           ].map(card => (
             <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
               <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
@@ -198,7 +199,7 @@ export default function PedidosPage() {
           {([
             { key: "todos",    label: "Todos" },
             { key: "ativos",   label: "Em Produção" },
-            { key: "aberto",   label: `Em Aberto${totais.countAberto > 0 ? ` (${totais.countAberto})` : ""}` },
+            { key: "aberto",   label: "Em Aberto" },
             { key: "quitado",  label: "Quitados" },
             { key: "entregue", label: "Entregues" },
             { key: "cancelado",label: "Cancelados" },
