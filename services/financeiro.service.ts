@@ -152,7 +152,7 @@ export async function criarLancamentosParcelados({
 }: {
   pedidoId: string;
   clienteId: number;
-  parcelas: { data: string; valor: number }[];
+  parcelas: { data: string; valor: number; conta?: string; formaPgto?: string }[];
 }) {
   await supabase.from('lancamentos').delete().eq('pedido_id', pedidoId).eq('status', 'A Receber');
   const total = parcelas.length;
@@ -165,7 +165,8 @@ export async function criarLancamentosParcelados({
         : `Parcela ${i + 1}/${total} · ${pedidoId}`,
       valor: p.valor,
       status: 'A Receber' as const,
-      conta: '',
+      conta: p.conta ?? '',
+      forma_pgto: p.formaPgto ?? null,
       vencimento: p.data,
       pedido_id: pedidoId,
       cliente_id: clienteId,

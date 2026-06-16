@@ -34,6 +34,8 @@ interface ParcelaForm {
   data: string;
   valor: number;
   editado: boolean;
+  conta: string;
+  formaPgto: string;
 }
 
 const ITEM_VAZIO: ItemForm = {
@@ -115,7 +117,7 @@ export default function NovoPedidoPage() {
   const [salvando, setSalvando]     = useState(false);
   const [totalPedidoInput, setTotalPedidoInput] = useState(0);
   const [modoPedido, setModoPedido] = useState<ModoPedido>("m2");
-  const [parcelasForm, setParcelasForm] = useState<ParcelaForm[]>([{ data: "", valor: 0, editado: false }]);
+  const [parcelasForm, setParcelasForm] = useState<ParcelaForm[]>([{ data: "", valor: 0, editado: false, conta: "", formaPgto: "" }]);
 
   useEffect(() => { load(); }, []);
 
@@ -141,7 +143,11 @@ export default function NovoPedidoPage() {
   useEffect(() => {
     if (!clienteId) return;
     const cli = clientes.find(c => c.id === clienteId);
-    if (cli) setFormaPgto(cli.pgto || "");
+    if (cli) {
+      const pgto = cli.pgto || "";
+      setFormaPgto(pgto);
+      setParcelasForm(prev => prev.map(p => ({ ...p, formaPgto: pgto })));
+    }
   }, [clienteId, clientes]);
 
   const clienteOpts = clientes.map(c => ({ id: c.id, label: c.nome, sub: c.cidade ?? undefined }));
@@ -171,10 +177,14 @@ export default function NovoPedidoPage() {
 
   useEffect(() => {
     setParcelasForm(prev => {
-      const novaPrimeira = prev[0]?.data || "";
+      const novaPrimeira   = prev[0]?.data      || "";
+      const defaultConta   = prev[0]?.conta     ?? "";
+      const defaultForma   = prev[0]?.formaPgto ?? "";
       const novas: ParcelaForm[] = Array.from({ length: parcelas }, (_, i) => ({
-        data: novaPrimeira ? (i === 0 ? novaPrimeira : addMeses(novaPrimeira, i)) : "",
+        data:      novaPrimeira ? (i === 0 ? novaPrimeira : addMeses(novaPrimeira, i)) : "",
         valor: 0, editado: false,
+        conta:     prev[i]?.conta     ?? defaultConta,
+        formaPgto: prev[i]?.formaPgto ?? defaultForma,
       }));
       return redistribuirParcelas(novas, valorTotal);
     });
@@ -199,6 +209,14 @@ export default function NovoPedidoPage() {
       const atualizado = prev.map((p, i) => i === idx ? { ...p, valor, editado: true } : p);
       return redistribuirParcelas(atualizado, valorTotal, idx);
     });
+  }
+
+  function handleFormaParc(idx: number, forma: string) {
+    setParcelasForm(prev => prev.map((p, i) => i === idx ? { ...p, formaPgto: forma } : p));
+  }
+
+  function handleContaParc(idx: number, c: string) {
+    setParcelasForm(prev => prev.map((p, i) => i === idx ? { ...p, conta: c } : p));
   }
 
   function getTabela(): TabelaPreco | null {
@@ -330,8 +348,9 @@ export default function NovoPedidoPage() {
       valor_total: valorTotal,
       valor_recebido: 0,
       status: todosChapa ? "Em Produção – Corte" : "Aguardando otimização",
-      forma_pgto: formaPgto,
-      conta, parcelas, obs,
+      forma_pgto: parcelasForm[0]?.formaPgto || formaPgto,
+      conta: parcelasForm[0]?.conta || conta,
+      parcelas, obs,
     };
 
     const itensInsert: ItemPedidoInsert[] = itens.map(i => ({
@@ -451,63 +470,52 @@ export default function NovoPedidoPage() {
                     {parcelas > 1 ? `${parcelas}× Parcelas` : "Pagamento"}
                   </div>
                   <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--t1)", fontFamily: "'DM Mono',monospace" }}>
-                    {parcelas > 1 ? formatBRL(valorTotal / parcelas) : (formaPgto || "—")}
+                    {parcelas > 1 ? formatBRL(valorTotal / parcelas) : (parcelasForm[0]?.formaPgto || formaPgto || "—")}
                   </div>
                 </div>
               </div>
 
-              {/* Forma · Conta · Parcelas */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 72px", gap: "8px", marginBottom: "12px" }}>
-                <div>
-                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "4px" }}>Forma Pgto</div>
-                  <select className="fc" style={{ margin: 0 }} value={formaPgto} onChange={e => setFormaPgto(e.target.value)}>
-                    <option value="">— Forma —</option>
-                    {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "4px" }}>Conta</div>
-                  <select className="fc" style={{ margin: 0 }} value={conta} onChange={e => setConta(e.target.value)}>
-                    <option value="">— Conta —</option>
-                    {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "4px" }}>Parcelas</div>
-                  <select className="fc" style={{ margin: 0 }} value={parcelas} onChange={e => setParcelas(Number(e.target.value))}>
-                    {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
-                  </select>
-                </div>
+              {/* Parcelas count */}
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em" }}>Parcelas</div>
+                <select className="fc" style={{ margin: 0, width: "72px" }} value={parcelas} onChange={e => setParcelas(Number(e.target.value))}>
+                  {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
+                </select>
               </div>
 
-              {/* Cards de parcela */}
+              {/* Tabela de parcelas — tudo em linha */}
               <div>
-                <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", marginBottom: "8px" }}>
-                  {parcelas === 1 ? "VENCIMENTO" : "A PAGAR"}
+                <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 1fr 1fr 110px", gap: "6px", padding: "0 12px 6px 12px" }}>
+                  {["#","DATA PGTO","FORMA PGTO","CONTA","VALOR"].map(h => (
+                    <div key={h} style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>{h}</div>
+                  ))}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                   {parcelasForm.map((p, idx) => (
-                    <div key={idx} style={{ background: "var(--surf2)", borderRadius: "8px", padding: "10px 12px", border: "1px solid var(--b2)" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
-                        <div style={{ flex: 1, fontSize: "12px", color: "var(--t1)", fontWeight: 600 }}>
-                          {parcelas > 1 ? `${idx + 1}ª Parcela` : "Pagamento"}
-                        </div>
-                        <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", fontFamily: "'DM Mono',monospace" }}>
-                          {formatBRL(p.valor)}
-                        </div>
+                    <div key={idx} style={{ display: "grid", gridTemplateColumns: "28px 1fr 1fr 1fr 110px", gap: "6px", alignItems: "center", background: "var(--surf2)", borderRadius: "8px", padding: "8px 12px", border: "1px solid var(--b2)" }}>
+                      <div style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", fontWeight: 600 }}>
+                        {parcelas > 1 ? `${idx + 1}ª` : "·"}
                       </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                        <div>
-                          <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "4px" }}>
-                            {parcelas > 1 ? "Vencimento" : "Data Pgto"}
-                          </div>
-                          <DateInput value={p.data} onChange={v => idx === 0 ? handlePrimeiraDtPgto(v) : handleDtPgto(idx, v)} />
-                        </div>
-                        <div>
-                          <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "4px" }}>Valor</div>
-                          <CurrencyInput value={p.valor} onChange={v => handleValorParcela(idx, v)} placeholder="R$ 0,00" style={{ margin: 0 }} />
-                        </div>
-                      </div>
+                      <DateInput value={p.data} onChange={v => idx === 0 ? handlePrimeiraDtPgto(v) : handleDtPgto(idx, v)} />
+                      <select
+                        className="fc"
+                        style={{ margin: 0, fontSize: "12px", padding: "7px 8px" }}
+                        value={p.formaPgto}
+                        onChange={e => handleFormaParc(idx, e.target.value)}
+                      >
+                        <option value="">— Forma —</option>
+                        {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
+                      </select>
+                      <select
+                        className="fc"
+                        style={{ margin: 0, fontSize: "12px", padding: "7px 8px" }}
+                        value={p.conta}
+                        onChange={e => handleContaParc(idx, e.target.value)}
+                      >
+                        <option value="">— Conta —</option>
+                        {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => <option key={c}>{c}</option>)}
+                      </select>
+                      <CurrencyInput value={p.valor} onChange={v => handleValorParcela(idx, v)} placeholder="R$ 0,00" style={{ margin: 0, fontSize: "12px", padding: "7px 8px" }} />
                     </div>
                   ))}
                 </div>
