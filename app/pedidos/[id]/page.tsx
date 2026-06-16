@@ -216,8 +216,8 @@ export default function PedidoDetalhe() {
           valorOriginal: Number(l.valor),
           valorDigitado: 0,
           dataPagamento: hoje(),
-          conta: l.conta ?? data?.conta ?? "",
-          formaPgto: l.forma_pgto ?? data?.forma_pgto ?? "",
+          conta: l.conta || data?.conta || "",
+          formaPgto: l.forma_pgto || data?.forma_pgto || "",
           marcando: false,
         };
       }
