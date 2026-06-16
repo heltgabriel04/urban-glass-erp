@@ -206,6 +206,72 @@ function bfdRun(
   return sheets;
 }
 
+// ── Sheet Merging (elimina chapas pouco ocupadas redistribuindo suas peças) ─────
+// Após o BFD produzir N chapas, tenta eliminar a menos carregada colocando
+// cada uma de suas peças na melhor posição disponível nas N-1 restantes.
+// Repete até não conseguir mais reduções.
+
+function cloneSheets(sheets: SheetState[]): SheetState[] {
+  return sheets.map(s => ({
+    freeRects: s.freeRects.map(r => ({ ...r })),
+    placed: [...s.placed],
+  }));
+}
+
+function tryEliminateSheet(
+  W: number, H: number,
+  sheets: SheetState[],
+  targetSi: number,
+  kerf: number
+): SheetState[] | null {
+  const sortedPieces = [...sheets[targetSi].placed].sort((a, b) => b.l * b.a - a.l * a.a);
+  const remaining = cloneSheets(sheets.filter((_, i) => i !== targetSi));
+
+  for (const piece of sortedPieces) {
+    const oris = [
+      { pl: piece.l, pa: piece.a, rot: piece.rot },
+      { pl: piece.a, pa: piece.l, rot: !piece.rot },
+    ];
+
+    let bestScore = Infinity, bestSi = -1;
+    let bestFr: MRect | null = null, bestOri = oris[0];
+
+    for (let si = 0; si < remaining.length; si++) {
+      for (const ori of oris) {
+        const fit = mrBestFit(remaining[si].freeRects, ori.pl, ori.pa);
+        if (fit && fit.score < bestScore) {
+          bestScore = fit.score; bestSi = si; bestFr = fit.fr; bestOri = ori;
+        }
+      }
+    }
+
+    if (bestFr === null) return null;
+
+    remaining[bestSi].placed.push({ ...piece, l: bestOri.pl, a: bestOri.pa, rot: bestOri.rot });
+    remaining[bestSi].freeRects = mrPlace(
+      remaining[bestSi].freeRects, bestFr, bestOri.pl, bestOri.pa, kerf, W, H
+    );
+  }
+
+  return remaining;
+}
+
+function mergeSheets(W: number, H: number, sheets: SheetState[], kerf: number): SheetState[] {
+  let current = sheets;
+  let improved = true;
+  while (improved && current.length > 1) {
+    improved = false;
+    const byLoad = current
+      .map((s, i) => ({ i, area: s.placed.reduce((sum, p) => sum + p.l * p.a, 0) }))
+      .sort((a, b) => a.area - b.area);
+    for (const { i } of byLoad) {
+      const result = tryEliminateSheet(W, H, current, i, kerf);
+      if (result !== null) { current = result; improved = true; break; }
+    }
+  }
+  return current;
+}
+
 export function empacotarTodas(
   W: number, H: number,
   pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
@@ -227,7 +293,7 @@ export function empacotarTodas(
   let melhorN = Infinity, melhorAprov = -1;
 
   for (const ordem of orderings) {
-    const sheets = bfdRun(W, H, pecas, kerf, ordem);
+    const sheets = mergeSheets(W, H, bfdRun(W, H, pecas, kerf, ordem), kerf);
     const n = sheets.length;
     if (n === 0) continue;
     const usedArea = sheets.reduce((s, sh) => s + sh.placed.reduce((a, p) => a + p.l * p.a, 0), 0);
