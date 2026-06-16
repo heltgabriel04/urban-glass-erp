@@ -44,6 +44,12 @@ const NAV = [
     ],
   },
   {
+    grupo: "CONFIGURAÇÕES",
+    items: [
+      { href: "/plano-contas", label: "Plano de Contas", icon: "≡" },
+    ],
+  },
+  {
     grupo: "GESTÃO",
     items: [
       { href: "/produtos",   label: "Produtos",             icon: "◫" },
