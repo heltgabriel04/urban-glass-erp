@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
+import { recalcularRecebido } from "@/services/pedidos.service";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import DateInput from "@/components/ui/DateInput";
 
@@ -171,7 +172,9 @@ export default function ContasReceberPage() {
   async function confirmarRecebimento() {
     if (!receberId || !dtRec) return;
     setSalvando(true);
+    const lancamento = recebiveis.find(r => r.id === receberId);
     await supabase.from("lancamentos").update({ status: "Pago", dt_pagamento: dtRec } as never).eq("id", receberId);
+    if (lancamento?.pedido_id) await recalcularRecebido(lancamento.pedido_id);
     setSalvando(false);
     closeModal();
     load();
@@ -179,13 +182,19 @@ export default function ContasReceberPage() {
 
   async function desfazerRecebimento(id: number) {
     if (!confirm("Desfazer recebimento e voltar para A Receber?")) return;
+    const lancamento = recebiveis.find(r => r.id === id);
     await supabase.from("lancamentos").update({ status: "A Receber", dt_pagamento: null } as never).eq("id", id);
+    if (lancamento?.pedido_id) await recalcularRecebido(lancamento.pedido_id);
     load();
   }
 
   async function excluir(id: number) {
     if (!confirm("Excluir este recebível?")) return;
+    const lancamento = recebiveis.find(r => r.id === id);
     await supabase.from("lancamentos").delete().eq("id", id);
+    if (lancamento?.pedido_id && getStatusEfetivo(lancamento) === "Recebido") {
+      await recalcularRecebido(lancamento.pedido_id);
+    }
     load();
   }
 
