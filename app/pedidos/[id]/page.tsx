@@ -428,12 +428,29 @@ export default function PedidoDetalhe() {
 
   async function handleDeletarLancamento(lancId: number) {
     if (!pedido) return;
-    if (!confirm("Remover este lançamento?")) return;
+    const lanc = lancamentos.find(l => l.id === lancId);
+    if (!lanc) return;
+
+    // Lançamento já pago: desfaz o recebimento restaurando para "A Receber"
+    // (garante que o valor volta ao saldo devedor corretamente)
+    if (lanc.status === "Pago") {
+      if (!confirm("Desfazer este recebimento? O valor voltará para 'A Receber'.")) return;
+      setSalvando(true);
+      const ok = await updateLancamento(lancId, { status: "A Receber", conta: null });
+      if (!ok) { toast("Erro ao desfazer recebimento", "err"); setSalvando(false); return; }
+      await recalcularRecebido(pedido.id);
+      toast("Recebimento desfeito");
+      await load();
+      setSalvando(false);
+      return;
+    }
+
+    if (!confirm("Remover esta parcela?")) return;
     setSalvando(true);
     const ok = await deletarLancamento(lancId);
     if (!ok) { toast("Erro ao remover lançamento", "err"); setSalvando(false); return; }
     await recalcularRecebido(pedido.id);
-    toast("Lançamento removido");
+    toast("Parcela removida");
     await load();
     setSalvando(false);
   }
