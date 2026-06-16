@@ -1,202 +1,305 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import AppLayout from "@/components/layout/AppLayout";
-import { getFaturamentoMensal, getLancamentos, createLancamento } from "@/services/financeiro.service";
-import { formatBRL, formatPercent, formatDate, MESES } from "@/lib/formatters";
-import CurrencyInput from "@/components/ui/CurrencyInput";
-import DateInput from "@/components/ui/DateInput";
-import type { FaturamentoMensal, Lancamento, LancamentoInsert } from "@/types";
+import { supabase } from "@/lib/supabase/client";
+import { formatBRL } from "@/lib/formatters";
 
-const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+interface Mov {
+  id: number;
+  tipo: "Entrada" | "Saída";
+  valor: number;
+  vencimento: string | null;
+  dt_pagamento: string | null;
+  conta: string | null;
+  status: string;
+}
 
-const VAZIO: LancamentoInsert = {
-  tipo: "Entrada", descricao: "", valor: 0,
-  status: "Pendente", vencimento: null, pedido_id: null, cliente_id: null,
-};
+function mesAtual() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function diasNoMes(yyyyMM: string) {
+  const [y, m] = yyyyMM.split("-").map(Number);
+  return new Date(y, m, 0).getDate();
+}
+
+function primeirodia(yyyyMM: string) { return `${yyyyMM}-01`; }
+
+function labelMes(yyyyMM: string) {
+  const [y, m] = yyyyMM.split("-").map(Number);
+  return new Date(y, m - 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+}
+
+function pad(n: number) { return String(n).padStart(2, "0"); }
+
+const BRL = (v: number) => formatBRL(v);
+
+function ColorVal({ v, zero = "var(--t3)" }: { v: number; zero?: string }) {
+  const cor = v > 0 ? "var(--ok)" : v < 0 ? "var(--err)" : zero;
+  return <span style={{ color: cor, fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>{BRL(v)}</span>;
+}
 
 export default function FluxoPage() {
-  const [fatMensal, setFatMensal] = useState<FaturamentoMensal[]>([]);
-  const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState(false);
-  const [form, setForm] = useState<LancamentoInsert>(VAZIO);
-  const [salvando, setSalvando] = useState(false);
+  const [mes, setMes]           = useState(mesAtual());
+  const [conta, setConta]       = useState("");
+  const [movs, setMovs]         = useState<Mov[]>([]);
+  const [loading, setLoading]   = useState(true);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [mes, conta]);
 
   async function load() {
     setLoading(true);
-    const [fat, lanc] = await Promise.all([getFaturamentoMensal(2026), getLancamentos()]);
-    setFatMensal(fat); setLancamentos(lanc); setLoading(false);
+    let q = supabase
+      .from("lancamentos")
+      .select("id, tipo, valor, vencimento, dt_pagamento, conta, status");
+    if (conta) q = q.eq("conta", conta);
+    const { data } = await q;
+    setMovs((data ?? []) as Mov[]);
+    setLoading(false);
   }
 
-  async function salvar() {
-    if (!form.descricao || !form.valor) return;
-    setSalvando(true);
-    await createLancamento(form);
-    setSalvando(false); setModal(false); setForm(VAZIO); load();
-  }
+  // ── Contas únicas para filtro ──────────────────────────────
+  const contasUnicas = useMemo(() => {
+    const set = new Set<string>();
+    movs.forEach(m => { if (m.conta) set.add(m.conta); });
+    return [...set].sort();
+  }, [movs]);
 
-  const meses = MESES_ABREV.map((mes, i) => {
-    const fat = fatMensal.find(f => f.mes === i + 1);
-    return { mes, faturado: fat ? Number(fat.faturado) : 0, recebido: fat ? Number(fat.recebido) : 0 };
+  // ── Dia a dia ─────────────────────────────────────────────
+  const { realizado, projetado, saldoAntReal, saldoAntProj } = useMemo(() => {
+    const total = diasNoMes(mes);
+    const [y, m] = mes.split("-").map(Number);
+    const inicio = primeirodia(mes);
+
+    // Saldo anterior REALIZADO: dt_pagamento existe e < inicio do mês
+    const saldoAntReal = movs
+      .filter(mv => mv.dt_pagamento && mv.dt_pagamento < inicio)
+      .reduce((s, mv) => s + (mv.tipo === "Entrada" ? Number(mv.valor) : -Number(mv.valor)), 0);
+
+    // Saldo anterior PROJETADO: vencimento existe e < inicio do mês
+    const saldoAntProj = movs
+      .filter(mv => mv.vencimento && mv.vencimento < inicio)
+      .reduce((s, mv) => s + (mv.tipo === "Entrada" ? Number(mv.valor) : -Number(mv.valor)), 0);
+
+    let acumReal = saldoAntReal;
+    let acumProj = saldoAntProj;
+
+    const realizado: { dia: number; entradas: number; saidas: number; saldoDia: number; saldoMes: number }[] = [];
+    const projetado: { dia: number; entradas: number; saidas: number; saldoDia: number; saldoMes: number }[] = [];
+
+    for (let d = 1; d <= total; d++) {
+      const data = `${y}-${pad(m)}-${pad(d)}`;
+
+      // REALIZADO: usa dt_pagamento
+      const entR = movs.filter(mv => mv.dt_pagamento === data && mv.tipo === "Entrada").reduce((s, mv) => s + Number(mv.valor), 0);
+      const saiR = movs.filter(mv => mv.dt_pagamento === data && mv.tipo === "Saída").reduce((s, mv) => s + Number(mv.valor), 0);
+      const sdR  = entR - saiR;
+      acumReal  += sdR;
+      realizado.push({ dia: d, entradas: entR, saidas: saiR, saldoDia: sdR, saldoMes: acumReal });
+
+      // PROJETADO: usa vencimento
+      const entP = movs.filter(mv => mv.vencimento === data && mv.tipo === "Entrada").reduce((s, mv) => s + Number(mv.valor), 0);
+      const saiP = movs.filter(mv => mv.vencimento === data && mv.tipo === "Saída").reduce((s, mv) => s + Number(mv.valor), 0);
+      const sdP  = entP - saiP;
+      acumProj  += sdP;
+      projetado.push({ dia: d, entradas: entP, saidas: saiP, saldoDia: sdP, saldoMes: acumProj });
+    }
+
+    return { realizado, projetado, saldoAntReal, saldoAntProj };
+  }, [movs, mes]);
+
+  // totais do mês
+  const totReal = realizado.reduce((s, d) => ({ ent: s.ent + d.entradas, sai: s.sai + d.saidas }), { ent: 0, sai: 0 });
+  const totProj = projetado.reduce((s, d) => ({ ent: s.ent + d.entradas, sai: s.sai + d.saidas }), { ent: 0, sai: 0 });
+  const saldoFinalReal = realizado.length ? realizado[realizado.length - 1].saldoMes : saldoAntReal;
+  const saldoFinalProj = projetado.length ? projetado[projetado.length - 1].saldoMes : saldoAntProj;
+
+  const hoje = new Date().toISOString().split("T")[0];
+  const [hY, hM, hD] = hoje.split("-").map(Number);
+  const [mY, mM] = mes.split("-").map(Number);
+  const diaHoje = (hY === mY && hM === mM) ? hD : null;
+
+  const thStyle: React.CSSProperties = {
+    padding: "7px 10px", fontSize: "9px", fontWeight: 700,
+    textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--t3)",
+    borderBottom: "1px solid var(--b1)", textAlign: "right", background: "var(--surf2)",
+  };
+  const thFirst: React.CSSProperties = { ...thStyle, textAlign: "left", width: "36px" };
+  const td = (v: number, right = true): React.CSSProperties => ({
+    padding: "5px 10px", fontSize: "12px", textAlign: right ? "right" : "left",
+    fontFamily: "'DM Mono',monospace",
   });
 
-  const totalFat = meses.reduce((a, m) => a + m.faturado, 0);
-  const totalRec = meses.reduce((a, m) => a + m.recebido, 0);
-  const entradas = lancamentos.filter(l => l.tipo === "Entrada");
-  const saidas   = lancamentos.filter(l => l.tipo === "Saída");
-  const totalEntradas = entradas.reduce((a, l) => a + Number(l.valor), 0);
-  const totalSaidas   = saidas.reduce((a, l) => a + Number(l.valor), 0);
-  const saldo = totalEntradas - totalSaidas;
+  function Tabela({ dados, saldoAnt, acento }: {
+    dados: typeof realizado;
+    saldoAnt: number;
+    acento: string;
+  }) {
+    const totalEnt  = dados.reduce((s, d) => s + d.entradas, 0);
+    const totalSai  = dados.reduce((s, d) => s + d.saidas, 0);
+    const saldoFinal = dados.length ? dados[dados.length - 1].saldoMes : saldoAnt;
 
-  const chipStatus = (s: string) => {
-    if (s === "Pago") return <span className="chip cg">Pago</span>;
-    if (s === "A Receber") return <span className="chip cy">A Receber</span>;
-    return <span className="chip cgr">Pendente</span>;
-  };
+    return (
+      <div style={{ overflowX: "auto" }}>
+        <div style={{ fontSize: "11px", color: "var(--t3)", marginBottom: "10px", display: "flex", justifyContent: "flex-end", gap: "6px" }}>
+          Saldo Final do Mês Anterior
+          <span style={{ fontFamily: "'DM Mono',monospace", fontWeight: 700, color: saldoAnt >= 0 ? "var(--ok)" : "var(--err)" }}>
+            {BRL(saldoAnt)}
+          </span>
+        </div>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={{ ...thFirst, background: `${acento}10` }}>Dia</th>
+              <th style={{ ...thStyle, background: `${acento}10`, color: acento }}>Entradas</th>
+              <th style={{ ...thStyle, background: `${acento}10`, color: "var(--err)" }}>Saídas</th>
+              <th style={{ ...thStyle, background: `${acento}10` }}>Saldo do Dia</th>
+              <th style={{ ...thStyle, background: `${acento}10`, color: acento }}>Saldo do Mês</th>
+            </tr>
+          </thead>
+          <tbody>
+            {dados.map(row => {
+              const isHoje = diaHoje === row.dia;
+              const rowBg = isHoje ? `${acento}09` : row.dia % 2 === 0 ? "var(--surf2)" : "transparent";
+              return (
+                <tr key={row.dia} style={{ background: rowBg, outline: isHoje ? `1px solid ${acento}40` : "none" }}>
+                  <td style={{ ...td(0, false), fontWeight: isHoje ? 800 : 400, color: isHoje ? acento : "var(--t2)", fontSize: "12px" }}>
+                    {row.dia}
+                    {isHoje && <span style={{ fontSize: "8px", marginLeft: "3px", color: acento }}>●</span>}
+                  </td>
+                  <td style={td(row.entradas)}>
+                    {row.entradas > 0 ? <span style={{ color: "var(--ok)" }}>{BRL(row.entradas)}</span> : <span style={{ color: "var(--t3)" }}>0,00</span>}
+                  </td>
+                  <td style={td(row.saidas)}>
+                    {row.saidas > 0 ? <span style={{ color: "var(--err)" }}>{BRL(row.saidas)}</span> : <span style={{ color: "var(--t3)" }}>0,00</span>}
+                  </td>
+                  <td style={td(row.saldoDia)}>
+                    {row.saldoDia !== 0 ? <ColorVal v={row.saldoDia} /> : <span style={{ color: "var(--t3)" }}>0,00</span>}
+                  </td>
+                  <td style={td(row.saldoMes)}>
+                    <ColorVal v={row.saldoMes} zero="var(--t2)" />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ borderTop: "2px solid var(--b1)", background: `${acento}08` }}>
+              <td style={{ ...td(0, false), fontWeight: 700, color: "var(--t2)", fontSize: "11px" }}>Total</td>
+              <td style={{ ...td(0), color: "var(--ok)", fontWeight: 800 }}>{BRL(totalEnt)}</td>
+              <td style={{ ...td(0), color: "var(--err)", fontWeight: 800 }}>{BRL(totalSai)}</td>
+              <td style={{ ...td(0) }}><ColorVal v={totalEnt - totalSai} /></td>
+              <td style={{ ...td(0) }}>
+                <span style={{ fontFamily: "'DM Mono',monospace", fontWeight: 800, fontSize: "13px", color: saldoFinal >= 0 ? "var(--ok)" : "var(--err)" }}>
+                  {BRL(saldoFinal)}
+                </span>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    );
+  }
 
   return (
     <AppLayout>
       <div className="tb">
-        <div className="tb-title">Fluxo de Caixa</div>
-        <button className="btn bp sm" onClick={() => setModal(true)}>+ Lançamento</button>
+        <div className="tb-title">Fluxo de Caixa Diário</div>
       </div>
 
       <div className="con">
-        {/* CARDS */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:"12px", marginBottom:"20px" }}>
+
+        {/* Filtros */}
+        <div style={{ display: "flex", gap: "12px", alignItems: "flex-end", marginBottom: "20px", background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "14px 16px" }}>
+          <div>
+            <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Mês / Ano</div>
+            <input type="month" className="fc" style={{ margin: 0, width: "160px" }} value={mes}
+              onChange={e => setMes(e.target.value)} />
+          </div>
+          <div>
+            <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Conta Bancária</div>
+            <select className="fc" style={{ margin: 0, minWidth: "200px" }} value={conta} onChange={e => setConta(e.target.value)}>
+              <option value="">Todas as contas</option>
+              {contasUnicas.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t2)", marginBottom: "2px" }}>
+            {labelMes(mes)}
+          </div>
+        </div>
+
+        {/* Resumo do mês */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px", marginBottom: "20px" }}>
           {[
-            { label:"Total Entradas", value: formatBRL(totalEntradas), color:"var(--ok)",  sub: entradas.length + " lançamentos" },
-            { label:"Total Saídas",   value: formatBRL(totalSaidas),   color:"var(--err)", sub: saidas.length + " lançamentos" },
-            { label:"Saldo",          value: formatBRL(saldo),         color: saldo >= 0 ? "var(--acc)" : "var(--err)", sub: saldo >= 0 ? "↑ Positivo" : "↓ Negativo" },
-          ].map(card => (
-            <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
-              <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
-              <div style={{ fontSize:"22px", fontWeight:700, color:card.color, fontFamily:"'DM Mono', monospace", lineHeight:1.2 }}>{card.value}</div>
-              <div style={{ fontSize:"11px", color:"var(--t3)" }}>{card.sub}</div>
+            { label: "Entradas Realizadas", val: totReal.ent, cor: "var(--ok)" },
+            { label: "Saídas Realizadas",   val: totReal.sai, cor: "var(--err)" },
+            { label: "Saldo Realizado",     val: saldoFinalReal, cor: saldoFinalReal >= 0 ? "var(--ok)" : "var(--err)" },
+            { label: "Saldo Projetado",     val: saldoFinalProj, cor: saldoFinalProj >= 0 ? "var(--ok)" : "var(--err)" },
+          ].map(s => (
+            <div key={s.label} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "14px 16px" }}>
+              <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: "6px" }}>{s.label}</div>
+              <div style={{ fontSize: "17px", fontWeight: 800, color: s.cor, fontFamily: "'DM Mono', monospace" }}>{BRL(s.val)}</div>
             </div>
           ))}
         </div>
 
-        {loading ? (
-          <div className="loading">Carregando fluxo de caixa...</div>
-        ) : (
-          <>
-            <div className="card mb14">
-              <div className="ct">Faturamento vs Recebimento por Mês</div>
-              <div className="tw" style={{ border:"none", borderRadius:0 }}>
-                <table>
-                  <thead>
-                    <tr><th>Mês</th><th>Faturado</th><th>Recebido</th><th>A Receber</th><th>Realizado %</th><th>Status</th></tr>
-                  </thead>
-                  <tbody>
-                    {meses.filter(m => m.faturado > 0 || m.recebido > 0).map((m, i) => {
-                      const pct = m.faturado > 0 ? m.recebido / m.faturado * 100 : 0;
-                      const aRec = m.faturado - m.recebido;
-                      return (
-                        <tr key={i}>
-                          <td><strong>{m.mes}</strong></td>
-                          <td className="mono">{formatBRL(m.faturado)}</td>
-                          <td className="mono" style={{ color:"var(--acc)" }}>{formatBRL(m.recebido)}</td>
-                          <td className="mono" style={{ color: aRec > 0 ? "var(--warn)" : "var(--t2)" }}>{formatBRL(aRec)}</td>
-                          <td>
-                            <div style={{ display:"flex", alignItems:"center", gap:"7px" }}>
-                              <div className="prg" style={{ width:"75px", height:"5px" }}>
-                                <div className="prg-f" style={{ width:`${Math.min(pct,100)}%`, background: pct < 50 ? "var(--err)" : pct < 80 ? "var(--warn)" : "var(--ok)" }} />
-                              </div>
-                              <span className="mono">{formatPercent(pct)}</span>
-                            </div>
-                          </td>
-                          <td>{chipStatus(pct >= 100 ? "Pago" : pct > 0 ? "A Receber" : "Pendente")}</td>
-                        </tr>
-                      );
-                    })}
-                    <tr style={{ fontWeight:700, background:"var(--surf2)" }}>
-                      <td>TOTAL</td>
-                      <td className="mono">{formatBRL(totalFat)}</td>
-                      <td className="mono" style={{ color:"var(--acc)" }}>{formatBRL(totalRec)}</td>
-                      <td className="mono" style={{ color:"var(--warn)" }}>{formatBRL(totalFat - totalRec)}</td>
-                      <td className="mono">{formatPercent(totalFat > 0 ? totalRec / totalFat * 100 : 0)}</td>
-                      <td>{chipStatus(totalRec >= totalFat ? "Pago" : totalRec > 0 ? "A Receber" : "Pendente")}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+        {loading ? <div className="loading">Carregando...</div> : (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
 
-            <div className="card">
-              <div className="ct">Lançamentos<button className="btn bp xs" onClick={() => setModal(true)}>+ Novo</button></div>
-              {lancamentos.length === 0 ? (
-                <div style={{ color:"var(--t3)", fontSize:"12px", padding:"16px 0" }}>Nenhum lançamento cadastrado</div>
-              ) : (
-                <div className="tw" style={{ border:"none", borderRadius:0 }}>
-                  <table>
-                    <thead>
-                      <tr><th>Tipo</th><th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Status</th></tr>
-                    </thead>
-                    <tbody>
-                      {lancamentos.map(l => (
-                        <tr key={l.id}>
-                          <td><span className={l.tipo === "Entrada" ? "chip cg" : "chip cr"}>{l.tipo}</span></td>
-                          <td>{l.descricao}</td>
-                          <td className="mono" style={{ color: l.tipo === "Entrada" ? "var(--ok)" : "var(--err)" }}>{l.tipo === "Saída" ? "− " : ""}{formatBRL(l.valor)}</td>
-                          <td className="mono">{formatDate(l.vencimento)}</td>
-                          <td>{chipStatus(l.status)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            {/* REALIZADO */}
+            <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderTop: "3px solid var(--ok)", borderRadius: "12px", overflow: "hidden" }}>
+              <div style={{ padding: "14px 16px", background: "var(--surf2)", borderBottom: "1px solid var(--b1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: "9px", color: "var(--ok)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.09em" }}>Realizado</div>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", marginTop: "1px" }}>Movimentações Efetivadas</div>
+                  <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "1px" }}>Baseado na data de pagamento / recebimento</div>
                 </div>
-              )}
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "2px" }}>Saldo Final</div>
+                  <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "'DM Mono',monospace", color: saldoFinalReal >= 0 ? "var(--ok)" : "var(--err)" }}>
+                    {BRL(saldoFinalReal)}
+                  </div>
+                </div>
+              </div>
+              <div style={{ padding: "14px" }}>
+                <Tabela dados={realizado} saldoAnt={saldoAntReal} acento="var(--ok)" />
+              </div>
             </div>
-          </>
-        )}
-      </div>
 
-      {modal && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && setModal(false)}>
-          <div className="mod" style={{ width:"440px" }}>
-            <div className="mhd">
-              <div className="mtit">Novo Lançamento</div>
-              <button className="mcl" onClick={() => setModal(false)}>✕</button>
-            </div>
-            <div className="fr" style={{ marginBottom:"10px" }}>
-              <div className="fg">
-                <label className="fl">Tipo</label>
-                <select className="fc" value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value as any }))}><option>Entrada</option><option>Saída</option></select>
+            {/* PROJETADO */}
+            <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderTop: "3px solid #60a5fa", borderRadius: "12px", overflow: "hidden" }}>
+              <div style={{ padding: "14px 16px", background: "var(--surf2)", borderBottom: "1px solid var(--b1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: "9px", color: "#60a5fa", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.09em" }}>Projetado</div>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", marginTop: "1px" }}>Previsão de Caixa</div>
+                  <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "1px" }}>Baseado na data de vencimento de todos os títulos</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "2px" }}>Saldo Projetado</div>
+                  <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "'DM Mono',monospace", color: saldoFinalProj >= 0 ? "var(--ok)" : "var(--err)" }}>
+                    {BRL(saldoFinalProj)}
+                  </div>
+                </div>
               </div>
-              <div className="fg">
-                <label className="fl">Status</label>
-                <select className="fc" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as any }))}><option>Pendente</option><option>Pago</option><option>A Receber</option></select>
-              </div>
-            </div>
-            <div className="fg" style={{ marginBottom:"10px" }}>
-              <label className="fl">Descrição *</label>
-              <input className="fc" value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Ex: Compra de chapas" />
-            </div>
-            <div className="fr" style={{ marginBottom:"14px" }}>
-              <div className="fg">
-                <label className="fl">Valor *</label>
-                <CurrencyInput
-                  value={form.valor}
-                  onChange={v => setForm(f => ({ ...f, valor: v }))}
-                  placeholder="R$ 0,00"
-                />
-              </div>
-              <div className="fg">
-                <label className="fl">Vencimento</label>
-                <DateInput value={form.vencimento ?? ""} onChange={v => setForm(f => ({ ...f, vencimento: v || null }))} />
+              <div style={{ padding: "14px" }}>
+                <Tabela dados={projetado} saldoAnt={saldoAntProj} acento="#60a5fa" />
               </div>
             </div>
-            <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end" }}>
-              <button className="btn bg" onClick={() => setModal(false)}>Cancelar</button>
-              <button className="btn bp" onClick={salvar} disabled={salvando}>{salvando ? "Salvando..." : "Salvar"}</button>
-            </div>
+
           </div>
+        )}
+
+        {/* Legenda */}
+        <div style={{ marginTop: "16px", display: "flex", gap: "20px", justifyContent: "center", fontSize: "11px", color: "var(--t3)" }}>
+          <span><span style={{ color: "var(--ok)", fontWeight: 700 }}>Realizado</span> — usa data de pagamento/recebimento efetivo</span>
+          <span>·</span>
+          <span><span style={{ color: "#60a5fa", fontWeight: 700 }}>Projetado</span> — usa data de vencimento de todos os títulos (pagos e pendentes)</span>
+          {diaHoje && <><span>·</span><span><span style={{ color: "var(--acc)" }}>●</span> dia atual</span></>}
         </div>
-      )}
+
+      </div>
     </AppLayout>
   );
 }
