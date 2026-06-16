@@ -53,11 +53,14 @@ function OtimizadorContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pedidoParam = searchParams.get("pedido");
+  const pecasParam  = searchParams.get("pecas");
+  const cwParam     = searchParams.get("cw");
+  const chParam     = searchParams.get("ch");
 
   const [produtos, setProdutos]           = useState<Produto[]>([]);
   const [pecas, setPecas]                 = useState<Peca[]>([{ l: 0, a: 0, qtd: 1, prod: "" }]);
-  const [chapaW, setChapaW]               = useState(3300);
-  const [chapaH, setChapaH]               = useState(2250);
+  const [chapaW, setChapaW]               = useState(cwParam ? Number(cwParam) : 3300);
+  const [chapaH, setChapaH]               = useState(chParam ? Number(chParam) : 2250);
   const [kerf, setKerf]                   = useState(0);
   const [bord, setBord]                   = useState(0);
   const [resultado, setResultado]         = useState<ResultadoChapa[] | null>(null);
@@ -105,6 +108,19 @@ function OtimizadorContent() {
       setProdutos((data as Produto[]) || []);
     });
   }, []);
+
+  // Carrega peças a partir do parâmetro ?pecas=<base64-json> na URL (modo AVULSO)
+  useEffect(() => {
+    if (!pecasParam || pedidoParam) return;
+    try {
+      const decoded = JSON.parse(atob(pecasParam)) as Array<{ l: number; a: number; qtd: number; prod: string }>;
+      if (Array.isArray(decoded) && decoded.length > 0) {
+        setPecas(decoded.map(p => ({ l: p.l, a: p.a, qtd: p.qtd ?? 1, prod: p.prod ?? "" })));
+        if (decoded[0]?.prod) autoSetChapa(decoded[0].prod);
+        setModoTeste(true);
+      }
+    } catch { /* URL inválida — ignora */ }
+  }, [pecasParam]);
 
   useEffect(() => {
     if (!pedidoParam) return;
