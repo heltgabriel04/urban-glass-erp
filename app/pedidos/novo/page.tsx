@@ -11,6 +11,8 @@ import { formatBRL, formatM2 } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
+import ImportarMedidasModal from "@/components/ui/ImportarMedidasModal";
+import type { MedidaImportada } from "@/lib/importPlanilhaMedidas";
 import type { Cliente, Produto, TabelaPreco, TabelaPrecoItem, ItemPedidoInsert, PedidoInsert, Vendedor } from "@/types";
 
 type ModoPedido = "m2" | "ml";
@@ -117,6 +119,7 @@ export default function NovoPedidoPage() {
   const [salvando, setSalvando]     = useState(false);
   const [totalPedidoInput, setTotalPedidoInput] = useState(0);
   const [modoPedido, setModoPedido] = useState<ModoPedido>("m2");
+  const [modalImportar, setModalImportar] = useState(false);
   const [parcelasForm, setParcelasForm] = useState<ParcelaForm[]>([{ data: "", valor: 0, editado: false, conta: "", formaPgto: "" }]);
 
   useEffect(() => { load(); }, []);
@@ -228,6 +231,27 @@ export default function NovoPedidoPage() {
 
   function addItem() { setItens(i => [...i, { ...ITEM_VAZIO }]); }
   function remItem(i: number) { setItens(items => items.filter((_, idx) => idx !== i)); }
+
+  function handleImportarMedidas(medidas: MedidaImportada[], produtoId: number | null) {
+    const prod = produtoId ? produtos.find(p => p.id === produtoId) : undefined;
+    const { valor, margem } = produtoId ? getPrecoProduto(produtoId) : { valor: 0, margem: 0 };
+    const novos: ItemForm[] = medidas.map(m => ({
+      ...ITEM_VAZIO,
+      produto_id: produtoId,
+      produto_nome: prod?.nome ?? "",
+      largura: m.largura,
+      altura: m.altura,
+      quantidade: m.quantidade,
+      valor_m2: valor,
+      preco_base: valor,
+      margem_prod: margem,
+    }));
+    setItens(prev => {
+      const base = prev.length === 1 && prev[0].largura === 0 && prev[0].altura === 0 && prev[0].produto_id === null ? [] : prev;
+      return [...base, ...novos];
+    });
+    setModalImportar(false);
+  }
 
   function updItem(i: number, field: keyof ItemForm, value: string | number | boolean) {
     setItens(items => items.map((item, idx) => {
@@ -570,6 +594,7 @@ export default function NovoPedidoPage() {
               <button style={!isMl ? toggleAtivo : toggleInativo} onClick={() => handleModoPedido("m2")}>m²</button>
               <button style={isMl ? { ...toggleAtivo, background: "#6366f1", borderColor: "#6366f1" } : toggleInativo} onClick={() => handleModoPedido("ml")}>ml</button>
             </div>
+            <button className="btn bg xs" onClick={() => setModalImportar(true)}>⇪ Importar Planilha</button>
             <button className="btn bp xs" onClick={addItem}>+ Item</button>
           </div>
 
@@ -724,6 +749,14 @@ export default function NovoPedidoPage() {
           </div>
         </div>
       </div>
+
+      {modalImportar && (
+        <ImportarMedidasModal
+          produtos={produtos.map(p => ({ id: p.id, nome: p.nome }))}
+          onImportar={handleImportarMedidas}
+          onClose={() => setModalImportar(false)}
+        />
+      )}
     </AppLayout>
   );
 }

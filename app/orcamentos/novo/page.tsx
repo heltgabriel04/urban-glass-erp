@@ -10,6 +10,8 @@ import { formatBRL, formatM2 } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
+import ImportarMedidasModal from "@/components/ui/ImportarMedidasModal";
+import type { MedidaImportada } from "@/lib/importPlanilhaMedidas";
 import type { Cliente, Produto, TabelaPreco, TabelaPrecoItem } from "@/types";
 
 interface ParcelaForm {
@@ -99,6 +101,7 @@ export default function NovoOrcamentoPage() {
   const [salvando, setSalvando]       = useState(false);
   const [totalPedidoInput, setTotalPedidoInput] = useState(0);
   const [parcelasForm, setParcelasForm] = useState<ParcelaForm[]>([{ data: "", valor: 0, editado: false, conta: "", formaPgto: "" }]);
+  const [modalImportar, setModalImportar] = useState(false);
 
   const largRefs   = useRef<(HTMLInputElement | null)[]>([]);
   const altRefs    = useRef<(HTMLInputElement | null)[]>([]);
@@ -249,6 +252,27 @@ export default function NovoOrcamentoPage() {
   }
 
   function remItem(i: number) { setItens(items => items.filter((_, idx) => idx !== i)); }
+
+  function handleImportarMedidas(medidas: MedidaImportada[], produtoId: number | null) {
+    const prod = produtoId ? produtos.find(p => p.id === produtoId) : undefined;
+    const { valor, margem } = produtoId ? getPrecoProduto(produtoId) : { valor: 0, margem: 0 };
+    const novos: ItemForm[] = medidas.map(m => ({
+      ...ITEM_VAZIO,
+      produto_id: produtoId,
+      produto_nome: prod?.nome ?? "",
+      largura: m.largura,
+      altura: m.altura,
+      quantidade: m.quantidade,
+      valor_m2: valor,
+      preco_base: valor,
+      margem_prod: margem,
+    }));
+    setItens(prev => {
+      const base = prev.length === 1 && prev[0].largura === 0 && prev[0].altura === 0 && prev[0].produto_id === null ? [] : prev;
+      return [...base, ...novos];
+    });
+    setModalImportar(false);
+  }
 
   function calcM2Item(item: ItemForm): number {
     const l = arredondarParaMultiplo50(item.largura);
@@ -579,6 +603,7 @@ export default function NovoOrcamentoPage() {
               <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>
                 Enter avança · Enter em Qtd cria nova linha
               </span>
+              <button tabIndex={-1} className="btn bg sm" onClick={() => setModalImportar(true)}>⇪ Importar Planilha</button>
               <button tabIndex={-1} className="btn bp sm" onClick={addItem}>+ Item</button>
             </div>
           </div>
@@ -714,6 +739,14 @@ export default function NovoOrcamentoPage() {
           </div>
         </div>
       </div>
+
+      {modalImportar && (
+        <ImportarMedidasModal
+          produtos={produtos.map(p => ({ id: p.id, nome: p.nome }))}
+          onImportar={handleImportarMedidas}
+          onClose={() => setModalImportar(false)}
+        />
+      )}
     </AppLayout>
   );
 }
