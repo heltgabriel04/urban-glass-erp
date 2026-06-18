@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidosPaginado, getPedidosTotais, avancarStatusPedido, retrocederStatusPedido, deletarPedido, type PedidosTotais, type TabPedidos } from "@/services/pedidos.service";
 import { getClientes } from "@/services/clientes.service";
@@ -37,13 +37,22 @@ function isChapaInteira(largura: number, altura: number): boolean {
 const PAGE_SIZE = 50;
 
 export default function PedidosPage() {
+  return (
+    <Suspense fallback={null}>
+      <PedidosPageInner />
+    </Suspense>
+  );
+}
+
+function PedidosPageInner() {
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [pedidos, setPedidos]             = useState<Pedido[]>([]);
   const [loading, setLoading]             = useState(true);
-  const [filtro, setFiltro]               = useState("");
-  const [tab, setTab]                     = useState<TabPedidos>("todos");
-  const [page, setPage]                   = useState(0); // 0-based
+  const [filtro, setFiltro]               = useState(searchParams.get("q") ?? "");
+  const [tab, setTab]                     = useState<TabPedidos>((searchParams.get("tab") as TabPedidos) || "todos");
+  const [page, setPage]                   = useState(Number(searchParams.get("page") ?? 0)); // 0-based
   const [total, setTotal]                 = useState(0);
   const [totais, setTotais]               = useState<PedidosTotais>({ count: 0, valorTotal: 0, recebido: 0, emProducao: 0 });
   const [comOtimizacao, setComOtimizacao] = useState<Set<string>>(new Set());
@@ -56,8 +65,18 @@ export default function PedidosPage() {
   useEffect(() => { getClientes().then(setClientes); }, []);
 
   // Recarrega ao mudar página, busca ou aba (busca com debounce de 300ms).
+  // A URL é atualizada (sem novo histórico) junto, para que "Voltar" do detalhe do pedido
+  // retorne para esta mesma busca/aba/página em vez de resetar os filtros.
   useEffect(() => {
-    const t = setTimeout(() => { load(); }, 300);
+    const t = setTimeout(() => {
+      load();
+      const params = new URLSearchParams();
+      if (filtro.trim()) params.set("q", filtro.trim());
+      if (tab !== "todos") params.set("tab", tab);
+      if (page > 0) params.set("page", String(page));
+      const qs = params.toString();
+      router.replace(qs ? `/pedidos?${qs}` : "/pedidos", { scroll: false });
+    }, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, filtro, tab]);
