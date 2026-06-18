@@ -407,6 +407,7 @@ export default function EtiquetasPage() {
             background: white;
             margin: 0; padding: 0;
             width: 92mm; height: 50mm;
+            overflow: visible;
           }
 
           .grid-wrapper {
@@ -414,6 +415,7 @@ export default function EtiquetasPage() {
             padding: 0; margin: 0;
             width: 92mm;
             background: white;
+            overflow: visible;
           }
 
           .etiqueta {
