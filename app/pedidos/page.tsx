@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidosPaginado, getPedidosTotais, avancarStatusPedido, retrocederStatusPedido, deletarPedido, type PedidosTotais, type TabPedidos } from "@/services/pedidos.service";
+import { getClientes } from "@/services/clientes.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import { supabase } from "@/lib/supabase/client";
-import type { Pedido } from "@/types";
+import type { Pedido, Cliente } from "@/types";
 
 const CHIP: Record<string, string> = {
   "Aguardando otimização":    "chip cy",
@@ -49,6 +50,10 @@ export default function PedidosPage() {
   const [pedidosChapa, setPedidosChapa]   = useState<Set<string>>(new Set());
   const [pedidosVidroCliente, setPedidosVidroCliente] = useState<Set<string>>(new Set());
   const [deletando, setDeletando]         = useState<Set<string>>(new Set());
+  const [clientes, setClientes]           = useState<Cliente[]>([]);
+  const [sugestoesAbertas, setSugestoesAbertas] = useState(false);
+
+  useEffect(() => { getClientes().then(setClientes); }, []);
 
   // Recarrega ao mudar página, busca ou aba (busca com debounce de 300ms).
   useEffect(() => {
@@ -56,6 +61,17 @@ export default function PedidosPage() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, filtro, tab]);
+
+  const termoBusca = filtro.trim().toLowerCase();
+  const sugestoesClientes = termoBusca.length === 0 ? [] : clientes
+    .filter(c => c.nome.toLowerCase().includes(termoBusca))
+    .slice(0, 8);
+
+  function selecionarCliente(cliente: Cliente) {
+    setFiltro(cliente.nome);
+    setPage(0);
+    setSugestoesAbertas(false);
+  }
 
   async function load() {
     setLoading(true);
@@ -170,8 +186,32 @@ export default function PedidosPage() {
           <input
             placeholder="Buscar pedido ou cliente..."
             value={filtro}
-            onChange={e => { setFiltro(e.target.value); setPage(0); }}
+            onChange={e => { setFiltro(e.target.value); setPage(0); setSugestoesAbertas(true); }}
+            onFocus={() => setSugestoesAbertas(true)}
+            onBlur={() => setTimeout(() => setSugestoesAbertas(false), 150)}
           />
+          {sugestoesAbertas && sugestoesClientes.length > 0 && (
+            <ul style={{
+              position: "absolute", top: "100%", left: 0, right: 0, zIndex: 999,
+              background: "var(--surf2)", border: "1px solid var(--acc)",
+              borderRadius: "8px", marginTop: "4px", padding: "4px",
+              listStyle: "none", maxHeight: "220px", overflowY: "auto",
+              boxShadow: "0 8px 24px rgba(0,0,0,.4)",
+            }}>
+              {sugestoesClientes.map(c => (
+                <li
+                  key={c.id}
+                  onMouseDown={() => selecionarCliente(c)}
+                  style={{ padding: "8px 10px", borderRadius: "6px", cursor: "pointer" }}
+                  onMouseEnter={e => (e.currentTarget as HTMLLIElement).style.background = "rgba(61,255,160,.12)"}
+                  onMouseLeave={e => (e.currentTarget as HTMLLIElement).style.background = "transparent"}
+                >
+                  <div style={{ fontSize: "13px", color: "var(--t1)", fontWeight: 500 }}>{c.nome}</div>
+                  {c.cidade && <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "1px", fontFamily: "'DM Mono', monospace" }}>{c.cidade}</div>}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <a href="/pedidos/novo" className="btn bp sm">+ Novo Pedido</a>
       </div>
