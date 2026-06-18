@@ -24,6 +24,16 @@ export interface PedidosPagina {
 
 export type TabPedidos = "todos" | "ativos" | "aberto" | "quitado" | "entregue" | "cancelado";
 
+/** Monta a condição OR (nº pedido, status ou nome de cliente) para o filtro textual de `pedidos`. */
+async function buildFiltroBuscaOr(termo: string): Promise<string> {
+  const { data: cli } = await supabase.from('clientes').select('id').ilike('nome', `%${termo}%`);
+  const ids = (cli ?? []).map(c => (c as { id: number }).id);
+  const safe = termo.replace(/[,()]/g, ' ');
+  const ors = [`id.ilike.%${safe}%`, `status.ilike.%${safe}%`];
+  if (ids.length) ors.push(`cliente_id.in.(${ids.join(',')})`);
+  return ors.join(',');
+}
+
 /** Lista paginada com busca e aba financeira/status server-side. */
 export async function getPedidosPaginado(
   { limit, offset, busca, tab }: { limit: number; offset: number; busca?: string; tab?: TabPedidos }
@@ -59,14 +69,7 @@ export async function getPedidosPaginado(
   }
 
   const termo = busca?.trim();
-  if (termo) {
-    const { data: cli } = await supabase.from('clientes').select('id').ilike('nome', `%${termo}%`);
-    const ids = (cli ?? []).map(c => (c as { id: number }).id);
-    const safe = termo.replace(/[,()]/g, ' ');
-    const ors = [`id.ilike.%${safe}%`, `status.ilike.%${safe}%`];
-    if (ids.length) ors.push(`cliente_id.in.(${ids.join(',')})`);
-    query = query.or(ors.join(','));
-  }
+  if (termo) query = query.or(await buildFiltroBuscaOr(termo));
 
   const { data, error, count } = await query.range(offset, offset + limit - 1);
   if (error) { console.error('getPedidosPaginado:', error); return { rows: [], total: 0 }; }
@@ -80,9 +83,13 @@ export interface PedidosTotais {
   emProducao: number;
 }
 
-/** Totais globais (todos os pedidos) para os cards — payload leve, sem joins. */
-export async function getPedidosTotais(): Promise<PedidosTotais> {
-  const { data, error } = await supabase.from('pedidos').select('valor_total, valor_recebido, status');
+/** Totais para os cards — payload leve, sem joins. Se `busca` for informado, restringe aos pedidos que casam com a pesquisa (ex.: cliente selecionado). */
+export async function getPedidosTotais(busca?: string): Promise<PedidosTotais> {
+  let query = supabase.from('pedidos').select('valor_total, valor_recebido, status');
+  const termo = busca?.trim();
+  if (termo) query = query.or(await buildFiltroBuscaOr(termo));
+
+  const { data, error } = await query;
   if (error) { console.error('getPedidosTotais:', error); return { count: 0, valorTotal: 0, recebido: 0, emProducao: 0 }; }
   const rows = (data ?? []) as Array<{ valor_total: number; valor_recebido: number; status: string }>;
   return {

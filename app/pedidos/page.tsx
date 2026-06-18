@@ -59,13 +59,13 @@ export default function PedidosPage() {
 
   async function load() {
     setLoading(true);
-    const [{ rows, total: tot }, totaisGlobais] = await Promise.all([
+    const [{ rows, total: tot }, totaisFiltrados] = await Promise.all([
       getPedidosPaginado({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, busca: filtro, tab }),
-      getPedidosTotais(),
+      getPedidosTotais(filtro),
     ]);
     setPedidos(rows);
     setTotal(tot);
-    setTotais(totaisGlobais);
+    setTotais(totaisFiltrados);
 
     // Badges (otimização / chapa inteira / vidro do cliente) só da página visível
     const ids = rows.map(p => p.id);
@@ -177,6 +177,12 @@ export default function PedidosPage() {
       </div>
 
       <div className="con">
+
+        {filtro.trim() && (
+          <div style={{ fontSize:"12px", color:"var(--t3)", marginBottom:"10px" }}>
+            Totais filtrados por: <strong style={{ color:"var(--t1)" }}>{filtro.trim()}</strong>
+          </div>
+        )}
 
         <div style={{ display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:"12px", marginBottom:"20px" }}>
           {[
