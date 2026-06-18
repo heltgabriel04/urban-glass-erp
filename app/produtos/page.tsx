@@ -5,6 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
 import CurrencyInput from "@/components/ui/CurrencyInput";
+import SearchInput from "@/components/ui/SearchInput";
 import type { Produto, ProdutoInsert } from "@/types";
 
 const PREFIXOS: Record<string, string> = {
@@ -129,10 +130,7 @@ export default function ProdutosPage() {
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Produtos</div>
-        <div className="tb-search">
-          <span className="tb-search-ic">⌕</span>
-          <input placeholder="Buscar produto, código, tipo..." value={filtro} onChange={e => setFiltro(e.target.value)} />
-        </div>
+        <SearchInput placeholder="Buscar produto, código, tipo..." value={filtro} onChange={setFiltro} />
         <button className="btn bp sm" onClick={abrirNovo}>+ Novo Produto</button>
       </div>
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { getMargemPorPedido, type MargemPedido } from "@/services/margem.service";
 import { formatBRL, formatPercent, formatDate } from "@/lib/formatters";
+import SearchInput from "@/components/ui/SearchInput";
 
 export default function MargemPage() {
   const [linhas, setLinhas] = useState<MargemPedido[]>([]);
@@ -36,10 +37,7 @@ export default function MargemPage() {
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Margem &amp; CMV</div>
-        <div className="tb-search">
-          <span className="tb-search-ic">⌕</span>
-          <input placeholder="Buscar pedido ou cliente..." value={busca} onChange={e => setBusca(e.target.value)} />
-        </div>
+        <SearchInput placeholder="Buscar pedido ou cliente..." value={busca} onChange={setBusca} />
       </div>
 
       <div className="con">

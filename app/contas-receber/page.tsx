@@ -7,6 +7,7 @@ import { formatBRL } from "@/lib/formatters";
 import { recalcularRecebido } from "@/services/pedidos.service";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import DateInput from "@/components/ui/DateInput";
+import SearchInput from "@/components/ui/SearchInput";
 
 interface PlanoItem { id: number; codigo_estruturado: string; descricao: string; }
 interface ClienteItem { id: number; nome: string; }
@@ -268,8 +269,8 @@ export default function ContasReceberPage() {
 
         {/* Busca */}
         <div style={{ marginBottom: "12px" }}>
-          <input className="fc" placeholder="Buscar por descrição, cliente, pedido ou documento..." value={busca}
-            onChange={e => setBusca(e.target.value)} style={{ margin: 0, width: "100%" }} />
+          <SearchInput icon={false} className="fc" placeholder="Buscar por descrição, cliente, pedido ou documento..."
+            value={busca} onChange={setBusca} inputStyle={{ margin: 0, width: "100%" }} />
         </div>
 
         {/* Tabela */}

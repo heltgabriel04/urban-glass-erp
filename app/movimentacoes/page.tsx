@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
+import SearchInput from "@/components/ui/SearchInput";
 
 interface PlanoContasMin { id: number; codigo_estruturado: string; descricao: string }
 interface ClienteMin    { id: number; nome: string }
@@ -221,7 +222,7 @@ export default function MovimentacoesPage() {
             </div>
             <div>
               <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Pessoa / Fornecedor / Descrição</div>
-              <input type="text" className="fc" style={fc} placeholder="Buscar..." value={filtroPessoa} onChange={e => setFiltroPessoa(e.target.value)} />
+              <SearchInput icon={false} className="fc" inputStyle={fc} placeholder="Buscar..." value={filtroPessoa} onChange={setFiltroPessoa} />
             </div>
             <div style={{ display: "flex", gap: "6px", paddingBottom: "1px" }}>
               <select className="fc" style={{ ...fc, minWidth: "120px" }} value={filtroStatus} onChange={e => setFiltroStatus(e.target.value as FiltroStatus)}>

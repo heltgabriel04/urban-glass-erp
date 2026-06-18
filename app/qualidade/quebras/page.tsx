@@ -5,6 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { getQuebras, createQuebra, confirmarBaixaEstoqueQuebra } from "@/services/qualidade.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
+import SearchInput from "@/components/ui/SearchInput";
 import type { Quebra, QuebraInsert, SetorQualidade } from "@/types";
 import { supabase } from "@/lib/supabase/client";
 import { getEstoque } from "@/services/estoque.service";
@@ -128,8 +129,8 @@ export default function QuebrasPage() {
       <div className="tb">
         <div className="tb-title">Controle de Quebras</div>
         <div style={{ display:"flex", gap:"6px", alignItems:"center" }}>
-          <input placeholder="Buscar produto, pedido, responsável…" value={busca} onChange={e => setBusca(e.target.value)}
-            style={{ fontSize:"11px", padding:"5px 10px", borderRadius:"6px", border:"1px solid var(--b2)", background:"var(--surf2)", color:"var(--t1)", width:"220px", fontFamily:"'DM Mono',monospace" }} />
+          <SearchInput icon={false} placeholder="Buscar produto, pedido, responsável…" value={busca} onChange={setBusca}
+            inputStyle={{ fontSize:"11px", padding:"5px 10px", borderRadius:"6px", border:"1px solid var(--b2)", background:"var(--surf2)", color:"var(--t1)", width:"220px", fontFamily:"'DM Mono',monospace" }} />
           <select value={filtroSetor} onChange={e => setFiltroSetor(e.target.value)}
             style={{ fontSize:"11px", padding:"5px 8px", borderRadius:"6px", border:"1px solid var(--b2)", background:"var(--surf2)", color:"var(--t1)", fontFamily:"'DM Mono',monospace" }}>
             <option value="todos">Todos os setores</option>

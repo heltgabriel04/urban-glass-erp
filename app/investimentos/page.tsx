@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
+import SearchInput from "@/components/ui/SearchInput";
 import { registrarLog } from "@/services/log.service";
 import * as XLSX from "xlsx";
 
@@ -1094,8 +1095,8 @@ export default function InvestimentosPage() {
             <div style={{ padding: "16px" }}>
               {/* Filters */}
               <div style={{ display: "flex", gap: "10px", marginBottom: "14px", flexWrap: "wrap", alignItems: "center" }}>
-                <input className="fc" placeholder="Buscar banco ou descrição..." value={busca}
-                  onChange={e => setBusca(e.target.value)} style={{ flex: 1, minWidth: "200px", margin: 0 }} />
+                <SearchInput icon={false} className="fc" placeholder="Buscar banco ou descrição..." value={busca}
+                  onChange={setBusca} wrapperStyle={{ flex: 1, minWidth: "200px" }} inputStyle={{ margin: 0 }} />
                 <select className="fc" style={{ minWidth: "160px", margin: 0 }} value={filtroBanco} onChange={e => setFiltroBanco(e.target.value)}>
                   <option value="">Todos os bancos</option>
                   {bancos.map(b => <option key={b} value={b}>{b}</option>)}

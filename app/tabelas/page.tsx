@@ -5,6 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
 import CurrencyInput from "@/components/ui/CurrencyInput";
+import SearchInput from "@/components/ui/SearchInput";
 import type { Produto, TabelaPreco, TabelaPrecoItem } from "@/types";
 
 interface PrecoEdit {
@@ -191,10 +192,7 @@ export default function TabelasPage() {
 
         {/* Filtros */}
         <div style={{ display: "flex", gap: "10px", marginBottom: "14px", flexWrap: "wrap" }}>
-          <div className="tb-search" style={{ flex: 1, minWidth: "200px" }}>
-            <span className="tb-search-ic">⌕</span>
-            <input placeholder="Buscar produto ou código..." value={filtro} onChange={e => setFiltro(e.target.value)} />
-          </div>
+          <SearchInput placeholder="Buscar produto ou código..." value={filtro} onChange={setFiltro} wrapperStyle={{ flex: 1, minWidth: "200px" }} />
           <div style={{ display: "flex", gap: "4px" }}>
             {tipos.map(t => (
               <button key={t} onClick={() => setFiltroTipo(t)} style={{

@@ -5,6 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { getClientes, createCliente, updateCliente, deletarCliente } from "@/services/clientes.service";
 import { getFinanceiroClientes } from "@/services/financeiro.service";
 import { formatBRL } from "@/lib/formatters";
+import SearchInput from "@/components/ui/SearchInput";
 import type { Cliente, FinanceiroCliente, ClienteInsert, TipoPessoa, IndIE } from "@/types";
 
 type ClienteForm = ClienteInsert & { responsavel?: string; tel_responsavel?: string };
@@ -159,10 +160,7 @@ export default function ClientesPage() {
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Clientes</div>
-        <div className="tb-search">
-          <span className="tb-search-ic">⌕</span>
-          <input placeholder="Buscar cliente, cidade, CNPJ..." value={filtro} onChange={e => setFiltro(e.target.value)} />
-        </div>
+        <SearchInput placeholder="Buscar cliente, cidade, CNPJ..." value={filtro} onChange={setFiltro} />
         <button className="btn bp sm" onClick={abrirNovo}>+ Novo Cliente</button>
       </div>
 

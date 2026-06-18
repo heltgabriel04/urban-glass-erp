@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
+import SearchInput from "@/components/ui/SearchInput";
 
 interface Categoria {
   id: number;
@@ -208,9 +209,9 @@ export default function PlanoContasPage() {
 
               {/* Filtros */}
               <div style={{ display: "flex", gap: "10px", marginBottom: "14px" }}>
-                <input className="fc" placeholder="Buscar por descrição ou código..." value={busca}
-                  onChange={e => setBusca(e.target.value)}
-                  style={{ flex: 1, margin: 0 }} />
+                <SearchInput icon={false} className="fc" placeholder="Buscar por descrição ou código..." value={busca}
+                  onChange={setBusca}
+                  wrapperStyle={{ flex: 1 }} inputStyle={{ margin: 0 }} />
                 <select className="fc" value={filtroCat} onChange={e => setFiltroCat(e.target.value === "" ? "" : Number(e.target.value))}
                   style={{ minWidth: "220px", margin: 0 }}>
                   <option value="">Todas as categorias</option>

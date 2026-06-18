@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { getFornecedores, createFornecedor, updateFornecedor, deletarFornecedor } from "@/services/fornecedores.service";
 import { useToast } from "@/components/ui/toast";
+import SearchInput from "@/components/ui/SearchInput";
 import type { Fornecedor, FornecedorInsert } from "@/types";
 
 const VAZIO: FornecedorInsert = {
@@ -89,14 +90,7 @@ export default function FornecedoresPage() {
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Fornecedores</div>
-        <div className="tb-search">
-          <span className="tb-search-ic">⌕</span>
-          <input
-            placeholder="Buscar por nome, categoria ou cidade..."
-            value={busca}
-            onChange={e => setBusca(e.target.value)}
-          />
-        </div>
+        <SearchInput placeholder="Buscar por nome, categoria ou cidade..." value={busca} onChange={setBusca} />
         <button className="btn bp sm" onClick={abrirNovo}>+ Novo Fornecedor</button>
       </div>
 

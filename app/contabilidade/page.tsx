@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/components/ui/toast";
+import SearchInput from "@/components/ui/SearchInput";
 import {
   getConfigPadrao,
   salvarConfigPadrao,
@@ -582,12 +583,13 @@ export default function ContabilidadePage() {
             </div>
 
             <div style={{ display: "flex", gap: "10px", marginBottom: "14px", flexWrap: "wrap" }}>
-              <input
+              <SearchInput
+                icon={false}
                 className="fc"
-                style={{ flex: 1, minWidth: "200px", maxWidth: "320px" }}
+                wrapperStyle={{ flex: 1, minWidth: "200px", maxWidth: "320px" }}
                 placeholder="Buscar por código, nome ou NCM..."
                 value={busca}
-                onChange={(e) => setBusca(e.target.value)}
+                onChange={setBusca}
               />
               <div style={{ display: "flex", gap: "6px" }}>
                 {(["todos", "configurado", "pendente"] as const).map((f) => (

@@ -6,6 +6,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { getOrcamentos, updateOrcamento, aprovarOrcamento, rejeitarOrcamento, deletarOrcamento } from "@/services/orcamentos.service";
 import { formatBRL, formatDate, formatPercent } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
+import SearchInput from "@/components/ui/SearchInput";
 
 const CHIP: Record<string, string> = {
   "Rascunho":  "chip cgr",
@@ -105,14 +106,7 @@ export default function OrcamentosPage() {
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Orçamentos</div>
-        <div className="tb-search">
-          <span className="tb-search-ic">⌕</span>
-          <input
-            placeholder="Buscar orçamento ou cliente..."
-            value={busca}
-            onChange={e => setBusca(e.target.value)}
-          />
-        </div>
+        <SearchInput placeholder="Buscar orçamento ou cliente..." value={busca} onChange={setBusca} />
         <a href="/orcamentos/novo" className="btn bp sm">+ Novo Orçamento</a>
       </div>
 
