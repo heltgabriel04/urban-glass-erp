@@ -293,7 +293,7 @@ export default function EtiquetasPage() {
     <>
       <style>{`
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { font-family: Arial, sans-serif; background: #666; color: #000; }
+        html, body { font-family: Arial, sans-serif; background: #666; color: #000; height: auto; overflow-y: auto; }
 
         .toolbar {
           position: sticky; top: 0; z-index: 100;
