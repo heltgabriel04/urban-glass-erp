@@ -208,7 +208,18 @@ function PedidosPageInner() {
             onChange={e => { setFiltro(e.target.value); setPage(0); setSugestoesAbertas(true); }}
             onFocus={() => setSugestoesAbertas(true)}
             onBlur={() => setTimeout(() => setSugestoesAbertas(false), 150)}
+            style={filtro ? { paddingRight: "22px" } : undefined}
           />
+          {filtro && (
+            <button
+              type="button"
+              title="Limpar busca"
+              onClick={() => { setFiltro(""); setPage(0); setSugestoesAbertas(false); }}
+              style={{ position:"absolute", right:"6px", top:"50%", transform:"translateY(-50%)", width:"16px", height:"16px", display:"flex", alignItems:"center", justifyContent:"center", border:"none", background:"transparent", color:"var(--t3)", cursor:"pointer", fontSize:"13px", lineHeight:1, padding:0 }}
+              onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.color = "var(--t1)"}
+              onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.color = "var(--t3)"}
+            >×</button>
+          )}
           {sugestoesAbertas && sugestoesClientes.length > 0 && (
             <ul style={{
               position: "absolute", top: "100%", left: 0, right: 0, zIndex: 999,
