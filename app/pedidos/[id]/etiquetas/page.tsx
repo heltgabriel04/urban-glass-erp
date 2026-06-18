@@ -420,7 +420,7 @@ export default function EtiquetasPage() {
 
           .etiqueta {
             display: flex; flex-direction: column;
-            width: 92mm; height: 46mm; /* 50mm da página − 4mm da margem superior do @page */
+            width: 92mm; height: 44mm; /* 50mm da página − 4mm da margem superior do @page */
             box-sizing: border-box;
             border: none; border-radius: 0;
             box-shadow: none; overflow: hidden;
