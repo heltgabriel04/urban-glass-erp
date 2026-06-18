@@ -326,6 +326,7 @@ function PedidosPageInner() {
                   const isVidroCliente = pedidosVidroCliente.has(p.id);
                   const podeAvancarSemOtim = temOtim || isChapa || isVidroCliente;
                   const bloqueado     = !finalizado && p.status === "Aguardando otimização" && !podeAvancarSemOtim;
+                  const temEtiqueta   = temOtim || isChapa || isVidroCliente;
 
                   return (
                     <tr
@@ -360,7 +361,7 @@ function PedidosPageInner() {
 
                           {temOtim && btnLink(`/pedidos/${p.id}/plano`, "Ver Plano de Corte", "◈", "var(--ok)", "rgba(16,185,129,.12)")}
 
-                          {temOtim && btnLink(`/pedidos/${p.id}/etiquetas`, "Imprimir Etiquetas", "🏷", "var(--acc2)", "rgba(139,92,246,.12)")}
+                          {temEtiqueta && btnLink(`/pedidos/${p.id}/etiquetas`, "Imprimir Etiquetas", "🏷", "var(--acc2)", "rgba(139,92,246,.12)")}
 
                           {podeRomaneio && (
                             <button

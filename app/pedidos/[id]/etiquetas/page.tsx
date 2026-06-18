@@ -33,6 +33,7 @@ interface Etiqueta {
   loteCorte: string;
   qrData: string;
   modoCaixa?: boolean;
+  modoVidroCliente?: boolean;
 }
 
 function QRCode({ data, size = 72 }: { data: string; size?: number }) {
@@ -81,6 +82,16 @@ function EtiquetaCard({ et, num }: { et: Etiqueta; num: number }) {
                 <span className="et-sep">·</span>
                 <span>Total: {et.totalPecasGeral} chapas</span>
               </>
+            ) : et.modoVidroCliente ? (
+              <>
+                <span>📦 Vidro do Cliente</span>
+                <span className="et-sep">·</span>
+                <span>Item: {et.chapaNum}/{et.totalChapas}</span>
+                <span className="et-sep">·</span>
+                <span>Peça: {et.pecaNum}/{et.totalPecasNaChapa}</span>
+                <span className="et-sep">·</span>
+                <span>Total geral: {et.totalPecasGeral}</span>
+              </>
             ) : (
               <>
                 <span># Montagem: {et.chapaNum}/{et.totalChapas} #</span>
@@ -113,6 +124,7 @@ export default function EtiquetasPage() {
   const [filtroChapa, setFiltroChapa] = useState<number | "todas">("todas");
   const [totalChapas, setTotalChapas] = useState(0);
   const [modoChapa, setModoChapa]     = useState(false);
+  const [modoVidroCliente, setModoVidroCliente] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -211,6 +223,43 @@ export default function EtiquetasPage() {
           const totalCaixas = ets.length;
           setTotalChapas(totalCaixas);
           setEtiquetas(ets.map(e => ({ ...e, totalChapas: totalCaixas })));
+        } else if (itens.length > 0 && itens.every(i => i.vidro_cliente)) {
+          // Vidro do cliente: não passa pelo otimizador de chapas (não é estoque próprio),
+          // então a etiqueta é gerada direto a partir das peças do pedido, uma por unidade.
+          setModoVidroCliente(true);
+          const hoje = new Date();
+          const dd  = String(hoje.getDate()).padStart(2, "0");
+          const mm  = String(hoje.getMonth() + 1).padStart(2, "0");
+          const aa  = String(hoje.getFullYear()).slice(-2);
+          const lote = `${dd}${mm}${aa}-${id}`;
+
+          const totalGeral = itens.reduce((s, i) => s + i.quantidade, 0);
+          const ets: Etiqueta[] = [];
+
+          itens.forEach((item, ii) => {
+            for (let p = 0; p < item.quantidade; p++) {
+              ets.push({
+                pedidoId:          id,
+                clienteNome:       ped?.clientes?.nome ?? "—",
+                material:          item.produto_nome,
+                largura:           item.largura,
+                altura:            item.altura,
+                chapaNum:          ii + 1,
+                totalChapas:       itens.length,
+                pecaNum:           p + 1,
+                totalPecasNaChapa: item.quantidade,
+                totalPecasGeral:   totalGeral,
+                loteCorte:         lote,
+                qrData: ped?.status === "Entregue"
+                  ? `URBAN GLASS\nPedido: ${id}\nCliente: ${ped?.clientes?.nome ?? ""}\nMaterial: ${item.produto_nome}\nMedidas: ${item.largura}x${item.altura}mm\nLote: ${lote}`
+                  : `https://urbanglasserp.vercel.app/pedidos/${id}/producao`,
+                modoVidroCliente:  true,
+              });
+            }
+          });
+
+          setTotalChapas(itens.length);
+          setEtiquetas(ets);
         }
       }
       setLoading(false);
@@ -230,7 +279,7 @@ export default function EtiquetasPage() {
       </div>
     );
 
-  if (!pedido || (!otim && !modoChapa))
+  if (!pedido || (!otim && !modoChapa && !modoVidroCliente))
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", gap: "12px", fontFamily: "Arial" }}>
         <div style={{ color: "#c00", fontWeight: 700 }}>Nenhuma otimização encontrada para este pedido.</div>
@@ -407,7 +456,7 @@ export default function EtiquetasPage() {
           Etiquetas — <span>{id}</span>
           <span style={{ fontSize: "11px", color: "#aaa", marginLeft: "12px" }}>
             {etiquetasFiltradas.length} etiqueta(s)
-            {filtroChapa !== "todas" ? ` · Chapa ${filtroChapa}` : ""}
+            {filtroChapa !== "todas" ? ` · ${modoVidroCliente ? "Item" : "Chapa"} ${filtroChapa}` : ""}
           </span>
         </div>
 
@@ -420,10 +469,10 @@ export default function EtiquetasPage() {
                 setFiltroChapa(e.target.value === "todas" ? "todas" : Number(e.target.value))
               }
             >
-              <option value="todas">Todas as chapas</option>
+              <option value="todas">{modoVidroCliente ? "Todos os itens" : "Todas as chapas"}</option>
               {Array.from({ length: totalChapas }, (_, i) => (
                 <option key={i + 1} value={i + 1}>
-                  Chapa {i + 1}
+                  {modoVidroCliente ? `Item ${i + 1}` : `Chapa ${i + 1}`}
                 </option>
               ))}
             </select>
@@ -443,6 +492,8 @@ export default function EtiquetasPage() {
             <div>Otimização: <span>{new Date(otim.dt_otim).toLocaleDateString("pt-BR")}</span></div>
             <div>Aproveitamento: <span>{otim.aproveitamento}%</span></div>
           </>
+        ) : modoVidroCliente ? (
+          <div>Tipo: <span>Vidro do Cliente</span></div>
         ) : (
           <div>Tipo: <span>Chapas inteiras</span></div>
         )}
