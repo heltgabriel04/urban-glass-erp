@@ -168,6 +168,7 @@ export default function OrcamentoDetalhe() {
           )}
 
           <button className="btn bg sm" onClick={handlePrint}>⎙ PDF</button>
+          <button className="btn bg sm" onClick={() => router.push(`/orcamentos/novo?duplicarDe=${id}`)}>⧉ Duplicar</button>
 
           {orc.status === "Rascunho" && (
             <>

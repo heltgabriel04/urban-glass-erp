@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { getClientes } from "@/services/clientes.service";
-import { createOrcamento, getProximoIdOrcamento } from "@/services/orcamentos.service";
+import { createOrcamento, getProximoIdOrcamento, getOrcamentoById } from "@/services/orcamentos.service";
 import { formatBRL, formatM2 } from "@/lib/formatters";
+import { useToast } from "@/components/ui/toast";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
@@ -76,7 +77,17 @@ function arredondarParaMultiplo50(v: number): number {
 }
 
 export default function NovoOrcamentoPage() {
+  return (
+    <Suspense fallback={null}>
+      <NovoOrcamentoPageInner />
+    </Suspense>
+  );
+}
+
+function NovoOrcamentoPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { toast } = useToast();
 
   const [clientes, setClientes]       = useState<Cliente[]>([]);
   const [produtos, setProdutos]       = useState<Produto[]>([]);
@@ -100,6 +111,7 @@ export default function NovoOrcamentoPage() {
   const [loading, setLoading]         = useState(true);
   const [salvando, setSalvando]       = useState(false);
   const [totalPedidoInput, setTotalPedidoInput] = useState(0);
+  const [valorGeralInput, setValorGeralInput] = useState(0);
   const [parcelasForm, setParcelasForm] = useState<ParcelaForm[]>([{ data: "", valor: 0, editado: false, conta: "", formaPgto: "" }]);
   const [modalImportar, setModalImportar] = useState(false);
 
@@ -147,6 +159,34 @@ export default function NovoOrcamentoPage() {
     }
 
     setItens([{ ...ITEM_VAZIO }]);
+
+    const duplicarDe = searchParams.get("duplicarDe");
+    if (duplicarDe) {
+      const original = await getOrcamentoById(duplicarDe);
+      if (original) {
+        setClienteId(original.cliente_id);
+        setObs(original.obs ?? "");
+        setFrete(original.frete || "Retirada");
+        const itensOriginais = original.itens_orcamento ?? [];
+        if (itensOriginais.length > 0) {
+          setItens(itensOriginais.map((i: any) => ({
+            ...ITEM_VAZIO,
+            produto_id:   i.produto_id,
+            produto_nome: i.produto_nome,
+            largura:      i.largura,
+            altura:       i.altura,
+            quantidade:   i.quantidade,
+            valor_m2:     Number(i.valor_m2),
+            lapidacao:    Number(i.lapidacao ?? 0),
+            preco_base:   Number(i.valor_m2),
+          })));
+        }
+        toast(`Itens copiados do orçamento ${duplicarDe} — revise antes de salvar`);
+      } else {
+        toast(`Orçamento ${duplicarDe} não encontrado para duplicar`, "err");
+      }
+    }
+
     setLoading(false);
   }
 
@@ -201,12 +241,14 @@ export default function NovoOrcamentoPage() {
     });
   }
 
+  // Editar a 1ª parcela aplica a forma/conta a todas (mesmo padrão usado na data de pagamento);
+  // editar uma parcela específica só muda aquela, permitindo personalizar depois.
   function handleFormaParc(idx: number, forma: string) {
-    setParcelasForm(prev => prev.map((p, i) => i === idx ? { ...p, formaPgto: forma } : p));
+    setParcelasForm(prev => prev.map((p, i) => (idx === 0 || i === idx) ? { ...p, formaPgto: forma } : p));
   }
 
   function handleContaParc(idx: number, c: string) {
-    setParcelasForm(prev => prev.map((p, i) => i === idx ? { ...p, conta: c } : p));
+    setParcelasForm(prev => prev.map((p, i) => (idx === 0 || i === idx) ? { ...p, conta: c } : p));
   }
 
   const somaParcelas = parcelasForm.reduce((a, p) => a + p.valor, 0);
@@ -341,6 +383,12 @@ export default function NovoOrcamentoPage() {
       valor_m2: parseFloat(valorM2Geral.toFixed(4)),
     })));
     setTotalPedidoInput(0);
+  }
+
+  function aplicarValorGeral(valor: number) {
+    if (valor <= 0) return;
+    setItens(items => items.map(item => ({ ...item, valor_m2: valor })));
+    setValorGeralInput(0);
   }
 
   // Agrega m² necessário por produto (para checar contra estoque)
@@ -728,6 +776,15 @@ export default function NovoOrcamentoPage() {
             <CurrencyInput tabIndex={-1} value={totalPedidoInput} onChange={setTotalPedidoInput} placeholder="Ex: R$ 850,00" style={{ width: "140px", margin: 0 }} />
             <button tabIndex={-1} className="btn bp sm" onClick={() => aplicarTotalPedido(totalPedidoInput)} disabled={totalPedidoInput <= 0 || m2Total === 0}>↵ Aplicar</button>
             <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>distribui proporcionalmente ao m² de cada item</span>
+          </div>
+
+          <div style={{ marginTop: "8px", padding: "12px 14px", background: "var(--surf2)", borderRadius: "8px", border: "1px solid var(--b2)", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "11px", color: "var(--t2)", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>
+              Aplicar preço único a todos os itens:
+            </span>
+            <CurrencyInput tabIndex={-1} value={valorGeralInput} onChange={setValorGeralInput} placeholder="Ex: R$ 80,00/m²" style={{ width: "140px", margin: 0 }} />
+            <button tabIndex={-1} className="btn bp sm" onClick={() => aplicarValorGeral(valorGeralInput)} disabled={valorGeralInput <= 0}>↵ Aplicar</button>
+            <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>define o mesmo R$/m² em todas as linhas — útil quando você não sabe o total, só o preço unitário</span>
           </div>
 
           <div className="totbar" style={{ marginTop: "8px" }}>

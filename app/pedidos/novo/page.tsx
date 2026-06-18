@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { getClientes } from "@/services/clientes.service";
-import { createPedido, getProximoIdPedido } from "@/services/pedidos.service";
+import { createPedido, getProximoIdPedido, getPedidoById } from "@/services/pedidos.service";
 import { criarLancamentosParcelados } from "@/services/financeiro.service";
 import { formatBRL, formatM2 } from "@/lib/formatters";
+import { useToast } from "@/components/ui/toast";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
@@ -97,7 +98,17 @@ function redistribuirParcelas(parcelas: ParcelaForm[], valorTotal: number, idxEd
 }
 
 export default function NovoPedidoPage() {
+  return (
+    <Suspense fallback={null}>
+      <NovoPedidoPageInner />
+    </Suspense>
+  );
+}
+
+function NovoPedidoPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { toast } = useToast();
 
   const [clientes, setClientes]       = useState<Cliente[]>([]);
   const [produtos, setProdutos]       = useState<Produto[]>([]);
@@ -118,6 +129,7 @@ export default function NovoPedidoPage() {
   const [loading, setLoading]       = useState(true);
   const [salvando, setSalvando]     = useState(false);
   const [totalPedidoInput, setTotalPedidoInput] = useState(0);
+  const [valorGeralInput, setValorGeralInput] = useState(0);
   const [modoPedido, setModoPedido] = useState<ModoPedido>("m2");
   const [modalImportar, setModalImportar] = useState(false);
   const [parcelasForm, setParcelasForm] = useState<ParcelaForm[]>([{ data: "", valor: 0, editado: false, conta: "", formaPgto: "" }]);
@@ -140,6 +152,35 @@ export default function NovoPedidoPage() {
     setVendedores(vends as Pick<Vendedor, "id" | "nome" | "comissao_pct">[]);
     setProximoId(pid);
     setItens([{ ...ITEM_VAZIO }]);
+
+    const duplicarDe = searchParams.get("duplicarDe");
+    if (duplicarDe) {
+      const original = await getPedidoById(duplicarDe);
+      if (original) {
+        setClienteId(original.cliente_id);
+        setVendedorId(original.vendedor_id ?? null);
+        setObs(original.obs ?? "");
+        const itensOriginais = original.itens_pedido ?? [];
+        if (itensOriginais.length > 0) {
+          setItens(itensOriginais.map(i => ({
+            ...ITEM_VAZIO,
+            produto_id:    i.produto_id,
+            produto_nome:  i.produto_nome,
+            largura:       i.largura,
+            altura:        i.altura,
+            quantidade:    i.quantidade,
+            valor_m2:      Number(i.valor_m2),
+            lapidacao:     Number(i.lapidacao ?? 0),
+            vidro_cliente: Boolean(i.vidro_cliente),
+            preco_base:    Number(i.valor_m2),
+          })));
+        }
+        toast(`Itens copiados do pedido ${duplicarDe} — revise antes de salvar`);
+      } else {
+        toast(`Pedido ${duplicarDe} não encontrado para duplicar`, "err");
+      }
+    }
+
     setLoading(false);
   }
 
@@ -214,12 +255,14 @@ export default function NovoPedidoPage() {
     });
   }
 
+  // Editar a 1ª parcela aplica a forma/conta a todas (mesmo padrão usado na data de pagamento);
+  // editar uma parcela específica só muda aquela, permitindo personalizar depois.
   function handleFormaParc(idx: number, forma: string) {
-    setParcelasForm(prev => prev.map((p, i) => i === idx ? { ...p, formaPgto: forma } : p));
+    setParcelasForm(prev => prev.map((p, i) => (idx === 0 || i === idx) ? { ...p, formaPgto: forma } : p));
   }
 
   function handleContaParc(idx: number, c: string) {
-    setParcelasForm(prev => prev.map((p, i) => i === idx ? { ...p, conta: c } : p));
+    setParcelasForm(prev => prev.map((p, i) => (idx === 0 || i === idx) ? { ...p, conta: c } : p));
   }
 
   function getTabela(): TabelaPreco | null {
@@ -345,6 +388,12 @@ export default function NovoPedidoPage() {
       setItens(items => items.map(item => ({ ...item, valor_m2: parseFloat((total / m2Tot).toFixed(4)) })));
     }
     setTotalPedidoInput(0);
+  }
+
+  function aplicarValorGeral(valor: number) {
+    if (valor <= 0) return;
+    setItens(items => items.map(item => ({ ...item, valor_m2: valor })));
+    setValorGeralInput(0);
   }
 
   const somaParcelas = parcelasForm.reduce((a, p) => a + p.valor, 0);
@@ -738,6 +787,13 @@ export default function NovoPedidoPage() {
             <CurrencyInput value={totalPedidoInput} onChange={setTotalPedidoInput} placeholder="Ex: R$ 850,00" style={{ width: "140px", margin: 0 }} />
             <button className="btn bp sm" onClick={() => aplicarTotalPedido(totalPedidoInput)} disabled={totalPedidoInput <= 0 || m2Total === 0}>↵ Aplicar</button>
             <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>distribui proporcionalmente ao {isMl ? "ml" : "m²"} de cada item</span>
+          </div>
+
+          <div style={{ marginTop: "8px", padding: "12px 14px", background: "var(--surf2)", borderRadius: "8px", border: "1px solid var(--b2)", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "11px", color: "var(--t2)", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>Aplicar preço único a todos os itens:</span>
+            <CurrencyInput value={valorGeralInput} onChange={setValorGeralInput} placeholder={isMl ? "Ex: R$ 15,00/ml" : "Ex: R$ 80,00/m²"} style={{ width: "140px", margin: 0 }} />
+            <button className="btn bp sm" onClick={() => aplicarValorGeral(valorGeralInput)} disabled={valorGeralInput <= 0}>↵ Aplicar</button>
+            <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>define o mesmo R$/{isMl ? "ml" : "m²"} em todas as linhas — útil quando você não sabe o total, só o preço unitário</span>
           </div>
 
           <div className="totbar" style={{ marginTop: "8px" }}>

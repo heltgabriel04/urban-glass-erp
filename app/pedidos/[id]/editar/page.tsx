@@ -111,6 +111,7 @@ export default function EditarPedidoPage() {
   const [modoPedido, setModoPedido] = useState<ModoPedido>("m2");
   const [parcelasForm, setParcelasForm] = useState<ParcelaForm[]>([]);
   const [totalPedidoInput, setTotalPedidoInput] = useState(0);
+  const [valorGeralInput, setValorGeralInput] = useState(0);
 
   const [loading, setLoading]   = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -313,6 +314,12 @@ export default function EditarPedidoPage() {
       setItens(items => items.map(item => ({ ...item, valor_m2: parseFloat((total / m2Tot).toFixed(4)) })));
     }
     setTotalPedidoInput(0);
+  }
+
+  function aplicarValorGeral(valor: number) {
+    if (valor <= 0) return;
+    setItens(items => items.map(item => ({ ...item, valor_m2: valor })));
+    setValorGeralInput(0);
   }
 
   function handleModoPedido(modo: ModoPedido) {
@@ -745,6 +752,13 @@ export default function EditarPedidoPage() {
             <CurrencyInput value={totalPedidoInput} onChange={setTotalPedidoInput} placeholder="Ex: R$ 850,00" style={{ width:"140px", margin:0 }} />
             <button className="btn bp sm" onClick={() => aplicarTotalPedido(totalPedidoInput)} disabled={totalPedidoInput <= 0 || m2Total === 0}>↵ Aplicar</button>
             <span style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>distribui proporcionalmente ao {isMl ? "ml" : "m²"} de cada item</span>
+          </div>
+
+          <div style={{ marginTop:"8px", padding:"12px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)", display:"flex", alignItems:"center", gap:"12px", flexWrap:"wrap" }}>
+            <span style={{ fontSize:"11px", color:"var(--t2)", fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap" }}>Aplicar preço único a todos os itens:</span>
+            <CurrencyInput value={valorGeralInput} onChange={setValorGeralInput} placeholder={isMl ? "Ex: R$ 15,00/ml" : "Ex: R$ 80,00/m²"} style={{ width:"140px", margin:0 }} />
+            <button className="btn bp sm" onClick={() => aplicarValorGeral(valorGeralInput)} disabled={valorGeralInput <= 0}>↵ Aplicar</button>
+            <span style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>define o mesmo R$/{isMl ? "ml" : "m²"} em todas as linhas — útil quando você não sabe o total, só o preço unitário</span>
           </div>
 
           {/* Totbar */}
