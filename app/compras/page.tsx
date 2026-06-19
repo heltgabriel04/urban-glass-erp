@@ -73,17 +73,17 @@ export default function ComprasPage() {
     setItens(prev => prev.map((it, idx) => {
       if (idx !== i) return it;
       const novo = { ...it, [field]: value };
+      const p = produtos.find(p => String(p.id) === novo.produto_id);
       if (field === "produto_id") {
-        const p = produtos.find(p => String(p.id) === value);
         if (p?.chapa_largura_mm && p?.chapa_altura_mm) {
           novo.m2_por_chapa = (((Number(p.chapa_largura_mm) / 1000) * (Number(p.chapa_altura_mm) / 1000)).toFixed(4));
         }
-      }
-      if (field === "colares") {
-        const p = produtos.find(p => String(p.id) === novo.produto_id);
-        if (p?.chapas_por_colar && value !== "") {
-          novo.chapas = String(Number(value) * p.chapas_por_colar);
+        if (p?.chapas_por_colar && novo.colares !== "") {
+          novo.chapas = String(Number(novo.colares) * p.chapas_por_colar);
         }
+      }
+      if (field === "colares" && p?.chapas_por_colar && value !== "") {
+        novo.chapas = String(Number(value) * p.chapas_por_colar);
       }
       return novo;
     }));
@@ -262,15 +262,27 @@ export default function ComprasPage() {
                   <div>
                     {i === 0 && <label style={labelStyle}>Colares</label>}
                     <input style={inputStyle} type="number" min="0" value={it.colares} onChange={e => updItem(i, "colares", e.target.value)}
-                      placeholder={prod?.chapas_por_colar ? `× ${prod.chapas_por_colar}` : "—"} />
+                      placeholder={prod?.chapas_por_colar ? `× ${prod.chapas_por_colar} ch.` : "config. no produto"} />
                   </div>
                   <div>
                     {i === 0 && <label style={labelStyle}>Chapas *</label>}
-                    <input style={inputStyle} type="number" min="0" value={it.chapas} onChange={e => updItem(i, "chapas", e.target.value)} />
+                    {prod?.chapas_por_colar ? (
+                      <div style={{ ...inputStyle, background: "transparent", color: "var(--t2)" }} title="Calculado automaticamente a partir dos colares">
+                        {it.chapas || "—"}
+                      </div>
+                    ) : (
+                      <input style={inputStyle} type="number" min="0" value={it.chapas} onChange={e => updItem(i, "chapas", e.target.value)} />
+                    )}
                   </div>
                   <div>
                     {i === 0 && <label style={labelStyle}>m²/chapa *</label>}
-                    <input style={inputStyle} type="number" min="0" step="0.0001" value={it.m2_por_chapa} onChange={e => updItem(i, "m2_por_chapa", e.target.value)} />
+                    {prod?.chapa_largura_mm && prod?.chapa_altura_mm ? (
+                      <div style={{ ...inputStyle, background: "transparent", color: "var(--t2)" }} title="Calculado automaticamente a partir da chapa do produto">
+                        {it.m2_por_chapa}
+                      </div>
+                    ) : (
+                      <input style={inputStyle} type="number" min="0" step="0.0001" value={it.m2_por_chapa} onChange={e => updItem(i, "m2_por_chapa", e.target.value)} />
+                    )}
                   </div>
                   <div>
                     {i === 0 && <label style={labelStyle}>Custo/m²</label>}
