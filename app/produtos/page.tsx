@@ -8,13 +8,17 @@ import CurrencyInput from "@/components/ui/CurrencyInput";
 import SearchInput from "@/components/ui/SearchInput";
 import type { Produto, ProdutoInsert } from "@/types";
 
+// "Chapa" não é um tipo de vidro — é só um estado de venda (inteira vs.
+// cortada), já tratado por isChapaInteira() a partir das medidas do item.
+// Não readicione como opção aqui: isso recria produto duplicado e fragmenta
+// o estoque do mesmo material (ver histórico de unificação em /produtos).
 const PREFIXOS: Record<string, string> = {
   "Laminado": "VL",
-  "Chapa":    "CH",
   "Reflecta": "VR",
+  "Monolítico": "VM",
 };
 
-const TIPOS = ["Laminado", "Chapa", "Reflecta", "Monolítico"];
+const TIPOS = ["Laminado", "Reflecta", "Monolítico"];
 
 const VAZIO: ProdutoInsert = {
   cod: "", nome: "", tipo: "", espessura: "", cor: "",
