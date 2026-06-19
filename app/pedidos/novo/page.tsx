@@ -330,17 +330,17 @@ function NovoPedidoPageInner() {
     return { valor: prod?.valor ?? 0, margem: prod?.margem ?? 0 };
   }
 
-  function setProdutoItem(i: number, id: number, label: string) {
-    const { valor, margem } = getPrecoProduto(id);
+  function setProdutoItem(i: number, id: number | null, label: string) {
+    const { valor, margem } = id !== null ? getPrecoProduto(id) : { valor: 0, margem: 0 };
     setItens(items => items.map((item, idx) => {
       if (idx !== i) return item;
       return {
         ...item,
         produto_id: id,
         produto_nome: label,
-        valor_m2: valor,
-        preco_base: valor,
-        margem_prod: margem,
+        valor_m2: id !== null ? valor : item.valor_m2,
+        preco_base: id !== null ? valor : item.preco_base,
+        margem_prod: id !== null ? margem : item.margem_prod,
       };
     }));
   }
@@ -717,7 +717,7 @@ function NovoPedidoPageInner() {
                 {isMl ? (
                   <div>
                     <div style={{ display: "grid", gridTemplateColumns: colsMl, gap: "6px", alignItems: "center" }}>
-                      <AutocompleteInput options={produtoOpts} value={item.produto_id} onChange={(id, label) => setProdutoItem(i, id, label)} placeholder="Buscar produto..." />
+                      <AutocompleteInput options={produtoOpts} value={item.produto_id} valueLabel={item.produto_nome} allowFreeText={item.vidro_cliente} onChange={(id, label) => setProdutoItem(i, id, label)} placeholder={item.vidro_cliente ? "Buscar ou digitar produto do cliente..." : "Buscar produto..."} />
                       <div style={{ position: "relative" }}>
                         <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" style={{ paddingRight: "24px" }} />
                         <label style={{ position: "absolute", right: "6px", top: "50%", transform: "translateY(-50%)", cursor: "pointer" }}>
@@ -752,7 +752,7 @@ function NovoPedidoPageInner() {
                 ) : (
                   <div>
                     <div style={{ display: "grid", gridTemplateColumns: colsM2, gap: "6px", alignItems: "center" }}>
-                      <AutocompleteInput options={produtoOpts} value={item.produto_id} onChange={(id, label) => setProdutoItem(i, id, label)} placeholder="Buscar produto..." />
+                      <AutocompleteInput options={produtoOpts} value={item.produto_id} valueLabel={item.produto_nome} allowFreeText={item.vidro_cliente} onChange={(id, label) => setProdutoItem(i, id, label)} placeholder={item.vidro_cliente ? "Buscar ou digitar produto do cliente..." : "Buscar produto..."} />
                       <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
                       <input className="fc" type="number" value={item.altura  || ""} onChange={e => updItem(i, "altura",  parseInt(e.target.value) || 0)} placeholder="0" />
                       <input className="fc" type="number" value={item.quantidade} onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />

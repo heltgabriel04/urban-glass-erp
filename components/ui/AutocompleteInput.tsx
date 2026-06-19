@@ -11,13 +11,20 @@ interface Option {
 interface Props {
   options: Option[];
   value: number | null;
-  onChange: (id: number, label: string) => void;
+  /** Texto a exibir quando `value` é null mas já existe uma descrição livre
+   *  salva (ex.: item de vidro do cliente sem produto do catálogo). */
+  valueLabel?: string;
+  onChange: (id: number | null, label: string) => void;
+  /** Permite digitar um texto que não corresponde a nenhuma opção — vira
+   *  `id: null` no onChange. Use só quando não exigir um produto cadastrado
+   *  (ex.: vidro do cliente). */
+  allowFreeText?: boolean;
   placeholder?: string;
   disabled?: boolean;
   tabIndex?: number;
 }
 
-export default function AutocompleteInput({ options, value, onChange, placeholder = "Buscar...", disabled, tabIndex }: Props) {
+export default function AutocompleteInput({ options, value, valueLabel, onChange, allowFreeText, placeholder = "Buscar...", disabled, tabIndex }: Props) {
   const [query, setQuery]             = useState("");
   const [aberto, setAberto]           = useState(false);
   const [highlighted, setHighlighted] = useState(0);
@@ -25,10 +32,18 @@ export default function AutocompleteInput({ options, value, onChange, placeholde
   const listRef  = useRef<HTMLUListElement>(null);
 
   useEffect(() => {
-    if (value === null) { setQuery(""); return; }
+    if (value === null) { setQuery(valueLabel ?? ""); return; }
     const opt = options.find(o => o.id === value);
     if (opt) setQuery(opt.label);
-  }, [value, options]);
+    else if (valueLabel) setQuery(valueLabel);
+  }, [value, options, valueLabel]);
+
+  function commitFreeText() {
+    if (!allowFreeText) return;
+    const match = options.find(o => o.label.toLowerCase() === query.toLowerCase());
+    if (match) onChange(match.id, match.label);
+    else if (query.trim()) onChange(null, query.trim());
+  }
 
   const filtrados = query.length === 0
     ? options.slice(0, 8)
@@ -47,12 +62,16 @@ export default function AutocompleteInput({ options, value, onChange, placeholde
     if (!aberto) { if (e.key === "ArrowDown" || e.key === "Enter") setAberto(true); return; }
     if (e.key === "ArrowDown") { e.preventDefault(); setHighlighted(h => Math.min(h + 1, filtrados.length - 1)); }
     if (e.key === "ArrowUp")   { e.preventDefault(); setHighlighted(h => Math.max(h - 1, 0)); }
-    if (e.key === "Enter")     { e.preventDefault(); if (filtrados[highlighted]) selecionar(filtrados[highlighted]); }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (filtrados[highlighted]) selecionar(filtrados[highlighted]);
+      else { commitFreeText(); setAberto(false); }
+    }
     if (e.key === "Escape")    { setAberto(false); }
   }
 
   function handleBlur() {
-    setTimeout(() => setAberto(false), 150);
+    setTimeout(() => { setAberto(false); commitFreeText(); }, 150);
   }
 
   return (

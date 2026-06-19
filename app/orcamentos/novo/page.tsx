@@ -336,7 +336,8 @@ function NovoOrcamentoPageInner() {
     return { valor: prod?.valor ?? 0, margem: prod?.margem ?? 0 };
   }
 
-  function updProduto(i: number, id: number, label: string) {
+  function updProduto(i: number, id: number | null, label: string) {
+    if (id === null) return; // orçamento não tem vidro do cliente — produto sempre vem do catálogo
     const { valor, margem } = getPrecoProduto(id);
     setItens(items => items.map((item, idx) => idx !== i ? item : {
       ...item,
