@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatM2 } from "@/lib/formatters";
-import { baixarChapasEstoque } from "@/services/estoque.service";
+import { registrarMovimentacao } from "@/services/estoqueMovimentacoes.service";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import type { EstoqueItem, Produto } from "@/types";
 
@@ -29,6 +29,7 @@ const FORM_VAZIO: FormState = { produto_id: "", chapas: "", larg_chapa: "", alt_
 export default function EstoquePage() {
   const [estoque, setEstoque]   = useState<EstoqueItem[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [comprometidoPorProduto, setComprometidoPorProduto] = useState<Record<number, number>>({});
   const [loading, setLoading]   = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -41,18 +42,16 @@ export default function EstoquePage() {
 
   useEffect(() => { load(); }, []);
 
+  // Reconciliação: a baixa por otimização já é aplicada automaticamente ao salvar
+  // o plano de corte (ver app/otimizador/page.tsx). Esta função existe só para
+  // cobrir casos em que isso falhou (ex.: erro de rede) — é idempotente via
+  // registrarMovimentacao, então rodar de novo não duplica nenhuma baixa.
   async function handleSincronizarBaixas() {
-    if (!confirm(
-      "Aplicar baixas de estoque com base no histórico de otimizações?\n\n" +
-      "⚠ Execute APENAS UMA VEZ por lote de pedidos ainda não descontados.\n" +
-      "Se as baixas já foram aplicadas anteriormente, haverá duplo desconto."
-    )) return;
-
     setSincronizando(true);
 
     const { data: historico, error } = await supabase
       .from("historico_otimizador")
-      .select("id, chapas_json, created_at")
+      .select("id, pedido_id, chapas_json, created_at")
       .order("created_at", { ascending: true });
 
     if (error || !historico) {
@@ -61,65 +60,64 @@ export default function EstoquePage() {
       return;
     }
 
-    // Agrupa registros por sessão de otimização: registros salvos em sequência
-    // dentro de uma janela de 120 s pertencem à mesma sessão (mesma chamada de handleSalvar).
-    // Cada sessão usa o 1º registro como representante para evitar dupla contagem.
-    const sessions: { chapas_json: any }[][] = [];
-    let cur: typeof historico = [];
+    // Usa o registro mais recente de cada pedido — é o plano de corte vigente.
+    const ultimoPorPedido = new Map<string, { chapas_json: any }>();
     for (const rec of historico) {
-      if (cur.length === 0) { cur.push(rec); continue; }
-      const last = new Date(cur[cur.length - 1].created_at).getTime();
-      const now  = new Date(rec.created_at).getTime();
-      if (now - last <= 120_000) { cur.push(rec); }
-      else { sessions.push(cur); cur = [rec]; }
+      if (!rec.pedido_id) continue;
+      ultimoPorPedido.set(rec.pedido_id, rec);
     }
-    if (cur.length > 0) sessions.push(cur);
 
-    // Soma consumo por produto usando apenas o 1º registro de cada sessão
-    const consumoPorProd = new Map<string, { chapas: number; m2: number }>();
-    for (const session of sessions) {
-      const chapas = session[0].chapas_json as Array<{ prod: string; W: number; H: number }> | null;
+    let aplicados = 0, jaOk = 0, falhas = 0;
+    const erros: string[] = [];
+
+    for (const [pedidoId, rec] of ultimoPorPedido.entries()) {
+      const chapas = rec.chapas_json as Array<{ prod: string; W: number; H: number; retalhoId?: string | null }> | null;
       if (!chapas) continue;
+
+      const consumoPorProd = new Map<string, { chapas: number; m2: number }>();
       for (const chapa of chapas) {
-        if (!chapa?.prod) continue;
+        if (!chapa?.prod || chapa.retalhoId) continue;
         const prev = consumoPorProd.get(chapa.prod) ?? { chapas: 0, m2: 0 };
         consumoPorProd.set(chapa.prod, {
           chapas: prev.chapas + 1,
           m2: parseFloat((prev.m2 + (chapa.W * chapa.H) / 1e6).toFixed(4)),
         });
       }
-    }
 
-    if (consumoPorProd.size === 0) {
-      alert("Nenhuma chapa encontrada no histórico de otimizações.");
-      setSincronizando(false);
-      return;
-    }
-
-    let ok = 0, fail = 0;
-    const naoEncontrados: string[] = [];
-    for (const [prodNome, consumo] of consumoPorProd.entries()) {
-      const success = await baixarChapasEstoque(prodNome, consumo.chapas, consumo.m2);
-      if (success) ok++;
-      else { fail++; naoEncontrados.push(prodNome); }
+      for (const [prodNome, consumo] of consumoPorProd.entries()) {
+        const res = await registrarMovimentacao({
+          produtoNome: prodNome,
+          tipo: "saida_producao", origemTipo: "otimizacao", origemId: pedidoId,
+          chapas: -consumo.chapas, m2: -consumo.m2,
+        });
+        if (res.jaExistia) jaOk++;
+        else if (res.ok) aplicados++;
+        else { falhas++; erros.push(`${pedidoId} / ${prodNome}: ${res.motivo}`); }
+      }
     }
 
     setSincronizando(false);
     load();
 
-    let msg = `Baixas sincronizadas!\n${ok} produto(s) atualizado(s).`;
-    if (fail > 0) msg += `\n\n${fail} produto(s) não encontrado(s) no estoque:\n${naoEncontrados.join("\n")}`;
+    let msg = `Reconciliação concluída.\n${aplicados} movimentação(ões) aplicada(s) agora.\n${jaOk} já estavam em dia (nada feito).`;
+    if (falhas > 0) msg += `\n\n${falhas} falha(s):\n${erros.join("\n")}`;
     alert(msg);
   }
 
   async function load() {
     setLoading(true);
-    const [{ data: est }, { data: prod }] = await Promise.all([
-      supabase.from("estoque").select("*, produtos(nome, tipo, espessura, cor, cod)").order("id"),
+    const [{ data: est }, { data: prod }, { data: comprometido }] = await Promise.all([
+      supabase.from("estoque").select("*, produtos(nome, tipo, espessura, cor, cod, chapas_por_colar)").order("id"),
       supabase.from("produtos").select("*").eq("ativo", true).order("nome"),
+      supabase.from("vw_estoque_comprometido").select("produto_id, m2_comprometido"),
     ]);
     setEstoque(est as EstoqueItem[] || []);
     setProdutos(prod as Produto[] || []);
+    const mapaComprometido: Record<number, number> = {};
+    (comprometido ?? []).forEach((c: { produto_id: number; m2_comprometido: number }) => {
+      mapaComprometido[c.produto_id] = Number(c.m2_comprometido) || 0;
+    });
+    setComprometidoPorProduto(mapaComprometido);
     setLoading(false);
   }
 
@@ -239,9 +237,11 @@ export default function EstoquePage() {
     load();
   }
 
-  const m2Total      = estoque.reduce((a, e) => a + Number(e.m2_saldo), 0);
-  const chapasTotal  = estoque.reduce((a, e) => a + Number(e.chapas_saldo), 0);
-  const valorEstoque = estoque.reduce((a, e) => a + Number(e.m2_saldo) * Number(e.custo_m2), 0);
+  const m2Total        = estoque.reduce((a, e) => a + Number(e.m2_saldo), 0);
+  const chapasTotal    = estoque.reduce((a, e) => a + Number(e.chapas_saldo), 0);
+  const valorEstoque   = estoque.reduce((a, e) => a + Number(e.m2_saldo) * Number(e.custo_m2), 0);
+  const m2Comprometido = Object.values(comprometidoPorProduto).reduce((a, v) => a + v, 0);
+  const m2Disponivel   = m2Total - m2Comprometido;
 
   // Ruptura: saldo de chapas no nível ou abaixo do mínimo definido (mínimo > 0)
   function emRuptura(e: EstoqueItem): boolean {
@@ -290,8 +290,13 @@ export default function EstoquePage() {
       <div className="tb">
         <div className="tb-title">Estoque · Chapas</div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button className="btn bg sm" onClick={handleSincronizarBaixas} disabled={sincronizando}>
-            {sincronizando ? "Sincronizando..." : "Sincronizar Baixas"}
+          <button
+            className="btn bg sm"
+            onClick={handleSincronizarBaixas}
+            disabled={sincronizando}
+            title="A baixa por otimização já é automática. Use isto só se suspeitar que alguma ficou pendente — é seguro rodar mais de uma vez."
+          >
+            {sincronizando ? "Reconciliando..." : "Reconciliar Baixas"}
           </button>
           <button className="btn bp sm" onClick={() => { if (showForm) { setShowForm(false); resetForm(); } else abrirNovo(); }}>
             {showForm ? "✕ Cancelar" : "+ Entrada de Estoque"}
@@ -417,12 +422,14 @@ export default function EstoquePage() {
         )}
 
         {/* Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "20px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px", marginBottom: "20px" }}>
           {[
-            { label: "m² em Estoque",     value: formatM2(m2Total),      color: "var(--acc)",  sub: "m² disponíveis" },
-            { label: "Chapas em Estoque", value: String(chapasTotal),     color: "var(--acc2)", sub: "chapas disponíveis" },
-            { label: "Valor do Estoque",  value: formatBRL(valorEstoque), color: "var(--acc5)", sub: "custo de aquisição" },
-            { label: "Em Ruptura",        value: String(emRupturaCount),  color: emRupturaCount > 0 ? "var(--err)" : "var(--ok)", sub: "no/abaixo do mínimo" },
+            { label: "m² em Estoque",      value: formatM2(m2Total),        color: "var(--acc)",  sub: "saldo total" },
+            { label: "m² Comprometido",    value: formatM2(m2Comprometido), color: "var(--warn)", sub: "em pedidos não baixados" },
+            { label: "m² Disponível",      value: formatM2(m2Disponivel),   color: "var(--ok)",   sub: "livre pra vender" },
+            { label: "Chapas em Estoque",  value: String(chapasTotal),      color: "var(--acc2)", sub: "chapas disponíveis" },
+            { label: "Valor do Estoque",   value: formatBRL(valorEstoque),  color: "var(--acc5)", sub: "custo de aquisição" },
+            { label: "Em Ruptura",         value: String(emRupturaCount),   color: emRupturaCount > 0 ? "var(--err)" : "var(--ok)", sub: "no/abaixo do mínimo" },
           ].map(card => (
             <div key={card.label} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: "4px" }}>
               <div style={{ fontSize: "11px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{card.label}</div>
@@ -440,6 +447,7 @@ export default function EstoquePage() {
                   <tr>
                     <th>Produto</th><th>Código</th><th>Chapas Entrada</th>
                     <th>m² Entrada</th><th>m² Consumido</th><th>Chapas Saldo</th>
+                    <th>Colares</th>
                     <th>Mín.</th>
                     <th>m² Saldo</th><th>Custo/m²</th><th>Valor Total</th><th>Nível</th>
                     <th>Ações</th><th style={{ width: "40px" }}></th>
@@ -447,7 +455,7 @@ export default function EstoquePage() {
                 </thead>
                 <tbody>
                   {estoque.length === 0 && (
-                    <tr><td colSpan={13} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>Nenhum item no estoque — registre uma entrada acima</td></tr>
+                    <tr><td colSpan={14} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>Nenhum item no estoque — registre uma entrada acima</td></tr>
                   )}
                   {estoque.map(e => {
                     const pct = Number(e.m2_entrada) > 0 ? (Number(e.m2_saldo) / Number(e.m2_entrada)) * 100 : 0;
@@ -464,6 +472,11 @@ export default function EstoquePage() {
                         <td className="mono" style={{ color: emRuptura(e) ? "var(--err)" : undefined }}>
                           {e.chapas_saldo}
                           {emRuptura(e) && <span title="No/abaixo do estoque mínimo" style={{ marginLeft: "4px" }}>⚠</span>}
+                        </td>
+                        <td className="mono">
+                          {e.produtos?.chapas_por_colar
+                            ? `${Math.floor(Number(e.chapas_saldo) / e.produtos.chapas_por_colar)} (+${Number(e.chapas_saldo) % e.produtos.chapas_por_colar} ch.)`
+                            : <span className="tdim" title="Cadastre 'chapas por colar' no produto">—</span>}
                         </td>
                         <td>
                           <input

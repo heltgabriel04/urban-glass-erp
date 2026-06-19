@@ -24,6 +24,7 @@ const FORM_VAZIO = {
   altura: "",
   chapa_origem: "",
   pedido_origem: "",
+  localizacao: "",
   dt_gerado: hoje(),
   status: "Disponível" as StatusRetalho,
 };
@@ -94,6 +95,7 @@ export default function RetalhoPage() {
       m2,
       chapa_origem:  form.chapa_origem.trim() || null,
       pedido_origem: form.pedido_origem.trim() || null,
+      localizacao:   form.localizacao.trim() || null,
       dt_gerado:     form.dt_gerado || hoje(),
       status:        form.status,
     }]).select().single();
@@ -182,7 +184,7 @@ export default function RetalhoPage() {
         {showForm && (
           <div style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"20px 24px", marginBottom:"20px" }}>
             <div style={{ fontSize:"12px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em", marginBottom:"16px" }}>NOVO RETALHO</div>
-            <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr 1fr", gap:"12px", alignItems:"end" }}>
+            <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr 1fr 1fr", gap:"12px", alignItems:"end" }}>
 
               <div>
                 <label style={labelStyle}>Produto *</label>
@@ -253,6 +255,16 @@ export default function RetalhoPage() {
                   onChange={v => setForm(f => ({ ...f, dt_gerado: v }))}
                 />
               </div>
+
+              <div>
+                <label style={labelStyle}>Localização</label>
+                <input
+                  style={inputStyle}
+                  placeholder="Cavalete 3 - B"
+                  value={form.localizacao}
+                  onChange={e => setForm(f => ({ ...f, localizacao: e.target.value }))}
+                />
+              </div>
             </div>
 
             <div style={{ display:"flex", gap:"8px", marginTop:"14px", justifyContent:"flex-end" }}>
@@ -304,6 +316,7 @@ export default function RetalhoPage() {
                       <th>m²</th>
                       <th>Chapa Origem</th>
                       <th>Pedido Origem</th>
+                      <th>Localização</th>
                       <th>Gerado em</th>
                       <th>Status</th>
                       <th>Ações</th>
@@ -319,6 +332,7 @@ export default function RetalhoPage() {
                         <td className="mono">{formatM2(r.m2)}</td>
                         <td className="mono" style={{ color:"var(--t2)" }}>{r.chapa_origem || "—"}</td>
                         <td className="mono" style={{ color:"var(--acc)" }}>{r.pedido_origem || "—"}</td>
+                        <td className="mono" style={{ color:"var(--t2)" }}>{r.localizacao || "—"}</td>
                         <td className="mono">{formatDate(r.dt_gerado)}</td>
                         <td><span className={CHIP[r.status as StatusRetalho] ?? "chip cgr"}>{r.status}</span></td>
                         <td>

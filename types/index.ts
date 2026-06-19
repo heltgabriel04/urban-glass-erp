@@ -134,6 +134,9 @@ export interface Produto {
   unidade: string;
   ativo: boolean;
   obs: string;
+  chapas_por_colar?: number | null;   // ficha técnica de embalagem (ex.: 18, 24)
+  chapa_largura_mm?: number | null;
+  chapa_altura_mm?: number | null;
   created_at: string;
 }
 
@@ -156,6 +159,61 @@ export interface EstoqueItem {
   updated_at: string;
   produtos?: Produto;
 }
+
+// ─── MOVIMENTAÇÃO DE ESTOQUE (livro-razão) ─────────────────
+export type TipoMovimentacaoEstoque = 'entrada_compra' | 'saida_producao' | 'ajuste' | 'devolucao' | 'saldo_inicial';
+export type OrigemMovimentacaoEstoque = 'otimizacao' | 'pedido_chapa' | 'manual' | 'saldo_inicial';
+
+export interface EstoqueMovimentacao {
+  id: number;
+  produto_id: number;
+  tipo: TipoMovimentacaoEstoque;
+  origem_tipo: OrigemMovimentacaoEstoque | null;
+  origem_id: string | null;
+  chapas: number;   // positivo = entrada, negativo = saída
+  m2: number;       // positivo = entrada, negativo = saída
+  custo_unitario_m2: number | null;
+  saldo_chapas_apos: number | null;
+  saldo_m2_apos: number | null;
+  usuario: string | null;
+  obs: string | null;
+  created_at: string;
+}
+
+export type EstoqueMovimentacaoInsert = Omit<EstoqueMovimentacao, 'id' | 'created_at'>;
+
+export interface EstoqueConsolidado {
+  produto_id: number;
+  nome: string;
+  chapas_por_colar: number | null;
+  colares_inteiros: number | null;
+  chapas_soltas: number;
+  chapas_saldo: number;
+  m2_saldo: number;
+  m2_comprometido: number;
+  m2_disponivel: number;
+  custo_m2: number;
+}
+
+// ─── MATERIAL DO CLIENTE (livro-razão próprio) ─────────────
+export type TipoMovimentacaoClienteMaterial = 'entrada' | 'saida_producao' | 'devolucao' | 'perda';
+
+export interface MaterialClienteMov {
+  id: number;
+  pedido_id: string | null;
+  cliente_id: number | null;
+  item_pedido_id: number | null;
+  tipo: TipoMovimentacaoClienteMaterial;
+  descricao: string | null;
+  largura: number | null;
+  altura: number | null;
+  quantidade: number | null;
+  nc_id: number | null;
+  dt_movimento: string;
+  obs: string | null;
+}
+
+export type MaterialClienteMovInsert = Omit<MaterialClienteMov, 'id' | 'dt_movimento'>;
 
 // ─── PEDIDO ────────────────────────────────────────────────
 export interface StatusHistoryEntry {
@@ -274,6 +332,7 @@ export interface Retalho {
   m2: number;
   chapa_origem: string;
   pedido_origem: string | null;
+  localizacao?: string | null;
   dt_gerado: string;
   status: StatusRetalho;
   created_at: string;
@@ -615,6 +674,8 @@ export type Database = {
       pedidos:                 { Row: Pedido;              Insert: PedidoInsert;       Update: PedidoUpdate   };
       itens_pedido:            { Row: ItemPedido;          Insert: ItemPedidoInsert                           };
       estoque:                 { Row: EstoqueItem                                                             };
+      estoque_movimentacoes:   { Row: EstoqueMovimentacao; Insert: EstoqueMovimentacaoInsert                  };
+      material_cliente_mov:    { Row: MaterialClienteMov;  Insert: MaterialClienteMovInsert                   };
       retalhos:                { Row: Retalho                                                                 };
       retalhos_uso:            { Row: RetalhoUso                                                              };
       orcamentos:              { Row: Orcamento;           Insert: OrcamentoInsert                            };
@@ -635,6 +696,7 @@ export type Database = {
       financeiro_clientes:              { Row: FinanceiroCliente         };
       faturamento_mensal:               { Row: FaturamentoMensal         };
       view_indicadores_qualidade_mensal:{ Row: IndicadorQualidadeMensal  };
+      vw_estoque_consolidado:           { Row: EstoqueConsolidado        };
     };
   };
 };

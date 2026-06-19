@@ -1,0 +1,146 @@
+import { supabase } from '@/lib/supabase/client';
+import type { TipoMovimentacaoEstoque, OrigemMovimentacaoEstoque } from '@/types';
+
+export interface RegistrarMovimentacaoParams {
+  produtoId?: number | null;
+  produtoNome?: string;
+  tipo: TipoMovimentacaoEstoque;
+  origemTipo: OrigemMovimentacaoEstoque;
+  origemId: string;
+  /** Positivo = entrada, negativo = saída. */
+  chapas?: number;
+  /** Positivo = entrada, negativo = saída. */
+  m2?: number;
+  custoUnitarioM2?: number | null;
+  usuario?: string | null;
+  obs?: string | null;
+}
+
+export interface ResultadoMovimentacao {
+  ok: boolean;
+  jaExistia?: boolean;
+  motivo?: string;
+}
+
+/**
+ * Registra uma movimentação de estoque de forma idempotente: a combinação
+ * (origemTipo, origemId, produto) só gera 1 movimento, mesmo se a função for
+ * chamada de novo (double-click, re-otimização sem zerar, retry de rede etc.).
+ */
+export async function registrarMovimentacao(params: RegistrarMovimentacaoParams): Promise<ResultadoMovimentacao> {
+  const { tipo, origemTipo, origemId, chapas = 0, m2 = 0, custoUnitarioM2, usuario, obs } = params;
+
+  let produtoId = params.produtoId ?? null;
+  if (!produtoId && params.produtoNome) {
+    const { data } = await supabase.from('produtos').select('id').eq('nome', params.produtoNome).limit(1).maybeSingle();
+    produtoId = (data as { id: number } | null)?.id ?? null;
+  }
+  if (!produtoId) return { ok: false, motivo: `produto não encontrado: ${params.produtoNome ?? params.produtoId}` };
+
+  const { data: existente } = await supabase
+    .from('estoque_movimentacoes')
+    .select('id')
+    .eq('origem_tipo', origemTipo)
+    .eq('origem_id', origemId)
+    .eq('produto_id', produtoId)
+    .maybeSingle();
+  if (existente) return { ok: true, jaExistia: true };
+
+  const { data: estoqueItem } = await supabase
+    .from('estoque')
+    .select('id, chapas_saldo, m2_saldo, m2_consumido')
+    .eq('produto_id', produtoId)
+    .limit(1)
+    .maybeSingle();
+  if (!estoqueItem) return { ok: false, motivo: `produto ${produtoId} sem registro em estoque` };
+
+  const item = estoqueItem as { id: number; chapas_saldo: number; m2_saldo: number; m2_consumido: number };
+  const novoSaldoChapas = Math.max(0, Number(item.chapas_saldo) + chapas);
+  const novoSaldoM2     = Math.max(0, parseFloat((Number(item.m2_saldo) + m2).toFixed(4)));
+  // Saída (m2 negativo) soma ao consumido; entrada não altera consumido.
+  const novoConsumido   = m2 < 0
+    ? parseFloat((Number(item.m2_consumido) - m2).toFixed(4))
+    : Number(item.m2_consumido);
+
+  const { error: errUpd } = await supabase
+    .from('estoque')
+    .update({
+      chapas_saldo: novoSaldoChapas,
+      m2_saldo:     novoSaldoM2,
+      m2_consumido: novoConsumido,
+      updated_at:   new Date().toISOString(),
+    } as never)
+    .eq('id', item.id);
+  if (errUpd) return { ok: false, motivo: errUpd.message };
+
+  const { error: errIns } = await supabase.from('estoque_movimentacoes').insert({
+    produto_id: produtoId,
+    tipo, origem_tipo: origemTipo, origem_id: origemId,
+    chapas, m2,
+    custo_unitario_m2: custoUnitarioM2 ?? null,
+    saldo_chapas_apos: novoSaldoChapas,
+    saldo_m2_apos:     novoSaldoM2,
+    usuario: usuario ?? null,
+    obs:     obs ?? null,
+  } as never);
+  if (errIns) return { ok: false, motivo: errIns.message };
+
+  return { ok: true };
+}
+
+/** Desfaz todas as movimentações de uma origem (ex.: ao zerar/excluir um pedido). */
+export async function reverterMovimentacao(origemTipo: OrigemMovimentacaoEstoque, origemId: string): Promise<boolean> {
+  const { data: movs, error } = await supabase
+    .from('estoque_movimentacoes')
+    .select('id, produto_id, chapas, m2')
+    .eq('origem_tipo', origemTipo)
+    .eq('origem_id', origemId);
+  if (error) { console.error('reverterMovimentacao:', error); return false; }
+  if (!movs || movs.length === 0) return true;
+
+  for (const mov of movs as Array<{ id: number; produto_id: number; chapas: number; m2: number }>) {
+    const { data: estoqueItem } = await supabase
+      .from('estoque')
+      .select('id, chapas_saldo, m2_saldo, m2_consumido')
+      .eq('produto_id', mov.produto_id)
+      .limit(1)
+      .maybeSingle();
+
+    if (estoqueItem) {
+      const item = estoqueItem as { id: number; chapas_saldo: number; m2_saldo: number; m2_consumido: number };
+      const novoSaldoChapas = Math.max(0, Number(item.chapas_saldo) - mov.chapas);
+      const novoSaldoM2     = Math.max(0, parseFloat((Number(item.m2_saldo) - mov.m2).toFixed(4)));
+      const novoConsumido   = mov.m2 < 0
+        ? Math.max(0, parseFloat((Number(item.m2_consumido) + mov.m2).toFixed(4)))
+        : Number(item.m2_consumido);
+
+      await supabase.from('estoque').update({
+        chapas_saldo: novoSaldoChapas,
+        m2_saldo:     novoSaldoM2,
+        m2_consumido: novoConsumido,
+        updated_at:   new Date().toISOString(),
+      } as never).eq('id', item.id);
+    }
+    await supabase.from('estoque_movimentacoes').delete().eq('id', mov.id);
+  }
+  return true;
+}
+
+export async function getMovimentacoesPorProduto(produtoId: number) {
+  const { data, error } = await supabase
+    .from('estoque_movimentacoes')
+    .select('*')
+    .eq('produto_id', produtoId)
+    .order('created_at', { ascending: false });
+  if (error) { console.error('getMovimentacoesPorProduto:', error); return []; }
+  return data;
+}
+
+export async function getEstoqueConsolidado() {
+  const { data, error } = await supabase
+    .from('vw_estoque_consolidado')
+    .select('*')
+    .order('nome');
+  if (error) { console.error('getEstoqueConsolidado:', error); return []; }
+  return data;
+}

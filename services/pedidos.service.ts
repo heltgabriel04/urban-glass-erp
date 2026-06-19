@@ -1,8 +1,9 @@
 import { supabase } from '@/lib/supabase/client';
-import type { Pedido, PedidoInsert, PedidoUpdate, ItemPedidoInsert, StatusPedido } from '@/types';
+import type { Pedido, PedidoInsert, PedidoUpdate, ItemPedido, ItemPedidoInsert, StatusPedido } from '@/types';
 import { registrarLog } from './log.service';
-import { getOtimizacoesPorPedido } from './otimizador.service';
-import { reverterBaixaEstoque } from './estoque.service';
+import { isChapaInteira } from '@/lib/chapas';
+import { registrarMovimentacao, reverterMovimentacao } from './estoqueMovimentacoes.service';
+import { registrarMovimentoCliente, deletarMovimentacoesPorPedido } from './materialCliente.service';
 
 export async function getPedidos(filtroStatus?: StatusPedido) {
   let query = supabase
@@ -133,8 +134,33 @@ export async function createPedido(pedido: PedidoInsert, itens: ItemPedidoInsert
 
   if (itens.length > 0) {
     const itensComId = itens.map(i => ({ ...i, pedido_id: (data as Pedido).id }));
-    const { error: errItens } = await supabase.from('itens_pedido').insert(itensComId as never);
+    const { data: itensInseridos, error: errItens } = await supabase
+      .from('itens_pedido')
+      .insert(itensComId as never)
+      .select();
     if (errItens) console.error('createPedido itens:', errItens);
+
+    for (const item of (itensInseridos ?? []) as ItemPedido[]) {
+      if (item.vidro_cliente) {
+        const res = await registrarMovimentoCliente({
+          pedido_id: (data as Pedido).id, cliente_id: pedido.cliente_id, item_pedido_id: item.id,
+          tipo: 'entrada', descricao: item.produto_nome,
+          largura: item.largura, altura: item.altura, quantidade: item.quantidade,
+          nc_id: null, obs: null,
+        });
+        if (!res.ok && !res.jaExistia) console.error('createPedido entrada vidro cliente:', res.motivo);
+        continue;
+      }
+      if (!isChapaInteira(item.largura, item.altura)) continue;
+      const m2 = (item.largura * item.altura / 1e6) * item.quantidade;
+      const res = await registrarMovimentacao({
+        produtoId: item.produto_id ?? undefined,
+        produtoNome: item.produto_nome,
+        tipo: 'saida_producao', origemTipo: 'pedido_chapa', origemId: String(item.id),
+        chapas: -item.quantidade, m2: -parseFloat(m2.toFixed(4)),
+      });
+      if (!res.ok && !res.jaExistia) console.error('createPedido baixa chapa inteira:', res.motivo);
+    }
   }
 
   return data as Pedido;
@@ -192,6 +218,24 @@ export async function avancarStatusPedido(id: string, statusAtual: StatusPedido)
     descricao: `Avançou status do pedido ${id}: ${statusAtual} → ${novoStatus}`,
     campos_alterados: { status: { de: statusAtual, para: novoStatus } },
   });
+
+  if (res && statusAtual === 'Aguardando otimização' && novoStatus === 'Em Produção – Corte') {
+    const { data: itensVC } = await supabase
+      .from('itens_pedido')
+      .select('id, produto_nome, largura, altura, quantidade')
+      .eq('pedido_id', id)
+      .eq('vidro_cliente', true);
+    for (const item of (itensVC ?? []) as Array<{ id: number; produto_nome: string; largura: number; altura: number; quantidade: number }>) {
+      const r = await registrarMovimentoCliente({
+        pedido_id: id, cliente_id: res.cliente_id, item_pedido_id: item.id,
+        tipo: 'saida_producao', descricao: item.produto_nome,
+        largura: item.largura, altura: item.altura, quantidade: item.quantidade,
+        nc_id: null, obs: null,
+      });
+      if (!r.ok && !r.jaExistia) console.error('avancarStatusPedido saida vidro cliente:', r.motivo);
+    }
+  }
+
   return res;
 }
 
@@ -214,27 +258,20 @@ export async function retrocederStatusPedido(id: string, statusAtual: StatusPedi
 }
 
 export async function deletarPedido(pedidoId: string): Promise<{ ok: boolean; erro?: string }> {
-  // 1. Revert stock consumed by this pedido's optimizations
-  const otimizacoes = await getOtimizacoesPorPedido(pedidoId);
-  if (otimizacoes.length > 0) {
-    const chapasJson: Array<{ W: number; H: number; prod: string; placed: unknown[]; retalhoId?: string | null }> =
-      otimizacoes[0].chapas_json ?? [];
-    const consumoPorProd = new Map<string, { chapas: number; m2: number }>();
-    for (const chapa of chapasJson) {
-      if (chapa.retalhoId) continue;
-      if (!chapa.placed || chapa.placed.length === 0) continue;
-      const prev = consumoPorProd.get(chapa.prod) ?? { chapas: 0, m2: 0 };
-      consumoPorProd.set(chapa.prod, {
-        chapas: prev.chapas + 1,
-        m2: prev.m2 + (chapa.W * chapa.H) / 1e6,
-      });
-    }
-    for (const [prod, consumo] of consumoPorProd.entries()) {
-      await reverterBaixaEstoque(prod, consumo.chapas, parseFloat(consumo.m2.toFixed(4)));
-    }
+  // 1. Revert stock consumed by this pedido: plano de corte (otimização) e
+  //    eventuais vendas de chapa inteira avulsa (uma movimentação por item).
+  await reverterMovimentacao('otimizacao', pedidoId);
+
+  const { data: itensDoPedido } = await supabase
+    .from('itens_pedido')
+    .select('id')
+    .eq('pedido_id', pedidoId);
+  for (const item of (itensDoPedido ?? []) as Array<{ id: number }>) {
+    await reverterMovimentacao('pedido_chapa', String(item.id));
   }
 
   // 2. Delete child records in FK-safe order
+  await deletarMovimentacoesPorPedido(pedidoId);
   await supabase.from('lancamentos').delete().eq('pedido_id', pedidoId);
   await supabase.from('retrabalhos').delete().eq('pedido_id', pedidoId);
   await supabase.from('quebras').delete().eq('pedido_id', pedidoId);

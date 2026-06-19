@@ -8,7 +8,8 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { salvarOtimizacao } from "@/services/otimizador.service";
 import { updatePedido } from "@/services/pedidos.service";
-import { baixarChapasEstoque, salvarRetalhos } from "@/services/estoque.service";
+import { salvarRetalhos } from "@/services/estoque.service";
+import { registrarMovimentacao, reverterMovimentacao } from "@/services/estoqueMovimentacoes.service";
 import type { Produto, Retalho } from "@/types";
 import { CHAPAS_PADRAO, PRODUTO_CHAPA, isChapaInteira } from "@/lib/chapas";
 import {
@@ -747,9 +748,11 @@ function OtimizadorContent() {
     if (!confirm("Apagar completamente a otimização deste pedido?")) return;
     setZerando(true);
     await supabase.from("otimizacoes").delete().eq("pedido_id", pedidoRef);
+    await reverterMovimentacao("otimizacao", pedidoRef);
     await updatePedido(pedidoRef, { status: "Aguardando otimização" });
     for (const pid of pedidosSelecionados) {
       await supabase.from("otimizacoes").delete().eq("pedido_id", pid);
+      await reverterMovimentacao("otimizacao", pid);
       await updatePedido(pid, { status: "Aguardando otimização" });
     }
     setResultado(null); setMsg(""); setRetalhosGerados([]); setPedidosSelecionados(new Set()); setRetalhosUsados([]);
@@ -801,7 +804,16 @@ function OtimizadorContent() {
     });
     for (const [prodNome, consumo] of consumoPorProd.entries()) {
       const prodId = produtos.find(pr => pr.nome === prodNome)?.id;
-      await baixarChapasEstoque(prodNome, consumo.chapas, parseFloat(consumo.m2.toFixed(4)), prodId);
+      const res = await registrarMovimentacao({
+        produtoId: prodId, produtoNome: prodNome,
+        tipo: "saida_producao", origemTipo: "otimizacao", origemId: pedidoRef,
+        chapas: -consumo.chapas, m2: -parseFloat(consumo.m2.toFixed(4)),
+      });
+      if (res.jaExistia) {
+        console.warn(`Baixa de estoque para o pedido ${pedidoRef} já tinha sido registrada — não aplicada de novo. Use "Zerar" antes de reotimizar.`);
+      } else if (!res.ok) {
+        console.error("registrarMovimentacao (otimizador):", res.motivo);
+      }
     }
     router.push("/pedidos/" + pedidoRef);
   }
