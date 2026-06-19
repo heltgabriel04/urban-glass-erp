@@ -320,7 +320,7 @@ function PedidosPageInner() {
                   const quitado       = aberto <= 0;
                   const finalizado    = ["Entregue","Cancelado"].includes(p.status);
                   const primeiro      = p.status === "Aguardando otimização";
-                  const podeRomaneio  = ["Finalizado","Entregue"].includes(p.status);
+                  const podeRomaneio  = true;
                   const temOtim       = comOtimizacao.has(p.id);
                   const isChapa       = pedidosChapa.has(p.id);
                   const isVidroCliente = pedidosVidroCliente.has(p.id);

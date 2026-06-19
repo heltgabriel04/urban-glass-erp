@@ -611,7 +611,7 @@ export default function PedidoDetalhe() {
   const statusIdx    = FLUXO.indexOf(pedido.status);
   const podeAvancar  = !["Entregue","Cancelado"].includes(pedido.status);
   const temItens     = (pedido.itens_pedido?.length ?? 0) > 0;
-  const podeRomaneio   = ["Finalizado","Entregue"].includes(pedido.status);
+  const podeRomaneio   = true;
   const podeChecklist  = statusIdx >= FLUXO.indexOf("Separação");
   const temOtimizacao = otimizacoes.length > 0;
   const ultimaOtim   = otimizacoes[0] ?? null;
