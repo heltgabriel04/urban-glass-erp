@@ -34,6 +34,7 @@ interface Etiqueta {
   qrData: string;
   modoCaixa?: boolean;
   modoVidroCliente?: boolean;
+  codigoAdicional?: string | null;
 }
 
 function QRCode({ data, size = 72 }: { data: string; size?: number }) {
@@ -73,6 +74,12 @@ function EtiquetaCard({ et, num }: { et: Etiqueta; num: number }) {
             <span className="et-lbl">MEDIDAS</span>
             <span className="et-val et-medidas">L {et.largura} × H {et.altura} mm</span>
           </div>
+          {et.codigoAdicional && (
+            <div className="et-linha et-dim">
+              <span className="et-lbl">CÓDIGO</span>
+              <span className="et-val et-codigo">{et.codigoAdicional}</span>
+            </div>
+          )}
           <div className="et-rodape-info">
             {et.modoCaixa ? (
               <>
@@ -254,6 +261,7 @@ export default function EtiquetasPage() {
                   ? `URBAN GLASS\nPedido: ${id}\nCliente: ${ped?.clientes?.nome ?? ""}\nMaterial: ${item.produto_nome}\nMedidas: ${item.largura}x${item.altura}mm\nLote: ${lote}`
                   : `https://urbanglasserp.vercel.app/pedidos/${id}/producao`,
                 modoVidroCliente:  true,
+                codigoAdicional:   item.codigo_adicional,
               });
             }
           });
@@ -380,6 +388,10 @@ export default function EtiquetasPage() {
           font-size: 16px; font-weight: 900;
           font-family: 'Courier New', monospace; color: #000;
         }
+        .et-codigo {
+          font-size: 15px; font-weight: 900;
+          font-family: 'Courier New', monospace; color: #000;
+        }
         .et-dim { margin-top: 2px; }
 
         .et-rodape-info {
@@ -445,6 +457,7 @@ export default function EtiquetasPage() {
           .et-cliente { font-size: 8.5pt; color: #000 !important; font-weight: 900 !important; }
           .et-pedido  { font-size: 10pt; color: #000 !important; font-weight: 900 !important; }
           .et-medidas { font-size: 9pt; color: #000 !important; font-weight: 900 !important; }
+          .et-codigo  { font-size: 8.5pt; color: #000 !important; font-weight: 900 !important; }
           .et-rodape-info { font-size: 7pt; color: #000 !important; font-weight: 700 !important; border-top: 0.3pt solid #ccc; padding-top: 2px; margin-top: 2px !important; }
           .et-lote    { font-size: 7pt; color: #000 !important; font-weight: 700 !important; margin-top: 1px !important; }
           .et-qrlbl   { font-size: 7pt; color: #000 !important; font-weight: 700 !important; }

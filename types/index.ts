@@ -204,6 +204,7 @@ export interface ItemPedido {
   quantidade: number;
   subtotal: number;
   vidro_cliente: boolean;   // true = cliente trouxe o vidro (não desconta estoque)
+  codigo_adicional?: string | null; // código extra por peça (ex.: planilha própria do cliente), exibido na etiqueta
   created_at: string;
   produtos?: Produto;
 }
