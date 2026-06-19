@@ -162,7 +162,7 @@ export interface EstoqueItem {
 
 // ─── MOVIMENTAÇÃO DE ESTOQUE (livro-razão) ─────────────────
 export type TipoMovimentacaoEstoque = 'entrada_compra' | 'saida_producao' | 'ajuste' | 'devolucao' | 'saldo_inicial';
-export type OrigemMovimentacaoEstoque = 'otimizacao' | 'pedido_chapa' | 'manual' | 'saldo_inicial';
+export type OrigemMovimentacaoEstoque = 'otimizacao' | 'pedido_chapa' | 'manual' | 'saldo_inicial' | 'compra';
 
 export interface EstoqueMovimentacao {
   id: number;
@@ -214,6 +214,41 @@ export interface MaterialClienteMov {
 }
 
 export type MaterialClienteMovInsert = Omit<MaterialClienteMov, 'id' | 'dt_movimento'>;
+
+// ─── COMPRA (fornecedor → recebimento) ─────────────────────
+export type StatusCompra = 'rascunho' | 'recebido';
+
+export interface Compra {
+  id: string;
+  fornecedor_id: number | null;
+  nf: string | null;
+  dt_compra: string;
+  condicao_pgto: string | null;
+  status: StatusCompra;
+  valor_total: number;
+  obs: string | null;
+  dt_recebimento: string | null;
+  created_at: string;
+  fornecedores?: Pick<Fornecedor, 'id' | 'nome'>;
+  compras_itens?: CompraItem[];
+}
+
+export type CompraInsert = Omit<Compra, 'created_at' | 'fornecedores' | 'compras_itens'>;
+
+export interface CompraItem {
+  id: number;
+  compra_id: string;
+  produto_id: number | null;
+  colares: number | null;
+  chapas: number;
+  m2_por_chapa: number;
+  m2: number;
+  custo_unitario_m2: number;
+  subtotal: number;
+  produtos?: Pick<Produto, 'id' | 'nome' | 'cod' | 'chapas_por_colar'>;
+}
+
+export type CompraItemInsert = Omit<CompraItem, 'id' | 'produtos'>;
 
 // ─── PEDIDO ────────────────────────────────────────────────
 export interface StatusHistoryEntry {
@@ -670,6 +705,8 @@ export type Database = {
       clientes:                { Row: Cliente;             Insert: ClienteInsert;      Update: ClienteUpdate  };
       vendedores:              { Row: Vendedor;            Insert: VendedorInsert;     Update: VendedorUpdate };
       fornecedores:            { Row: Fornecedor;          Insert: FornecedorInsert;   Update: FornecedorUpdate };
+      compras:                 { Row: Compra;              Insert: CompraInsert                                };
+      compras_itens:           { Row: CompraItem;          Insert: CompraItemInsert                            };
       produtos:                { Row: Produto;             Insert: ProdutoInsert;      Update: ProdutoUpdate  };
       pedidos:                 { Row: Pedido;              Insert: PedidoInsert;       Update: PedidoUpdate   };
       itens_pedido:            { Row: ItemPedido;          Insert: ItemPedidoInsert                           };
