@@ -6,11 +6,19 @@ export interface RegistrarMovimentacaoParams {
   produtoNome?: string;
   tipo: TipoMovimentacaoEstoque;
   origemTipo: OrigemMovimentacaoEstoque;
-  origemId: string;
+  /** Chave de idempotência junto com produto. Omita para entradas manuais — cada
+   *  chamada sempre insere (não há risco de double-fire como nos fluxos automáticos). */
+  origemId?: string;
   /** Positivo = entrada, negativo = saída. */
   chapas?: number;
   /** Positivo = entrada, negativo = saída. */
   m2?: number;
+  /**
+   * Custo/m² desta movimentação específica. Em entradas, é usado para
+   * recalcular o custo médio ponderado de `estoque.custo_m2`. Em saídas, se
+   * omitido, é preenchido automaticamente com o custo médio vigente no
+   * momento — isso é o que permite reconstruir o custo histórico depois.
+   */
   custoUnitarioM2?: number | null;
   usuario?: string | null;
   obs?: string | null;
@@ -37,24 +45,26 @@ export async function registrarMovimentacao(params: RegistrarMovimentacaoParams)
   }
   if (!produtoId) return { ok: false, motivo: `produto não encontrado: ${params.produtoNome ?? params.produtoId}` };
 
-  const { data: existente } = await supabase
-    .from('estoque_movimentacoes')
-    .select('id')
-    .eq('origem_tipo', origemTipo)
-    .eq('origem_id', origemId)
-    .eq('produto_id', produtoId)
-    .maybeSingle();
-  if (existente) return { ok: true, jaExistia: true };
+  if (origemId) {
+    const { data: existente } = await supabase
+      .from('estoque_movimentacoes')
+      .select('id')
+      .eq('origem_tipo', origemTipo)
+      .eq('origem_id', origemId)
+      .eq('produto_id', produtoId)
+      .maybeSingle();
+    if (existente) return { ok: true, jaExistia: true };
+  }
 
   const { data: estoqueItem } = await supabase
     .from('estoque')
-    .select('id, chapas_saldo, m2_saldo, m2_consumido')
+    .select('id, chapas_saldo, m2_saldo, m2_consumido, custo_m2')
     .eq('produto_id', produtoId)
     .limit(1)
     .maybeSingle();
   if (!estoqueItem) return { ok: false, motivo: `produto ${produtoId} sem registro em estoque` };
 
-  const item = estoqueItem as { id: number; chapas_saldo: number; m2_saldo: number; m2_consumido: number };
+  const item = estoqueItem as { id: number; chapas_saldo: number; m2_saldo: number; m2_consumido: number; custo_m2: number };
   const novoSaldoChapas = Math.max(0, Number(item.chapas_saldo) + chapas);
   const novoSaldoM2     = Math.max(0, parseFloat((Number(item.m2_saldo) + m2).toFixed(4)));
   // Saída (m2 negativo) soma ao consumido; entrada não altera consumido.
@@ -62,12 +72,26 @@ export async function registrarMovimentacao(params: RegistrarMovimentacaoParams)
     ? parseFloat((Number(item.m2_consumido) - m2).toFixed(4))
     : Number(item.m2_consumido);
 
+  // Custo histórico desta movimentação: em saída, se não informado, é o
+  // custo médio vigente agora (vira o registro do CMV daquela baixa).
+  const custoEfetivo = custoUnitarioM2 ?? (m2 < 0 ? Number(item.custo_m2) : null);
+
+  // Custo médio ponderado: só recalcula em entrada com custo informado.
+  let novoCustoM2 = Number(item.custo_m2 ?? 0);
+  if (m2 > 0 && custoUnitarioM2 != null) {
+    const saldoAnteriorM2 = Number(item.m2_saldo);
+    novoCustoM2 = saldoAnteriorM2 + m2 > 0
+      ? parseFloat((((saldoAnteriorM2 * Number(item.custo_m2 ?? 0)) + (m2 * custoUnitarioM2)) / (saldoAnteriorM2 + m2)).toFixed(4))
+      : custoUnitarioM2;
+  }
+
   const { error: errUpd } = await supabase
     .from('estoque')
     .update({
       chapas_saldo: novoSaldoChapas,
       m2_saldo:     novoSaldoM2,
       m2_consumido: novoConsumido,
+      custo_m2:     novoCustoM2,
       updated_at:   new Date().toISOString(),
     } as never)
     .eq('id', item.id);
@@ -75,9 +99,9 @@ export async function registrarMovimentacao(params: RegistrarMovimentacaoParams)
 
   const { error: errIns } = await supabase.from('estoque_movimentacoes').insert({
     produto_id: produtoId,
-    tipo, origem_tipo: origemTipo, origem_id: origemId,
+    tipo, origem_tipo: origemTipo, origem_id: origemId ?? null,
     chapas, m2,
-    custo_unitario_m2: custoUnitarioM2 ?? null,
+    custo_unitario_m2: custoEfetivo,
     saldo_chapas_apos: novoSaldoChapas,
     saldo_m2_apos:     novoSaldoM2,
     usuario: usuario ?? null,

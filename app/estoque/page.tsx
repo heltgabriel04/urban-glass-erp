@@ -205,30 +205,43 @@ export default function EstoquePage() {
       if (error) { alert("Erro: " + error.message); setSalvando(false); return; }
 
     } else if (itemExistente) {
-      const novoCusto = custoM2 > 0 ? custoM2 : Number(itemExistente.custo_m2);
+      // Totais acumulados (entrada bruta histórica) são só estatística — não
+      // fazem parte do livro-razão. Saldo e custo médio ponderado vêm de lá.
       const { error } = await supabase.from("estoque").update({
         chapas_entrada: Number(itemExistente.chapas_entrada) + chapasNum,
         m2_entrada:     parseFloat((Number(itemExistente.m2_entrada) + m2Final).toFixed(4)),
-        chapas_saldo:   Number(itemExistente.chapas_saldo) + chapasNum,
-        m2_saldo:       parseFloat((Number(itemExistente.m2_saldo) + m2Final).toFixed(4)),
         m2_por_chapa:   m2ChapFinal,
-        custo_m2:       novoCusto,
-        updated_at:     new Date().toISOString(),
       }).eq("id", itemExistente.id);
 
       if (error) { alert("Erro: " + error.message); setSalvando(false); return; }
 
+      const res = await registrarMovimentacao({
+        produtoId: itemExistente.produto_id, tipo: "entrada_compra", origemTipo: "manual",
+        chapas: chapasNum, m2: m2Final, custoUnitarioM2: custoM2 > 0 ? custoM2 : null,
+      });
+      if (!res.ok) { alert("Erro ao registrar entrada no livro-razão: " + res.motivo); setSalvando(false); return; }
+
     } else {
       if (!prodSelecionado) { setSalvando(false); return; }
-      const { error } = await supabase.from("estoque").insert([{
+      const { data: novoItem, error } = await supabase.from("estoque").insert([{
         produto_id: prodSelecionado.id, cod: prodSelecionado.cod,
         chapas_entrada: chapasNum, m2_entrada: m2Final,
-        m2_consumido: 0, m2_saldo: m2Final, chapas_saldo: chapasNum,
-        m2_por_chapa: m2ChapFinal, custo_m2: custoM2 || 0,
+        m2_consumido: 0, m2_saldo: 0, chapas_saldo: 0,
+        m2_por_chapa: m2ChapFinal, custo_m2: 0,
         updated_at: new Date().toISOString(),
-      } as never]);
+      } as never]).select().single();
 
       if (error) { alert("Erro: " + error.message); setSalvando(false); return; }
+
+      const res = await registrarMovimentacao({
+        produtoId: prodSelecionado.id, tipo: "entrada_compra", origemTipo: "manual",
+        chapas: chapasNum, m2: m2Final, custoUnitarioM2: custoM2 || 0,
+      });
+      if (!res.ok) {
+        alert("Erro ao registrar entrada no livro-razão: " + res.motivo);
+        await supabase.from("estoque").delete().eq("id", (novoItem as { id: number }).id);
+        setSalvando(false); return;
+      }
     }
 
     setSalvando(false);
