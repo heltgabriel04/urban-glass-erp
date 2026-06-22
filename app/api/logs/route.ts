@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { requireAuth } from "@/lib/auth/api-guard";
+import { requireAuth, requireRole } from "@/lib/auth/api-guard";
 import { logEntrySchema } from "@/lib/validation/api";
 
 function adminClient() {
@@ -11,8 +11,7 @@ function adminClient() {
 }
 
 export async function GET() {
-  // TODO: restringir a "admin" quando o claim de perfil estiver configurado.
-  const denied = await requireAuth();
+  const denied = await requireRole(["admin"]);
   if (denied) return denied;
 
   const { data, error } = await adminClient()
