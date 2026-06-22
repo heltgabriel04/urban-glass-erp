@@ -59,6 +59,13 @@ export default function RetiradasPedidoPage() {
     [pedido, retiradas]
   );
 
+  const totalPecasPedido   = saldo.reduce((a, s) => a + s.quantidade_total, 0);
+  const totalPecasRetirado = saldo.reduce((a, s) => a + s.quantidade_retirada, 0);
+  const corRetiradas =
+    totalPecasRetirado === 0                 ? { bg: "rgba(255,255,255,.04)", border: "var(--b2)",          text: "var(--t2)"  }
+    : totalPecasRetirado >= totalPecasPedido ? { bg: "rgba(16,185,129,.06)", border: "rgba(16,185,129,.3)", text: "var(--ok)"   }
+    :                                           { bg: "rgba(245,158,11,.08)", border: "rgba(245,158,11,.3)", text: "var(--warn)" };
+
   const retiradasCronologicas = useMemo(
     () => [...retiradas].sort((a, b) => a.created_at.localeCompare(b.created_at)),
     [retiradas]
@@ -154,6 +161,22 @@ export default function RetiradasPedidoPage() {
         </div>
 
         <div className="con no-print" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* ─── Resumo ─── */}
+          {saldo.length > 0 && (
+            <div style={{ background: corRetiradas.bg, border: `1px solid ${corRetiradas.border}`, borderRadius: "10px", padding: "14px 18px", display: "flex", alignItems: "center", gap: "24px" }}>
+              <div>
+                <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", marginBottom: "2px" }}>RESUMO</div>
+                <div style={{ fontSize: "13px", color: corRetiradas.text, fontWeight: 700 }}>
+                  {totalPecasRetirado} de {totalPecasPedido} peça(s) retirada(s)
+                </div>
+              </div>
+              <div style={{ fontSize: "12px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", display: "flex", gap: "16px" }}>
+                <span>Viagens: <strong style={{ color: "var(--t1)" }}>{retiradas.length}</strong></span>
+                <span>Pendente: <strong style={{ color: "var(--t1)" }}>{totalPecasPedido - totalPecasRetirado}</strong></span>
+              </div>
+            </div>
+          )}
+
           {/* ─── Registrar retirada ─── */}
           <div className="card">
             <div className="ct">Registrar retirada</div>

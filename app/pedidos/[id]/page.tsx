@@ -7,11 +7,12 @@ import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, g
 import { getLancamentosPorPedido, deletarLancamento, createLancamento, updateLancamento } from "@/services/financeiro.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, updateNaoConformidade } from "@/services/qualidade.service";
+import { getRetiradasPorPedido, calcularSaldoItens } from "@/services/retiradas.service";
 import { formatBRL, formatDate, formatDuracao } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
-import type { Pedido, Lancamento, Vendedor, NaoConformidade, NaoConformidadeInsert, TipoNC, GravidadeNC, StatusNaoConformidade } from "@/types";
+import type { Pedido, Lancamento, Vendedor, NaoConformidade, NaoConformidadeInsert, TipoNC, GravidadeNC, StatusNaoConformidade, RetiradaPedido } from "@/types";
 import type { HistoricoOtimizador } from "@/services/otimizador.service";
 import { supabase } from "@/lib/supabase/client";
 
@@ -137,6 +138,7 @@ export default function PedidoDetalhe() {
   const [pedido, setPedido]             = useState<Pedido | null>(null);
   const [lancamentos, setLancamentos]   = useState<Lancamento[]>([]);
   const [otimizacoes, setOtimizacoes]   = useState<HistoricoOtimizador[]>([]);
+  const [retiradas, setRetiradas]       = useState<RetiradaPedido[]>([]);
   const [clientes, setClientes]         = useState<{ id: number; nome: string }[]>([]);
   const [vendedores, setVendedores]     = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
   const [creditoCliente, setCreditoCliente] = useState(0);
@@ -190,13 +192,14 @@ export default function PedidoDetalhe() {
 
   async function load() {
     setLoading(true);
-    const [data, lancs, otims, clis, vends, ncsData] = await Promise.all([
+    const [data, lancs, otims, clis, vends, ncsData, rets] = await Promise.all([
       getPedidoById(id),
       getLancamentosPorPedido(id),
       getOtimizacoesPorPedido(id),
       supabase.from("clientes").select("id, nome").eq("ativo", true).order("nome").then(r => r.data ?? []),
       supabase.from("vendedores").select("id, nome, comissao_pct").eq("ativo", true).order("nome").then(r => r.data ?? []),
       getNaoConformidadesPorPedido(id),
+      getRetiradasPorPedido(id),
     ]);
     setPedido(data);
     setLancamentos(lancs);
@@ -204,6 +207,7 @@ export default function PedidoDetalhe() {
     setClientes(clis as { id: number; nome: string }[]);
     setVendedores(vends as Pick<Vendedor, "id" | "nome" | "comissao_pct">[]);
     setNcs(ncsData);
+    setRetiradas(rets);
     if (data?.cliente_id) {
       const cred = await getCreditoCliente(data.cliente_id);
       setCreditoCliente(cred);
@@ -617,6 +621,14 @@ export default function PedidoDetalhe() {
   const ultimaOtim   = otimizacoes[0] ?? null;
   const todosVidroCliente = temItens && (pedido.itens_pedido ?? []).every(i => (i as any).vidro_cliente === true);
   const todosChapa        = temItens && (pedido.itens_pedido ?? []).every(i => isChapaInteira(i.largura, i.altura));
+
+  const saldoRetiradas     = calcularSaldoItens(pedido.itens_pedido ?? [], retiradas);
+  const totalPecasPedido   = saldoRetiradas.reduce((a, s) => a + s.quantidade_total, 0);
+  const totalPecasRetirado = saldoRetiradas.reduce((a, s) => a + s.quantidade_retirada, 0);
+  const corRetiradas =
+    totalPecasRetirado === 0          ? { bg: "rgba(255,255,255,.04)", border: "var(--b2)",          text: "var(--t2)"  }
+    : totalPecasRetirado >= totalPecasPedido ? { bg: "rgba(16,185,129,.06)", border: "rgba(16,185,129,.3)", text: "var(--ok)"   }
+    :                                    { bg: "rgba(245,158,11,.08)", border: "rgba(245,158,11,.3)", text: "var(--warn)" };
   const bloqueadoSemOtim  = pedido.status === "Aguardando otimização" && !temOtimizacao && !todosVidroCliente && !todosChapa;
 
   const parcelasAReceber = lancamentos.filter(l => l.status === "A Receber").sort((a, b) => (a.vencimento ?? "").localeCompare(b.vencimento ?? ""));
@@ -787,6 +799,25 @@ export default function PedidoDetalhe() {
               );
             })()}
           </div>
+
+          {/* Retiradas */}
+          {temItens && (
+            <div style={{ background: corRetiradas.bg, border: `1px solid ${corRetiradas.border}`, borderRadius:"10px", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px" }}>
+              <div style={{ display:"flex", gap:"24px", alignItems:"center" }}>
+                <div>
+                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"2px" }}>RETIRADAS</div>
+                  <div style={{ fontSize:"13px", color: corRetiradas.text, fontWeight:700 }}>
+                    {totalPecasRetirado} de {totalPecasPedido} peça(s) retirada(s)
+                  </div>
+                </div>
+                <div style={{ fontSize:"12px", color:"var(--t3)", fontFamily:"'DM Mono', monospace", display:"flex", gap:"16px" }}>
+                  <span>Viagens: <strong style={{ color:"var(--t1)" }}>{retiradas.length}</strong></span>
+                  <span>Pendente: <strong style={{ color:"var(--t1)" }}>{totalPecasPedido - totalPecasRetirado}</strong></span>
+                </div>
+              </div>
+              <a href={`/pedidos/${id}/retiradas`} className="btn bg sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>🚚 Ver Retiradas</a>
+            </div>
+          )}
 
           {/* Grid info + financeiro */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"16px" }}>
