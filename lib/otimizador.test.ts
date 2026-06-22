@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { empacotar, calcAproveitamento, type PecaPlacada } from "@/lib/otimizador";
+import { empacotar, empacotarTodas, calcAproveitamento, type PecaPlacada } from "@/lib/otimizador";
 
 const prod = "X"; // produto sem chapa padrão → usa fallback nos testes
 
@@ -49,6 +49,32 @@ describe("empacotar", () => {
     const { placed, usados } = empacotar(500, 500, [{ l: 800, a: 800, prod }], 0);
     expect(placed).toHaveLength(0);
     expect(usados.size).toBe(0);
+  });
+});
+
+describe("empacotarTodas (multi-chapa)", () => {
+  it("nunca sobrepõe peças nem ultrapassa os limites da chapa, mesmo após sheet merging", () => {
+    let seed = 12345;
+    function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+    const W = 3300, H = 2250;
+    for (let trial = 0; trial < 30; trial++) {
+      const n = 10 + Math.floor(rnd() * 40);
+      const pecas = Array.from({ length: n }, () => ({
+        l: 200 + Math.floor(rnd() * 1800),
+        a: 200 + Math.floor(rnd() * 1800),
+        prod,
+      }));
+      const chapas = empacotarTodas(W, H, pecas, 0, 200);
+      chapas.forEach(chapa => {
+        expect(semSobreposicao(chapa.placed)).toBe(true);
+        chapa.placed.forEach(p => {
+          expect(p.x).toBeGreaterThanOrEqual(0);
+          expect(p.y).toBeGreaterThanOrEqual(0);
+          expect(p.x + p.l).toBeLessThanOrEqual(W + 1e-6);
+          expect(p.y + p.a).toBeLessThanOrEqual(H + 1e-6);
+        });
+      });
+    }
   });
 });
 

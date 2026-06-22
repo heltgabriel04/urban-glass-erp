@@ -460,7 +460,7 @@ function tryEliminateSheet(
 
     if (bestFr === null) return null;
 
-    remaining[bestSi].placed.push({ ...piece, l: bestOri.pl, a: bestOri.pa, rot: bestOri.rot });
+    remaining[bestSi].placed.push({ ...piece, x: bestFr.x, y: bestFr.y, l: bestOri.pl, a: bestOri.pa, rot: bestOri.rot });
     remaining[bestSi].freeRects = mrPlace(
       remaining[bestSi].freeRects, bestFr, bestOri.pl, bestOri.pa, kerf, W, H
     );
