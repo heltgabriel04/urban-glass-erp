@@ -18,7 +18,7 @@ const STATUS_CHIP: Record<SaldoItemRetirada["status"], string> = {
   Retirado: "chip cg",
 };
 
-interface ItemFormState { quantidade: number; obs: string }
+interface SelecaoItem { sel: boolean; quantidade: number; obs: string }
 
 export default function RetiradasPedidoPage() {
   const { id } = useParams<{ id: string }>();
@@ -31,12 +31,10 @@ export default function RetiradasPedidoPage() {
   const [salvando, setSalvando]   = useState(false);
   const [expandida, setExpandida] = useState<string | null>(null);
 
-  const [modalNova, setModalNova]         = useState(false);
   const [novaData, setNovaData]           = useState(hoje());
   const [novoMotorista, setNovoMotorista] = useState("");
   const [novoVeiculo, setNovoVeiculo]     = useState("");
-  const [novaObsGeral, setNovaObsGeral]   = useState("");
-  const [itensForm, setItensForm]         = useState<Record<number, ItemFormState>>({});
+  const [selecao, setSelecao]             = useState<Record<number, SelecaoItem>>({});
 
   const [retiradaImprimir, setRetiradaImprimir] = useState<RetiradaPedido | null>(null);
 
@@ -47,6 +45,12 @@ export default function RetiradasPedidoPage() {
     const [ped, rets] = await Promise.all([getPedidoById(id), getRetiradasPorPedido(id)]);
     setPedido(ped);
     setRetiradas(rets);
+
+    const novoSaldo = calcularSaldoItens(ped?.itens_pedido ?? [], rets);
+    setSelecao(Object.fromEntries(novoSaldo.map(s => [s.item_pedido_id, { sel: false, quantidade: 0, obs: "" }])));
+    setNovaData(hoje());
+    setNovoMotorista("");
+    setNovoVeiculo("");
     setLoading(false);
   }
 
@@ -68,46 +72,40 @@ export default function RetiradasPedidoPage() {
     return (r.retiradas_pedido_itens ?? []).reduce((s, i) => s + i.quantidade, 0);
   }
 
-  const itensPendentes = saldo.filter(s => s.quantidade_pendente > 0);
-
-  function abrirModalNova() {
-    setNovaData(hoje());
-    setNovoMotorista("");
-    setNovoVeiculo("");
-    setNovaObsGeral("");
-    const inicial: Record<number, ItemFormState> = {};
-    itensPendentes.forEach(s => { inicial[s.item_pedido_id] = { quantidade: 0, obs: "" }; });
-    setItensForm(inicial);
-    setModalNova(true);
+  function toggleSelecionado(s: SaldoItemRetirada) {
+    setSelecao(f => {
+      const atual = f[s.item_pedido_id] ?? { sel: false, quantidade: 0, obs: "" };
+      const novoSel = !atual.sel;
+      return { ...f, [s.item_pedido_id]: { ...atual, sel: novoSel, quantidade: novoSel ? (atual.quantidade || s.quantidade_pendente) : 0 } };
+    });
   }
 
   function setItemQuantidade(itemId: number, valor: number, max: number) {
     const v = Math.max(0, Math.min(Math.floor(valor) || 0, max));
-    setItensForm(f => ({ ...f, [itemId]: { ...f[itemId], quantidade: v } }));
+    setSelecao(f => ({ ...f, [itemId]: { ...f[itemId], quantidade: v, sel: v > 0 } }));
   }
 
   function setItemObs(itemId: number, obs: string) {
-    setItensForm(f => ({ ...f, [itemId]: { ...f[itemId], obs } }));
+    setSelecao(f => ({ ...f, [itemId]: { ...f[itemId], obs } }));
   }
 
   async function handleSalvarRetirada() {
-    const itensPayload = Object.entries(itensForm)
-      .filter(([, v]) => v.quantidade > 0)
+    const itensPayload = Object.entries(selecao)
+      .filter(([, v]) => v.sel && v.quantidade > 0)
       .map(([itemId, v]) => ({ item_pedido_id: Number(itemId), quantidade: v.quantidade, obs: v.obs || null }));
 
-    if (itensPayload.length === 0) { toast("Informe ao menos uma quantidade", "warn"); return; }
+    if (itensPayload.length === 0) { toast("Selecione ao menos um item e a quantidade", "warn"); return; }
 
     setSalvando(true);
     const res = await createRetirada(
       id,
-      { dt_retirada: novaData, motorista: novoMotorista || null, veiculo: novoVeiculo || null, obs: novaObsGeral || null },
+      { dt_retirada: novaData, motorista: novoMotorista || null, veiculo: novoVeiculo || null, obs: null },
       itensPayload
     );
     setSalvando(false);
 
     if (!res) { toast("Erro ao registrar retirada", "err"); return; }
     toast("✓ Retirada registrada");
-    setModalNova(false);
     await load();
   }
 
@@ -153,47 +151,91 @@ export default function RetiradasPedidoPage() {
             Retiradas — <span style={{ color: "var(--acc)" }}>{pedido.id}</span>
           </div>
           <span className="chip cgr">{pedido.status}</span>
-          <button
-            className="btn bp sm"
-            onClick={abrirModalNova}
-            disabled={itensPendentes.length === 0}
-            title={itensPendentes.length === 0 ? "Todos os itens já foram retirados" : undefined}
-          >
-            + Nova Retirada
-          </button>
         </div>
 
         <div className="con no-print" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          {/* ─── Saldo por item ─── */}
+          {/* ─── Registrar retirada ─── */}
           <div className="card">
-            <div className="ct">Saldo por item</div>
-            <div className="tw">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Produto</th>
-                    <th>Dimensão (mm)</th>
-                    <th>Qtd total</th>
-                    <th>Retirado</th>
-                    <th>Pendente</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {saldo.length === 0 ? (
-                    <tr><td colSpan={6} style={{ textAlign: "center", color: "var(--t3)" }}>Este pedido não possui itens cadastrados.</td></tr>
-                  ) : saldo.map(s => (
-                    <tr key={s.item_pedido_id}>
-                      <td>{s.produto_nome}</td>
-                      <td className="mono">{s.largura} × {s.altura}</td>
-                      <td className="mono">{s.quantidade_total}</td>
-                      <td className="mono">{s.quantidade_retirada}</td>
-                      <td className="mono">{s.quantidade_pendente}</td>
-                      <td><span className={STATUS_CHIP[s.status]}>{s.status}</span></td>
-                    </tr>
+            <div className="ct">Registrar retirada</div>
+
+            <div className="fr3" style={{ marginBottom: 14 }}>
+              <div className="fg">
+                <label className="fl">Data da retirada</label>
+                <DateInput value={novaData} onChange={setNovaData} className="fc" />
+              </div>
+              <div className="fg">
+                <label className="fl">Motorista (opcional)</label>
+                <input className="fc" value={novoMotorista} onChange={e => setNovoMotorista(e.target.value)} placeholder="Nome do motorista" />
+              </div>
+              <div className="fg">
+                <label className="fl">Veículo (opcional)</label>
+                <input className="fc" value={novoVeiculo} onChange={e => setNovoVeiculo(e.target.value)} placeholder="Placa / modelo" />
+              </div>
+            </div>
+
+            {saldo.length === 0 ? (
+              <div style={{ color: "var(--t3)", fontSize: 13 }}>Este pedido não possui itens cadastrados.</div>
+            ) : (
+              <div className="tw">
+                <div style={{ display: "grid", gridTemplateColumns: "32px 2.2fr 110px 90px 110px 2fr", gap: 10, padding: "10px 14px", background: "var(--surf2)", borderBottom: "1px solid var(--b1)" }}>
+                  {["", "Produto / Código", "Dimensão (mm)", "Pendente", "Qtd a retirar", "Obs. da peça"].map((h, i) => (
+                    <div key={i} style={{ fontSize: 9.5, color: "var(--t3)", textTransform: "uppercase", letterSpacing: 1.2, fontFamily: "'DM Mono', monospace" }}>{h}</div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+                {saldo.map(s => {
+                  const sel = selecao[s.item_pedido_id] ?? { sel: false, quantidade: 0, obs: "" };
+                  const disponivel = s.quantidade_pendente > 0;
+                  return (
+                    <div
+                      key={s.item_pedido_id}
+                      style={{
+                        display: "grid", gridTemplateColumns: "32px 2.2fr 110px 90px 110px 2fr", gap: 10,
+                        padding: "10px 14px", borderBottom: "1px solid var(--b1)", alignItems: "center",
+                        opacity: disponivel ? 1 : 0.5,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={sel.sel}
+                        disabled={!disponivel}
+                        onChange={() => toggleSelecionado(s)}
+                        style={{ width: 16, height: 16, accentColor: "var(--acc)", cursor: disponivel ? "pointer" : "default" }}
+                      />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{s.produto_nome}</div>
+                        {s.codigo_adicional && (
+                          <div className="mono" style={{ fontSize: 11, color: "var(--acc2)" }}>Código: {s.codigo_adicional}</div>
+                        )}
+                      </div>
+                      <div className="mono" style={{ fontSize: 12 }}>{s.largura} × {s.altura}</div>
+                      <div>
+                        {disponivel ? (
+                          <span className="mono" style={{ fontSize: 12 }}>{s.quantidade_pendente} / {s.quantidade_total}</span>
+                        ) : (
+                          <span className={STATUS_CHIP[s.status]}>{s.status}</span>
+                        )}
+                      </div>
+                      <input
+                        className="fc" type="number" min={0} max={s.quantidade_pendente} disabled={!disponivel}
+                        value={sel.quantidade}
+                        onChange={e => setItemQuantidade(s.item_pedido_id, Number(e.target.value), s.quantidade_pendente)}
+                      />
+                      <input
+                        className="fc" disabled={!disponivel}
+                        value={sel.obs}
+                        onChange={e => setItemObs(s.item_pedido_id, e.target.value)}
+                        placeholder="Ex.: retrabalho de lapidação"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
+              <button className="btn bp sm" onClick={handleSalvarRetirada} disabled={salvando}>
+                {salvando ? "Salvando..." : "Registrar Retirada"}
+              </button>
             </div>
           </div>
 
@@ -257,78 +299,6 @@ export default function RetiradasPedidoPage() {
             )}
           </div>
         </div>
-
-        {/* ─── MODAL NOVA RETIRADA ─── */}
-        {modalNova && (
-          <div className="mov open" onClick={e => e.target === e.currentTarget && setModalNova(false)}>
-            <div className="mod" style={{ width: "640px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
-              <div className="mhd">
-                <div className="mtit">Nova Retirada</div>
-                <button className="mcl" onClick={() => setModalNova(false)}>✕</button>
-              </div>
-
-              <div style={{ overflowY: "auto", padding: "20px", flex: 1, display: "flex", flexDirection: "column", gap: 14 }}>
-                <div className="fr3">
-                  <div className="fg">
-                    <label className="fl">Data da retirada</label>
-                    <DateInput value={novaData} onChange={setNovaData} className="fc" />
-                  </div>
-                  <div className="fg">
-                    <label className="fl">Motorista</label>
-                    <input className="fc" value={novoMotorista} onChange={e => setNovoMotorista(e.target.value)} placeholder="Nome do motorista" />
-                  </div>
-                  <div className="fg">
-                    <label className="fl">Veículo</label>
-                    <input className="fc" value={novoVeiculo} onChange={e => setNovoVeiculo(e.target.value)} placeholder="Placa / modelo" />
-                  </div>
-                </div>
-
-                <div className="fg">
-                  <label className="fl">Observação geral da viagem</label>
-                  <textarea className="fc" rows={2} value={novaObsGeral} onChange={e => setNovaObsGeral(e.target.value)} placeholder="Ex.: cliente buscou parte do pedido, restante aguardando lapidação" />
-                </div>
-
-                <div style={{ borderTop: "1px solid var(--b1)", paddingTop: 14 }}>
-                  <div className="fl" style={{ marginBottom: 8 }}>Itens pendentes</div>
-                  {itensPendentes.length === 0 ? (
-                    <div style={{ color: "var(--t3)", fontSize: 13 }}>Não há itens pendentes de retirada.</div>
-                  ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      {itensPendentes.map(s => {
-                        const form = itensForm[s.item_pedido_id] ?? { quantidade: 0, obs: "" };
-                        return (
-                          <div key={s.item_pedido_id} style={{ display: "grid", gridTemplateColumns: "2fr 90px 2fr", gap: 10, alignItems: "start" }}>
-                            <div>
-                              <div style={{ fontSize: 13, fontWeight: 600 }}>{s.produto_nome}</div>
-                              <div className="tdim mono">{s.largura} × {s.altura} · pendente: {s.quantidade_pendente}</div>
-                            </div>
-                            <input
-                              className="fc" type="number" min={0} max={s.quantidade_pendente}
-                              value={form.quantidade}
-                              onChange={e => setItemQuantidade(s.item_pedido_id, Number(e.target.value), s.quantidade_pendente)}
-                            />
-                            <input
-                              className="fc" value={form.obs}
-                              onChange={e => setItemObs(s.item_pedido_id, e.target.value)}
-                              placeholder="Obs. da peça (ex.: retrabalho de lapidação)"
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)", flexShrink: 0 }}>
-                <button className="btn bg" onClick={() => setModalNova(false)}>Cancelar</button>
-                <button className="btn bp" onClick={handleSalvarRetirada} disabled={salvando}>
-                  {salvando ? "Salvando..." : "Salvar Retirada"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* ─── ROMANEIO DE RETIRADA (impressão) ─── */}
         {retiradaImprimir && (

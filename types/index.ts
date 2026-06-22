@@ -337,6 +337,7 @@ export interface SaldoItemRetirada {
   produto_nome: string;
   largura: number;
   altura: number;
+  codigo_adicional: string | null;
   quantidade_total: number;
   quantidade_retirada: number;
   quantidade_pendente: number;

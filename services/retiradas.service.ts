@@ -38,6 +38,7 @@ export function calcularSaldoItens(itensPedido: ItemPedido[], retiradas: Retirad
       produto_nome: item.produto_nome,
       largura: item.largura,
       altura: item.altura,
+      codigo_adicional: item.codigo_adicional ?? null,
       quantidade_total: item.quantidade,
       quantidade_retirada,
       quantidade_pendente,
