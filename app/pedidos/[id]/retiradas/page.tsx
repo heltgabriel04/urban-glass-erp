@@ -335,9 +335,12 @@ export default function RetiradasPedidoPage() {
                 <div style={{ fontSize: "9px", color: "#333" }}>(32) 99986-0317</div>
               </div>
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: "11px", color: "#333", textTransform: "uppercase", letterSpacing: "2px", marginBottom: "4px" }}>Romaneio de Retirada — Viagem {numeroViagem(retiradaImprimir)}</div>
+                <div style={{ fontSize: "11px", color: "#333", textTransform: "uppercase", letterSpacing: "2px", marginBottom: "4px" }}>Romaneio de Retirada</div>
                 <div style={{ fontSize: "28px", fontWeight: 900, color: "#2d5fa6", letterSpacing: "-1px" }}>{pedido.id}</div>
-                <div style={{ fontSize: "11px", color: "#333", marginTop: "6px" }}>Data da retirada: <strong>{formatDate(retiradaImprimir.dt_retirada)}</strong></div>
+                <div style={{ fontSize: "11px", color: "#333", marginTop: "6px" }}>Emissão: <strong>{new Date().toLocaleDateString("pt-BR")}</strong></div>
+                <div style={{ display: "inline-block", marginTop: "8px", padding: "3px 14px", borderRadius: "99px", fontSize: "10px", fontWeight: 700, letterSpacing: "1px", background: "#eef2ff", color: "#3730a3", border: "1px solid #c7d2fe" }}>
+                  VIAGEM {numeroViagem(retiradaImprimir)}
+                </div>
                 <div style={{ fontSize: "9px", color: "#c00", marginTop: "6px", fontStyle: "italic" }}>⚠ Não tem validade fiscal</div>
               </div>
             </div>
@@ -346,15 +349,17 @@ export default function RetiradasPedidoPage() {
               <div style={{ padding: "12px", background: "#f0f4ff", borderRadius: "8px", borderLeft: "4px solid #2d5fa6" }}>
                 <div style={{ fontSize: "9px", fontWeight: 700, color: "#2d5fa6", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: "8px" }}>Comprador</div>
                 <div style={{ fontSize: "13px", fontWeight: 700, color: "#1a1a2e" }}>{pedido.clientes?.nome ?? "—"}</div>
+                {(pedido.clientes as any)?.cnpj && <div style={{ fontSize: "10px", color: "#333", marginTop: "3px" }}>CNPJ: {(pedido.clientes as any).cnpj}</div>}
                 {pedido.clientes?.cidade && <div style={{ fontSize: "10px", color: "#333" }}>{pedido.clientes.cidade}</div>}
                 {pedido.clientes?.tel && <div style={{ fontSize: "10px", color: "#333" }}>Tel: {pedido.clientes.tel}</div>}
               </div>
               <div style={{ padding: "12px", background: "#f0f4ff", borderRadius: "8px", borderLeft: "4px solid #3d8c5c" }}>
-                <div style={{ fontSize: "9px", fontWeight: 700, color: "#3d8c5c", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: "8px" }}>Dados da Viagem</div>
+                <div style={{ fontSize: "9px", fontWeight: 700, color: "#3d8c5c", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: "8px" }}>Condições Comerciais</div>
                 <div style={{ fontSize: "11px", color: "#1a1a2e", display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#333" }}>Motorista</span><strong>{retiradaImprimir.motorista || "—"}</strong></div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#333" }}>Veículo</span><strong>{retiradaImprimir.veiculo || "—"}</strong></div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#333" }}>Itens nesta viagem</span><strong>{(retiradaImprimir.retiradas_pedido_itens ?? []).length}</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#333" }}>Pagamento</span><strong>{pedido.forma_pgto || "—"}</strong></div>
+                  {pedido.parcelas > 1 && <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#333" }}>Parcelas</span><strong>{pedido.parcelas}×</strong></div>}
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#333" }}>Retirada prevista</span><strong>{formatDate(pedido.dt_retirada)}</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#333" }}>{(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml total" : "m² total"}</span><strong>{Number(pedido.m2_total).toFixed(2)} {(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml" : "m²"}</strong></div>
                 </div>
               </div>
             </div>
@@ -362,21 +367,27 @@ export default function RetiradasPedidoPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "16px", fontSize: "11px" }}>
               <thead>
                 <tr style={{ background: "#2d5fa6" }}>
-                  {["#", "Produto", "Dimensão (mm)", "Qtd", "Observação"].map((h, i) => (
-                    <th key={i} style={{ padding: "8px", color: "white", fontWeight: 700, fontSize: "9px", textAlign: i === 0 || i === 3 ? "center" : "left", letterSpacing: "0.5px" }}>{h}</th>
+                  {["#", "Produto", "Dimensão (mm)", "Medida", "Qtd", "Observação"].map((h, i) => (
+                    <th key={i} style={{ padding: "8px", color: "white", fontWeight: 700, fontSize: "9px", textAlign: i === 0 || i === 4 ? "center" : "left", letterSpacing: "0.5px" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {(retiradaImprimir.retiradas_pedido_itens ?? []).map((item, i) => (
-                  <tr key={item.id} style={{ background: i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
-                    <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", textAlign: "center", color: "#000", fontSize: "10px", fontWeight: 700 }}>{i + 1}</td>
-                    <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", fontWeight: 700, color: "#000" }}>{item.itens_pedido?.produto_nome ?? "—"}</td>
-                    <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", fontFamily: "monospace", fontSize: "10px", fontWeight: 700, color: "#000" }}>{item.itens_pedido?.largura} × {item.itens_pedido?.altura}</td>
-                    <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", textAlign: "center", fontWeight: 700, color: "#000" }}>{item.quantidade}</td>
-                    <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", color: "#000" }}>{item.obs || "—"}</td>
-                  </tr>
-                ))}
+                {(retiradaImprimir.retiradas_pedido_itens ?? []).map((item, i) => {
+                  const itemPed = item.itens_pedido;
+                  const isML = itemPed?.produtos?.unidade === "ml" || itemPed?.vidro_cliente === true;
+                  const medida = itemPed ? (itemPed.largura / 1000) * (itemPed.altura / 1000) * item.quantidade : 0;
+                  return (
+                    <tr key={item.id} style={{ background: i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
+                      <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", textAlign: "center", color: "#000", fontSize: "10px", fontWeight: 700 }}>{i + 1}</td>
+                      <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", fontWeight: 700, color: "#000" }}>{itemPed?.produto_nome ?? "—"}</td>
+                      <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", fontFamily: "monospace", fontSize: "10px", fontWeight: 700, color: "#000" }}>{itemPed?.largura} × {itemPed?.altura}</td>
+                      <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", fontFamily: "monospace", fontSize: "10px", fontWeight: 700, color: "#000" }}>{medida.toFixed(3)} {isML ? "ml" : "m²"}</td>
+                      <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", textAlign: "center", fontWeight: 700, color: "#000" }}>{item.quantidade}</td>
+                      <td style={{ padding: "7px 8px", borderBottom: "1px solid #e8ecf5", color: "#000" }}>{item.obs || "—"}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
 
@@ -385,6 +396,17 @@ export default function RetiradasPedidoPage() {
                 <strong style={{ color: "#92400e" }}>Observações da viagem:</strong> <span style={{ color: "#333", fontWeight: 700 }}>{retiradaImprimir.obs}</span>
               </div>
             )}
+
+            <div style={{ padding: "12px", background: "#f0f4ff", borderRadius: "8px", borderLeft: "4px solid #3d8c5c", marginBottom: "16px" }}>
+              <div style={{ fontSize: "9px", fontWeight: 700, color: "#3d8c5c", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: "8px" }}>Dados da Viagem</div>
+              <div style={{ fontSize: "11px", color: "#1a1a2e", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 32px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#333" }}>Viagem</span><strong>{numeroViagem(retiradaImprimir)}</strong></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#333" }}>Data da retirada</span><strong>{formatDate(retiradaImprimir.dt_retirada)}</strong></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#333" }}>Motorista</span><strong>{retiradaImprimir.motorista || "—"}</strong></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#333" }}>Veículo</span><strong>{retiradaImprimir.veiculo || "—"}</strong></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#333" }}>Peças retiradas nesta viagem</span><strong>{totalPecas(retiradaImprimir)}</strong></div>
+              </div>
+            </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "32px", marginBottom: "16px", marginTop: "32px" }}>
               {["Vendedor / Urban Glass", "Recebido por / Comprador", "Motorista / Entregador"].map(label => (

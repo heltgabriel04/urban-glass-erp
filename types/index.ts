@@ -325,7 +325,7 @@ export interface RetiradaPedidoItem {
   quantidade: number;
   obs: string | null;
   created_at: string;
-  itens_pedido?: Pick<ItemPedido, 'id' | 'produto_nome' | 'largura' | 'altura' | 'quantidade' | 'vidro_cliente' | 'codigo_adicional'>;
+  itens_pedido?: Pick<ItemPedido, 'id' | 'produto_nome' | 'largura' | 'altura' | 'quantidade' | 'vidro_cliente' | 'codigo_adicional'> & { produtos?: Pick<Produto, 'unidade'> | null };
 }
 
 export type RetiradaPedidoItemInsert = Omit<RetiradaPedidoItem, 'id' | 'created_at' | 'itens_pedido'>;

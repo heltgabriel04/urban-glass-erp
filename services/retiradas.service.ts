@@ -9,7 +9,7 @@ import type {
 export async function getRetiradasPorPedido(pedidoId: string): Promise<RetiradaPedido[]> {
   const { data, error } = await supabase
     .from('retiradas_pedido')
-    .select(`*, retiradas_pedido_itens ( *, itens_pedido ( id, produto_nome, largura, altura, quantidade, vidro_cliente, codigo_adicional ) )`)
+    .select(`*, retiradas_pedido_itens ( *, itens_pedido ( id, produto_nome, largura, altura, quantidade, vidro_cliente, codigo_adicional, produtos ( unidade ) ) )`)
     .eq('pedido_id', pedidoId)
     .order('dt_retirada', { ascending: false })
     .order('created_at', { ascending: false });
@@ -66,7 +66,7 @@ export async function createRetirada(
   const { data: itensInseridos, error: errItens } = await supabase
     .from('retiradas_pedido_itens')
     .insert(itensComRetiradaId as never)
-    .select(`*, itens_pedido ( id, produto_nome, largura, altura, quantidade, vidro_cliente, codigo_adicional )`);
+    .select(`*, itens_pedido ( id, produto_nome, largura, altura, quantidade, vidro_cliente, codigo_adicional, produtos ( unidade ) )`);
 
   if (errItens) {
     console.error('createRetirada itens:', errItens);
