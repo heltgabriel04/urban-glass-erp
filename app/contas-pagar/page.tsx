@@ -7,6 +7,7 @@ import { formatBRL } from "@/lib/formatters";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import DateInput from "@/components/ui/DateInput";
 import SearchInput from "@/components/ui/SearchInput";
+import { registrarLog } from "@/services/log.service";
 
 interface PlanoItem { id: number; codigo_estruturado: string; descricao: string; }
 
@@ -140,23 +141,28 @@ export default function ContasPagarPage() {
   async function salvarConta() {
     if (!form.descricao.trim() || form.valor <= 0) return;
     setSalvando(true);
+    // Não inclui `status` aqui: editar uma conta não deve reabrir uma que já
+    // está paga. Status só muda via confirmarPagamento/desfazerPagamento.
     const payload = {
       tipo: "Saída",
       descricao: form.descricao.trim(),
       valor: form.valor,
-      status: "Pendente",
       vencimento: form.vencimento || null,
       dt_emissao: form.dt_emissao || null,
       documento: form.documento.trim() || null,
       fornecedor: form.fornecedor.trim() || null,
       obs: form.obs.trim() || null,
       plano_contas_id: form.plano_contas_id ? Number(form.plano_contas_id) : null,
-      pedido_id: null, cliente_id: null,
     };
     if (editId) {
+      registrarLog({
+        acao: "editou", tabela: "lancamentos", registro_id: String(editId),
+        descricao: `Editou conta a pagar: ${payload.descricao}`,
+        campos_alterados: { valor: payload.valor, vencimento: payload.vencimento },
+      });
       await supabase.from("lancamentos").update(payload as never).eq("id", editId);
     } else {
-      await supabase.from("lancamentos").insert([payload] as never);
+      await supabase.from("lancamentos").insert([{ ...payload, status: "Pendente", pedido_id: null, cliente_id: null }] as never);
     }
     setSalvando(false);
     closeModal();
@@ -166,6 +172,11 @@ export default function ContasPagarPage() {
   async function confirmarPagamento() {
     if (!pagarId || !dtPgto) return;
     setSalvando(true);
+    registrarLog({
+      acao: "pagou", tabela: "lancamentos", registro_id: String(pagarId),
+      descricao: `Marcou conta a pagar #${pagarId} como Paga`,
+      campos_alterados: { status: { de: "Pendente", para: "Pago" }, dt_pagamento: dtPgto },
+    });
     await supabase.from("lancamentos").update({ status: "Pago", dt_pagamento: dtPgto } as never).eq("id", pagarId);
     setSalvando(false);
     closeModal();
@@ -174,12 +185,23 @@ export default function ContasPagarPage() {
 
   async function desfazerPagamento(id: number) {
     if (!confirm("Desfazer pagamento e voltar para Em aberto?")) return;
+    registrarLog({
+      acao: "desfez_pagamento", tabela: "lancamentos", registro_id: String(id),
+      descricao: `Desfez pagamento da conta a pagar #${id}`,
+      campos_alterados: { status: { de: "Pago", para: "Pendente" } },
+    });
     await supabase.from("lancamentos").update({ status: "Pendente", dt_pagamento: null } as never).eq("id", id);
     load();
   }
 
   async function excluir(id: number) {
     if (!confirm("Excluir esta conta a pagar?")) return;
+    const conta = contas.find(c => c.id === id);
+    registrarLog({
+      acao: "excluiu", tabela: "lancamentos", registro_id: String(id),
+      descricao: `Excluiu conta a pagar: ${conta?.descricao ?? id}`,
+      campos_alterados: { valor: conta?.valor, status: conta?.status },
+    });
     await supabase.from("lancamentos").delete().eq("id", id);
     load();
   }
