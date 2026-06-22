@@ -663,6 +663,9 @@ export default function PedidoDetalhe() {
           {(temOtimizacao || todosChapa) && (
             <a href={"/pedidos/" + pedido.id + "/etiquetas"} className="btn bg sm" style={{ textDecoration:"none" }}>🏷 Etiquetas</a>
           )}
+          {temItens && (
+            <a href={`/pedidos/${id}/retiradas`} className="btn bg sm" style={{ textDecoration:"none" }}>🚚 Retiradas</a>
+          )}
           {podeChecklist && (
             <a
               href={`/pedidos/${id}/checklist`}

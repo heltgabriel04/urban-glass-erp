@@ -4,6 +4,7 @@ import { registrarLog } from './log.service';
 import { isChapaInteira } from '@/lib/chapas';
 import { registrarMovimentacao, reverterMovimentacao } from './estoqueMovimentacoes.service';
 import { registrarMovimentoCliente, deletarMovimentacoesPorPedido } from './materialCliente.service';
+import { deletarRetiradasPorPedido } from './retiradas.service';
 
 export async function getPedidos(filtroStatus?: StatusPedido) {
   let query = supabase
@@ -277,6 +278,7 @@ export async function deletarPedido(pedidoId: string): Promise<{ ok: boolean; er
   await supabase.from('quebras').delete().eq('pedido_id', pedidoId);
   await supabase.from('nao_conformidades').delete().eq('pedido_id', pedidoId);
   await supabase.from('retalhos_uso').delete().eq('pedido_id', pedidoId);
+  await deletarRetiradasPorPedido(pedidoId);
   await supabase.from('itens_pedido').delete().eq('pedido_id', pedidoId);
   await supabase.from('historico_otimizador').delete().eq('pedido_id', pedidoId);
   await supabase.from('checklist_expedicao').delete().eq('pedido_id', pedidoId);

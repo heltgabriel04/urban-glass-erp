@@ -304,6 +304,45 @@ export interface ItemPedido {
 
 export type ItemPedidoInsert = Omit<ItemPedido, 'id' | 'created_at' | 'produtos'>;
 
+// ─── RETIRADA PARCIAL (viagem) ─────────────────────────────
+export interface RetiradaPedido {
+  id: string;
+  pedido_id: string;
+  dt_retirada: string;
+  motorista: string | null;
+  veiculo: string | null;
+  obs: string | null;
+  created_at: string;
+  retiradas_pedido_itens?: RetiradaPedidoItem[];
+}
+
+export type RetiradaPedidoInsert = Omit<RetiradaPedido, 'id' | 'created_at' | 'retiradas_pedido_itens'>;
+
+export interface RetiradaPedidoItem {
+  id: number;
+  retirada_id: string;
+  item_pedido_id: number;
+  quantidade: number;
+  obs: string | null;
+  created_at: string;
+  itens_pedido?: Pick<ItemPedido, 'id' | 'produto_nome' | 'largura' | 'altura' | 'quantidade' | 'vidro_cliente' | 'codigo_adicional'>;
+}
+
+export type RetiradaPedidoItemInsert = Omit<RetiradaPedidoItem, 'id' | 'created_at' | 'itens_pedido'>;
+
+export type StatusSaldoRetirada = 'Pendente' | 'Parcial' | 'Retirado';
+
+export interface SaldoItemRetirada {
+  item_pedido_id: number;
+  produto_nome: string;
+  largura: number;
+  altura: number;
+  quantidade_total: number;
+  quantidade_retirada: number;
+  quantidade_pendente: number;
+  status: StatusSaldoRetirada;
+}
+
 // ─── CHECKLIST DE EXPEDIÇÃO ────────────────────────────────
 export interface ChecklistItemData {
   id: string;
@@ -728,6 +767,8 @@ export type Database = {
       historico_nc:            { Row: HistoricoNC;        Insert: HistoricoNCInsert      };
       quebras:                 { Row: Quebra;             Insert: QuebraInsert;          Update: QuebraUpdate          };
       retrabalhos:             { Row: Retrabalho;         Insert: RetrabalhoInsert;      Update: RetrabalhoUpdate      };
+      retiradas_pedido:        { Row: RetiradaPedido;     Insert: RetiradaPedidoInsert     };
+      retiradas_pedido_itens:  { Row: RetiradaPedidoItem; Insert: RetiradaPedidoItemInsert };
     };
     Views: {
       financeiro_clientes:              { Row: FinanceiroCliente         };
