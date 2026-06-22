@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidoById } from "@/services/pedidos.service";
-import { getRetiradasPorPedido, createRetirada, deletarRetirada, calcularSaldoItens } from "@/services/retiradas.service";
+import { getRetiradasPorPedido, createRetirada, updateRetirada, deletarRetirada, calcularSaldoItens } from "@/services/retiradas.service";
 import { useToast } from "@/components/ui/toast";
 import DateInput from "@/components/ui/DateInput";
 import { formatDate } from "@/lib/formatters";
@@ -35,6 +35,7 @@ export default function RetiradasPedidoPage() {
   const [novoMotorista, setNovoMotorista] = useState("");
   const [novoVeiculo, setNovoVeiculo]     = useState("");
   const [selecao, setSelecao]             = useState<Record<number, SelecaoItem>>({});
+  const [editandoId, setEditandoId]       = useState<string | null>(null);
 
   const [retiradaImprimir, setRetiradaImprimir] = useState<RetiradaPedido | null>(null);
 
@@ -51,12 +52,18 @@ export default function RetiradasPedidoPage() {
     setNovaData(hoje());
     setNovoMotorista("");
     setNovoVeiculo("");
+    setEditandoId(null);
     setLoading(false);
   }
 
   const saldo: SaldoItemRetirada[] = useMemo(
     () => pedido ? calcularSaldoItens(pedido.itens_pedido ?? [], retiradas) : [],
     [pedido, retiradas]
+  );
+
+  const saldoForm: SaldoItemRetirada[] = useMemo(
+    () => pedido ? calcularSaldoItens(pedido.itens_pedido ?? [], editandoId ? retiradas.filter(r => r.id !== editandoId) : retiradas) : [],
+    [pedido, retiradas, editandoId]
   );
 
   const totalPecasPedido   = saldo.reduce((a, s) => a + s.quantidade_total, 0);
@@ -103,17 +110,41 @@ export default function RetiradasPedidoPage() {
 
     if (itensPayload.length === 0) { toast("Selecione ao menos um item e a quantidade", "warn"); return; }
 
+    const dadosHeader = { dt_retirada: novaData, motorista: novoMotorista || null, veiculo: novoVeiculo || null, obs: null };
+
     setSalvando(true);
-    const res = await createRetirada(
-      id,
-      { dt_retirada: novaData, motorista: novoMotorista || null, veiculo: novoVeiculo || null, obs: null },
-      itensPayload
-    );
+    const res = editandoId
+      ? await updateRetirada(editandoId, id, dadosHeader, itensPayload)
+      : await createRetirada(id, dadosHeader, itensPayload);
     setSalvando(false);
 
-    if (!res) { toast("Erro ao registrar retirada", "err"); return; }
-    toast("✓ Retirada registrada");
+    if (!res) { toast(editandoId ? "Erro ao salvar alterações" : "Erro ao registrar retirada", "err"); return; }
+    toast(editandoId ? "✓ Retirada atualizada" : "✓ Retirada registrada");
     await load();
+  }
+
+  function iniciarEdicao(r: RetiradaPedido) {
+    const saldoBase = pedido ? calcularSaldoItens(pedido.itens_pedido ?? [], retiradas.filter(x => x.id !== r.id)) : [];
+    const sel: Record<number, SelecaoItem> = {};
+    saldoBase.forEach(s => { sel[s.item_pedido_id] = { sel: false, quantidade: 0, obs: "" }; });
+    (r.retiradas_pedido_itens ?? []).forEach(it => {
+      sel[it.item_pedido_id] = { sel: true, quantidade: it.quantidade, obs: it.obs ?? "" };
+    });
+    setSelecao(sel);
+    setEditandoId(r.id);
+    setNovaData(r.dt_retirada);
+    setNovoMotorista(r.motorista ?? "");
+    setNovoVeiculo(r.veiculo ?? "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelarEdicao() {
+    const novoSaldo = pedido ? calcularSaldoItens(pedido.itens_pedido ?? [], retiradas) : [];
+    setSelecao(Object.fromEntries(novoSaldo.map(s => [s.item_pedido_id, { sel: false, quantidade: 0, obs: "" }])));
+    setNovaData(hoje());
+    setNovoMotorista("");
+    setNovoVeiculo("");
+    setEditandoId(null);
   }
 
   async function handleExcluirRetirada(retiradaId: string) {
@@ -177,9 +208,11 @@ export default function RetiradasPedidoPage() {
             </div>
           )}
 
-          {/* ─── Registrar retirada ─── */}
-          <div className="card">
-            <div className="ct">Registrar retirada</div>
+          {/* ─── Registrar / editar retirada ─── */}
+          <div className="card" style={editandoId ? { border: "1px solid var(--acc)" } : undefined}>
+            <div className="ct">
+              {editandoId ? `Editar Retirada · Viagem ${numeroViagem(retiradas.find(r => r.id === editandoId)!)}` : "Registrar retirada"}
+            </div>
 
             <div className="fr3" style={{ marginBottom: 14 }}>
               <div className="fg">
@@ -196,7 +229,7 @@ export default function RetiradasPedidoPage() {
               </div>
             </div>
 
-            {saldo.length === 0 ? (
+            {saldoForm.length === 0 ? (
               <div style={{ color: "var(--t3)", fontSize: 13 }}>Este pedido não possui itens cadastrados.</div>
             ) : (
               <div className="tw">
@@ -205,7 +238,7 @@ export default function RetiradasPedidoPage() {
                     <div key={i} style={{ fontSize: 9.5, color: "var(--t3)", textTransform: "uppercase", letterSpacing: 1.2, fontFamily: "'DM Mono', monospace" }}>{h}</div>
                   ))}
                 </div>
-                {saldo.map(s => {
+                {saldoForm.map(s => {
                   const sel = selecao[s.item_pedido_id] ?? { sel: false, quantidade: 0, obs: "" };
                   const disponivel = s.quantidade_pendente > 0;
                   return (
@@ -255,9 +288,12 @@ export default function RetiradasPedidoPage() {
               </div>
             )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
+              {editandoId && (
+                <button className="btn bg sm" onClick={cancelarEdicao} disabled={salvando}>Cancelar edição</button>
+              )}
               <button className="btn bp sm" onClick={handleSalvarRetirada} disabled={salvando}>
-                {salvando ? "Salvando..." : "Registrar Retirada"}
+                {salvando ? "Salvando..." : editandoId ? "Salvar Alterações" : "Registrar Retirada"}
               </button>
             </div>
           </div>
@@ -272,7 +308,7 @@ export default function RetiradasPedidoPage() {
                 {retiradas.map(r => {
                   const aberta = expandida === r.id;
                   return (
-                    <div key={r.id} style={{ border: "1px solid var(--b1)", borderRadius: "var(--r2)", overflow: "hidden" }}>
+                    <div key={r.id} style={{ border: `1px solid ${editandoId === r.id ? "var(--acc)" : "var(--b1)"}`, borderRadius: "var(--r2)", overflow: "hidden" }}>
                       <div
                         style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", cursor: "pointer", background: "var(--surf2)" }}
                         onClick={() => setExpandida(aberta ? null : r.id)}
@@ -282,6 +318,7 @@ export default function RetiradasPedidoPage() {
                         <div style={{ fontSize: 12, color: "var(--t3)" }}>{r.motorista || "—"}{r.veiculo ? ` · ${r.veiculo}` : ""}</div>
                         <div style={{ fontSize: 12, color: "var(--t3)" }}>{totalPecas(r)} peça(s)</div>
                         <div style={{ flex: 1 }} />
+                        <button className="btn bg xs" onClick={e => { e.stopPropagation(); iniciarEdicao(r); }}>✏ Editar</button>
                         <button className="btn bg xs" onClick={e => { e.stopPropagation(); handleImprimir(r); }}>🖨 Romaneio</button>
                         <button className="btn bw xs" onClick={e => { e.stopPropagation(); handleExcluirRetirada(r.id); }}>🗑 Excluir</button>
                         <span style={{ color: "var(--t3)" }}>{aberta ? "▲" : "▼"}</span>

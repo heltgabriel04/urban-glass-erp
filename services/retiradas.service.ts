@@ -83,6 +83,40 @@ export async function createRetirada(
   return { ...(retirada as RetiradaPedido), retiradas_pedido_itens: itensInseridos as never };
 }
 
+/** Substitui data/motorista/veículo e a lista de itens de uma retirada já registrada. */
+export async function updateRetirada(
+  retiradaId: string,
+  pedidoId: string,
+  dados: Omit<RetiradaPedidoInsert, 'pedido_id'>,
+  itens: Array<Pick<RetiradaPedidoItemInsert, 'item_pedido_id' | 'quantidade' | 'obs'>>
+): Promise<RetiradaPedido | null> {
+  if (itens.length === 0) { console.error('updateRetirada: nenhum item informado'); return null; }
+
+  const { error: errUpd } = await supabase.from('retiradas_pedido').update(dados as never).eq('id', retiradaId);
+  if (errUpd) { console.error('updateRetirada:', errUpd); return null; }
+
+  const { error: errDel } = await supabase.from('retiradas_pedido_itens').delete().eq('retirada_id', retiradaId);
+  if (errDel) { console.error('updateRetirada itens (delete):', errDel); return null; }
+
+  const itensComRetiradaId = itens.map(i => ({ ...i, retirada_id: retiradaId }));
+  const { data: itensInseridos, error: errIns } = await supabase
+    .from('retiradas_pedido_itens')
+    .insert(itensComRetiradaId as never)
+    .select(`*, itens_pedido ( id, produto_nome, largura, altura, quantidade, vidro_cliente, codigo_adicional, produtos ( unidade ) )`);
+
+  if (errIns) { console.error('updateRetirada itens (insert):', errIns); return null; }
+
+  const { data: retiradaAtual } = await supabase.from('retiradas_pedido').select('*').eq('id', retiradaId).single();
+
+  registrarLog({
+    acao: "editou", tabela: "retiradas_pedido", registro_id: retiradaId,
+    descricao: `Editou retirada do pedido ${pedidoId}`,
+    campos_alterados: { motorista: dados.motorista, veiculo: dados.veiculo, qtd_itens: itens.length },
+  });
+
+  return { ...(retiradaAtual as RetiradaPedido), retiradas_pedido_itens: itensInseridos as never };
+}
+
 export async function deletarRetirada(retiradaId: string, pedidoId: string): Promise<{ ok: boolean; erro?: string }> {
   const { error } = await supabase.from('retiradas_pedido').delete().eq('id', retiradaId);
   if (error) { console.error('deletarRetirada:', error); return { ok: false, erro: error.message }; }
