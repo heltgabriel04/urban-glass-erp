@@ -156,6 +156,26 @@ export default function EtiquetasPage() {
         const totalGeral = chapas.reduce((s, c) => s + c.placed.length, 0);
         const ets: Etiqueta[] = [];
 
+        // Fila de códigos adicionais por dimensão (largura/altura, em qualquer ordem
+        // por causa de peças rotacionadas), para casar com as peças já cortadas.
+        const codigoFila = new Map<string, { codigo: string; restante: number }[]>();
+        (ped?.itens_pedido ?? []).forEach((item) => {
+          if (!item.codigo_adicional) return;
+          const key = [item.largura, item.altura].sort((a, b) => a - b).join("x");
+          const fila = codigoFila.get(key) ?? [];
+          fila.push({ codigo: item.codigo_adicional, restante: item.quantidade });
+          codigoFila.set(key, fila);
+        });
+        function buscarCodigo(l: number, a: number): string | null {
+          const key = [l, a].sort((x, y) => x - y).join("x");
+          const fila = codigoFila.get(key);
+          if (!fila || fila.length === 0) return null;
+          const entry = fila[0];
+          entry.restante--;
+          if (entry.restante <= 0) fila.shift();
+          return entry.codigo;
+        }
+
         chapas.forEach((chapa, ci) => {
           chapa.placed.forEach((peca, pi) => {
             const pidDaPeca = (peca as any).pedidoId ?? id;
@@ -174,6 +194,7 @@ export default function EtiquetasPage() {
               qrData: ped?.status === "Entregue"
                 ? `URBAN GLASS\nPedido: ${pidDaPeca}\nCliente: ${ped?.clientes?.nome ?? ""}\nMaterial: ${peca.prod || chapa.prod}\nMedidas: ${peca.l}x${peca.a}mm\nLote: ${lote}`
                 : `https://urbanglasserp.vercel.app/pedidos/${pidDaPeca}/producao`,
+              codigoAdicional:   pidDaPeca === id ? buscarCodigo(peca.l, peca.a) : null,
             });
           });
         });
