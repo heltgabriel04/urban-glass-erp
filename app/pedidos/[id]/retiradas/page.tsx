@@ -36,6 +36,7 @@ export default function RetiradasPedidoPage() {
   const [novoVeiculo, setNovoVeiculo]     = useState("");
   const [selecao, setSelecao]             = useState<Record<number, SelecaoItem>>({});
   const [editandoId, setEditandoId]       = useState<string | null>(null);
+  const [filtroForm, setFiltroForm]       = useState<"pendentes" | "todos">("pendentes");
 
   const [retiradaImprimir, setRetiradaImprimir] = useState<RetiradaPedido | null>(null);
 
@@ -65,6 +66,12 @@ export default function RetiradasPedidoPage() {
     () => pedido ? calcularSaldoItens(pedido.itens_pedido ?? [], editandoId ? retiradas.filter(r => r.id !== editandoId) : retiradas) : [],
     [pedido, retiradas, editandoId]
   );
+
+  const itensExibidos = filtroForm === "pendentes" ? saldoForm.filter(s => s.quantidade_pendente > 0) : saldoForm;
+
+  const totalSelecionado = Object.values(selecao)
+    .filter(v => v.sel)
+    .reduce((a, v) => a + v.quantidade, 0);
 
   const totalPecasPedido   = saldo.reduce((a, s) => a + s.quantidade_total, 0);
   const totalPecasRetirado = saldo.reduce((a, s) => a + s.quantidade_retirada, 0);
@@ -232,13 +239,37 @@ export default function RetiradasPedidoPage() {
             {saldoForm.length === 0 ? (
               <div style={{ color: "var(--t3)", fontSize: 13 }}>Este pedido não possui itens cadastrados.</div>
             ) : (
-              <div className="tw">
+              <>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 10 }}>
+                  <div style={{ display: "flex", gap: "4px", borderBottom: "1px solid var(--b1)" }}>
+                    {([
+                      { key: "pendentes", label: "Restantes" },
+                      { key: "todos",     label: "Todos" },
+                    ] as { key: "pendentes" | "todos"; label: string }[]).map(t => (
+                      <button key={t.key} onClick={() => setFiltroForm(t.key)} style={{
+                        padding: "6px 14px", fontSize: "12px", fontWeight: 700, border: "none", cursor: "pointer",
+                        background: "transparent", borderBottom: filtroForm === t.key ? "2px solid var(--acc)" : "2px solid transparent",
+                        color: filtroForm === t.key ? "var(--acc)" : "var(--t3)", marginBottom: "-1px", letterSpacing: "0.04em",
+                      }}>{t.label}</button>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: totalSelecionado > 0 ? "var(--acc)" : "var(--t3)" }}>
+                    📦 {totalSelecionado} peça(s) selecionada(s) para saída
+                  </div>
+                </div>
+
+                {itensExibidos.length === 0 ? (
+                  <div style={{ color: "var(--t3)", fontSize: 13, padding: "10px 0" }}>
+                    {filtroForm === "pendentes" ? "Nenhuma peça pendente — tudo já foi retirado." : "Nenhum item encontrado."}
+                  </div>
+                ) : (
+                <div className="tw">
                 <div style={{ display: "grid", gridTemplateColumns: "32px 2.2fr 110px 90px 110px 2fr", gap: 10, padding: "10px 14px", background: "var(--surf2)", borderBottom: "1px solid var(--b1)" }}>
                   {["", "Produto / Código", "Dimensão (mm)", "Pendente", "Qtd a retirar", "Obs. da peça"].map((h, i) => (
                     <div key={i} style={{ fontSize: 9.5, color: "var(--t3)", textTransform: "uppercase", letterSpacing: 1.2, fontFamily: "'DM Mono', monospace" }}>{h}</div>
                   ))}
                 </div>
-                {saldoForm.map(s => {
+                {itensExibidos.map(s => {
                   const sel = selecao[s.item_pedido_id] ?? { sel: false, quantidade: 0, obs: "" };
                   const disponivel = s.quantidade_pendente > 0;
                   return (
@@ -285,7 +316,9 @@ export default function RetiradasPedidoPage() {
                     </div>
                   );
                 })}
-              </div>
+                </div>
+                )}
+              </>
             )}
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
