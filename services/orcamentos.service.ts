@@ -254,6 +254,33 @@ export async function deletarOrcamento(orcamentoId: string): Promise<boolean> {
   return true;
 }
 
+// ─── Storage: orçamento assinado pelo cliente ───────────────
+const BUCKET_ASSINADO = 'orcamentos-assinados';
+
+export async function uploadArquivoAssinado(orcamentoId: string, file: File): Promise<string | null> {
+  const ext  = file.name.split('.').pop() ?? 'pdf';
+  const path = `${orcamentoId}/${Date.now()}_assinado.${ext}`;
+  const { error } = await supabase.storage.from(BUCKET_ASSINADO).upload(path, file, { upsert: false });
+  if (error) { console.error('uploadArquivoAssinado:', error); return null; }
+  const { data } = supabase.storage.from(BUCKET_ASSINADO).getPublicUrl(path);
+
+  registrarLog({
+    acao: "anexou", tabela: "orcamentos", registro_id: orcamentoId,
+    descricao: `Anexou orçamento assinado em ${orcamentoId}`,
+  });
+  return data.publicUrl;
+}
+
+export async function deleteArquivoAssinado(url: string): Promise<boolean> {
+  const marker = `/${BUCKET_ASSINADO}/`;
+  const idx = url.indexOf(marker);
+  if (idx === -1) return false;
+  const path = url.slice(idx + marker.length);
+  const { error } = await supabase.storage.from(BUCKET_ASSINADO).remove([path]);
+  if (error) { console.error('deleteArquivoAssinado:', error); return false; }
+  return true;
+}
+
 export async function getProximoIdOrcamento(): Promise<string> {
   const { data } = await supabase
     .from('orcamentos')

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
-import { getOrcamentoById, updateOrcamento, aprovarOrcamento, rejeitarOrcamento } from "@/services/orcamentos.service";
+import { getOrcamentoById, updateOrcamento, aprovarOrcamento, rejeitarOrcamento, uploadArquivoAssinado, deleteArquivoAssinado } from "@/services/orcamentos.service";
 import { formatBRL, formatDate, formatM2 } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import { supabase } from "@/lib/supabase/client";
@@ -33,6 +33,8 @@ export default function OrcamentoDetalhe() {
   const [modalRejeitar, setModalRejeitar] = useState(false);
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
   const [obsRejeicao, setObsRejeicao] = useState("");
+  const [uploadandoAssinado, setUploadandoAssinado] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const MOTIVOS = ["Preço", "Prazo de entrega", "Prazo de pagamento", "Transporte", "Desistência"];
 
@@ -130,6 +132,28 @@ export default function OrcamentoDetalhe() {
     setSalvando(false);
     if (result) { toast("Orçamento voltou para Rascunho"); load(); }
     else toast("Erro ao atualizar", "err");
+  }
+
+  async function handleUploadAssinado(file: File) {
+    setUploadandoAssinado(true);
+    const url = await uploadArquivoAssinado(id, file);
+    if (url) {
+      await updateOrcamento(id, { arquivo_assinado_url: url } as any);
+      toast("Orçamento assinado salvo");
+      load();
+    } else {
+      toast("Erro ao enviar arquivo", "err");
+    }
+    setUploadandoAssinado(false);
+  }
+
+  async function handleRemoverAssinado() {
+    if (!orc.arquivo_assinado_url) return;
+    if (!confirm("Remover o arquivo assinado anexado?")) return;
+    await deleteArquivoAssinado(orc.arquivo_assinado_url);
+    await updateOrcamento(id, { arquivo_assinado_url: null } as any);
+    toast("Arquivo removido");
+    load();
   }
 
   if (loading) return <AppLayout><div className="con"><div className="loading">Carregando...</div></div></AppLayout>;
@@ -291,6 +315,37 @@ export default function OrcamentoDetalhe() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Orçamento Assinado */}
+          <div className="card" style={{ padding: "20px 24px" }}>
+            <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, marginBottom: "16px", letterSpacing: ".06em" }}>ORÇAMENTO ASSINADO</div>
+
+            {orc.arquivo_assinado_url ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px", background: "rgba(16,185,129,.08)", borderRadius: "8px", border: "1px solid rgba(16,185,129,.2)" }}>
+                <span style={{ fontSize: "18px" }}>📄</span>
+                <a href={orc.arquivo_assinado_url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--ok)", fontWeight: 600, fontSize: "13px", textDecoration: "underline" }}>
+                  Ver arquivo assinado
+                </a>
+                <button className="btn bg sm" onClick={() => fileInputRef.current?.click()} disabled={uploadandoAssinado}>
+                  {uploadandoAssinado ? "Enviando..." : "Substituir"}
+                </button>
+                <button className="btn bw sm" onClick={handleRemoverAssinado} disabled={uploadandoAssinado}>Remover</button>
+                <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: "none" }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadAssinado(f); e.target.value = ""; }} />
+              </div>
+            ) : (
+              <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px", padding: "20px", border: "2px dashed var(--b2)", borderRadius: "8px", cursor: uploadandoAssinado ? "default" : "pointer", background: "var(--surf2)" }}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f && !uploadandoAssinado) handleUploadAssinado(f); }}>
+                <span style={{ fontSize: "20px" }}>📎</span>
+                <span style={{ fontSize: "12px", color: "var(--t3)" }}>
+                  {uploadandoAssinado ? "Enviando..." : "Arraste ou clique para anexar o orçamento assinado pelo cliente (PDF ou imagem)"}
+                </span>
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: "none" }} disabled={uploadandoAssinado}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadAssinado(f); e.target.value = ""; }} />
+              </label>
+            )}
           </div>
 
           {/* Previsão de Entrega */}
