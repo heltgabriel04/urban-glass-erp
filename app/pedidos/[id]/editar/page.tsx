@@ -476,8 +476,8 @@ export default function EditarPedidoPage() {
   const toggleBase:   React.CSSProperties = { padding:"5px 14px", borderRadius:"6px", fontSize:"12px", fontWeight:600, cursor:"pointer", border:"1px solid var(--b2)", transition:"all 0.15s", fontFamily:"'DM Mono',monospace" };
   const toggleAtivo:  React.CSSProperties = { ...toggleBase, background:"var(--acc)", color:"#000", borderColor:"var(--acc)" };
   const toggleInativo:React.CSSProperties = { ...toggleBase, background:"transparent", color:"var(--t3)" };
-  const colsM2 = "2fr 70px 70px 50px 90px 90px 90px 90px 36px";
-  const colsMl = "2fr 90px 90px 50px 90px 90px 90px 36px";
+  const colsM2 = "2fr 70px 70px 50px 90px 90px 90px 36px 100px";
+  const colsMl = "2fr 90px 90px 50px 90px 90px 36px 100px";
 
   const clienteOpts = clientes.map(c => ({ id: c.id, label: c.nome, sub: c.cidade ?? undefined }));
   const produtoOpts = produtos.map(p => ({ id: p.id, label: p.nome, sub: formatBRL(p.valor) + "/m²" }));
@@ -651,7 +651,7 @@ export default function EditarPedidoPage() {
                 style={{ width:"12px", height:"12px", accentColor:"var(--warn)", cursor:"pointer" }}
                 title="Marcar todos como vidro do cliente"
               />
-              <span style={{ fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px", fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap" }}>V.Cliente</span>
+              <span style={{ fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px", fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap" }}>Vidro Cliente</span>
             </div>
           </div>
 
