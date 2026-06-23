@@ -1,5 +1,5 @@
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
-import { formatBRL, formatDate, formatM2 } from "@/lib/formatters";
+import { formatDate, formatM2 } from "@/lib/formatters";
 import type { Pedido } from "@/types";
 
 const AZUL = "#2d5fa6";
@@ -40,20 +40,11 @@ const styles = StyleSheet.create({
   colQtd: { width: "10%", textAlign: "center" },
   colCodigo: { width: "12%" },
 
-  totalBox: {
-    alignSelf: "flex-end", minWidth: 220, backgroundColor: "#f0f4ff",
-    borderRadius: 6, padding: 12, marginBottom: 18,
-  },
-  totalLinha: { flexDirection: "row", justifyContent: "space-between", paddingTop: 8, borderTopWidth: 2, borderTopColor: AZUL },
-  totalLabel: { fontSize: 11, fontWeight: 700, color: AZUL },
-  totalValor: { fontSize: 13, fontWeight: 700, color: AZUL },
-
   footer: {
     borderTopWidth: 2, borderTopColor: AZUL, paddingTop: 8, marginTop: 12,
-    flexDirection: "row", justifyContent: "space-between",
   },
   footerTexto: { fontSize: 7, color: "#333" },
-  footerAviso: { fontSize: 7, color: "#c00", fontStyle: "italic" },
+  footerAviso: { fontSize: 7, color: "#c00", fontStyle: "italic", marginTop: 4 },
 });
 
 export function RomaneioDocument({ pedido }: { pedido: Pedido }) {
@@ -130,13 +121,6 @@ export function RomaneioDocument({ pedido }: { pedido: Pedido }) {
               </View>
             );
           })}
-        </View>
-
-        <View style={styles.totalBox}>
-          <View style={styles.totalLinha}>
-            <Text style={styles.totalLabel}>VALOR TOTAL</Text>
-            <Text style={styles.totalValor}>{formatBRL(pedido.valor_total)}</Text>
-          </View>
         </View>
 
         <View style={styles.footer}>
