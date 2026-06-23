@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
-import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido } from "@/services/pedidos.service";
+import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido, uploadRomaneioAssinado, deleteRomaneioAssinado } from "@/services/pedidos.service";
 import { getLancamentosPorPedido, deletarLancamento, createLancamento, updateLancamento } from "@/services/financeiro.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, updateNaoConformidade } from "@/services/qualidade.service";
@@ -144,6 +144,8 @@ export default function PedidoDetalhe() {
   const [creditoCliente, setCreditoCliente] = useState(0);
   const [loading, setLoading]           = useState(true);
   const [salvando, setSalvando]         = useState(false);
+  const [uploadandoRomaneio, setUploadandoRomaneio] = useState(false);
+  const fileInputRomaneioRef = useRef<HTMLInputElement>(null);
 
   // Qualidade
   const [ncs, setNcs]               = useState<NaoConformidade[]>([]);
@@ -603,6 +605,28 @@ export default function PedidoDetalhe() {
     setSalvando(false);
     if (!result) { toast("Erro ao aplicar crédito", "err"); return; }
     toast(`✓ ${formatBRL(creditoCliente - result.creditoRestante)} de crédito aplicado`);
+    await load();
+  }
+
+  async function handleUploadRomaneioAssinado(file: File) {
+    setUploadandoRomaneio(true);
+    const url = await uploadRomaneioAssinado(id, file);
+    if (url) {
+      await updatePedido(id, { romaneio_assinado_url: url } as any);
+      toast("Romaneio assinado salvo");
+      await load();
+    } else {
+      toast("Erro ao enviar arquivo", "err");
+    }
+    setUploadandoRomaneio(false);
+  }
+
+  async function handleRemoverRomaneioAssinado() {
+    if (!pedido?.romaneio_assinado_url) return;
+    if (!confirm("Remover o romaneio assinado anexado?")) return;
+    await deleteRomaneioAssinado(pedido.romaneio_assinado_url);
+    await updatePedido(id, { romaneio_assinado_url: null } as any);
+    toast("Arquivo removido");
     await load();
   }
 
@@ -1192,6 +1216,37 @@ export default function PedidoDetalhe() {
                   </tbody>
                 </table>
               </div>
+            )}
+          </div>
+
+          {/* Romaneio Assinado */}
+          <div className="card" style={{ padding: "20px 24px" }}>
+            <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, marginBottom: "16px", letterSpacing: ".06em" }}>ROMANEIO ASSINADO</div>
+
+            {pedido.romaneio_assinado_url ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px", background: "rgba(16,185,129,.08)", borderRadius: "8px", border: "1px solid rgba(16,185,129,.2)" }}>
+                <span style={{ fontSize: "18px" }}>📄</span>
+                <a href={pedido.romaneio_assinado_url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--ok)", fontWeight: 600, fontSize: "13px", textDecoration: "underline" }}>
+                  Ver romaneio assinado
+                </a>
+                <button className="btn bg sm" onClick={() => fileInputRomaneioRef.current?.click()} disabled={uploadandoRomaneio}>
+                  {uploadandoRomaneio ? "Enviando..." : "Substituir"}
+                </button>
+                <button className="btn bw sm" onClick={handleRemoverRomaneioAssinado} disabled={uploadandoRomaneio}>Remover</button>
+                <input ref={fileInputRomaneioRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: "none" }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadRomaneioAssinado(f); e.target.value = ""; }} />
+              </div>
+            ) : (
+              <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px", padding: "20px", border: "2px dashed var(--b2)", borderRadius: "8px", cursor: uploadandoRomaneio ? "default" : "pointer", background: "var(--surf2)" }}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f && !uploadandoRomaneio) handleUploadRomaneioAssinado(f); }}>
+                <span style={{ fontSize: "20px" }}>📎</span>
+                <span style={{ fontSize: "12px", color: "var(--t3)" }}>
+                  {uploadandoRomaneio ? "Enviando..." : "Arraste ou clique para anexar o romaneio assinado na entrega (PDF ou imagem)"}
+                </span>
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: "none" }} disabled={uploadandoRomaneio}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadRomaneioAssinado(f); e.target.value = ""; }} />
+              </label>
             )}
           </div>
         </div>

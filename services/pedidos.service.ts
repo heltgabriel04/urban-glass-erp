@@ -433,6 +433,33 @@ export async function utilizarCreditoEmPedido(
   return { pedido: pedidoAtualizado, creditoRestante };
 }
 
+// ─── Storage: romaneio assinado pelo cliente/motorista ───────────────
+const BUCKET_ROMANEIO_ASSINADO = 'romaneios-assinados';
+
+export async function uploadRomaneioAssinado(pedidoId: string, file: File): Promise<string | null> {
+  const ext  = file.name.split('.').pop() ?? 'pdf';
+  const path = `${pedidoId}/${Date.now()}_assinado.${ext}`;
+  const { error } = await supabase.storage.from(BUCKET_ROMANEIO_ASSINADO).upload(path, file, { upsert: false });
+  if (error) { console.error('uploadRomaneioAssinado:', error); return null; }
+  const { data } = supabase.storage.from(BUCKET_ROMANEIO_ASSINADO).getPublicUrl(path);
+
+  registrarLog({
+    acao: "anexou", tabela: "pedidos", registro_id: pedidoId,
+    descricao: `Anexou romaneio assinado em ${pedidoId}`,
+  });
+  return data.publicUrl;
+}
+
+export async function deleteRomaneioAssinado(url: string): Promise<boolean> {
+  const marker = `/${BUCKET_ROMANEIO_ASSINADO}/`;
+  const idx = url.indexOf(marker);
+  if (idx === -1) return false;
+  const path = url.slice(idx + marker.length);
+  const { error } = await supabase.storage.from(BUCKET_ROMANEIO_ASSINADO).remove([path]);
+  if (error) { console.error('deleteRomaneioAssinado:', error); return false; }
+  return true;
+}
+
 export async function getProximoIdPedido(): Promise<string> {
   const { data } = await supabase
     .from('pedidos')
