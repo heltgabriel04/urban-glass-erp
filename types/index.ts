@@ -275,7 +275,7 @@ export interface Pedido {
   status_history?: StatusHistoryEntry[];
   qr_token?: string;
   romaneio_pdf_url?: string | null;
-  romaneio_assinado_url?: string | null;
+  romaneio_assinado_urls?: string[] | null;
   created_at: string;
   updated_at: string;
   clientes?: Cliente;

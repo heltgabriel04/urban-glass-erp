@@ -433,21 +433,29 @@ export async function utilizarCreditoEmPedido(
   return { pedido: pedidoAtualizado, creditoRestante };
 }
 
-// ─── Storage: romaneio assinado pelo cliente/motorista ───────────────
+// ─── Storage: romaneio(s) assinado(s) pelo cliente/motorista ─────────
+// Um pedido pode ter mais de um romaneio assinado quando é retirado em
+// várias viagens — por isso aceita múltiplos arquivos por upload.
 const BUCKET_ROMANEIO_ASSINADO = 'romaneios-assinados';
 
-export async function uploadRomaneioAssinado(pedidoId: string, file: File): Promise<string | null> {
-  const ext  = file.name.split('.').pop() ?? 'pdf';
-  const path = `${pedidoId}/${Date.now()}_assinado.${ext}`;
-  const { error } = await supabase.storage.from(BUCKET_ROMANEIO_ASSINADO).upload(path, file, { upsert: false });
-  if (error) { console.error('uploadRomaneioAssinado:', error); return null; }
-  const { data } = supabase.storage.from(BUCKET_ROMANEIO_ASSINADO).getPublicUrl(path);
+export async function uploadRomaneioAssinado(pedidoId: string, files: File[]): Promise<string[]> {
+  const urls: string[] = [];
+  for (const file of files) {
+    const ext  = file.name.split('.').pop() ?? 'pdf';
+    const path = `${pedidoId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage.from(BUCKET_ROMANEIO_ASSINADO).upload(path, file, { upsert: false });
+    if (error) { console.error('uploadRomaneioAssinado:', error); continue; }
+    const { data } = supabase.storage.from(BUCKET_ROMANEIO_ASSINADO).getPublicUrl(path);
+    urls.push(data.publicUrl);
+  }
 
-  registrarLog({
-    acao: "anexou", tabela: "pedidos", registro_id: pedidoId,
-    descricao: `Anexou romaneio assinado em ${pedidoId}`,
-  });
-  return data.publicUrl;
+  if (urls.length > 0) {
+    registrarLog({
+      acao: "anexou", tabela: "pedidos", registro_id: pedidoId,
+      descricao: `Anexou ${urls.length} romaneio(s) assinado(s) em ${pedidoId}`,
+    });
+  }
+  return urls;
 }
 
 export async function deleteRomaneioAssinado(url: string): Promise<boolean> {

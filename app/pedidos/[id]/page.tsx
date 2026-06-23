@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido, uploadRomaneioAssinado, deleteRomaneioAssinado } from "@/services/pedidos.service";
@@ -145,7 +145,6 @@ export default function PedidoDetalhe() {
   const [loading, setLoading]           = useState(true);
   const [salvando, setSalvando]         = useState(false);
   const [uploadandoRomaneio, setUploadandoRomaneio] = useState(false);
-  const fileInputRomaneioRef = useRef<HTMLInputElement>(null);
 
   // Qualidade
   const [ncs, setNcs]               = useState<NaoConformidade[]>([]);
@@ -608,12 +607,14 @@ export default function PedidoDetalhe() {
     await load();
   }
 
-  async function handleUploadRomaneioAssinado(file: File) {
+  async function handleUploadRomaneioAssinado(files: File[]) {
+    if (!pedido || files.length === 0) return;
     setUploadandoRomaneio(true);
-    const url = await uploadRomaneioAssinado(id, file);
-    if (url) {
-      await updatePedido(id, { romaneio_assinado_url: url } as any);
-      toast("Romaneio assinado salvo");
+    const urls = await uploadRomaneioAssinado(id, files);
+    if (urls.length > 0) {
+      const existentes = pedido.romaneio_assinado_urls ?? [];
+      await updatePedido(id, { romaneio_assinado_urls: [...existentes, ...urls] } as any);
+      toast(urls.length > 1 ? `${urls.length} romaneios assinados salvos` : "Romaneio assinado salvo");
       await load();
     } else {
       toast("Erro ao enviar arquivo", "err");
@@ -621,11 +622,12 @@ export default function PedidoDetalhe() {
     setUploadandoRomaneio(false);
   }
 
-  async function handleRemoverRomaneioAssinado() {
-    if (!pedido?.romaneio_assinado_url) return;
-    if (!confirm("Remover o romaneio assinado anexado?")) return;
-    await deleteRomaneioAssinado(pedido.romaneio_assinado_url);
-    await updatePedido(id, { romaneio_assinado_url: null } as any);
+  async function handleRemoverRomaneioAssinado(url: string) {
+    if (!pedido) return;
+    if (!confirm("Remover este romaneio assinado?")) return;
+    await deleteRomaneioAssinado(url);
+    const restantes = (pedido.romaneio_assinado_urls ?? []).filter(u => u !== url);
+    await updatePedido(id, { romaneio_assinado_urls: restantes.length > 0 ? restantes : null } as any);
     toast("Arquivo removido");
     await load();
   }
@@ -1219,35 +1221,36 @@ export default function PedidoDetalhe() {
             )}
           </div>
 
-          {/* Romaneio Assinado */}
+          {/* Romaneio(s) Assinado(s) */}
           <div className="card" style={{ padding: "20px 24px" }}>
-            <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, marginBottom: "16px", letterSpacing: ".06em" }}>ROMANEIO ASSINADO</div>
+            <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, marginBottom: "16px", letterSpacing: ".06em" }}>
+              ROMANEIO(S) ASSINADO(S){(pedido.romaneio_assinado_urls?.length ?? 0) > 0 ? ` (${pedido.romaneio_assinado_urls!.length})` : ""}
+            </div>
 
-            {pedido.romaneio_assinado_url ? (
-              <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px", background: "rgba(16,185,129,.08)", borderRadius: "8px", border: "1px solid rgba(16,185,129,.2)" }}>
-                <span style={{ fontSize: "18px" }}>📄</span>
-                <a href={pedido.romaneio_assinado_url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--ok)", fontWeight: 600, fontSize: "13px", textDecoration: "underline" }}>
-                  Ver romaneio assinado
-                </a>
-                <button className="btn bg sm" onClick={() => fileInputRomaneioRef.current?.click()} disabled={uploadandoRomaneio}>
-                  {uploadandoRomaneio ? "Enviando..." : "Substituir"}
-                </button>
-                <button className="btn bw sm" onClick={handleRemoverRomaneioAssinado} disabled={uploadandoRomaneio}>Remover</button>
-                <input ref={fileInputRomaneioRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: "none" }}
-                  onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadRomaneioAssinado(f); e.target.value = ""; }} />
+            {(pedido.romaneio_assinado_urls?.length ?? 0) > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+                {pedido.romaneio_assinado_urls!.map((url, i) => (
+                  <div key={url} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", background: "rgba(16,185,129,.08)", borderRadius: "8px", border: "1px solid rgba(16,185,129,.2)" }}>
+                    <span style={{ fontSize: "16px" }}>📄</span>
+                    <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--ok)", fontWeight: 600, fontSize: "13px", textDecoration: "underline" }}>
+                      Romaneio assinado {i + 1}
+                    </a>
+                    <button className="btn bw sm" onClick={() => handleRemoverRomaneioAssinado(url)} disabled={uploadandoRomaneio}>Remover</button>
+                  </div>
+                ))}
               </div>
-            ) : (
-              <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px", padding: "20px", border: "2px dashed var(--b2)", borderRadius: "8px", cursor: uploadandoRomaneio ? "default" : "pointer", background: "var(--surf2)" }}
-                onDragOver={e => e.preventDefault()}
-                onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f && !uploadandoRomaneio) handleUploadRomaneioAssinado(f); }}>
-                <span style={{ fontSize: "20px" }}>📎</span>
-                <span style={{ fontSize: "12px", color: "var(--t3)" }}>
-                  {uploadandoRomaneio ? "Enviando..." : "Arraste ou clique para anexar o romaneio assinado na entrega (PDF ou imagem)"}
-                </span>
-                <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: "none" }} disabled={uploadandoRomaneio}
-                  onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadRomaneioAssinado(f); e.target.value = ""; }} />
-              </label>
             )}
+
+            <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px", padding: "20px", border: "2px dashed var(--b2)", borderRadius: "8px", cursor: uploadandoRomaneio ? "default" : "pointer", background: "var(--surf2)" }}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoRomaneio) handleUploadRomaneioAssinado(fs); }}>
+              <span style={{ fontSize: "20px" }}>📎</span>
+              <span style={{ fontSize: "12px", color: "var(--t3)" }}>
+                {uploadandoRomaneio ? "Enviando..." : "Arraste ou clique para anexar romaneio(s) assinado(s) na entrega (PDF ou imagem) — dá pra anexar mais de um, ex: uma viagem por retirada"}
+              </span>
+              <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple style={{ display: "none" }} disabled={uploadandoRomaneio}
+                onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadRomaneioAssinado(fs); e.target.value = ""; }} />
+            </label>
           </div>
         </div>
 

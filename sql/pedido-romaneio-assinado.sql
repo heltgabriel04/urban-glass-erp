@@ -1,7 +1,9 @@
--- Upload do romaneio assinado pelo cliente/motorista na entrega.
+-- Upload do(s) romaneio(s) assinado(s) pelo cliente/motorista na entrega.
+-- Array porque um pedido com várias retiradas pode acumular vários
+-- romaneios assinados, um por viagem.
 -- Execute no SQL Editor do Supabase.
 
-ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS romaneio_assinado_url TEXT;
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS romaneio_assinado_urls TEXT[];
 
 -- Bucket de armazenamento para os romaneios assinados
 INSERT INTO storage.buckets (id, name, public)
