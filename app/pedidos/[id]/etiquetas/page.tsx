@@ -427,27 +427,27 @@ export default function EtiquetasPage() {
 
           @page {
             size: 100mm 50mm landscape;
-            margin: 4mm 0mm 0mm 8mm;
+            margin: 4mm 0mm 0mm 10mm;
           }
 
           html, body {
             background: white;
             margin: 0; padding: 0;
-            width: 92mm; height: 50mm;
+            width: 90mm; height: 50mm;
             overflow: visible;
           }
 
           .grid-wrapper {
             display: block;
             padding: 0; margin: 0;
-            width: 92mm;
+            width: 90mm;
             background: white;
             overflow: visible;
           }
 
           .etiqueta {
             display: flex; flex-direction: column;
-            width: 92mm; height: 44mm; /* 50mm da página − 4mm da margem superior do @page */
+            width: 90mm; height: 44mm; /* 50mm da página − 4mm da margem superior do @page */
             box-sizing: border-box;
             border: none; border-radius: 0;
             box-shadow: none; overflow: hidden;
