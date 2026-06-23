@@ -273,6 +273,8 @@ export interface Pedido {
   parcelas: number;
   obs: string;
   status_history?: StatusHistoryEntry[];
+  qr_token?: string;
+  romaneio_pdf_url?: string | null;
   created_at: string;
   updated_at: string;
   clientes?: Cliente;

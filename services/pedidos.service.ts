@@ -237,6 +237,13 @@ export async function avancarStatusPedido(id: string, statusAtual: StatusPedido)
     }
   }
 
+  // Gera o romaneio em PDF pra rota pública do QR da etiqueta (status já é o gatilho
+  // que o QR usa para decidir produção vs romaneio — ver app/api/r/[token]/route.ts)
+  if (res && novoStatus === 'Entregue') {
+    fetch(`/api/pedidos/${id}/gerar-romaneio`, { method: 'POST' })
+      .catch(err => console.warn('gerar-romaneio:', err));
+  }
+
   return res;
 }
 

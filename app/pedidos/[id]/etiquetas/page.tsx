@@ -191,9 +191,7 @@ export default function EtiquetasPage() {
               totalPecasNaChapa: chapa.placed.length,
               totalPecasGeral:   totalGeral,
               loteCorte:         lote,
-              qrData: ped?.status === "Entregue"
-                ? `URBAN GLASS\nPedido: ${pidDaPeca}\nCliente: ${ped?.clientes?.nome ?? ""}\nMaterial: ${peca.prod || chapa.prod}\nMedidas: ${peca.l}x${peca.a}mm\nLote: ${lote}`
-                : `https://urbanglasserp.vercel.app/pedidos/${pidDaPeca}/producao`,
+              qrData: `https://urbanglasserp.vercel.app/api/r/${ped?.qr_token}`,
               codigoAdicional:   pidDaPeca === id ? buscarCodigo(peca.l, peca.a) : null,
             });
           });
@@ -239,9 +237,7 @@ export default function EtiquetasPage() {
                 totalPecasNaChapa: porCaixa,
                 totalPecasGeral:   totalGeral,
                 loteCorte:         lote,
-                qrData: ped?.status === "Entregue"
-                  ? `URBAN GLASS\nPedido: ${id}\nCliente: ${ped?.clientes?.nome ?? ""}\nMaterial: ${item.produto_nome}\nMedidas: ${item.largura}x${item.altura}mm\nLote: ${lote}`
-                  : `https://urbanglasserp.vercel.app/pedidos/${id}/producao`,
+                qrData: `https://urbanglasserp.vercel.app/api/r/${ped?.qr_token}`,
                 modoCaixa:         true,
               });
               caixaIdx++;
@@ -278,9 +274,7 @@ export default function EtiquetasPage() {
                 totalPecasNaChapa: item.quantidade,
                 totalPecasGeral:   totalGeral,
                 loteCorte:         lote,
-                qrData: ped?.status === "Entregue"
-                  ? `URBAN GLASS\nPedido: ${id}\nCliente: ${ped?.clientes?.nome ?? ""}\nMaterial: ${item.produto_nome}\nMedidas: ${item.largura}x${item.altura}mm\nLote: ${lote}`
-                  : `https://urbanglasserp.vercel.app/pedidos/${id}/producao`,
+                qrData: `https://urbanglasserp.vercel.app/api/r/${ped?.qr_token}`,
                 modoVidroCliente:  true,
                 codigoAdicional:   item.codigo_adicional,
               });
