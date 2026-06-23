@@ -71,15 +71,12 @@ function EtiquetaCard({ et, num }: { et: Etiqueta; num: number }) {
             <span className="et-val et-pedido">{et.pedidoId}</span>
           </div>
           <div className="et-linha et-dim">
-            <span className="et-lbl">MEDIDAS</span>
-            <span className="et-val et-medidas">L {et.largura} × H {et.altura} mm</span>
+            <span className="et-lbl">{et.codigoAdicional ? "MEDIDAS / CÓDIGO" : "MEDIDAS"}</span>
+            <span className="et-val et-medidas">
+              L {et.largura} × H {et.altura} mm
+              {et.codigoAdicional && <span className="et-codigo"> · {et.codigoAdicional}</span>}
+            </span>
           </div>
-          {et.codigoAdicional && (
-            <div className="et-linha et-dim">
-              <span className="et-lbl">CÓDIGO</span>
-              <span className="et-val et-codigo">{et.codigoAdicional}</span>
-            </div>
-          )}
           <div className="et-rodape-info">
             {et.modoCaixa ? (
               <>
