@@ -424,31 +424,35 @@ export default function EtiquetasPage() {
 
           @page {
             size: 100mm 50mm landscape;
-            margin: 4mm 0mm 0mm 13mm;
+            margin: 0;
           }
 
           html, body {
             background: white;
             margin: 0; padding: 0;
-            width: 87mm; height: 50mm;
+            width: 100mm; height: 50mm;
             overflow: visible;
           }
 
           .grid-wrapper {
             display: block;
             padding: 0; margin: 0;
-            width: 87mm;
+            width: 100mm;
             background: white;
             overflow: visible;
           }
 
+          /* Centralizada (margin auto) em vez de empurrada com margem fixa:
+             o diálogo de impressão pode forçar "Margins: None" e ignorar o
+             margin do @page, então o respiro fica todo de um lado só. Centralizar
+             aqui é por dentro do próprio elemento e não depende dessa opção. */
           .etiqueta {
             display: flex; flex-direction: column;
-            width: 87mm; height: 44mm; /* 50mm da página − 4mm da margem superior do @page */
+            width: 87mm; height: 44mm; /* 50mm da página − 4mm de respiro no topo */
             box-sizing: border-box;
             border: none; border-radius: 0;
             box-shadow: none; overflow: hidden;
-            margin: 0; padding: 0;
+            margin: 4mm auto 0 auto; padding: 0;
             page-break-after: always; break-after: page;
           }
 
