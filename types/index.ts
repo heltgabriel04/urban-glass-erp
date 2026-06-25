@@ -410,6 +410,7 @@ export interface Retalho {
   altura: number;
   espessura?: number | null;
   m2: number;
+  quantidade?: number;
   chapa_origem: string;
   pedido_origem: string | null;
   localizacao?: string | null;
