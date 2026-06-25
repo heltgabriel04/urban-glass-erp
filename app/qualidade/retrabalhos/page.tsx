@@ -9,7 +9,7 @@ import type { Retrabalho, RetrabalhoInsert, StatusRetrabalho } from "@/types";
 import { supabase } from "@/lib/supabase/client";
 
 const ETAPAS = [
-  "Aguardando otimização","Em Produção – Corte","Qualidade (Corte)",
+  "Planejamento","Em Produção – Corte","Qualidade (Corte)",
   "Em Produção – Lapidação","Qualidade (Lapidação)","Separação","Expedição",
 ];
 

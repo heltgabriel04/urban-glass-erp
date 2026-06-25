@@ -1,7 +1,7 @@
 import type { Pedido } from '@/types';
 
 export const ETAPAS_FLUXO = [
-  'Aguardando otimização',
+  'Planejamento',
   'Em Produção – Corte',
   'Qualidade (Corte)',
   'Em Produção – Lapidação',

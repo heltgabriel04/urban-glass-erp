@@ -3,7 +3,7 @@
 // ============================================================
 
 export type StatusPedido =
-  | 'Aguardando otimização'
+  | 'Planejamento'
   | 'Em Produção – Corte'
   | 'Qualidade (Corte)'
   | 'Em Produção – Lapidação'
@@ -276,6 +276,7 @@ export interface Pedido {
   qr_token?: string;
   romaneio_pdf_url?: string | null;
   romaneio_assinado_urls?: string[] | null;
+  corte_certo_urls?: string[] | null;
   created_at: string;
   updated_at: string;
   clientes?: Cliente;

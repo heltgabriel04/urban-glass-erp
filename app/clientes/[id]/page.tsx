@@ -8,7 +8,7 @@ import { formatBRL, formatDate, formatPercent } from "@/lib/formatters";
 import type { Cliente, Pedido, FinanceiroCliente } from "@/types";
 
 const CHIP: Record<string, string> = {
-  "Aguardando otimização":   "chip cy",
+  "Planejamento":            "chip cy",
   "Em Produção – Corte":     "chip cp",
   "Em Produção – Lapidação": "chip co",
   "Separação":               "chip cb",

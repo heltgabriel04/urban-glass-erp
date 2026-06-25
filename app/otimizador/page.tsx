@@ -201,7 +201,7 @@ function OtimizadorContent() {
     const { data: pedidosAguardando } = await supabase
       .from("pedidos")
       .select("id, clientes(nome), dt_retirada")
-      .eq("status", "Aguardando otimização")
+      .eq("status", "Planejamento")
       .neq("id", pedidoPrincipal);
 
     if (!pedidosAguardando || pedidosAguardando.length === 0) {
@@ -749,11 +749,11 @@ function OtimizadorContent() {
     setZerando(true);
     await supabase.from("otimizacoes").delete().eq("pedido_id", pedidoRef);
     await reverterMovimentacao("otimizacao", pedidoRef);
-    await updatePedido(pedidoRef, { status: "Aguardando otimização" });
+    await updatePedido(pedidoRef, { status: "Planejamento" });
     for (const pid of pedidosSelecionados) {
       await supabase.from("otimizacoes").delete().eq("pedido_id", pid);
       await reverterMovimentacao("otimizacao", pid);
-      await updatePedido(pid, { status: "Aguardando otimização" });
+      await updatePedido(pid, { status: "Planejamento" });
     }
     setResultado(null); setMsg(""); setRetalhosGerados([]); setPedidosSelecionados(new Set()); setRetalhosUsados([]);
     setZerando(false);

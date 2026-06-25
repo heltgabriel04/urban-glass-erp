@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
-import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido, uploadRomaneioAssinado, deleteRomaneioAssinado } from "@/services/pedidos.service";
+import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido, uploadRomaneioAssinado, deleteRomaneioAssinado, uploadCorteCertoPdf, deleteCorteCertoPdf, vincularRetalhoAoPedido, desvincularRetalhoAoPedido, getRetalhosUsadosPorPedido } from "@/services/pedidos.service";
 import { getLancamentosPorPedido, deletarLancamento, createLancamento, updateLancamento } from "@/services/financeiro.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, updateNaoConformidade } from "@/services/qualidade.service";
@@ -32,7 +32,7 @@ const STATUS_COR_NC: Record<StatusNaoConformidade, string> = {
 };
 
 const CHIP: Record<string, string> = {
-  "Aguardando otimização":   "chip cy",
+  "Planejamento":            "chip cy",
   "Em Produção – Corte":     "chip cp",
   "Qualidade (Corte)":       "chip cg",
   "Em Produção – Lapidação": "chip co",
@@ -44,7 +44,7 @@ const CHIP: Record<string, string> = {
 };
 
 const FLUXO = [
-  "Aguardando otimização",
+  "Planejamento",
   "Em Produção – Corte",
   "Qualidade (Corte)",
   "Em Produção – Lapidação",
@@ -139,6 +139,11 @@ export default function PedidoDetalhe() {
   const [lancamentos, setLancamentos]   = useState<Lancamento[]>([]);
   const [otimizacoes, setOtimizacoes]   = useState<HistoricoOtimizador[]>([]);
   const [retiradas, setRetiradas]       = useState<RetiradaPedido[]>([]);
+  const [retalhosUsados, setRetalhosUsados] = useState<Awaited<ReturnType<typeof getRetalhosUsadosPorPedido>>>([]);
+  const [uploadandoCorteCerto, setUploadandoCorteCerto] = useState(false);
+  const [showVincularRetalho, setShowVincularRetalho] = useState(false);
+  const [retalhosDisponiveis, setRetalhosDisponiveis] = useState<Array<{ id: string; produto_nome: string; largura: number; altura: number; m2: number; espessura: number | null; box: string | null; observacao: string | null }>>([]);
+  const [filtroBuscaRetalho, setFiltroBuscaRetalho] = useState("");
   const [clientes, setClientes]         = useState<{ id: number; nome: string }[]>([]);
   const [vendedores, setVendedores]     = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
   const [creditoCliente, setCreditoCliente] = useState(0);
@@ -209,6 +214,8 @@ export default function PedidoDetalhe() {
     setVendedores(vends as Pick<Vendedor, "id" | "nome" | "comissao_pct">[]);
     setNcs(ncsData);
     setRetiradas(rets);
+    const usos = await getRetalhosUsadosPorPedido(id);
+    setRetalhosUsados(usos);
     if (data?.cliente_id) {
       const cred = await getCreditoCliente(data.cliente_id);
       setCreditoCliente(cred);
@@ -583,12 +590,55 @@ export default function PedidoDetalhe() {
     setSalvando(false);
   }
 
+  async function handleUploadCorteCerto(files: File[]) {
+    if (!pedido || files.length === 0) return;
+    setUploadandoCorteCerto(true);
+    for (const file of files) {
+      const url = await uploadCorteCertoPdf(id, file);
+      if (!url) { toast("Erro ao enviar arquivo", "err"); }
+    }
+    toast(files.length > 1 ? `${files.length} PDFs do Corte Certo salvos` : "PDF do Corte Certo salvo");
+    await load();
+    setUploadandoCorteCerto(false);
+  }
+
+  async function handleRemoverCorteCerto(url: string) {
+    if (!pedido || !confirm("Remover este arquivo?")) return;
+    await deleteCorteCertoPdf(id, url);
+    await load();
+  }
+
+  async function abrirVincularRetalho() {
+    const { data } = await supabase
+      .from("retalhos")
+      .select("id, produto_nome, largura, altura, m2, espessura, box, observacao")
+      .eq("status", "Disponível")
+      .order("produto_nome");
+    setRetalhosDisponiveis((data ?? []) as typeof retalhosDisponiveis);
+    setFiltroBuscaRetalho("");
+    setShowVincularRetalho(true);
+  }
+
+  async function handleVincularRetalho(retalhoId: string) {
+    const r = await vincularRetalhoAoPedido(id, retalhoId);
+    if (r.ok) {
+      toast(`Retalho ${retalhoId} vinculado`);
+      setShowVincularRetalho(false);
+      await load();
+    } else {
+      toast("Erro ao vincular retalho", "err");
+    }
+  }
+
+  async function handleDesvincularRetalho(usoId: number, retalhoId: string) {
+    if (!confirm(`Desvincular retalho ${retalhoId} deste pedido e devolver ao estoque?`)) return;
+    const ok = await desvincularRetalhoAoPedido(usoId, retalhoId);
+    if (ok) { toast("Retalho devolvido ao estoque"); await load(); }
+    else toast("Erro ao desvincular", "err");
+  }
+
   async function handleAvancar() {
     if (!pedido) return;
-    if (pedido.status === "Aguardando otimização" && otimizacoes.length === 0 && !todosVidroCliente && !todosChapa) {
-      toast("Realize a otimização de corte antes de avançar para produção.", "warn");
-      return;
-    }
     setSalvando(true);
     const result = await avancarStatusPedido(pedido.id, pedido.status);
     if (result) toast(`${pedido.id} → ${result.status}`);
@@ -655,7 +705,7 @@ export default function PedidoDetalhe() {
     totalPecasRetirado === 0          ? { bg: "rgba(255,255,255,.04)", border: "var(--b2)",          text: "var(--t2)"  }
     : totalPecasRetirado >= totalPecasPedido ? { bg: "rgba(16,185,129,.06)", border: "rgba(16,185,129,.3)", text: "var(--ok)"   }
     :                                    { bg: "rgba(245,158,11,.08)", border: "rgba(245,158,11,.3)", text: "var(--warn)" };
-  const bloqueadoSemOtim  = pedido.status === "Aguardando otimização" && !temOtimizacao && !todosVidroCliente && !todosChapa;
+  const m2RetalhosUsados = retalhosUsados.reduce((a, u) => a + Number(u.retalhos?.m2 ?? 0), 0);
 
   const parcelasAReceber = lancamentos.filter(l => l.status === "A Receber").sort((a, b) => (a.vencimento ?? "").localeCompare(b.vencimento ?? ""));
   const lancamentosPagos = lancamentos.filter(l => l.status === "Pago");
@@ -695,10 +745,7 @@ export default function PedidoDetalhe() {
           <span className={CHIP[pedido.status] ?? "chip cgr"}>{pedido.status}</span>
           <button className="btn bg sm" onClick={() => router.push(`/pedidos/${id}/editar`)}>✏ Editar</button>
           <button className="btn bg sm" onClick={() => router.push(`/pedidos/novo?duplicarDe=${id}`)}>⧉ Duplicar</button>
-          {temItens && !todosVidroCliente && !todosChapa && (
-            <a href={"/otimizador?pedido=" + pedido.id} className="btn bg sm">◈ Otimizar Corte</a>
-          )}
-          {(temOtimizacao || todosChapa) && (
+          {temItens && (
             <a href={"/pedidos/" + pedido.id + "/etiquetas"} className="btn bg sm" style={{ textDecoration:"none" }}>🏷 Etiquetas</a>
           )}
           {temItens && (
@@ -733,45 +780,97 @@ export default function PedidoDetalhe() {
             ⚑ NC{ncs.length > 0 ? ` (${ncs.length})` : ""}
           </button>
           {podeAvancar && (
-            <button className="btn bp sm" onClick={handleAvancar} disabled={salvando || bloqueadoSemOtim} style={bloqueadoSemOtim ? { opacity:0.45, cursor:"not-allowed" } : {}}>
-              {salvando ? "Salvando..." : bloqueadoSemOtim ? "⚠ Otimização pendente" : "Avançar Status →"}
+            <button className="btn bp sm" onClick={handleAvancar} disabled={salvando}>
+              {salvando ? "Salvando..." : "Avançar Status →"}
             </button>
           )}
         </div>
 
         <div className="con no-print" style={{ display:"flex", flexDirection:"column", gap:"20px" }}>
 
-          {bloqueadoSemOtim && (
-            <div style={{ background:"rgba(245,158,11,.1)", border:"1px solid var(--warn)", borderRadius:"10px", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px" }}>
-              <div>
-                <div style={{ fontSize:"13px", fontWeight:700, color:"var(--warn)", marginBottom:"4px" }}>⚠ Otimização de corte pendente</div>
-                <div style={{ fontSize:"12px", color:"var(--t3)" }}>Este pedido não pode avançar para produção sem um plano de corte gerado.</div>
+          {/* Corte Certo PDF */}
+          <div className="card" style={{ padding:"16px 20px" }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"12px" }}>
+              <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>
+                CORTE CERTO{(pedido.corte_certo_urls?.length ?? 0) > 0 ? ` (${pedido.corte_certo_urls!.length})` : ""}
               </div>
-              <a href={"/otimizador?pedido=" + pedido.id} className="btn bp sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>◈ Otimizar Agora</a>
+              {pedido.status === "Planejamento" && (
+                <span style={{ fontSize:"11px", color:"var(--warn)", fontFamily:"'DM Mono', monospace" }}>
+                  → Avançar para Em Produção descontará estoque automaticamente
+                </span>
+              )}
             </div>
-          )}
 
-          {todosVidroCliente && pedido.status === "Aguardando otimização" && (
-            <div style={{ background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.3)", borderRadius:"10px", padding:"12px 18px", display:"flex", alignItems:"center", gap:"10px" }}>
-              <span style={{ fontSize:"16px" }}>📦</span>
-              <div>
-                <div style={{ fontSize:"13px", fontWeight:700, color:"var(--warn)" }}>Vidro fornecido pelo cliente</div>
-                <div style={{ fontSize:"12px", color:"var(--t3)" }}>Todos os itens são vidro do cliente — otimização não é necessária para avançar.</div>
+            {(pedido.corte_certo_urls?.length ?? 0) > 0 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:"6px", marginBottom:"10px" }}>
+                {pedido.corte_certo_urls!.map((url, i) => (
+                  <div key={url} style={{ display:"flex", alignItems:"center", gap:"10px", padding:"8px 12px", background:"rgba(99,102,241,.08)", borderRadius:"7px", border:"1px solid rgba(99,102,241,.2)" }}>
+                    <span style={{ fontSize:"15px" }}>📄</span>
+                    <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex:1, color:"var(--acc)", fontWeight:600, fontSize:"13px", textDecoration:"underline" }}>
+                      Plano de corte {i + 1}
+                    </a>
+                    <button className="btn bw sm" onClick={() => handleRemoverCorteCerto(url)} disabled={uploadandoCorteCerto}>Remover</button>
+                  </div>
+                ))}
               </div>
-            </div>
-          )}
+            )}
 
-          {todosChapa && pedido.status === "Aguardando otimização" && (
-            <div style={{ background:"rgba(0,200,255,.08)", border:"1px solid rgba(0,200,255,.25)", borderRadius:"10px", padding:"12px 18px", display:"flex", alignItems:"center", gap:"10px" }}>
-              <span style={{ fontSize:"16px" }}>🪟</span>
-              <div>
-                <div style={{ fontSize:"13px", fontWeight:700, color:"var(--acc2)" }}>Pedido de chapas inteiras</div>
-                <div style={{ fontSize:"12px", color:"var(--t3)" }}>Este pedido contém apenas chapas — otimização de corte não é necessária para avançar.</div>
+            <label style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:"6px", padding:"16px", border:"2px dashed var(--b2)", borderRadius:"8px", cursor: uploadandoCorteCerto ? "default" : "pointer", background:"var(--surf2)" }}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoCorteCerto) handleUploadCorteCerto(fs); }}>
+              <span style={{ fontSize:"18px" }}>📎</span>
+              <span style={{ fontSize:"12px", color:"var(--t3)" }}>
+                {uploadandoCorteCerto ? "Enviando..." : "Arraste ou clique para anexar o PDF do Corte Certo"}
+              </span>
+              <input type="file" accept=".pdf,.png,.jpg,.jpeg" multiple style={{ display:"none" }} disabled={uploadandoCorteCerto}
+                onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadCorteCerto(fs); e.target.value = ""; }} />
+            </label>
+          </div>
+
+          {/* Retalhos utilizados */}
+          <div className="card" style={{ padding:"16px 20px" }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"12px" }}>
+              <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>
+                RETALHOS UTILIZADOS{retalhosUsados.length > 0 ? ` (${retalhosUsados.length})` : ""}
+                {m2RetalhosUsados > 0 && <span style={{ marginLeft:"10px", color:"var(--ok)", fontFamily:"'DM Mono',monospace", fontWeight:700 }}>{m2RetalhosUsados.toFixed(4)} m² cobertos</span>}
               </div>
+              <button className="btn bg sm" onClick={abrirVincularRetalho}>+ Vincular Retalho</button>
             </div>
-          )}
 
-          {temOtimizacao && ultimaOtim && (
+            {retalhosUsados.length === 0 ? (
+              <div style={{ color:"var(--t3)", fontSize:"12px", padding:"12px 0" }}>Nenhum retalho vinculado. Use o botão acima para selecionar retalhos disponíveis.</div>
+            ) : (
+              <div className="tw" style={{ marginBottom:0 }}>
+                <table>
+                  <thead>
+                    <tr><th>Retalho</th><th>Produto</th><th>Dimensões</th><th>m²</th><th>Box</th><th>Cliente</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                    {retalhosUsados.map(u => (
+                      <tr key={u.id}>
+                        <td><span className="mono" style={{ color:"var(--acc2)" }}>{u.retalho_id}</span></td>
+                        <td><strong>{u.retalhos?.produto_nome ?? "—"}</strong>{u.retalhos?.espessura ? <span className="tdim">{u.retalhos.espessura}mm</span> : null}</td>
+                        <td className="mono">{u.retalhos ? `${u.retalhos.largura} × ${u.retalhos.altura} mm` : "—"}</td>
+                        <td className="mono">{u.retalhos ? Number(u.retalhos.m2).toFixed(4) : "—"}</td>
+                        <td className="mono" style={{ color:"var(--t2)" }}>{u.retalhos?.box ?? "—"}</td>
+                        <td>{u.retalhos?.observacao ? <span style={{ color:"var(--warn)", fontWeight:700, fontSize:"11px" }}>👤 {u.retalhos.observacao}</span> : <span style={{ color:"var(--t3)" }}>—</span>}</td>
+                        <td>
+                          <button
+                            className="btn bw sm"
+                            onClick={() => handleDesvincularRetalho(u.id, u.retalho_id)}
+                            title="Desvincular e devolver ao estoque"
+                          >Desvincular</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* bloco legado de otimização interna — oculto, mantido para histórico */}
+          {temOtimizacao && ultimaOtim && false && (
             <div style={{ background:"rgba(16,185,129,.06)", border:"1px solid rgba(16,185,129,.3)", borderRadius:"10px", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px" }}>
               <div style={{ display:"flex", gap:"24px", alignItems:"center" }}>
                 <div>
@@ -785,8 +884,8 @@ export default function PedidoDetalhe() {
                 </div>
               </div>
               <div style={{ display:"flex", gap:"8px" }}>
-                <a href={"/pedidos/" + pedido.id + "/plano"} className="btn bg sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>◈ Ver Plano</a>
-                <a href={"/pedidos/" + pedido.id + "/etiquetas"} className="btn bg sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>🏷 Etiquetas</a>
+                <a href={"/pedidos/" + pedido?.id + "/plano"} className="btn bg sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>◈ Ver Plano</a>
+                <a href={"/pedidos/" + pedido?.id + "/etiquetas"} className="btn bg sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>🏷 Etiquetas</a>
               </div>
             </div>
           )}
@@ -1185,9 +1284,6 @@ export default function PedidoDetalhe() {
           <div className="card" style={{ padding:"20px 24px" }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px" }}>
               <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>ITENS DO PEDIDO ({pedido.itens_pedido?.length ?? 0})</div>
-              {temItens && !todosVidroCliente && !todosChapa && (
-                <a href={"/otimizador?pedido=" + pedido.id} className="btn bg xs">◈ Otimizar Corte</a>
-              )}
             </div>
             {!temItens ? (
               <div style={{ color:"var(--t3)", padding:"24px 0", textAlign:"center" }}>Nenhum item registrado neste pedido.</div>
@@ -1593,6 +1689,61 @@ export default function PedidoDetalhe() {
             <div style={{ color:"#c00", fontStyle:"italic", fontWeight:700 }}>Este documento não substitui a Nota Fiscal Eletrônica</div>
           </div>
         </div>
+      {/* Modal: vincular retalho */}
+      {showVincularRetalho && (
+        <div className="mov open" onClick={e => e.target === e.currentTarget && setShowVincularRetalho(false)}>
+          <div className="mod" style={{ width:"640px", maxHeight:"85vh", display:"flex", flexDirection:"column" }}>
+            <div className="mhd">
+              <div className="mtit">Vincular Retalho ao Pedido {pedido?.id}</div>
+              <button className="mcl" onClick={() => setShowVincularRetalho(false)}>✕</button>
+            </div>
+            <div style={{ padding:"12px 20px 8px" }}>
+              <input
+                placeholder="Buscar por produto, box, cliente..."
+                value={filtroBuscaRetalho}
+                onChange={e => setFiltroBuscaRetalho(e.target.value)}
+                style={{ width:"100%", boxSizing:"border-box", background:"var(--surf2)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"8px 12px", color:"var(--t1)", fontSize:"13px", outline:"none" }}
+                autoFocus
+              />
+            </div>
+            <div style={{ flex:1, overflowY:"auto", padding:"0 20px 16px" }}>
+              {retalhosDisponiveis.length === 0 ? (
+                <div style={{ color:"var(--t3)", textAlign:"center", padding:"32px 0" }}>Nenhum retalho disponível no estoque.</div>
+              ) : (() => {
+                const q = filtroBuscaRetalho.toLowerCase();
+                const filtrados = retalhosDisponiveis.filter(r =>
+                  !q || r.produto_nome.toLowerCase().includes(q) || (r.box ?? "").toLowerCase().includes(q) || r.id.toLowerCase().includes(q) || (r.observacao ?? "").toLowerCase().includes(q)
+                );
+                return filtrados.length === 0 ? (
+                  <div style={{ color:"var(--t3)", textAlign:"center", padding:"24px 0" }}>Nenhum retalho encontrado para "{filtroBuscaRetalho}"</div>
+                ) : (
+                  <div className="tw">
+                    <table>
+                      <thead>
+                        <tr><th>ID</th><th>Produto</th><th>Dimensões</th><th>m²</th><th>Box</th><th>Cliente</th><th></th></tr>
+                      </thead>
+                      <tbody>
+                        {filtrados.map(r => (
+                          <tr key={r.id}>
+                            <td><span className="mono" style={{ color:"var(--acc2)" }}>{r.id}</span></td>
+                            <td><strong>{r.produto_nome}</strong>{r.espessura ? <span className="tdim">{r.espessura}mm</span> : null}</td>
+                            <td className="mono">{r.largura} × {r.altura} mm</td>
+                            <td className="mono">{Number(r.m2).toFixed(4)}</td>
+                            <td className="mono" style={{ color:"var(--t2)" }}>{r.box ?? "—"}</td>
+                            <td>{r.observacao ? <span style={{ color:"var(--warn)", fontWeight:700, fontSize:"11px" }}>👤 {r.observacao}</span> : <span style={{ color:"var(--t3)" }}>—</span>}</td>
+                            <td><button className="btn bp sm" onClick={() => handleVincularRetalho(r.id)}>Vincular</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
       </AppLayout>
     </>
   );

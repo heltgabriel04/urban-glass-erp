@@ -11,7 +11,7 @@ import { supabase } from "@/lib/supabase/client";
 import type { Pedido, Cliente } from "@/types";
 
 const CHIP: Record<string, string> = {
-  "Aguardando otimização":    "chip cy",
+  "Planejamento":             "chip cy",
   "Em Produção – Corte":      "chip cp",
   "Qualidade (Corte)":        "chip cg",
   "Em Produção – Lapidação":  "chip co",
@@ -319,13 +319,13 @@ function PedidosPageInner() {
                   const aberto        = p.valor_total - p.valor_recebido;
                   const quitado       = aberto <= 0;
                   const finalizado    = ["Entregue","Cancelado"].includes(p.status);
-                  const primeiro      = p.status === "Aguardando otimização";
+                  const primeiro      = p.status === "Planejamento";
                   const podeRomaneio  = true;
                   const temOtim       = comOtimizacao.has(p.id);
                   const isChapa       = pedidosChapa.has(p.id);
                   const isVidroCliente = pedidosVidroCliente.has(p.id);
                   const podeAvancarSemOtim = temOtim || isChapa || isVidroCliente;
-                  const bloqueado     = !finalizado && p.status === "Aguardando otimização" && !podeAvancarSemOtim;
+                  const bloqueado     = false;
                   const temEtiqueta   = temOtim || isChapa || isVidroCliente;
 
                   return (
