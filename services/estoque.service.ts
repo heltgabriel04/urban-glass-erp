@@ -21,9 +21,12 @@ export interface RetalhoItem {
   produto_nome: string;
   largura: number;
   altura: number;
+  espessura?: number | null;
   m2: number;
   chapa_origem: string;
   pedido_origem: string;
+  localizacao?: string | null;
+  box?: string | null;
   dt_gerado: string;
   status: string;
   created_at?: string;

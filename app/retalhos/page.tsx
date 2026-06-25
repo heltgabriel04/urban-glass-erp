@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatDate, formatM2 } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
+import ImportarRetalhosModal from "@/components/ui/ImportarRetalhosModal";
+import type { RetalhoImportado } from "@/lib/importPlanilhaRetalhos";
 import type { Retalho, StatusRetalho } from "@/types";
 
 const CHIP: Record<StatusRetalho, string> = {
@@ -22,20 +25,28 @@ const FORM_VAZIO = {
   produto_nome: "",
   largura: "",
   altura: "",
+  espessura: "",
+  box: "",
   chapa_origem: "",
   pedido_origem: "",
   localizacao: "",
+  quantidade: "1",
   dt_gerado: hoje(),
   status: "Disponível" as StatusRetalho,
 };
 
 export default function RetalhoPage() {
+  const router = useRouter();
   const [retalhos, setRetalhos]     = useState<Retalho[]>([]);
   const [produtos, setProdutos]     = useState<{ id: number; nome: string }[]>([]);
   const [pedidos, setPedidos]       = useState<{ id: string }[]>([]);
   const [loading, setLoading]       = useState(true);
   const [filtro, setFiltro]         = useState<StatusRetalho | "">("");
+  const [filtroBox, setFiltroBox]   = useState("");
   const [showForm, setShowForm]     = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importando, setImportando] = useState(false);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [form, setForm]             = useState(FORM_VAZIO);
   const [salvando, setSalvando]     = useState(false);
 
@@ -73,6 +84,11 @@ export default function RetalhoPage() {
     await supabase.from("retalhos").delete().eq("id", id);
   }
 
+  function proximoId(retalhosAtuais: Retalho[]) {
+    const ids = retalhosAtuais.map(r => parseInt(r.id.replace("R-", ""))).filter(n => !isNaN(n));
+    return ids.length > 0 ? Math.max(...ids) + 1 : 1;
+  }
+
   async function handleSalvar() {
     if (!form.produto_nome.trim()) { alert("Selecione o produto."); return; }
     if (!form.largura || !form.altura) { alert("Informe as dimensões."); return; }
@@ -82,37 +98,109 @@ export default function RetalhoPage() {
     const largura = parseInt(form.largura);
     const altura  = parseInt(form.altura);
     const m2      = parseFloat(((largura * altura) / 1_000_000).toFixed(4));
+    const qtd     = Math.max(1, parseInt(form.quantidade) || 1);
 
-    const ids = retalhos.map(r => parseInt(r.id.replace("R-", ""))).filter(n => !isNaN(n));
-    const nextNum = ids.length > 0 ? Math.max(...ids) + 1 : 1;
-    const id = "R-" + String(nextNum).padStart(3, "0");
-
-    const { data, error } = await supabase.from("retalhos").insert([{
-      id,
+    let nextNum = proximoId(retalhos);
+    const rows = Array.from({ length: qtd }, () => ({
+      id: "R-" + String(nextNum++).padStart(3, "0"),
       produto_nome:  form.produto_nome.trim(),
       largura,
       altura,
+      espessura:     form.espessura ? parseFloat(form.espessura) : null,
       m2,
       chapa_origem:  form.chapa_origem.trim() || null,
       pedido_origem: form.pedido_origem.trim() || null,
       localizacao:   form.localizacao.trim() || null,
+      box:           form.box.trim() || null,
       dt_gerado:     form.dt_gerado || hoje(),
       status:        form.status,
-    }]).select().single();
+    }));
+
+    const { data, error } = await supabase.from("retalhos").insert(rows).select();
 
     setSalvando(false);
 
     if (error) { alert("Erro ao salvar: " + error.message); return; }
 
-    setRetalhos(prev => [data as Retalho, ...prev]);
+    setRetalhos(prev => [...(data as Retalho[]), ...prev]);
     setForm(FORM_VAZIO);
     setShowForm(false);
   }
 
-  const filtrados   = filtro ? retalhos.filter(r => r.status === filtro) : retalhos;
+  async function handleImportar(itens: RetalhoImportado[]) {
+    setImportando(true);
+
+    let nextNum = proximoId(retalhos);
+    const rows: Record<string, unknown>[] = [];
+    for (const item of itens) {
+      const m2 = parseFloat(((item.largura * item.altura) / 1_000_000).toFixed(4));
+      for (let i = 0; i < item.quantidade; i++) {
+        rows.push({
+          id: "R-" + String(nextNum++).padStart(3, "0"),
+          produto_nome:  item.produto_nome,
+          largura:       item.largura,
+          altura:        item.altura,
+          espessura:     item.espessura,
+          m2,
+          chapa_origem:  item.chapa_origem,
+          pedido_origem: null,
+          localizacao:   item.localizacao,
+          box:           item.box,
+          dt_gerado:     hoje(),
+          status:        "Disponível",
+        });
+      }
+    }
+
+    const { data, error } = await supabase.from("retalhos").insert(rows).select();
+
+    setImportando(false);
+
+    if (error) { alert("Erro ao importar: " + error.message); return; }
+
+    setRetalhos(prev => [...(data as Retalho[]), ...prev]);
+    setShowImport(false);
+  }
+
+  async function zerarTudo() {
+    if (retalhos.length === 0) return;
+    const resp = prompt(
+      `Isso vai excluir PERMANENTEMENTE os ${retalhos.length} retalhos cadastrados e o histórico de uso deles. Digite ZERAR para confirmar:`
+    );
+    if (resp !== "ZERAR") return;
+
+    setLoading(true);
+    await supabase.from("retalhos_uso").delete().neq("id", 0);
+    await supabase.from("retalhos").delete().neq("id", "");
+    setSelecionados(new Set());
+    await load();
+  }
+
+  function toggleSelecionado(id: string) {
+    setSelecionados(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelecionarTodos() {
+    setSelecionados(prev =>
+      filtrados.every(r => prev.has(r.id)) ? new Set() : new Set(filtrados.map(r => r.id))
+    );
+  }
+
+  function imprimirSelecionados() {
+    if (selecionados.size === 0) return;
+    sessionStorage.setItem("retalhos_etiquetas_ids", JSON.stringify(Array.from(selecionados)));
+    router.push("/retalhos/etiquetas");
+  }
+
+  const filtrados   = retalhos.filter(r => (!filtro || r.status === filtro) && (!filtroBox || r.box === filtroBox));
   const disponiveis = retalhos.filter(r => r.status === "Disponível");
   const reservados  = retalhos.filter(r => r.status === "Reservado");
   const m2Disp      = disponiveis.reduce((a, r) => a + Number(r.m2), 0);
+  const boxes       = Array.from(new Set(retalhos.map(r => r.box).filter(Boolean))) as string[];
 
   const FILTROS = ["", "Disponível", "Reservado", "Em uso", "Descartado"] as const;
 
@@ -173,6 +261,20 @@ export default function RetalhoPage() {
             </button>
           ))}
         </div>
+        {boxes.length > 0 && (
+          <select
+            value={filtroBox}
+            onChange={e => setFiltroBox(e.target.value)}
+            style={{ background:"var(--surf2)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"5px 10px", color:"var(--t2)", fontSize:"12px", cursor:"pointer" }}
+          >
+            <option value="">Todos os boxes</option>
+            {boxes.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+        )}
+        <button className="btn bg sm" onClick={() => setShowImport(true)}>⇪ Importar Planilha</button>
+        <button className="btn bg sm" disabled={selecionados.size === 0} onClick={imprimirSelecionados}>
+          🖨 Etiquetas{selecionados.size > 0 ? ` (${selecionados.size})` : ""}
+        </button>
         <button className="btn bp sm" onClick={() => setShowForm(v => !v)}>
           {showForm ? "✕ Cancelar" : "+ Novo Retalho"}
         </button>
@@ -184,7 +286,7 @@ export default function RetalhoPage() {
         {showForm && (
           <div style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"20px 24px", marginBottom:"20px" }}>
             <div style={{ fontSize:"12px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em", marginBottom:"16px" }}>NOVO RETALHO</div>
-            <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr 1fr 1fr", gap:"12px", alignItems:"end" }}>
+            <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr", gap:"12px", alignItems:"end", marginBottom:"12px" }}>
 
               <div>
                 <label style={labelStyle}>Produto *</label>
@@ -219,6 +321,42 @@ export default function RetalhoPage() {
                   placeholder="800"
                   value={form.altura}
                   onChange={e => setForm(f => ({ ...f, altura: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Espessura (mm)</label>
+                <input
+                  style={inputStyle}
+                  type="number"
+                  placeholder="4"
+                  value={form.espessura}
+                  onChange={e => setForm(f => ({ ...f, espessura: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Quantidade</label>
+                <input
+                  style={inputStyle}
+                  type="number"
+                  min={1}
+                  placeholder="1"
+                  value={form.quantidade}
+                  onChange={e => setForm(f => ({ ...f, quantidade: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr", gap:"12px", alignItems:"end" }}>
+
+              <div>
+                <label style={labelStyle}>Box</label>
+                <input
+                  style={inputStyle}
+                  placeholder="Box 3"
+                  value={form.box}
+                  onChange={e => setForm(f => ({ ...f, box: e.target.value }))}
                 />
               </div>
 
@@ -282,19 +420,28 @@ export default function RetalhoPage() {
         )}
 
         {/* CARDS */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:"12px", marginBottom:"20px" }}>
-          {[
-            { label:"Total",         value: String(retalhos.length),   color:"var(--t1)",   sub:"cadastrados" },
-            { label:"Disponíveis",   value: String(disponiveis.length), color:"var(--ok)",   sub:"prontos para uso" },
-            { label:"m² Disponível", value: m2Disp.toFixed(2) + " m²", color:"var(--acc)",  sub:"aproveitável" },
-            { label:"Reservados",    value: String(reservados.length),  color:"var(--warn)", sub:"em uso pendente" },
-          ].map(card => (
-            <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
-              <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
-              <div style={{ fontSize:"22px", fontWeight:700, color:card.color, fontFamily:"'DM Mono', monospace", lineHeight:1.2 }}>{card.value}</div>
-              <div style={{ fontSize:"11px", color:"var(--t3)" }}>{card.sub}</div>
-            </div>
-          ))}
+        <div style={{ display:"flex", alignItems:"flex-start", gap:"12px", marginBottom:"20px" }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:"12px", flex:1 }}>
+            {[
+              { label:"Total",         value: String(retalhos.length),   color:"var(--t1)",   sub:"cadastrados" },
+              { label:"Disponíveis",   value: String(disponiveis.length), color:"var(--ok)",   sub:"prontos para uso" },
+              { label:"m² Disponível", value: m2Disp.toFixed(2) + " m²", color:"var(--acc)",  sub:"aproveitável" },
+              { label:"Reservados",    value: String(reservados.length),  color:"var(--warn)", sub:"em uso pendente" },
+            ].map(card => (
+              <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
+                <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
+                <div style={{ fontSize:"22px", fontWeight:700, color:card.color, fontFamily:"'DM Mono', monospace", lineHeight:1.2 }}>{card.value}</div>
+                <div style={{ fontSize:"11px", color:"var(--t3)" }}>{card.sub}</div>
+              </div>
+            ))}
+          </div>
+          <button
+            title="Excluir todos os retalhos cadastrados"
+            onClick={zerarTudo}
+            style={{ alignSelf:"stretch", padding:"0 16px", borderRadius:"10px", background:"transparent", border:"1px solid rgba(244,63,94,.35)", color:"var(--err)", fontSize:"11px", fontWeight:700, letterSpacing:"0.04em", cursor:"pointer", whiteSpace:"nowrap" }}
+          >
+            🗑 Zerar Tudo
+          </button>
         </div>
 
         {loading ? (
@@ -310,10 +457,18 @@ export default function RetalhoPage() {
                 <table>
                   <thead>
                     <tr>
+                      <th style={{ width:"32px", textAlign:"center" }}>
+                        <input
+                          type="checkbox"
+                          checked={filtrados.length > 0 && filtrados.every(r => selecionados.has(r.id))}
+                          onChange={toggleSelecionarTodos}
+                        />
+                      </th>
                       <th>ID</th>
                       <th>Produto</th>
                       <th>Dimensões</th>
                       <th>m²</th>
+                      <th>Box</th>
                       <th>Chapa Origem</th>
                       <th>Pedido Origem</th>
                       <th>Localização</th>
@@ -326,10 +481,21 @@ export default function RetalhoPage() {
                   <tbody>
                     {filtrados.map(r => (
                       <tr key={r.id}>
+                        <td style={{ textAlign:"center" }}>
+                          <input
+                            type="checkbox"
+                            checked={selecionados.has(r.id)}
+                            onChange={() => toggleSelecionado(r.id)}
+                          />
+                        </td>
                         <td><span className="mono" style={{ color:"var(--acc2)" }}>{r.id}</span></td>
-                        <td><strong>{r.produto_nome}</strong></td>
+                        <td>
+                          <strong>{r.produto_nome}</strong>
+                          {r.espessura ? <div className="tdim">{r.espessura}mm</div> : null}
+                        </td>
                         <td className="mono">{r.largura} × {r.altura} mm</td>
                         <td className="mono">{formatM2(r.m2)}</td>
+                        <td className="mono" style={{ color:"var(--t2)" }}>{r.box || "—"}</td>
                         <td className="mono" style={{ color:"var(--t2)" }}>{r.chapa_origem || "—"}</td>
                         <td className="mono" style={{ color:"var(--acc)" }}>{r.pedido_origem || "—"}</td>
                         <td className="mono" style={{ color:"var(--t2)" }}>{r.localizacao || "—"}</td>
@@ -362,6 +528,14 @@ export default function RetalhoPage() {
           </>
         )}
       </div>
+
+      {showImport && (
+        <ImportarRetalhosModal
+          onImportar={handleImportar}
+          onClose={() => setShowImport(false)}
+          importando={importando}
+        />
+      )}
     </AppLayout>
   );
 }
