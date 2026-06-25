@@ -46,6 +46,7 @@ export default function RetalhoPage() {
   const [filtroBox, setFiltroBox]   = useState("");
   const [filtroCliente, setFiltroCliente] = useState<"" | "cliente" | "proprio">("");
   const [showForm, setShowForm]     = useState(false);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
   const [importando, setImportando] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
@@ -91,6 +92,32 @@ export default function RetalhoPage() {
     return ids.length > 0 ? Math.max(...ids) + 1 : 1;
   }
 
+  function abrirEdicao(r: Retalho) {
+    setForm({
+      produto_nome:  r.produto_nome,
+      largura:       String(r.largura),
+      altura:        String(r.altura),
+      espessura:     r.espessura != null ? String(r.espessura) : "",
+      box:           r.box ?? "",
+      chapa_origem:  r.chapa_origem ?? "",
+      pedido_origem: r.pedido_origem ?? "",
+      localizacao:   r.localizacao ?? "",
+      observacao:    r.observacao ?? "",
+      quantidade:    "1",
+      dt_gerado:     r.dt_gerado,
+      status:        r.status,
+    });
+    setEditandoId(r.id);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function fecharForm() {
+    setShowForm(false);
+    setEditandoId(null);
+    setForm(FORM_VAZIO);
+  }
+
   async function handleSalvar() {
     if (!form.produto_nome.trim()) { alert("Selecione o produto."); return; }
     if (!form.largura || !form.altura) { alert("Informe as dimensões."); return; }
@@ -100,11 +127,7 @@ export default function RetalhoPage() {
     const largura = parseInt(form.largura);
     const altura  = parseInt(form.altura);
     const m2      = parseFloat(((largura * altura) / 1_000_000).toFixed(4));
-    const qtd     = Math.max(1, parseInt(form.quantidade) || 1);
-
-    let nextNum = proximoId(retalhos);
-    const rows = Array.from({ length: qtd }, () => ({
-      id: "R-" + String(nextNum++).padStart(3, "0"),
+    const campos  = {
       produto_nome:  form.produto_nome.trim(),
       largura,
       altura,
@@ -117,17 +140,32 @@ export default function RetalhoPage() {
       observacao:    form.observacao.trim() || null,
       dt_gerado:     form.dt_gerado || hoje(),
       status:        form.status,
-    }));
+    };
 
-    const { data, error } = await supabase.from("retalhos").insert(rows).select();
+    if (editandoId) {
+      const { data, error } = await supabase
+        .from("retalhos")
+        .update(campos)
+        .eq("id", editandoId)
+        .select()
+        .single();
+      setSalvando(false);
+      if (error) { alert("Erro ao salvar: " + error.message); return; }
+      setRetalhos(prev => prev.map(r => r.id === editandoId ? (data as Retalho) : r));
+    } else {
+      const qtd = Math.max(1, parseInt(form.quantidade) || 1);
+      let nextNum = proximoId(retalhos);
+      const rows = Array.from({ length: qtd }, () => ({
+        id: "R-" + String(nextNum++).padStart(3, "0"),
+        ...campos,
+      }));
+      const { data, error } = await supabase.from("retalhos").insert(rows).select();
+      setSalvando(false);
+      if (error) { alert("Erro ao salvar: " + error.message); return; }
+      setRetalhos(prev => [...(data as Retalho[]), ...prev]);
+    }
 
-    setSalvando(false);
-
-    if (error) { alert("Erro ao salvar: " + error.message); return; }
-
-    setRetalhos(prev => [...(data as Retalho[]), ...prev]);
-    setForm(FORM_VAZIO);
-    setShowForm(false);
+    fecharForm();
   }
 
   async function handleImportar(itens: RetalhoImportado[]) {
@@ -306,7 +344,7 @@ export default function RetalhoPage() {
         <button className="btn bg sm" disabled={selecionados.size === 0} onClick={imprimirSelecionados}>
           🖨 Etiquetas{selecionados.size > 0 ? ` (${selecionados.size})` : ""}
         </button>
-        <button className="btn bp sm" onClick={() => setShowForm(v => !v)}>
+        <button className="btn bp sm" onClick={() => showForm ? fecharForm() : setShowForm(true)}>
           {showForm ? "✕ Cancelar" : "+ Novo Retalho"}
         </button>
       </div>
@@ -316,7 +354,9 @@ export default function RetalhoPage() {
         {/* FORM */}
         {showForm && (
           <div style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"20px 24px", marginBottom:"20px" }}>
-            <div style={{ fontSize:"12px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em", marginBottom:"16px" }}>NOVO RETALHO</div>
+            <div style={{ fontSize:"12px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em", marginBottom:"16px" }}>
+              {editandoId ? `EDITANDO ${editandoId}` : "NOVO RETALHO"}
+            </div>
             <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr", gap:"12px", alignItems:"end", marginBottom:"12px" }}>
 
               <div>
@@ -457,9 +497,9 @@ export default function RetalhoPage() {
                   m² calculado: {((Number(form.largura) * Number(form.altura)) / 1_000_000).toFixed(4)}
                 </span>
               )}
-              <button className="btn bg sm" onClick={() => { setShowForm(false); setForm(FORM_VAZIO); }}>Cancelar</button>
+              <button className="btn bg sm" onClick={fecharForm}>Cancelar</button>
               <button className="btn bp sm" onClick={handleSalvar} disabled={salvando}>
-                {salvando ? "Salvando..." : "Salvar Retalho"}
+                {salvando ? "Salvando..." : editandoId ? "Salvar Alterações" : "Salvar Retalho"}
               </button>
             </div>
           </div>
@@ -565,16 +605,27 @@ export default function RetalhoPage() {
                             {r.status !== "Em uso"     && btnStatus("Em uso",     "var(--acc2)", "rgba(99,179,237,.15)", () => mudarStatus(r.id, "Em uso"))}
                           </div>
                         </td>
-                        <td style={{ width:"40px", textAlign:"center" }}>
-                          <button
-                            title="Excluir retalho"
-                            onClick={() => deletar(r.id)}
-                            style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", cursor:"pointer", transition:"all 0.15s" }}
-                            onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
-                            onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
-                          >
-                            🗑
-                          </button>
+                        <td style={{ textAlign:"center" }}>
+                          <div style={{ display:"inline-flex", gap:"4px" }}>
+                            <button
+                              title="Editar retalho"
+                              onClick={() => abrirEdicao(r)}
+                              style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", cursor:"pointer", transition:"all 0.15s" }}
+                              onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(99,179,237,.15)"; b.style.borderColor = "var(--acc2)"; b.style.color = "var(--acc2)"; }}
+                              onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
+                            >
+                              ✎
+                            </button>
+                            <button
+                              title="Excluir retalho"
+                              onClick={() => deletar(r.id)}
+                              style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", cursor:"pointer", transition:"all 0.15s" }}
+                              onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
+                              onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
+                            >
+                              🗑
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
