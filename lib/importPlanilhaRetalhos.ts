@@ -44,11 +44,15 @@ export function parseLinhasRetalhos(rows: unknown[][]): RetalhoImportado[] {
   const iQtd       = idx("quant", "qtd", "qtde");
   const iObs       = idx("observ", "obs", "cliente");
 
-  // Se não encontrou altura, tenta a coluna imediatamente após largura/dimensões
-  // (planilha com "DIMENSÕES | <sem cabeçalho>" é o caso padrão do Excel interno)
+  // Se não encontrou altura, tenta a coluna imediatamente após largura/dimensões.
+  // Cobre dois casos: cabeçalho em branco (sem mesclagem) ou célula mesclada que
+  // a lib xlsx repete o mesmo valor na coluna vizinha.
   let iAltura = idx("alt");
-  if (iAltura < 0 && iLargura >= 0 && header[iLargura + 1] === "") {
-    iAltura = iLargura + 1;
+  if (iAltura < 0 && iLargura >= 0) {
+    const nextH = header[iLargura + 1] ?? "";
+    if (nextH === "" || nextH === header[iLargura]) {
+      iAltura = iLargura + 1;
+    }
   }
 
   if (iProduto < 0 || iLargura < 0 || iAltura < 0) return [];

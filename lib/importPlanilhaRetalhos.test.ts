@@ -38,9 +38,10 @@ describe("parseLinhasRetalhos", () => {
     expect(parseLinhasRetalhos([])).toEqual([]);
   });
 
-  it("lê formato da planilha interna: DIMENSÕES | (blank) | QUANTIDADE | PRODUTO | OBSERVAÇÃO | LOCAL", () => {
+  it("lê formato da planilha interna: DIMENSÕES | DIMENSÕES (mesclada) | QUANTIDADE | PRODUTO | OBSERVAÇÃO | LOCAL", () => {
     const rows = [
-      ["DIMENSÕES", "", "QUANTIDADE", "PRODUTO", "OBSERVAÇÃO", "LOCAL"],
+      // xlsx repete "DIMENSÕES" na coluna B quando a célula é mesclada
+      ["DIMENSÕES", "DIMENSÕES", "QUANTIDADE", "PRODUTO", "OBSERVAÇÃO", "LOCAL"],
       [1150, 590, 1, "Laminado 3+3 Incolor", "", "BOX 1"],
       [590,  950, 3, "Laminado 4+4 Bronze",  "Diogo", "BOX 2"],
     ];
