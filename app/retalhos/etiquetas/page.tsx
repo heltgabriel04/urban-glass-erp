@@ -38,6 +38,12 @@ function EtiquetaRetalhoCard({ r, num }: { r: Retalho; num: number }) {
                 <span>{r.localizacao}</span>
               </>
             )}
+            {r.observacao && (
+              <>
+                <span className="et-sep">·</span>
+                <span className="et-obs-cliente">👤 {r.observacao}</span>
+              </>
+            )}
           </div>
         </div>
         <div className="et-dir">
@@ -179,6 +185,7 @@ export default function EtiquetasRetalhosPage() {
           display: flex; gap: 4px; align-items: center; flex-wrap: wrap;
         }
         .et-sep { color: #888; }
+        .et-obs-cliente { color: #b45309; font-weight: 900; }
 
         @media print {
           .toolbar { display: none !important; }
@@ -230,6 +237,7 @@ export default function EtiquetasRetalhosPage() {
           .et-medidas { font-size: 9pt; color: #000 !important; font-weight: 900 !important; }
           .et-m2      { font-size: 13pt; color: #000 !important; font-weight: 900 !important; }
           .et-rodape-info { font-size: 7pt; color: #000 !important; font-weight: 700 !important; border-top: 0.3pt solid #ccc; padding-top: 2px; margin-top: 2px !important; }
+          .et-obs-cliente { color: #000 !important; font-weight: 900 !important; }
           .et-qrlbl   { font-size: 7pt; color: #000 !important; font-weight: 700 !important; }
           .et-dim     { margin-top: 0; }
         }
