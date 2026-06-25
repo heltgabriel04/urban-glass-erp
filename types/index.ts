@@ -413,6 +413,7 @@ export interface Retalho {
   pedido_origem: string | null;
   localizacao?: string | null;
   box?: string | null;
+  observacao?: string | null;
   dt_gerado: string;
   status: StatusRetalho;
   created_at: string;

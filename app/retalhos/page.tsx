@@ -30,6 +30,7 @@ const FORM_VAZIO = {
   chapa_origem: "",
   pedido_origem: "",
   localizacao: "",
+  observacao: "",
   quantidade: "1",
   dt_gerado: hoje(),
   status: "Disponível" as StatusRetalho,
@@ -43,6 +44,7 @@ export default function RetalhoPage() {
   const [loading, setLoading]       = useState(true);
   const [filtro, setFiltro]         = useState<StatusRetalho | "">("");
   const [filtroBox, setFiltroBox]   = useState("");
+  const [filtroCliente, setFiltroCliente] = useState<"" | "cliente" | "proprio">("");
   const [showForm, setShowForm]     = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importando, setImportando] = useState(false);
@@ -112,6 +114,7 @@ export default function RetalhoPage() {
       pedido_origem: form.pedido_origem.trim() || null,
       localizacao:   form.localizacao.trim() || null,
       box:           form.box.trim() || null,
+      observacao:    form.observacao.trim() || null,
       dt_gerado:     form.dt_gerado || hoje(),
       status:        form.status,
     }));
@@ -146,6 +149,7 @@ export default function RetalhoPage() {
           pedido_origem: null,
           localizacao:   item.localizacao,
           box:           item.box,
+          observacao:    item.observacao,
           dt_gerado:     hoje(),
           status:        "Disponível",
         });
@@ -196,9 +200,17 @@ export default function RetalhoPage() {
     router.push("/retalhos/etiquetas");
   }
 
-  const filtrados   = retalhos.filter(r => (!filtro || r.status === filtro) && (!filtroBox || r.box === filtroBox));
+  const filtrados = retalhos.filter(r => {
+    if (filtro && r.status !== filtro) return false;
+    if (filtroBox && r.box !== filtroBox) return false;
+    if (filtroCliente === "cliente" && !r.observacao) return false;
+    if (filtroCliente === "proprio" && r.observacao) return false;
+    return true;
+  });
+
   const disponiveis = retalhos.filter(r => r.status === "Disponível");
   const reservados  = retalhos.filter(r => r.status === "Reservado");
+  const deCliente   = retalhos.filter(r => r.observacao);
   const m2Disp      = disponiveis.reduce((a, r) => a + Number(r.m2), 0);
   const boxes       = Array.from(new Set(retalhos.map(r => r.box).filter(Boolean))) as string[];
 
@@ -238,7 +250,7 @@ export default function RetalhoPage() {
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Retalhos</div>
-        <div style={{ display:"flex", gap:"6px" }}>
+        <div style={{ display:"flex", gap:"6px", flexWrap:"wrap" }}>
           {FILTROS.map(s => (
             <button
               key={s}
@@ -271,6 +283,25 @@ export default function RetalhoPage() {
             {boxes.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
         )}
+        {/* Filtro de cliente */}
+        <div style={{ display:"flex", gap:"4px" }}>
+          {(["", "cliente", "proprio"] as const).map(v => (
+            <button
+              key={v}
+              onClick={() => setFiltroCliente(v)}
+              style={{
+                padding:"5px 12px", borderRadius:"99px", border:"1px solid", fontSize:"12px", cursor:"pointer",
+                fontFamily:"'Inter', sans-serif", fontWeight: filtroCliente === v ? 700 : 400,
+                background: filtroCliente === v ? (v === "cliente" ? "rgba(245,158,11,.15)" : "var(--surf2)") : "transparent",
+                borderColor: filtroCliente === v ? (v === "cliente" ? "var(--warn)" : "var(--b2)") : "var(--b1)",
+                color: filtroCliente === v ? (v === "cliente" ? "var(--warn)" : "var(--t1)") : "var(--t2)",
+                transition:"all 0.15s",
+              }}
+            >
+              {v === "" ? "Todos" : v === "cliente" ? "De cliente" : "Próprio"}
+            </button>
+          ))}
+        </div>
         <button className="btn bg sm" onClick={() => setShowImport(true)}>⇪ Importar Planilha</button>
         <button className="btn bg sm" disabled={selecionados.size === 0} onClick={imprimirSelecionados}>
           🖨 Etiquetas{selecionados.size > 0 ? ` (${selecionados.size})` : ""}
@@ -354,7 +385,7 @@ export default function RetalhoPage() {
                 <label style={labelStyle}>Box</label>
                 <input
                   style={inputStyle}
-                  placeholder="Box 3"
+                  placeholder="BOX 3"
                   value={form.box}
                   onChange={e => setForm(f => ({ ...f, box: e.target.value }))}
                 />
@@ -405,6 +436,21 @@ export default function RetalhoPage() {
               </div>
             </div>
 
+            <div style={{ marginTop:"12px" }}>
+              <label style={labelStyle}>Obs / Cliente (deixe em branco se for vidro próprio)</label>
+              <input
+                style={{ ...inputStyle, borderColor: form.observacao ? "var(--warn)" : "var(--b2)" }}
+                placeholder="Nome do cliente dono do vidro, ex: Diogo"
+                value={form.observacao}
+                onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))}
+              />
+              {form.observacao && (
+                <div style={{ fontSize:"11px", color:"var(--warn)", marginTop:"4px" }}>
+                  Este retalho será marcado como vidro de cliente.
+                </div>
+              )}
+            </div>
+
             <div style={{ display:"flex", gap:"8px", marginTop:"14px", justifyContent:"flex-end" }}>
               {Number(form.largura) > 0 && Number(form.altura) > 0 && (
                 <span style={{ fontSize:"12px", color:"var(--t3)", alignSelf:"center", fontFamily:"'DM Mono', monospace" }}>
@@ -421,12 +467,13 @@ export default function RetalhoPage() {
 
         {/* CARDS */}
         <div style={{ display:"flex", alignItems:"flex-start", gap:"12px", marginBottom:"20px" }}>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:"12px", flex:1 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:"12px", flex:1 }}>
             {[
-              { label:"Total",         value: String(retalhos.length),   color:"var(--t1)",   sub:"cadastrados" },
+              { label:"Total",         value: String(retalhos.length),    color:"var(--t1)",   sub:"cadastrados" },
               { label:"Disponíveis",   value: String(disponiveis.length), color:"var(--ok)",   sub:"prontos para uso" },
               { label:"m² Disponível", value: m2Disp.toFixed(2) + " m²", color:"var(--acc)",  sub:"aproveitável" },
               { label:"Reservados",    value: String(reservados.length),  color:"var(--warn)", sub:"em uso pendente" },
+              { label:"De Cliente",    value: String(deCliente.length),   color:"#f59e0b",     sub:"vidros de terceiros" },
             ].map(card => (
               <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
                 <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
@@ -469,9 +516,9 @@ export default function RetalhoPage() {
                       <th>Dimensões</th>
                       <th>m²</th>
                       <th>Box</th>
+                      <th>Obs / Cliente</th>
                       <th>Chapa Origem</th>
                       <th>Pedido Origem</th>
-                      <th>Localização</th>
                       <th>Gerado em</th>
                       <th>Status</th>
                       <th>Ações</th>
@@ -480,7 +527,10 @@ export default function RetalhoPage() {
                   </thead>
                   <tbody>
                     {filtrados.map(r => (
-                      <tr key={r.id}>
+                      <tr
+                        key={r.id}
+                        style={r.observacao ? { background:"rgba(245,158,11,.06)", borderLeft:"3px solid rgba(245,158,11,.5)" } : undefined}
+                      >
                         <td style={{ textAlign:"center" }}>
                           <input
                             type="checkbox"
@@ -496,9 +546,16 @@ export default function RetalhoPage() {
                         <td className="mono">{r.largura} × {r.altura} mm</td>
                         <td className="mono">{formatM2(r.m2)}</td>
                         <td className="mono" style={{ color:"var(--t2)" }}>{r.box || "—"}</td>
+                        <td>
+                          {r.observacao
+                            ? <span style={{ display:"inline-flex", alignItems:"center", gap:"4px", background:"rgba(245,158,11,.18)", color:"var(--warn)", padding:"2px 8px", borderRadius:"4px", fontSize:"11px", fontWeight:700 }}>
+                                👤 {r.observacao}
+                              </span>
+                            : <span className="mono" style={{ color:"var(--t3)" }}>—</span>
+                          }
+                        </td>
                         <td className="mono" style={{ color:"var(--t2)" }}>{r.chapa_origem || "—"}</td>
                         <td className="mono" style={{ color:"var(--acc)" }}>{r.pedido_origem || "—"}</td>
-                        <td className="mono" style={{ color:"var(--t2)" }}>{r.localizacao || "—"}</td>
                         <td className="mono">{formatDate(r.dt_gerado)}</td>
                         <td><span className={CHIP[r.status as StatusRetalho] ?? "chip cgr"}>{r.status}</span></td>
                         <td>
