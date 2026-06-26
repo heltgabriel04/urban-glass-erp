@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
-import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido, uploadRomaneioAssinado, deleteRomaneioAssinado, uploadCorteCertoPdf, deleteCorteCertoPdf, vincularRetalhoAoPedido, desvincularRetalhoAoPedido, getRetalhosUsadosPorPedido, criarSobraRetalho } from "@/services/pedidos.service";
+import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido, uploadRomaneioAssinado, deleteRomaneioAssinado, uploadCorteCertoPdf, deleteCorteCertoPdf, vincularRetalhoAoPedido, desvincularRetalhoAoPedido, marcarRetalhoComoQuebrado, getRetalhosUsadosPorPedido, criarSobraRetalho } from "@/services/pedidos.service";
 import { registrarLog } from "@/services/log.service";
 import { getLancamentosPorPedido, deletarLancamento, createLancamento, updateLancamento } from "@/services/financeiro.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
@@ -130,7 +130,7 @@ interface EdicaoPago {
   salvando: boolean;
 }
 
-type RetalhoDispInfo = { id: string; produto_nome: string; largura: number; altura: number; m2: number; espessura: number | null; box: string | null; observacao: string | null; pedido_origem: string | null; chapa_origem: string | null };
+type RetalhoDispInfo = { id: string; produto_nome: string; largura: number; altura: number; m2: number; espessura: number | null; box: string | null; localizacao: string | null; observacao: string | null; pedido_origem: string | null; chapa_origem: string | null };
 
 interface SugestaoRetalho {
   retalhoId: string;
@@ -305,6 +305,7 @@ export default function PedidoDetalhe() {
   const [sobraSalvando, setSobraSalvando]           = useState(false);
   const [logRetalhos, setLogRetalhos]               = useState<Array<{ id: string; created_at: string; usuario_email: string | null; acao: string; descricao: string }>>([]);
   const [showLogRetalhos, setShowLogRetalhos]       = useState(false);
+  const [confirmDesvincular, setConfirmDesvincular] = useState<{ usoId: number; retalhoId: string } | null>(null);
   const [itemParaRetalho, setItemParaRetalho] = useState<number | null>(null);
   const [clientes, setClientes]         = useState<{ id: number; nome: string }[]>([]);
   const [vendedores, setVendedores]     = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
@@ -401,7 +402,7 @@ export default function PedidoDetalhe() {
     setSugestoesIgnoradas(new Set());
     const { data: retDisp } = await supabase
       .from("retalhos")
-      .select("id, produto_nome, largura, altura, m2, espessura, box, observacao, pedido_origem, chapa_origem")
+      .select("id, produto_nome, largura, altura, m2, espessura, box, localizacao, observacao, pedido_origem, chapa_origem")
       .eq("status", "Disponível")
       .order("produto_nome");
     setRetalhosDisponiveis((retDisp ?? []) as typeof retalhosDisponiveis);
@@ -837,10 +838,18 @@ export default function PedidoDetalhe() {
     if (ok > 0) registrarLog({ acao: 'usou-todos', tabela: 'pedidos', registro_id: id, descricao: `Usou todos os retalhos sugeridos no pedido ${id}: ${ok} vinculado(s)${err > 0 ? `, ${err} erro(s)` : ""}` });
   }
 
-  async function handleDesvincularRetalho(usoId: number, retalhoId: string) {
-    if (!confirm(`Desvincular retalho ${retalhoId} deste pedido e devolver ao estoque?`)) return;
-    const ok = await desvincularRetalhoAoPedido(usoId, retalhoId, id);
-    if (ok) { toast("Retalho devolvido ao estoque"); await load(); }
+  function handleDesvincularRetalho(usoId: number, retalhoId: string) {
+    setConfirmDesvincular({ usoId, retalhoId });
+  }
+
+  async function executarDesvincular(quebrado: boolean) {
+    if (!confirmDesvincular) return;
+    const { usoId, retalhoId } = confirmDesvincular;
+    setConfirmDesvincular(null);
+    const ok = quebrado
+      ? await marcarRetalhoComoQuebrado(usoId, retalhoId, id)
+      : await desvincularRetalhoAoPedido(usoId, retalhoId, id);
+    if (ok) { toast(quebrado ? "Retalho marcado como quebrado" : "Retalho devolvido ao estoque"); await load(); }
     else toast("Erro ao desvincular", "err");
   }
 
@@ -1149,6 +1158,7 @@ export default function PedidoDetalhe() {
                                 <>
                                   <span style={{ fontSize:"11px", color:"var(--t2)", fontFamily:"'DM Mono',monospace" }}>{u.retalhos.largura}×{u.retalhos.altura}mm</span>
                                   {u.retalhos.box && <span style={{ fontSize:"10px", color:"var(--t3)" }}>box {u.retalhos.box}</span>}
+                                  {u.retalhos.localizacao && <span style={{ fontSize:"10px", color:"var(--t3)" }}>📍 {u.retalhos.localizacao}</span>}
                                   {u.retalhos.observacao && <span style={{ fontSize:"10px", color:"var(--warn)", fontWeight:600 }}>👤 {u.retalhos.observacao}</span>}
                                   {u.retalhos.pedido_origem && (
                                     <a href={`/pedidos/${u.retalhos.pedido_origem}`} style={{ fontSize:"10px", color:"var(--t3)", textDecoration:"underline", textDecorationStyle:"dotted" }} title={`Sobra do pedido ${u.retalhos.pedido_origem}`}>↩ {u.retalhos.pedido_origem}</a>
@@ -1174,6 +1184,7 @@ export default function PedidoDetalhe() {
                               <span style={{ fontFamily:"'DM Mono',monospace", color:"var(--acc2)", fontWeight:700, fontSize:"12px" }}>{s.retalhoId}</span>
                               <span style={{ fontSize:"11px", color:"var(--t2)", fontFamily:"'DM Mono',monospace" }}>{s.retalho.largura}×{s.retalho.altura}mm</span>
                               {s.retalho.box && <span style={{ fontSize:"10px", color:"var(--t3)" }}>box {s.retalho.box}</span>}
+                              {s.retalho.localizacao && <span style={{ fontSize:"10px", color:"var(--t3)" }}>📍 {s.retalho.localizacao}</span>}
                               <span style={{ fontSize:"10px", color:"var(--acc)", background:"rgba(99,102,241,.12)", border:"1px solid rgba(99,102,241,.2)", borderRadius:"3px", padding:"1px 6px" }}>sugestão{s.rotacionado ? " ↻" : ""}</span>
                               {s.retalho.pedido_origem && (
                                 <a href={`/pedidos/${s.retalho.pedido_origem}`} style={{ fontSize:"10px", color:"var(--t3)", textDecoration:"underline", textDecorationStyle:"dotted" }} title={`Sobra do pedido ${s.retalho.pedido_origem}`}>↩ {s.retalho.pedido_origem}</a>
@@ -2158,8 +2169,8 @@ export default function PedidoDetalhe() {
                         <span className="mono" style={{ fontSize:"12px", color:"var(--t2)" }}>{r.largura} × {r.altura} mm</span>
                         <span className="mono" style={{ fontSize:"12px", color:"var(--t2)" }}>{Number(r.m2).toFixed(3)} m²</span>
                         <span className="mono" style={{ fontSize:"12px", color:"var(--t3)" }}>{r.box ?? "—"}</span>
-                        <span style={{ fontSize:"11px", color: r.observacao ? "var(--warn)" : "var(--t3)", fontWeight: r.observacao ? 600 : 400, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                          {r.observacao ? `👤 ${r.observacao}` : "—"}
+                        <span style={{ fontSize:"11px", color:"var(--t3)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                          {r.localizacao ? `📍 ${r.localizacao}` : r.observacao ? `👤 ${r.observacao}` : "—"}
                         </span>
                         <button className="btn bp sm" style={{ whiteSpace:"nowrap" }} onClick={() => {
                           const itensCorte = (pedido?.itens_pedido ?? []).filter((i: any) => !i.vidro_cliente);
@@ -2171,6 +2182,36 @@ export default function PedidoDetalhe() {
                   </div>
                 );
               })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: desvincular ou marcar como quebrado */}
+      {confirmDesvincular && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:"16px" }}>
+          <div style={{ background:"var(--surf0)", border:"1px solid var(--b1)", borderRadius:"14px", padding:"24px", width:"100%", maxWidth:"400px" }}>
+            <div style={{ fontSize:"14px", fontWeight:700, color:"var(--t1)", marginBottom:"6px" }}>Desvincular retalho</div>
+            <div style={{ fontSize:"12px", color:"var(--t2)", marginBottom:"20px", fontFamily:"'DM Mono',monospace" }}>{confirmDesvincular.retalhoId}</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:"10px" }}>
+              <button
+                onClick={() => executarDesvincular(false)}
+                style={{ padding:"12px 16px", borderRadius:"10px", border:"1px solid var(--b2)", background:"var(--surf1)", color:"var(--t1)", fontSize:"13px", fontWeight:600, cursor:"pointer", textAlign:"left" }}
+              >
+                <div>↩ Devolver ao estoque</div>
+                <div style={{ fontSize:"11px", color:"var(--t3)", marginTop:"2px" }}>O vidro está intacto e volta para Disponível</div>
+              </button>
+              <button
+                onClick={() => executarDesvincular(true)}
+                style={{ padding:"12px 16px", borderRadius:"10px", border:"1px solid rgba(239,68,68,.3)", background:"rgba(239,68,68,.06)", color:"#ef4444", fontSize:"13px", fontWeight:600, cursor:"pointer", textAlign:"left" }}
+              >
+                <div>✕ Marcar como quebrado/perdido</div>
+                <div style={{ fontSize:"11px", color:"var(--t3)", marginTop:"2px" }}>O vidro foi descartado — vai para status Descartado</div>
+              </button>
+              <button
+                onClick={() => setConfirmDesvincular(null)}
+                style={{ padding:"9px 16px", borderRadius:"8px", border:"1px solid var(--b1)", background:"transparent", color:"var(--t3)", fontSize:"12px", cursor:"pointer" }}
+              >Cancelar</button>
             </div>
           </div>
         </div>
