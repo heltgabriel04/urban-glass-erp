@@ -196,6 +196,41 @@ function calcSugestoes(
   return result;
 }
 
+function computeAssignmentMap(
+  itens: any[],
+  retUsados: any[]
+): Map<number, any[]> {
+  const map = new Map<number, any[]>();
+  const assignedIds = new Set<number>();
+  // Pass 1: vinculações explícitas por item_pedido_id
+  for (const u of retUsados) {
+    if (u.item_pedido_id) {
+      if (!map.has(u.item_pedido_id)) map.set(u.item_pedido_id, []);
+      map.get(u.item_pedido_id)!.push(u);
+      assignedIds.add(u.id);
+    }
+  }
+  // Pass 2: fallback por algoritmo (retalhos sem item_pedido_id)
+  for (const item of itens) {
+    if (item.vidro_cliente) continue;
+    const lista = map.get(item.id) ?? [];
+    const needed = item.quantidade - lista.length;
+    if (needed <= 0) continue;
+    let added = 0;
+    for (const u of retUsados) {
+      if (added >= needed) break;
+      if (assignedIds.has(u.id) || !u.retalhos || u.item_pedido_id) continue;
+      if (!nomesCompativeis(item.produto_nome, u.retalhos.produto_nome)) continue;
+      if (fitMode(u.retalhos, item.largura, item.altura) === false) continue;
+      lista.push(u);
+      assignedIds.add(u.id);
+      added++;
+    }
+    if (lista.length > 0) map.set(item.id, lista);
+  }
+  return map;
+}
+
 export default function PedidoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -783,21 +818,7 @@ export default function PedidoDetalhe() {
   const lancamentosPagos = lancamentos.filter(l => l.status === "Pago");
 
   const sugestoes = calcSugestoes(pedido.itens_pedido ?? [], retalhosDisponiveis, retalhosUsados as any, sugestoesIgnoradas);
-  const itensCoberturaData = (pedido.itens_pedido ?? [])
-    .filter((item: any) => !item.vidro_cliente)
-    .map((item: any) => {
-      const cobertoPorRetalhos = retalhosUsados.filter(u =>
-        u.item_pedido_id === item.id ||
-        (!u.item_pedido_id && u.retalhos && nomesCompativeis(item.produto_nome, u.retalhos.produto_nome) &&
-          fitMode(u.retalhos, item.largura, item.altura) !== false)
-      ).length;
-      const cobertoPorSugestoes = sugestoes.filter(s => s.itemId === item.id).length;
-      return {
-        id: item.id, produto: item.produto_nome, largura: item.largura, altura: item.altura,
-        quantidade: item.quantidade, cobertoPorRetalhos, cobertoPorSugestoes,
-        paraCorte: Math.max(0, item.quantidade - cobertoPorRetalhos - cobertoPorSugestoes),
-      };
-    });
+  const assignmentMap = computeAssignmentMap(pedido.itens_pedido ?? [], retalhosUsados as any);
 
   const fc: React.CSSProperties = {
     background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: "6px",
@@ -918,10 +939,9 @@ export default function PedidoDetalhe() {
 
           {/* Retalhos utilizados */}
           <div className="card" style={{ padding:"16px 20px" }}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"12px" }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"14px" }}>
               <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>
-                RETALHOS UTILIZADOS{retalhosUsados.length > 0 ? ` (${retalhosUsados.length})` : ""}
-                {m2RetalhosUsados > 0 && <span style={{ marginLeft:"10px", color:"var(--ok)", fontFamily:"'DM Mono',monospace", fontWeight:700 }}>{m2RetalhosUsados.toFixed(4)} m² cobertos</span>}
+                RETALHOS &amp; CORTE CERTO
               </div>
               <div style={{ display:"flex", gap:"8px" }}>
                 {retalhosUsados.length > 0 && (
@@ -931,114 +951,94 @@ export default function PedidoDetalhe() {
               </div>
             </div>
 
-            {/* Cobertura por item */}
-            {itensCoberturaData.length > 0 && (
-              <div style={{ marginBottom:"14px" }}>
-                <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"6px" }}>COBERTURA DO PEDIDO</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:"5px" }}>
-                  {itensCoberturaData.map(item => {
-                    const totCoberto = item.cobertoPorRetalhos + item.cobertoPorSugestoes;
-                    const todoCoberto = totCoberto >= item.quantidade && item.paraCorte === 0;
+            {/* View unificada: por item → por peça */}
+            {(() => {
+              const itensCorte = (pedido.itens_pedido ?? []).filter((i: any) => !i.vidro_cliente);
+              if (itensCorte.length === 0) return (
+                <div style={{ color:"var(--t3)", fontSize:"12px", padding:"8px 0" }}>Nenhum item para corte neste pedido.</div>
+              );
+              return (
+                <div style={{ display:"flex", flexDirection:"column", gap:"16px" }}>
+                  {itensCorte.map((item: any) => {
+                    const retalhosDoItem = assignmentMap.get(item.id) ?? [];
+                    const sugestoesDoItem = sugestoes.filter(s => s.itemId === item.id);
+                    const nCoberto = retalhosDoItem.length;
+                    const nSugerido = sugestoesDoItem.length;
+                    const nCorte = Math.max(0, item.quantidade - nCoberto - nSugerido);
+                    const tudoCoberto = nCorte === 0 && nSugerido === 0;
+
                     return (
-                      <div key={item.id} style={{ display:"flex", alignItems:"center", gap:"10px", padding:"8px 12px", background:"var(--surf2)", borderRadius:"8px", border:`1px solid ${todoCoberto ? "rgba(16,185,129,.25)" : "var(--b2)"}` }}>
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <span style={{ fontSize:"12px", fontWeight:600, color:"var(--t1)" }}>{item.produto}</span>
-                          <span style={{ fontSize:"11px", color:"var(--t3)", marginLeft:"8px", fontFamily:"'DM Mono',monospace" }}>{item.largura}×{item.altura}mm</span>
-                          <span style={{ fontSize:"11px", color:"var(--t3)", marginLeft:"6px" }}>· {item.quantidade} pç</span>
+                      <div key={item.id}>
+                        {/* Cabeçalho do item */}
+                        <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"6px" }}>
+                          <span style={{ fontSize:"13px", fontWeight:700, color:"var(--t1)" }}>{item.produto_nome}</span>
+                          <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>{item.largura}×{item.altura}mm</span>
+                          <span style={{ fontSize:"11px", color:"var(--t3)" }}>· {item.quantidade} pç</span>
+                          {tudoCoberto && <span style={{ fontSize:"10px", color:"var(--ok)", fontWeight:700, marginLeft:"4px" }}>✓ tudo coberto</span>}
                         </div>
-                        <div style={{ display:"flex", gap:"6px", alignItems:"center", flexShrink:0 }}>
-                          {item.cobertoPorRetalhos > 0 && (
-                            <span style={{ fontSize:"11px", fontFamily:"'DM Mono',monospace", color:"var(--ok)", background:"rgba(16,185,129,.1)", border:"1px solid rgba(16,185,129,.3)", borderRadius:"4px", padding:"2px 8px" }}>
-                              ✓ {item.cobertoPorRetalhos} retalho{item.cobertoPorRetalhos > 1 ? "s" : ""}
-                            </span>
-                          )}
-                          {item.cobertoPorSugestoes > 0 && (
-                            <span style={{ fontSize:"11px", fontFamily:"'DM Mono',monospace", color:"var(--acc)", background:"rgba(99,102,241,.1)", border:"1px solid rgba(99,102,241,.3)", borderRadius:"4px", padding:"2px 8px" }}>
-                              ◎ {item.cobertoPorSugestoes} sugestão
-                            </span>
-                          )}
-                          {item.paraCorte > 0 ? (
-                            <span style={{ fontSize:"11px", fontFamily:"'DM Mono',monospace", color:"var(--warn)", background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.3)", borderRadius:"4px", padding:"2px 8px" }}>
-                              ✂ {item.paraCorte} para corte
-                            </span>
-                          ) : item.cobertoPorRetalhos + item.cobertoPorSugestoes === 0 ? (
-                            <span style={{ fontSize:"11px", fontFamily:"'DM Mono',monospace", color:"var(--t3)", background:"var(--surf3)", border:"1px solid var(--b2)", borderRadius:"4px", padding:"2px 8px" }}>
-                              ✂ {item.quantidade} para corte
-                            </span>
-                          ) : (
-                            <span style={{ fontSize:"11px", color:"var(--ok)" }}>✓ coberto</span>
-                          )}
+
+                        {/* Linha por peça */}
+                        <div style={{ display:"flex", flexDirection:"column", gap:"4px", paddingLeft:"4px" }}>
+
+                          {/* Retalhos já vinculados */}
+                          {retalhosDoItem.map((u: any, pi: number) => (
+                            <div key={u.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"7px 12px", background:"rgba(16,185,129,.07)", border:"1px solid rgba(16,185,129,.2)", borderRadius:"7px" }}>
+                              <span style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", minWidth:"36px" }}>pç {pi + 1}</span>
+                              <span style={{ fontSize:"13px", color:"var(--ok)" }}>✓</span>
+                              <span style={{ fontFamily:"'DM Mono',monospace", color:"var(--acc2)", fontWeight:700, fontSize:"12px" }}>{u.retalho_id}</span>
+                              {u.retalhos && (
+                                <>
+                                  <span style={{ fontSize:"11px", color:"var(--t2)", fontFamily:"'DM Mono',monospace" }}>{u.retalhos.largura}×{u.retalhos.altura}mm</span>
+                                  {u.retalhos.box && <span style={{ fontSize:"10px", color:"var(--t3)" }}>box {u.retalhos.box}</span>}
+                                  {u.retalhos.observacao && <span style={{ fontSize:"10px", color:"var(--warn)", fontWeight:600 }}>👤 {u.retalhos.observacao}</span>}
+                                </>
+                              )}
+                              <button
+                                className="btn bw sm"
+                                style={{ marginLeft:"auto", flexShrink:0 }}
+                                onClick={() => handleDesvincularRetalho(u.id, u.retalho_id)}
+                              >Desvincular</button>
+                            </div>
+                          ))}
+
+                          {/* Sugestões pendentes */}
+                          {sugestoesDoItem.map((s, pi) => (
+                            <div key={s.retalhoId} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"7px 12px", background:"rgba(99,102,241,.08)", border:"1px solid rgba(99,102,241,.25)", borderRadius:"7px" }}>
+                              <span style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", minWidth:"36px" }}>pç {nCoberto + pi + 1}</span>
+                              <span style={{ fontSize:"13px", color:"var(--acc)" }}>◎</span>
+                              <span style={{ fontFamily:"'DM Mono',monospace", color:"var(--acc2)", fontWeight:700, fontSize:"12px" }}>{s.retalhoId}</span>
+                              <span style={{ fontSize:"11px", color:"var(--t2)", fontFamily:"'DM Mono',monospace" }}>{s.retalho.largura}×{s.retalho.altura}mm</span>
+                              {s.retalho.box && <span style={{ fontSize:"10px", color:"var(--t3)" }}>box {s.retalho.box}</span>}
+                              <span style={{ fontSize:"10px", color:"var(--acc)", background:"rgba(99,102,241,.12)", border:"1px solid rgba(99,102,241,.2)", borderRadius:"3px", padding:"1px 6px" }}>sugestão{s.rotacionado ? " ↻" : ""}</span>
+                              <div style={{ marginLeft:"auto", display:"flex", gap:"5px", flexShrink:0 }}>
+                                <button
+                                  className="btn bp sm"
+                                  onClick={() => { handleVincularRetalho(s.retalhoId, s.itemId); }}
+                                >Usar</button>
+                                <button
+                                  className="btn bg sm"
+                                  onClick={() => { setSugestoesIgnoradas(prev => { const n = new Set(prev); n.add(s.retalhoId); return n; }); }}
+                                >Pular</button>
+                              </div>
+                            </div>
+                          ))}
+
+                          {/* Peças que vão para o Corte Certo */}
+                          {nCorte > 0 && Array.from({ length: nCorte }, (_, pi) => (
+                            <div key={pi} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"7px 12px", background:"rgba(245,158,11,.06)", border:"1px solid rgba(245,158,11,.2)", borderRadius:"7px" }}>
+                              <span style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", minWidth:"36px" }}>pç {nCoberto + nSugerido + pi + 1}</span>
+                              <span style={{ fontSize:"13px", color:"var(--warn)" }}>✂</span>
+                              <span style={{ fontSize:"12px", color:"var(--warn)", fontWeight:600 }}>Corte Certo</span>
+                              <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>{item.largura}×{item.altura}mm</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     );
                   })}
                 </div>
-              </div>
-            )}
-
-            {/* Sugestões automáticas */}
-            {sugestoes.length > 0 && (
-              <div style={{ marginBottom:"14px" }}>
-                <div style={{ fontSize:"10px", color:"var(--acc)", fontWeight:700, letterSpacing:".06em", marginBottom:"6px" }}>
-                  SUGESTÕES AUTOMÁTICAS ({sugestoes.length} retalho{sugestoes.length > 1 ? "s" : ""} compatível{sugestoes.length > 1 ? "is" : ""})
-                </div>
-                <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
-                  {sugestoes.map(s => (
-                    <div key={s.retalhoId} style={{ display:"flex", alignItems:"center", gap:"12px", padding:"10px 12px", background:"rgba(99,102,241,.06)", borderRadius:"8px", border:"1px solid rgba(99,102,241,.2)" }}>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:"8px", flexWrap:"wrap" }}>
-                          <span className="mono" style={{ color:"var(--acc2)", fontWeight:700, fontSize:"12px" }}>{s.retalhoId}</span>
-                          <span style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600 }}>{s.retalho.produto_nome}</span>
-                          <span className="mono" style={{ fontSize:"11px", color:"var(--t2)" }}>{s.retalho.largura}×{s.retalho.altura}mm</span>
-                          {s.retalho.box && <span style={{ fontSize:"10px", color:"var(--t3)" }}>box {s.retalho.box}</span>}
-                          {s.retalho.observacao && <span style={{ fontSize:"10px", color:"var(--warn)", fontWeight:600 }}>👤 {s.retalho.observacao}</span>}
-                        </div>
-                        <div style={{ fontSize:"11px", color:"var(--t3)", marginTop:"2px" }}>
-                          → cobre peça {s.pecaNum} de {s.itemLargura}×{s.itemAltura}mm{s.rotacionado ? " (rotacionado)" : ""}
-                        </div>
-                      </div>
-                      <div style={{ display:"flex", gap:"6px", flexShrink:0 }}>
-                        <button className="btn bp sm" onClick={() => handleVincularRetalho(s.retalhoId, s.itemId)}>Usar</button>
-                        <button className="btn bg sm" onClick={() => setSugestoesIgnoradas(prev => new Set([...prev, s.retalhoId]))}>Pular</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Retalhos já vinculados */}
-            {retalhosUsados.length === 0 && sugestoes.length === 0 && itensCoberturaData.length === 0 && (
-              <div style={{ color:"var(--t3)", fontSize:"12px", padding:"12px 0" }}>Nenhum retalho vinculado. Use o botão acima para selecionar retalhos disponíveis.</div>
-            )}
-            {retalhosUsados.length > 0 && (
-              <div className="tw" style={{ marginBottom:0 }}>
-                <table>
-                  <thead>
-                    <tr><th>Retalho</th><th>Produto</th><th>Dimensões</th><th>m²</th><th>Box</th><th>Cliente</th><th></th></tr>
-                  </thead>
-                  <tbody>
-                    {retalhosUsados.map(u => (
-                      <tr key={u.id}>
-                        <td><span className="mono" style={{ color:"var(--acc2)" }}>{u.retalho_id}</span></td>
-                        <td><strong>{u.retalhos?.produto_nome ?? "—"}</strong>{u.retalhos?.espessura ? <span className="tdim">{u.retalhos.espessura}mm</span> : null}</td>
-                        <td className="mono">{u.retalhos ? `${u.retalhos.largura} × ${u.retalhos.altura} mm` : "—"}</td>
-                        <td className="mono">{u.retalhos ? Number(u.retalhos.m2).toFixed(4) : "—"}</td>
-                        <td className="mono" style={{ color:"var(--t2)" }}>{u.retalhos?.box ?? "—"}</td>
-                        <td>{u.retalhos?.observacao ? <span style={{ color:"var(--warn)", fontWeight:700, fontSize:"11px" }}>👤 {u.retalhos.observacao}</span> : <span style={{ color:"var(--t3)" }}>—</span>}</td>
-                        <td>
-                          <button
-                            className="btn bw sm"
-                            onClick={() => handleDesvincularRetalho(u.id, u.retalho_id)}
-                            title="Desvincular e devolver ao estoque"
-                          >Desvincular</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* bloco legado de otimização interna — oculto, mantido para histórico */}
