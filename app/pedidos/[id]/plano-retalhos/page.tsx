@@ -348,6 +348,15 @@ export default function PlanoRetalhos() {
                   <div style={{ fontSize: "12px", color: "#9ca3af", fontFamily: "monospace", marginTop: "4px" }}>
                     {ret.largura} × {ret.altura} mm · {Number(ret.m2).toFixed(4)} m²
                     {ret.box && <span style={{ marginLeft: "10px", color: "#6b7280" }}>Box {ret.box}</span>}
+                    {ret.pedido_origem && (
+                      <span style={{ marginLeft: "10px", color: "#6b7280" }}>
+                        ↩ sobra de{" "}
+                        <a href={`/pedidos/${ret.pedido_origem}`} style={{ color: "#60a5fa", textDecoration: "underline", textDecorationStyle: "dotted" }}>{ret.pedido_origem}</a>
+                      </span>
+                    )}
+                    {ret.chapa_origem && !ret.pedido_origem && (
+                      <span style={{ marginLeft: "10px", color: "#6b7280" }}>chapa {ret.chapa_origem}</span>
+                    )}
                   </div>
                 </div>
                 {peca && (

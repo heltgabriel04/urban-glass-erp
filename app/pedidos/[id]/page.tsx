@@ -128,7 +128,7 @@ interface EdicaoPago {
   salvando: boolean;
 }
 
-type RetalhoDispInfo = { id: string; produto_nome: string; largura: number; altura: number; m2: number; espessura: number | null; box: string | null; observacao: string | null };
+type RetalhoDispInfo = { id: string; produto_nome: string; largura: number; altura: number; m2: number; espessura: number | null; box: string | null; observacao: string | null; pedido_origem: string | null; chapa_origem: string | null };
 
 interface SugestaoRetalho {
   retalhoId: string;
@@ -162,7 +162,7 @@ interface SobraFila {
 const MIN_SOBRA = 80; // mm mínimos para valer registrar
 
 function gerarSobra(
-  ret: { id: string; produto_nome: string; largura: number; altura: number; espessura: number | null; box: string | null },
+  ret: Pick<RetalhoDispInfo, "id" | "produto_nome" | "largura" | "altura" | "espessura" | "box">,
   pL: number, pA: number, rotacionado: boolean,
   pedidoId: string
 ): SobraFila | null {
@@ -295,7 +295,7 @@ export default function PedidoDetalhe() {
   const [retalhosUsados, setRetalhosUsados] = useState<Awaited<ReturnType<typeof getRetalhosUsadosPorPedido>>>([]);
   const [uploadandoCorteCerto, setUploadandoCorteCerto] = useState(false);
   const [showVincularRetalho, setShowVincularRetalho] = useState(false);
-  const [retalhosDisponiveis, setRetalhosDisponiveis] = useState<Array<{ id: string; produto_nome: string; largura: number; altura: number; m2: number; espessura: number | null; box: string | null; observacao: string | null }>>([]);
+  const [retalhosDisponiveis, setRetalhosDisponiveis] = useState<RetalhoDispInfo[]>([]);
   const [filtroBuscaRetalho, setFiltroBuscaRetalho] = useState("");
   const [sugestoesIgnoradas, setSugestoesIgnoradas] = useState<Set<string>>(new Set());
   const [selecionandoTodos, setSelecionandoTodos]   = useState(false);
@@ -397,7 +397,7 @@ export default function PedidoDetalhe() {
     setSugestoesIgnoradas(new Set());
     const { data: retDisp } = await supabase
       .from("retalhos")
-      .select("id, produto_nome, largura, altura, m2, espessura, box, observacao")
+      .select("id, produto_nome, largura, altura, m2, espessura, box, observacao, pedido_origem, chapa_origem")
       .eq("status", "Disponível")
       .order("produto_nome");
     setRetalhosDisponiveis((retDisp ?? []) as typeof retalhosDisponiveis);
@@ -1117,6 +1117,12 @@ export default function PedidoDetalhe() {
                                   <span style={{ fontSize:"11px", color:"var(--t2)", fontFamily:"'DM Mono',monospace" }}>{u.retalhos.largura}×{u.retalhos.altura}mm</span>
                                   {u.retalhos.box && <span style={{ fontSize:"10px", color:"var(--t3)" }}>box {u.retalhos.box}</span>}
                                   {u.retalhos.observacao && <span style={{ fontSize:"10px", color:"var(--warn)", fontWeight:600 }}>👤 {u.retalhos.observacao}</span>}
+                                  {u.retalhos.pedido_origem && (
+                                    <a href={`/pedidos/${u.retalhos.pedido_origem}`} style={{ fontSize:"10px", color:"var(--t3)", textDecoration:"underline", textDecorationStyle:"dotted" }} title={`Sobra do pedido ${u.retalhos.pedido_origem}`}>↩ {u.retalhos.pedido_origem}</a>
+                                  )}
+                                  {u.retalhos.chapa_origem && !u.retalhos.pedido_origem && (
+                                    <span style={{ fontSize:"10px", color:"var(--t3)" }}>chapa {u.retalhos.chapa_origem}</span>
+                                  )}
                                 </>
                               )}
                               <button
@@ -1136,6 +1142,12 @@ export default function PedidoDetalhe() {
                               <span style={{ fontSize:"11px", color:"var(--t2)", fontFamily:"'DM Mono',monospace" }}>{s.retalho.largura}×{s.retalho.altura}mm</span>
                               {s.retalho.box && <span style={{ fontSize:"10px", color:"var(--t3)" }}>box {s.retalho.box}</span>}
                               <span style={{ fontSize:"10px", color:"var(--acc)", background:"rgba(99,102,241,.12)", border:"1px solid rgba(99,102,241,.2)", borderRadius:"3px", padding:"1px 6px" }}>sugestão{s.rotacionado ? " ↻" : ""}</span>
+                              {s.retalho.pedido_origem && (
+                                <a href={`/pedidos/${s.retalho.pedido_origem}`} style={{ fontSize:"10px", color:"var(--t3)", textDecoration:"underline", textDecorationStyle:"dotted" }} title={`Sobra do pedido ${s.retalho.pedido_origem}`}>↩ {s.retalho.pedido_origem}</a>
+                              )}
+                              {s.retalho.chapa_origem && !s.retalho.pedido_origem && (
+                                <span style={{ fontSize:"10px", color:"var(--t3)" }}>chapa {s.retalho.chapa_origem}</span>
+                              )}
                               <div style={{ marginLeft:"auto", display:"flex", gap:"5px", flexShrink:0 }}>
                                 <button
                                   className="btn bp sm"
