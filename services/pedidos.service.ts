@@ -125,7 +125,7 @@ export async function createPedido(pedido: PedidoInsert, itens: ItemPedidoInsert
     .select()
     .single();
 
-  if (error) { console.error('createPedido:', error); return null; }
+  if (error) { console.error('createPedido:', error); throw new Error(error.message); }
 
   registrarLog({
     acao: "criou", tabela: "pedidos", registro_id: (data as Pedido).id,

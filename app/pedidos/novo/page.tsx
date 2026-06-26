@@ -401,47 +401,46 @@ function NovoPedidoPageInner() {
   const parcelasOk   = difParcelas < 0.02;
 
   async function salvar() {
-    if (!clienteId) { alert("Selecione um cliente"); return; }
-    if (itens.some(i => i.largura === 0 || i.altura === 0)) { alert("Preencha as dimensões de todos os itens"); return; }
-    if (!parcelasOk) { alert(`Soma das parcelas (${formatBRL(somaParcelas)}) difere do total (${formatBRL(valorTotal)}). Ajuste os valores antes de salvar.`); return; }
+    if (!clienteId) { toast("Selecione um cliente", "err"); return; }
+    if (itens.some(i => i.largura === 0 || i.altura === 0)) { toast("Preencha as dimensões de todos os itens", "err"); return; }
+    if (!parcelasOk) { toast(`Soma das parcelas (${formatBRL(somaParcelas)}) difere do total (${formatBRL(valorTotal)})`, "err"); return; }
 
     setSalvando(true);
+    try {
+      const todosChapa = itens.every(i => isChapaInteira(i.largura, i.altura));
 
-    const todosChapa = itens.every(i => isChapaInteira(i.largura, i.altura));
+      const pedido: PedidoInsert = {
+        id: proximoId,
+        cliente_id: clienteId,
+        vendedor_id: vendedorId,
+        dt_pedido: dtPedido,
+        dt_retirada: dtRetirada || null,
+        datas_pgto: parcelasForm.map(p => p.data).filter(d => d),
+        valores_pgto: parcelasForm.map(p => p.valor),
+        m2_total: m2Total,
+        valor_total: valorTotal,
+        valor_recebido: 0,
+        status: todosChapa ? "Em Produção – Corte" : "Aguardando otimização",
+        forma_pgto: parcelasForm[0]?.formaPgto || formaPgto,
+        conta: parcelasForm[0]?.conta || conta,
+        parcelas, obs,
+      };
 
-    const pedido: PedidoInsert = {
-      id: proximoId,
-      cliente_id: clienteId,
-      vendedor_id: vendedorId,
-      dt_pedido: dtPedido,
-      dt_retirada: dtRetirada || null,
-      datas_pgto: parcelasForm.map(p => p.data).filter(d => d),
-      valores_pgto: parcelasForm.map(p => p.valor),
-      m2_total: m2Total,
-      valor_total: valorTotal,
-      valor_recebido: 0,
-      status: todosChapa ? "Em Produção – Corte" : "Aguardando otimização",
-      forma_pgto: parcelasForm[0]?.formaPgto || formaPgto,
-      conta: parcelasForm[0]?.conta || conta,
-      parcelas, obs,
-    };
+      const itensInsert: ItemPedidoInsert[] = itens.map(i => ({
+        pedido_id: proximoId,
+        produto_id: i.produto_id,
+        produto_nome: i.produto_nome,
+        largura: i.largura,
+        altura: i.altura,
+        m2: modoPedido === "ml" ? calcMLItem(i) : calcM2Item(i),
+        valor_m2: i.valor_m2,
+        lapidacao: i.lapidacao,
+        quantidade: i.quantidade,
+        subtotal: calcSubtotal(i),
+        vidro_cliente: i.vidro_cliente,
+      }));
 
-    const itensInsert: ItemPedidoInsert[] = itens.map(i => ({
-      pedido_id: proximoId,
-      produto_id: i.produto_id,
-      produto_nome: i.produto_nome,
-      largura: i.largura,
-      altura: i.altura,
-      m2: modoPedido === "ml" ? calcMLItem(i) : calcM2Item(i),
-      valor_m2: i.valor_m2,
-      lapidacao: i.lapidacao,
-      quantidade: i.quantidade,
-      subtotal: calcSubtotal(i),
-      vidro_cliente: i.vidro_cliente,
-    }));
-
-    const result = await createPedido(pedido, itensInsert);
-    if (result) {
+      const result = await createPedido(pedido, itensInsert);
       await criarLancamentosParcelados({ pedidoId: proximoId, clienteId, parcelas: parcelasForm });
       if (vendedorId) {
         const vendedor = vendedores.find(v => v.id === vendedorId);
@@ -453,15 +452,19 @@ function NovoPedidoPageInner() {
             valor:        valorComissao,
             status:       "Pendente",
             vencimento:   parcelasForm[0]?.data || null,
-            pedido_id:    proximoId,
+            pedido_id:    result.id,
             cliente_id:   null,
             vendedor_id:  vendedorId,
           } as never]);
         }
       }
       router.push("/pedidos");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro desconhecido";
+      toast(`Erro ao salvar pedido: ${msg}`, "err");
+    } finally {
+      setSalvando(false);
     }
-    setSalvando(false);
   }
 
   const tab  = getTabela();
