@@ -248,6 +248,7 @@ export default function PedidoDetalhe() {
   const [retalhosDisponiveis, setRetalhosDisponiveis] = useState<Array<{ id: string; produto_nome: string; largura: number; altura: number; m2: number; espessura: number | null; box: string | null; observacao: string | null }>>([]);
   const [filtroBuscaRetalho, setFiltroBuscaRetalho] = useState("");
   const [sugestoesIgnoradas, setSugestoesIgnoradas] = useState<Set<string>>(new Set());
+  const [selecionandoTodos, setSelecionandoTodos]   = useState(false);
   const [itemParaRetalho, setItemParaRetalho] = useState<number | null>(null);
   const [clientes, setClientes]         = useState<{ id: number; nome: string }[]>([]);
   const [vendedores, setVendedores]     = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
@@ -737,6 +738,20 @@ export default function PedidoDetalhe() {
     }
   }
 
+  async function handleSelecionarTodos(sugestoesPendentes: typeof sugestoes) {
+    if (!sugestoesPendentes.length) return;
+    setSelecionandoTodos(true);
+    let ok = 0, err = 0;
+    for (const s of sugestoesPendentes) {
+      const r = await vincularRetalhoAoPedido(id, s.retalhoId, s.itemId);
+      if (r.ok) ok++; else err++;
+    }
+    await load();
+    setSelecionandoTodos(false);
+    if (err === 0) toast(`${ok} retalho${ok > 1 ? "s" : ""} vinculado${ok > 1 ? "s" : ""}`);
+    else toast(`${ok} vinculado${ok > 1 ? "s" : ""}, ${err} com erro`, "err");
+  }
+
   async function handleDesvincularRetalho(usoId: number, retalhoId: string) {
     if (!confirm(`Desvincular retalho ${retalhoId} deste pedido e devolver ao estoque?`)) return;
     const ok = await desvincularRetalhoAoPedido(usoId, retalhoId);
@@ -943,9 +958,19 @@ export default function PedidoDetalhe() {
               <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>
                 RETALHOS &amp; CORTE CERTO
               </div>
-              <div style={{ display:"flex", gap:"8px" }}>
+              <div style={{ display:"flex", gap:"8px", flexWrap:"wrap" }}>
                 {retalhosUsados.length > 0 && (
                   <a href={`/pedidos/${id}/plano-retalhos`} className="btn bg sm" style={{ textDecoration:"none", whiteSpace:"nowrap" }}>✂ Plano de Retalhos</a>
+                )}
+                {sugestoes.length > 0 && (
+                  <button
+                    className="btn bp sm"
+                    disabled={selecionandoTodos}
+                    style={{ whiteSpace:"nowrap" }}
+                    onClick={() => handleSelecionarTodos(sugestoes)}
+                  >
+                    {selecionandoTodos ? "Vinculando…" : `✓ Usar Todos (${sugestoes.length})`}
+                  </button>
                 )}
                 <button className="btn bg sm" onClick={abrirVincularRetalho}>+ Vincular Retalho</button>
               </div>
