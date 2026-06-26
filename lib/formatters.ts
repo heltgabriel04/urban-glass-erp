@@ -22,14 +22,12 @@ export function formatPercent(value: number | null | undefined, decimals = 2): s
   return Number(value || 0).toFixed(decimals) + '%';
 }
 
-/** 23/05/2026 */
+/** 23/05/2026 — parseia YYYY-MM-DD sem converter para UTC para evitar bug de fuso */
 export function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—';
-  try {
-    return new Date(dateStr).toLocaleDateString('pt-BR');
-  } catch {
-    return dateStr;
-  }
+  const parts = dateStr.split('T')[0].split('-');
+  if (parts.length === 3 && parts[0].length === 4) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return dateStr;
 }
 
 /** Diferença em dias entre hoje e uma data */
