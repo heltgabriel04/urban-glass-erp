@@ -147,6 +147,9 @@ export default function PedidoDetalhe() {
   const [uploadandoRomaneio, setUploadandoRomaneio] = useState(false);
   const [uploadandoNfe,     setUploadandoNfe]     = useState(false);
   const [uploadandoBoleto,  setUploadandoBoleto]  = useState(false);
+  const [abrirRomaneio,     setAbrirRomaneio]     = useState(false);
+  const [abrirNfe,          setAbrirNfe]          = useState(false);
+  const [abrirBoleto,       setAbrirBoleto]       = useState(false);
 
   // Qualidade
   const [ncs, setNcs]               = useState<NaoConformidade[]>([]);
@@ -1335,99 +1338,114 @@ export default function PedidoDetalhe() {
           </div>
 
           {/* Romaneio(s) Assinado(s) */}
-          <div className="card" style={{ padding: "20px 24px" }}>
-            <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, marginBottom: "16px", letterSpacing: ".06em" }}>
-              ROMANEIO(S) ASSINADO(S){(pedido.romaneio_assinado_urls?.length ?? 0) > 0 ? ` (${pedido.romaneio_assinado_urls!.length})` : ""}
-            </div>
-
-            {(pedido.romaneio_assinado_urls?.length ?? 0) > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
-                {pedido.romaneio_assinado_urls!.map((url, i) => (
-                  <div key={url} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", background: "rgba(16,185,129,.08)", borderRadius: "8px", border: "1px solid rgba(16,185,129,.2)" }}>
-                    <span style={{ fontSize: "16px" }}>📄</span>
-                    <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--ok)", fontWeight: 600, fontSize: "13px", textDecoration: "underline" }}>
-                      Romaneio assinado {i + 1}
-                    </a>
-                    <button className="btn bw sm" onClick={() => handleRemoverRomaneioAssinado(url)} disabled={uploadandoRomaneio}>Remover</button>
+          <div className="card" style={{ overflow: "hidden" }}>
+            <button onClick={() => setAbrirRomaneio(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", background: "none", border: "none", cursor: "pointer", color: "var(--t1)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span style={{ fontSize: "14px" }}>📎</span>
+                <span style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>ROMANEIO(S) ASSINADO(S)</span>
+                {(pedido.romaneio_assinado_urls?.length ?? 0) > 0 && (
+                  <span style={{ fontSize: "11px", background: "rgba(16,185,129,.15)", color: "var(--ok)", borderRadius: "10px", padding: "1px 8px", fontWeight: 700 }}>{pedido.romaneio_assinado_urls!.length}</span>
+                )}
+              </div>
+              <span style={{ fontSize: "12px", color: "var(--t3)", transform: abrirRomaneio ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}>▾</span>
+            </button>
+            {abrirRomaneio && (
+              <div style={{ padding: "0 24px 20px" }}>
+                {(pedido.romaneio_assinado_urls?.length ?? 0) > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+                    {pedido.romaneio_assinado_urls!.map((url, i) => (
+                      <div key={url} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", background: "rgba(16,185,129,.08)", borderRadius: "8px", border: "1px solid rgba(16,185,129,.2)" }}>
+                        <span style={{ fontSize: "16px" }}>📄</span>
+                        <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--ok)", fontWeight: 600, fontSize: "13px", textDecoration: "underline" }}>Romaneio assinado {i + 1}</a>
+                        <button className="btn bw sm" onClick={() => handleRemoverRomaneioAssinado(url)} disabled={uploadandoRomaneio}>Remover</button>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+                <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px", padding: "20px", border: "2px dashed var(--b2)", borderRadius: "8px", cursor: uploadandoRomaneio ? "default" : "pointer", background: "var(--surf2)" }}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoRomaneio) handleUploadRomaneioAssinado(fs); }}>
+                  <span style={{ fontSize: "20px" }}>📎</span>
+                  <span style={{ fontSize: "12px", color: "var(--t3)", textAlign: "center" }}>{uploadandoRomaneio ? "Enviando..." : "Arraste ou clique para anexar romaneio(s) assinado(s) — dá pra anexar mais de um"}</span>
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple style={{ display: "none" }} disabled={uploadandoRomaneio}
+                    onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadRomaneioAssinado(fs); e.target.value = ""; }} />
+                </label>
               </div>
             )}
-
-            <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px", padding: "20px", border: "2px dashed var(--b2)", borderRadius: "8px", cursor: uploadandoRomaneio ? "default" : "pointer", background: "var(--surf2)" }}
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoRomaneio) handleUploadRomaneioAssinado(fs); }}>
-              <span style={{ fontSize: "20px" }}>📎</span>
-              <span style={{ fontSize: "12px", color: "var(--t3)" }}>
-                {uploadandoRomaneio ? "Enviando..." : "Arraste ou clique para anexar romaneio(s) assinado(s) na entrega (PDF ou imagem) — dá pra anexar mais de um, ex: uma viagem por retirada"}
-              </span>
-              <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple style={{ display: "none" }} disabled={uploadandoRomaneio}
-                onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadRomaneioAssinado(fs); e.target.value = ""; }} />
-            </label>
           </div>
 
           {/* NF-e */}
-          <div className="card" style={{ padding: "20px 24px" }}>
-            <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, marginBottom: "16px", letterSpacing: ".06em" }}>
-              NF-e{(pedido.nfe_urls?.length ?? 0) > 0 ? ` (${pedido.nfe_urls!.length})` : ""}
-            </div>
-
-            {(pedido.nfe_urls?.length ?? 0) > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
-                {pedido.nfe_urls!.map((url, i) => (
-                  <div key={url} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", background: "rgba(99,102,241,.08)", borderRadius: "8px", border: "1px solid rgba(99,102,241,.2)" }}>
-                    <span style={{ fontSize: "16px" }}>🧾</span>
-                    <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--acc)", fontWeight: 600, fontSize: "13px", textDecoration: "underline" }}>
-                      NF-e {i + 1}
-                    </a>
-                    <button className="btn bw sm" onClick={() => handleRemoverNfe(url)} disabled={uploadandoNfe}>Remover</button>
+          <div className="card" style={{ overflow: "hidden" }}>
+            <button onClick={() => setAbrirNfe(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", background: "none", border: "none", cursor: "pointer", color: "var(--t1)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span style={{ fontSize: "14px" }}>🧾</span>
+                <span style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>NF-e</span>
+                {(pedido.nfe_urls?.length ?? 0) > 0 && (
+                  <span style={{ fontSize: "11px", background: "rgba(99,102,241,.15)", color: "var(--acc)", borderRadius: "10px", padding: "1px 8px", fontWeight: 700 }}>{pedido.nfe_urls!.length}</span>
+                )}
+              </div>
+              <span style={{ fontSize: "12px", color: "var(--t3)", transform: abrirNfe ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}>▾</span>
+            </button>
+            {abrirNfe && (
+              <div style={{ padding: "0 24px 20px" }}>
+                {(pedido.nfe_urls?.length ?? 0) > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+                    {pedido.nfe_urls!.map((url, i) => (
+                      <div key={url} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", background: "rgba(99,102,241,.08)", borderRadius: "8px", border: "1px solid rgba(99,102,241,.2)" }}>
+                        <span style={{ fontSize: "16px" }}>🧾</span>
+                        <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--acc)", fontWeight: 600, fontSize: "13px", textDecoration: "underline" }}>NF-e {i + 1}</a>
+                        <button className="btn bw sm" onClick={() => handleRemoverNfe(url)} disabled={uploadandoNfe}>Remover</button>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+                <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px", padding: "20px", border: "2px dashed var(--b2)", borderRadius: "8px", cursor: uploadandoNfe ? "default" : "pointer", background: "var(--surf2)" }}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoNfe) handleUploadNfe(fs); }}>
+                  <span style={{ fontSize: "20px" }}>🧾</span>
+                  <span style={{ fontSize: "12px", color: "var(--t3)" }}>{uploadandoNfe ? "Enviando..." : "Arraste ou clique para anexar NF-e (PDF ou XML)"}</span>
+                  <input type="file" accept=".pdf,.xml,.jpg,.jpeg,.png" multiple style={{ display: "none" }} disabled={uploadandoNfe}
+                    onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadNfe(fs); e.target.value = ""; }} />
+                </label>
               </div>
             )}
-
-            <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px", padding: "20px", border: "2px dashed var(--b2)", borderRadius: "8px", cursor: uploadandoNfe ? "default" : "pointer", background: "var(--surf2)" }}
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoNfe) handleUploadNfe(fs); }}>
-              <span style={{ fontSize: "20px" }}>🧾</span>
-              <span style={{ fontSize: "12px", color: "var(--t3)" }}>
-                {uploadandoNfe ? "Enviando..." : "Arraste ou clique para anexar NF-e (PDF ou XML)"}
-              </span>
-              <input type="file" accept=".pdf,.xml,.jpg,.jpeg,.png" multiple style={{ display: "none" }} disabled={uploadandoNfe}
-                onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadNfe(fs); e.target.value = ""; }} />
-            </label>
           </div>
 
           {/* Boleto */}
-          <div className="card" style={{ padding: "20px 24px" }}>
-            <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, marginBottom: "16px", letterSpacing: ".06em" }}>
-              BOLETO{(pedido.boleto_urls?.length ?? 0) > 0 ? ` (${pedido.boleto_urls!.length})` : ""}
-            </div>
-
-            {(pedido.boleto_urls?.length ?? 0) > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
-                {pedido.boleto_urls!.map((url, i) => (
-                  <div key={url} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", background: "rgba(245,158,11,.08)", borderRadius: "8px", border: "1px solid rgba(245,158,11,.25)" }}>
-                    <span style={{ fontSize: "16px" }}>🏦</span>
-                    <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--warn)", fontWeight: 600, fontSize: "13px", textDecoration: "underline" }}>
-                      Boleto {i + 1}
-                    </a>
-                    <button className="btn bw sm" onClick={() => handleRemoverBoleto(url)} disabled={uploadandoBoleto}>Remover</button>
+          <div className="card" style={{ overflow: "hidden" }}>
+            <button onClick={() => setAbrirBoleto(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", background: "none", border: "none", cursor: "pointer", color: "var(--t1)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span style={{ fontSize: "14px" }}>🏦</span>
+                <span style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>BOLETO</span>
+                {(pedido.boleto_urls?.length ?? 0) > 0 && (
+                  <span style={{ fontSize: "11px", background: "rgba(245,158,11,.18)", color: "var(--warn)", borderRadius: "10px", padding: "1px 8px", fontWeight: 700 }}>{pedido.boleto_urls!.length}</span>
+                )}
+              </div>
+              <span style={{ fontSize: "12px", color: "var(--t3)", transform: abrirBoleto ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}>▾</span>
+            </button>
+            {abrirBoleto && (
+              <div style={{ padding: "0 24px 20px" }}>
+                {(pedido.boleto_urls?.length ?? 0) > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+                    {pedido.boleto_urls!.map((url, i) => (
+                      <div key={url} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", background: "rgba(245,158,11,.08)", borderRadius: "8px", border: "1px solid rgba(245,158,11,.25)" }}>
+                        <span style={{ fontSize: "16px" }}>🏦</span>
+                        <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--warn)", fontWeight: 600, fontSize: "13px", textDecoration: "underline" }}>Boleto {i + 1}</a>
+                        <button className="btn bw sm" onClick={() => handleRemoverBoleto(url)} disabled={uploadandoBoleto}>Remover</button>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+                <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px", padding: "20px", border: "2px dashed var(--b2)", borderRadius: "8px", cursor: uploadandoBoleto ? "default" : "pointer", background: "var(--surf2)" }}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoBoleto) handleUploadBoleto(fs); }}>
+                  <span style={{ fontSize: "20px" }}>🏦</span>
+                  <span style={{ fontSize: "12px", color: "var(--t3)" }}>{uploadandoBoleto ? "Enviando..." : "Arraste ou clique para anexar boleto (PDF ou imagem)"}</span>
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple style={{ display: "none" }} disabled={uploadandoBoleto}
+                    onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadBoleto(fs); e.target.value = ""; }} />
+                </label>
               </div>
             )}
-
-            <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px", padding: "20px", border: "2px dashed var(--b2)", borderRadius: "8px", cursor: uploadandoBoleto ? "default" : "pointer", background: "var(--surf2)" }}
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoBoleto) handleUploadBoleto(fs); }}>
-              <span style={{ fontSize: "20px" }}>🏦</span>
-              <span style={{ fontSize: "12px", color: "var(--t3)" }}>
-                {uploadandoBoleto ? "Enviando..." : "Arraste ou clique para anexar boleto (PDF ou imagem)"}
-              </span>
-              <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple style={{ display: "none" }} disabled={uploadandoBoleto}
-                onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadBoleto(fs); e.target.value = ""; }} />
-            </label>
           </div>
         </div>
 
