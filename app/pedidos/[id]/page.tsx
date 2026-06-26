@@ -7,7 +7,7 @@ import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, g
 import { getLancamentosPorPedido, deletarLancamento, createLancamento, updateLancamento } from "@/services/financeiro.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, updateNaoConformidade } from "@/services/qualidade.service";
-import { getRetiradasPorPedido, calcularSaldoItens } from "@/services/retiradas.service";
+import { getRetiradasPorPedido, calcularSaldoItens, createRetirada } from "@/services/retiradas.service";
 import { formatBRL, formatDate, formatDuracao } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import DateInput from "@/components/ui/DateInput";
@@ -168,6 +168,13 @@ export default function PedidoDetalhe() {
 
   // Estado de edição inline dos lançamentos já pagos
   const [editandoPago, setEditandoPago] = useState<Record<number, EdicaoPago>>({});
+
+  // Retirada rápida (registrar tudo de uma vez)
+  const [showRetTudo, setShowRetTudo]   = useState(false);
+  const [retTudoData, setRetTudoData]   = useState(hoje());
+  const [retTudoMot,  setRetTudoMot]    = useState("");
+  const [retTudoVei,  setRetTudoVei]    = useState("");
+  const [salvandoRet, setSalvandoRet]   = useState(false);
 
 
   useEffect(() => { load(); }, [id]);
@@ -583,6 +590,24 @@ export default function PedidoDetalhe() {
     setSalvando(false);
   }
 
+  async function handleRetTudo() {
+    if (!pedido) return;
+    const itensPendentes = calcularSaldoItens(pedido.itens_pedido ?? [], retiradas)
+      .filter(s => s.quantidade_pendente > 0)
+      .map(s => ({ item_pedido_id: s.item_pedido_id, quantidade: s.quantidade_pendente, obs: null }));
+    if (itensPendentes.length === 0) { toast("Nenhuma peça pendente", "warn"); return; }
+    setSalvandoRet(true);
+    const res = await createRetirada(id, { dt_retirada: retTudoData, motorista: retTudoMot || null, veiculo: retTudoVei || null, obs: null }, itensPendentes);
+    setSalvandoRet(false);
+    if (!res) { toast("Erro ao registrar retirada", "err"); return; }
+    toast(`✓ ${itensPendentes.reduce((a, i) => a + i.quantidade, 0)} peça(s) registrada(s) como retirada`);
+    setShowRetTudo(false);
+    setRetTudoMot("");
+    setRetTudoVei("");
+    setRetTudoData(hoje());
+    await load();
+  }
+
   async function handleAvancar() {
     if (!pedido) return;
     if (pedido.status === "Aguardando otimização" && otimizacoes.length === 0 && !todosVidroCliente && !todosChapa) {
@@ -828,20 +853,56 @@ export default function PedidoDetalhe() {
 
           {/* Retiradas */}
           {temItens && (
-            <div style={{ background: corRetiradas.bg, border: `1px solid ${corRetiradas.border}`, borderRadius:"10px", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px" }}>
-              <div style={{ display:"flex", gap:"24px", alignItems:"center" }}>
-                <div>
-                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"2px" }}>RETIRADAS</div>
-                  <div style={{ fontSize:"13px", color: corRetiradas.text, fontWeight:700 }}>
-                    {totalPecasRetirado} de {totalPecasPedido} peça(s) retirada(s)
+            <div style={{ border: `1px solid ${corRetiradas.border}`, borderRadius:"10px", overflow:"hidden" }}>
+              <div style={{ background: corRetiradas.bg, padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px" }}>
+                <div style={{ display:"flex", gap:"24px", alignItems:"center" }}>
+                  <div>
+                    <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"2px" }}>RETIRADAS</div>
+                    <div style={{ fontSize:"13px", color: corRetiradas.text, fontWeight:700 }}>
+                      {totalPecasRetirado} de {totalPecasPedido} peça(s) retirada(s)
+                    </div>
+                  </div>
+                  <div style={{ fontSize:"12px", color:"var(--t3)", fontFamily:"'DM Mono', monospace", display:"flex", gap:"16px" }}>
+                    <span>Viagens: <strong style={{ color:"var(--t1)" }}>{retiradas.length}</strong></span>
+                    <span>Pendente: <strong style={{ color:"var(--t1)" }}>{totalPecasPedido - totalPecasRetirado}</strong></span>
                   </div>
                 </div>
-                <div style={{ fontSize:"12px", color:"var(--t3)", fontFamily:"'DM Mono', monospace", display:"flex", gap:"16px" }}>
-                  <span>Viagens: <strong style={{ color:"var(--t1)" }}>{retiradas.length}</strong></span>
-                  <span>Pendente: <strong style={{ color:"var(--t1)" }}>{totalPecasPedido - totalPecasRetirado}</strong></span>
+                <div style={{ display:"flex", gap:"8px", alignItems:"center" }}>
+                  {totalPecasPedido - totalPecasRetirado > 0 && (
+                    <button
+                      className="btn sm"
+                      onClick={() => { setShowRetTudo(v => !v); setRetTudoData(hoje()); }}
+                      style={{ background: showRetTudo ? "rgba(99,102,241,.18)" : "rgba(99,102,241,.08)", border:"1px solid var(--acc)", color:"var(--acc)", fontWeight:700, whiteSpace:"nowrap" }}
+                    >
+                      ✓ Retirar tudo
+                    </button>
+                  )}
+                  <a href={`/pedidos/${id}/retiradas`} className="btn bg sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>🚚 Ver Retiradas</a>
                 </div>
               </div>
-              <a href={`/pedidos/${id}/retiradas`} className="btn bg sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>🚚 Ver Retiradas</a>
+
+              {showRetTudo && (
+                <div style={{ background:"var(--surf2)", borderTop:`1px solid ${corRetiradas.border}`, padding:"14px 18px", display:"flex", flexWrap:"wrap", gap:"10px", alignItems:"flex-end" }}>
+                  <div style={{ display:"flex", flexDirection:"column", gap:"4px", minWidth:"130px" }}>
+                    <label style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600 }}>Data da retirada</label>
+                    <DateInput value={retTudoData} onChange={setRetTudoData} />
+                  </div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:"4px", flex:"1 1 140px" }}>
+                    <label style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600 }}>Motorista (opcional)</label>
+                    <input value={retTudoMot} onChange={e => setRetTudoMot(e.target.value)} placeholder="—" style={{ background:"var(--surf3)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"7px 10px", color:"var(--t1)", fontSize:"13px", outline:"none" }} />
+                  </div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:"4px", flex:"1 1 140px" }}>
+                    <label style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600 }}>Veículo (opcional)</label>
+                    <input value={retTudoVei} onChange={e => setRetTudoVei(e.target.value)} placeholder="—" style={{ background:"var(--surf3)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"7px 10px", color:"var(--t1)", fontSize:"13px", outline:"none" }} />
+                  </div>
+                  <div style={{ display:"flex", gap:"8px" }}>
+                    <button className="btn bp sm" onClick={handleRetTudo} disabled={salvandoRet} style={{ whiteSpace:"nowrap" }}>
+                      {salvandoRet ? "Salvando..." : `✓ Confirmar retirada de ${totalPecasPedido - totalPecasRetirado} peça(s)`}
+                    </button>
+                    <button className="btn bg sm" onClick={() => setShowRetTudo(false)}>Cancelar</button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
