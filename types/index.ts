@@ -3,7 +3,7 @@
 // ============================================================
 
 export type StatusPedido =
-  | 'Planejamento'
+  | 'Aguardando otimização'
   | 'Em Produção – Corte'
   | 'Qualidade (Corte)'
   | 'Em Produção – Lapidação'
@@ -276,7 +276,6 @@ export interface Pedido {
   qr_token?: string;
   romaneio_pdf_url?: string | null;
   romaneio_assinado_urls?: string[] | null;
-  corte_certo_urls?: string[] | null;
   created_at: string;
   updated_at: string;
   clientes?: Cliente;
@@ -410,7 +409,6 @@ export interface Retalho {
   altura: number;
   espessura?: number | null;
   m2: number;
-  quantidade?: number;
   chapa_origem: string;
   pedido_origem: string | null;
   localizacao?: string | null;

@@ -9,7 +9,7 @@ import type { Pedido, StatusPedido } from "@/types";
 import { useToast } from "@/components/ui/toast";
 
 const COLUNAS: StatusPedido[] = [
-  "Planejamento",
+  "Aguardando otimização",
   "Em Produção – Corte",
   "Qualidade (Corte)",
   "Em Produção – Lapidação",
@@ -19,7 +19,7 @@ const COLUNAS: StatusPedido[] = [
 ];
 
 const COR_COL: Record<string, string> = {
-  "Planejamento":            "var(--warn)",
+  "Aguardando otimização":   "var(--warn)",
   "Em Produção – Corte":     "var(--acc4)",
   "Qualidade (Corte)":       "#22c55e",
   "Em Produção – Lapidação": "var(--acc3)",
@@ -73,6 +73,14 @@ export default function ProducaoPage() {
   }
 
   async function handleAvancar(p: Pedido) {
+    const eVidroCliente = vidroCliente.has(p.id);
+
+    // Bloquear somente se NÃO tem otimização E NÃO é 100% vidro do cliente
+    if (p.status === "Aguardando otimização" && !comOtimizacao.has(p.id) && !eVidroCliente) {
+      toast("Gere a otimização de corte antes de avançar para produção.", "warn");
+      return;
+    }
+
     setAvancando(p.id);
     await avancarStatusPedido(p.id, p.status as StatusPedido);
     setAvancando(null);
@@ -171,6 +179,7 @@ export default function ProducaoPage() {
 
                     {items.map(p => {
                       const eVidroCliente = vidroCliente.has(p.id);
+                      const semOtim = p.status === "Aguardando otimização" && !comOtimizacao.has(p.id) && !eVidroCliente;
                       const diasRet = p.dt_retirada
                         ? Math.ceil((new Date(p.dt_retirada).getTime() - hoje.getTime()) / 86400000)
                         : null;
@@ -213,7 +222,25 @@ export default function ProducaoPage() {
                             </div>
                           )}
 
-                          {!ultimo && (
+                          {/* Ação: precisa otimizar */}
+                          {semOtim && (
+                            <a
+                              href={`/otimizador?pedido=${p.id}`}
+                              onClick={e => e.stopPropagation()}
+                              style={{ display:"block", marginTop:"8px", textAlign:"center", fontSize:"10px", color:"var(--warn)", background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)", borderRadius:"5px", padding:"4px 0", textDecoration:"none" }}
+                            >
+                              ◈ Otimizar primeiro
+                            </a>
+                          )}
+
+                          {/* Ação: vidro do cliente — pode avançar sem otimização */}
+                          {!ultimo && !semOtim && p.status === "Aguardando otimização" && eVidroCliente && !comOtimizacao.has(p.id) && (
+                            <div style={{ marginTop:"6px", fontSize:"10px", color:"var(--warn)", fontFamily:"'DM Mono',monospace", textAlign:"center" }}>
+                              📦 vidro do cliente
+                            </div>
+                          )}
+
+                          {!ultimo && !semOtim && (
                             <div style={{ display:"flex", gap:"4px", marginTop:"8px" }}>
                               {p.status !== COLUNAS[0] && (
                                 <button
@@ -260,6 +287,7 @@ export default function ProducaoPage() {
                     )}
                     {pedidos.map(p => {
                       const eVidroCliente = vidroCliente.has(p.id);
+                      const semOtim  = p.status === "Aguardando otimização" && !comOtimizacao.has(p.id) && !eVidroCliente;
                       const diasRet  = p.dt_retirada ? Math.ceil((new Date(p.dt_retirada).getTime() - hoje.getTime()) / 86400000) : null;
                       const urgente  = diasRet !== null && diasRet <= 3;
                       return (
@@ -284,7 +312,11 @@ export default function ProducaoPage() {
                           </td>
                           <td>
                             {p.status !== "Finalizado" && (
-                              (
+                              semOtim ? (
+                                <a href={`/otimizador?pedido=${p.id}`} className="btn bg xs" style={{ textDecoration:"none", color:"var(--warn)", borderColor:"rgba(245,158,11,.4)" }}>
+                                  ◈ Otimizar
+                                </a>
+                              ) : (
                                 <div style={{ display:"flex", gap:"4px" }}>
                                   {p.status !== COLUNAS[0] && (
                                     <button className="btn bg xs" disabled={recuando === p.id} onClick={() => handleRetroceder(p)}>

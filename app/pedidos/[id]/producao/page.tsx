@@ -8,7 +8,7 @@ import type { Pedido } from "@/types";
 import type { HistoricoOtimizador } from "@/services/otimizador.service";
 
 const FLUXO = [
-  "Planejamento",
+  "Aguardando otimização",
   "Em Produção – Corte",
   "Em Produção – Lapidação",
   "Separação",
@@ -17,7 +17,7 @@ const FLUXO = [
 ];
 
 const STATUS_COLOR: Record<string, string> = {
-  "Planejamento":   "#f59e0b",
+  "Aguardando otimização":   "#f59e0b",
   "Em Produção – Corte":     "#a855f7",
   "Em Produção – Lapidação": "#f97316",
   "Separação":               "#3b82f6",
@@ -27,7 +27,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 const PROXIMA: Record<string, string> = {
-  "Planejamento":   "Em Produção – Corte",
+  "Aguardando otimização":   "Em Produção – Corte",
   "Em Produção – Corte":     "Em Produção – Lapidação",
   "Em Produção – Lapidação": "Separação",
   "Separação":               "Finalizado",
@@ -64,6 +64,11 @@ export default function ProducaoView() {
 
   async function handleAvancar() {
     if (!pedido) return;
+    if (pedido.status === "Aguardando otimização" && otims.length === 0) {
+      mostrarFeedback("Otimização de corte pendente. Fale com o responsável.", "warn");
+      setConfirmando(false);
+      return;
+    }
     setSalvando(true);
     setConfirmando(false);
     const result = await avancarStatusPedido(pedido.id, pedido.status);
@@ -80,7 +85,7 @@ export default function ProducaoView() {
   const corStatus         = STATUS_COLOR[statusAtual] ?? "var(--acc)";
   const proximaEtapa      = PROXIMA[statusAtual];
   const podeAvancar       = !!proximaEtapa;
-  const bloqueado         = false;
+  const bloqueado         = statusAtual === "Aguardando otimização" && otims.length === 0;
   const statusIdx         = FLUXO.indexOf(statusAtual);
 
   if (loading) return (

@@ -18,7 +18,7 @@ const MESES_COMPLETOS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","
 const TABS = ["Faturamento","Clientes","Pedidos","Produção","Eficiência","Fluxo de Caixa","Estoque","Orçamentos","Fechamento","Qualidade"];
 
 const STATUS_COR: Record<string, string> = {
-  "Planejamento":            "var(--warn)",
+  "Aguardando otimização":   "var(--warn)",
   "Em Produção – Corte":     "var(--acc4)",
   "Qualidade (Corte)":       "#22c55e",
   "Em Produção – Lapidação": "var(--acc3)",
@@ -623,7 +623,7 @@ export default function RelatoriosPage() {
                         { label: "Total de Pedidos",        value: String(pedidos.length),                                                            color: "var(--t1)"  },
                         { label: "Finalizados / Entregues", value: String(pedidos.filter(p => ["Entregue","Finalizado"].includes(p.status)).length),  color: "var(--ok)"  },
                         { label: "Em Produção",             value: String(pedidos.filter(p => p.status.includes("Produção")).length),                 color: "var(--acc4)"},
-                        { label: "Planejamento",            value: String(pedidos.filter(p => p.status === "Planejamento").length),                color: "var(--warn)"},
+                        { label: "Ag. Otimização",          value: String(pedidos.filter(p => p.status === "Aguardando otimização").length),           color: "var(--warn)"},
                         { label: "m² Total Processado",     value: m2Total.toFixed(2) + " m²",                                                        color: "var(--acc)" },
                         { label: "Valor Médio por Pedido",  value: formatBRL(ticketMedio),                                                             color: "var(--acc4)"},
                       ].map(row => (

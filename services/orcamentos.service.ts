@@ -133,7 +133,7 @@ export async function aprovarOrcamento(orcamentoId: string) {
       m2_total: orc.m2_total,
       valor_total: orc.valor_total,
       valor_recebido: 0,
-      status: 'Planejamento',
+      status: 'Aguardando otimização',
       forma_pgto: orc.forma_pgto || '',
       conta: orc.conta || '',
       parcelas: orc.parcelas || 1,

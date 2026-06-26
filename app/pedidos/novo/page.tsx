@@ -420,7 +420,7 @@ function NovoPedidoPageInner() {
       m2_total: m2Total,
       valor_total: valorTotal,
       valor_recebido: 0,
-      status: todosChapa ? "Em Produção – Corte" : "Planejamento",
+      status: todosChapa ? "Em Produção – Corte" : "Aguardando otimização",
       forma_pgto: parcelasForm[0]?.formaPgto || formaPgto,
       conta: parcelasForm[0]?.conta || conta,
       parcelas, obs,

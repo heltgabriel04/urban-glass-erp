@@ -28,7 +28,7 @@ const TIPOS_NC: TipoNC[] = [
 ];
 
 const ETAPAS = [
-  "Planejamento","Em Produção – Corte","Qualidade (Corte)",
+  "Aguardando otimização","Em Produção – Corte","Qualidade (Corte)",
   "Em Produção – Lapidação","Qualidade (Lapidação)","Separação","Finalizado","Expedição","Recebimento",
 ];
 
@@ -94,7 +94,7 @@ export default function NaoConformidadesPage() {
   useEffect(() => {
     load();
     supabase.from("pedidos").select("id, clientes(nome)").in("status", [
-      "Planejamento","Em Produção – Corte","Qualidade (Corte)",
+      "Aguardando otimização","Em Produção – Corte","Qualidade (Corte)",
       "Em Produção – Lapidação","Qualidade (Lapidação)","Separação",
     ]).order("id", { ascending: false }).limit(100)
       .then(({ data }) => setPedidos((data ?? []).map((p: any) => ({ id: p.id, cliente_nome: p.clientes?.nome ?? "—" }))));

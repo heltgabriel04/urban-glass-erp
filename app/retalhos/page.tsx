@@ -103,7 +103,7 @@ export default function RetalhoPage() {
       pedido_origem: r.pedido_origem ?? "",
       localizacao:   r.localizacao ?? "",
       observacao:    r.observacao ?? "",
-      quantidade:    String(r.quantidade ?? 1),
+      quantidade:    "1",
       dt_gerado:     r.dt_gerado,
       status:        r.status,
     });
@@ -127,14 +127,12 @@ export default function RetalhoPage() {
     const largura = parseInt(form.largura);
     const altura  = parseInt(form.altura);
     const m2      = parseFloat(((largura * altura) / 1_000_000).toFixed(4));
-    const qtd    = Math.max(1, parseInt(form.quantidade) || 1);
     const campos  = {
       produto_nome:  form.produto_nome.trim(),
       largura,
       altura,
       espessura:     form.espessura ? parseFloat(form.espessura) : null,
       m2,
-      quantidade:    qtd,
       chapa_origem:  form.chapa_origem.trim() || null,
       pedido_origem: form.pedido_origem.trim() || null,
       localizacao:   form.localizacao.trim() || null,
@@ -155,11 +153,13 @@ export default function RetalhoPage() {
       if (error) { alert("Erro ao salvar: " + error.message); return; }
       setRetalhos(prev => prev.map(r => r.id === editandoId ? (data as Retalho) : r));
     } else {
-      const nextNum = proximoId(retalhos);
-      const { data, error } = await supabase.from("retalhos").insert([{
-        id: "R-" + String(nextNum).padStart(3, "0"),
+      const qtd = Math.max(1, parseInt(form.quantidade) || 1);
+      let nextNum = proximoId(retalhos);
+      const rows = Array.from({ length: qtd }, () => ({
+        id: "R-" + String(nextNum++).padStart(3, "0"),
         ...campos,
-      }]).select();
+      }));
+      const { data, error } = await supabase.from("retalhos").insert(rows).select();
       setSalvando(false);
       if (error) { alert("Erro ao salvar: " + error.message); return; }
       setRetalhos(prev => [...(data as Retalho[]), ...prev]);
@@ -171,38 +171,27 @@ export default function RetalhoPage() {
   async function handleImportar(itens: RetalhoImportado[]) {
     setImportando(true);
 
-    // Agrupa itens idênticos (produto, medidas, espessura, box, cliente)
-    const grupos = new Map<string, RetalhoImportado>();
-    for (const item of itens) {
-      const chave = [item.produto_nome, item.largura, item.altura, item.espessura ?? "", item.box ?? "", item.observacao ?? ""].join("|");
-      const existente = grupos.get(chave);
-      if (existente) {
-        existente.quantidade += item.quantidade;
-      } else {
-        grupos.set(chave, { ...item });
-      }
-    }
-
     let nextNum = proximoId(retalhos);
     const rows: Record<string, unknown>[] = [];
-    for (const item of grupos.values()) {
+    for (const item of itens) {
       const m2 = parseFloat(((item.largura * item.altura) / 1_000_000).toFixed(4));
-      rows.push({
-        id:            "R-" + String(nextNum++).padStart(3, "0"),
-        produto_nome:  item.produto_nome,
-        largura:       item.largura,
-        altura:        item.altura,
-        espessura:     item.espessura,
-        m2,
-        quantidade:    item.quantidade,
-        chapa_origem:  item.chapa_origem,
-        pedido_origem: null,
-        localizacao:   item.localizacao,
-        box:           item.box,
-        observacao:    item.observacao,
-        dt_gerado:     hoje(),
-        status:        "Disponível",
-      });
+      for (let i = 0; i < item.quantidade; i++) {
+        rows.push({
+          id: "R-" + String(nextNum++).padStart(3, "0"),
+          produto_nome:  item.produto_nome,
+          largura:       item.largura,
+          altura:        item.altura,
+          espessura:     item.espessura,
+          m2,
+          chapa_origem:  item.chapa_origem,
+          pedido_origem: null,
+          localizacao:   item.localizacao,
+          box:           item.box,
+          observacao:    item.observacao,
+          dt_gerado:     hoje(),
+          status:        "Disponível",
+        });
+      }
     }
 
     const { data, error } = await supabase.from("retalhos").insert(rows).select();
@@ -257,13 +246,10 @@ export default function RetalhoPage() {
     return true;
   });
 
-  const disponiveis  = retalhos.filter(r => r.status === "Disponível");
-  const reservados   = retalhos.filter(r => r.status === "Reservado");
-  const deCliente    = retalhos.filter(r => r.observacao);
-  const totalPecas   = retalhos.reduce((a, r) => a + (r.quantidade ?? 1), 0);
-  const dispPecas    = disponiveis.reduce((a, r) => a + (r.quantidade ?? 1), 0);
-  const clientePecas = deCliente.reduce((a, r) => a + (r.quantidade ?? 1), 0);
-  const m2Disp       = disponiveis.reduce((a, r) => a + Number(r.m2) * (r.quantidade ?? 1), 0);
+  const disponiveis = retalhos.filter(r => r.status === "Disponível");
+  const reservados  = retalhos.filter(r => r.status === "Reservado");
+  const deCliente   = retalhos.filter(r => r.observacao);
+  const m2Disp      = disponiveis.reduce((a, r) => a + Number(r.m2), 0);
   const boxes       = Array.from(new Set(retalhos.map(r => r.box).filter(Boolean))) as string[];
 
   const FILTROS = ["", "Disponível", "Reservado", "Em uso", "Descartado"] as const;
@@ -523,11 +509,11 @@ export default function RetalhoPage() {
         <div style={{ display:"flex", alignItems:"flex-start", gap:"12px", marginBottom:"20px" }}>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:"12px", flex:1 }}>
             {[
-              { label:"Total",         value: String(totalPecas),         color:"var(--t1)",   sub:`em ${retalhos.length} grupos` },
-              { label:"Disponíveis",   value: String(dispPecas),          color:"var(--ok)",   sub:"prontos para uso" },
+              { label:"Total",         value: String(retalhos.length),    color:"var(--t1)",   sub:"cadastrados" },
+              { label:"Disponíveis",   value: String(disponiveis.length), color:"var(--ok)",   sub:"prontos para uso" },
               { label:"m² Disponível", value: m2Disp.toFixed(2) + " m²", color:"var(--acc)",  sub:"aproveitável" },
               { label:"Reservados",    value: String(reservados.length),  color:"var(--warn)", sub:"em uso pendente" },
-              { label:"De Cliente",    value: String(clientePecas),       color:"#f59e0b",     sub:"vidros de terceiros" },
+              { label:"De Cliente",    value: String(deCliente.length),   color:"#f59e0b",     sub:"vidros de terceiros" },
             ].map(card => (
               <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
                 <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
@@ -568,7 +554,6 @@ export default function RetalhoPage() {
                       <th>ID</th>
                       <th>Produto</th>
                       <th>Dimensões</th>
-                      <th style={{ textAlign:"center" }}>Qtd</th>
                       <th>m²</th>
                       <th>Box</th>
                       <th>Obs / Cliente</th>
@@ -599,12 +584,6 @@ export default function RetalhoPage() {
                           {r.espessura ? <div className="tdim">{r.espessura}mm</div> : null}
                         </td>
                         <td className="mono">{r.largura} × {r.altura} mm</td>
-                        <td style={{ textAlign:"center" }}>
-                          {(r.quantidade ?? 1) > 1
-                            ? <span style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", minWidth:"28px", height:"22px", background:"rgba(99,179,237,.18)", color:"var(--acc2)", borderRadius:"5px", fontFamily:"'DM Mono',monospace", fontSize:"12px", fontWeight:700, padding:"0 6px" }}>×{r.quantidade}</span>
-                            : <span className="mono" style={{ color:"var(--t3)" }}>1</span>
-                          }
-                        </td>
                         <td className="mono">{formatM2(r.m2)}</td>
                         <td className="mono" style={{ color:"var(--t2)" }}>{r.box || "—"}</td>
                         <td>

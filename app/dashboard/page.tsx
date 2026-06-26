@@ -10,7 +10,7 @@ import type { Pedido, FinanceiroCliente, FaturamentoMensal } from "@/types";
 const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
 const ETAPAS = [
-  { status: "Planejamento",            label: "Planejamento",   color: "var(--warn)" },
+  { status: "Aguardando otimização",   label: "Ag. Otimização", color: "var(--warn)" },
   { status: "Em Produção – Corte",     label: "Corte",          color: "var(--acc4)" },
   { status: "Qualidade (Corte)",       label: "Qual. Corte",    color: "#22c55e"     },
   { status: "Em Produção – Lapidação", label: "Lapidação",      color: "var(--acc3)" },
@@ -86,7 +86,7 @@ export default function DashboardPage() {
   // ── Alertas ────────────────────────────────────────────────
   const inadimplentes  = financeiro.filter(f => Number(f.recebido) === 0 && Number(f.faturado) > 0);
   const parciais       = financeiro.filter(f => Number(f.recebido) > 0 && Number(f.a_receber) > 0);
-  const aguardandoOtim = pedidos.filter(p => p.status === "Planejamento");
+  const aguardandoOtim = pedidos.filter(p => p.status === "Aguardando otimização");
 
   // ── Top clientes (filtrado pelo mês) ──────────────────────
   const topCli = useMemo(() => {

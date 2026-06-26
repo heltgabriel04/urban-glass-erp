@@ -194,7 +194,7 @@ export async function recalcularRecebido(pedidoId: string) {
 }
 
 const FLUXO: StatusPedido[] = [
-  'Planejamento',
+  'Aguardando otimização',
   'Em Produção – Corte',
   'Qualidade (Corte)',
   'Em Produção – Lapidação',
@@ -220,67 +220,20 @@ export async function avancarStatusPedido(id: string, statusAtual: StatusPedido)
     campos_alterados: { status: { de: statusAtual, para: novoStatus } },
   });
 
-  if (res && statusAtual === 'Planejamento' && novoStatus === 'Em Produção – Corte') {
-    // 1. Saída de material do cliente
+  if (res && statusAtual === 'Aguardando otimização' && novoStatus === 'Em Produção – Corte') {
     const { data: itensVC } = await supabase
       .from('itens_pedido')
-      .select('id, produto_nome, produto_id, largura, altura, quantidade, vidro_cliente')
-      .eq('pedido_id', id);
-
-    for (const item of (itensVC ?? []) as Array<{ id: number; produto_nome: string; produto_id: number | null; largura: number; altura: number; quantidade: number; vidro_cliente: boolean }>) {
-      if (item.vidro_cliente) {
-        const r = await registrarMovimentoCliente({
-          pedido_id: id, cliente_id: res.cliente_id, item_pedido_id: item.id,
-          tipo: 'saida_producao', descricao: item.produto_nome,
-          largura: item.largura, altura: item.altura, quantidade: item.quantidade,
-          nc_id: null, obs: null,
-        });
-        if (!r.ok && !r.jaExistia) console.error('avancarStatusPedido saida vidro cliente:', r.motivo);
-      }
-    }
-
-    // 2. Desconto de estoque para itens normais (não vidro_cliente, não chapa_inteira)
-    //    Subtrai m² dos retalhos já vinculados ao pedido para o mesmo produto.
-    const itensNormais = (itensVC ?? []) as Array<{ id: number; produto_nome: string; produto_id: number | null; largura: number; altura: number; quantidade: number; vidro_cliente: boolean }>;
-    const itensProduzir = itensNormais.filter(i => !i.vidro_cliente && !isChapaInteira(i.largura, i.altura));
-
-    if (itensProduzir.length > 0) {
-      // Soma m² por produto
-      const m2PorProduto = new Map<string, { produtoId: number | null; m2: number }>();
-      for (const item of itensProduzir) {
-        const m2 = (item.largura * item.altura / 1e6) * item.quantidade;
-        const key = item.produto_nome;
-        const cur = m2PorProduto.get(key) ?? { produtoId: item.produto_id, m2: 0 };
-        m2PorProduto.set(key, { ...cur, m2: cur.m2 + m2 });
-      }
-
-      // m² cobertos por retalhos vinculados
-      const { data: usos } = await supabase
-        .from('retalhos_uso')
-        .select('retalho_id, retalhos(produto_nome, m2)')
-        .eq('pedido_id', id);
-      const m2Retalhos = new Map<string, number>();
-      for (const uso of (usos ?? []) as unknown as Array<{ retalho_id: string; retalhos: { produto_nome: string; m2: number } | null }>) {
-        if (!uso.retalhos) continue;
-        const { produto_nome, m2 } = uso.retalhos;
-        m2Retalhos.set(produto_nome, (m2Retalhos.get(produto_nome) ?? 0) + Number(m2));
-      }
-
-      for (const [produtoNome, { produtoId, m2: m2Total }] of m2PorProduto.entries()) {
-        const m2Coberto = m2Retalhos.get(produtoNome) ?? 0;
-        const m2Liquido = Math.max(0, m2Total - m2Coberto);
-        if (m2Liquido < 0.001) continue;
-        const r = await registrarMovimentacao({
-          produtoId: produtoId ?? undefined,
-          produtoNome,
-          tipo: 'saida_producao',
-          origemTipo: 'otimizacao',
-          origemId: id,
-          chapas: 0,
-          m2: -parseFloat(m2Liquido.toFixed(4)),
-        });
-        if (!r.ok && !r.jaExistia) console.error('avancarStatusPedido desconto m2:', r.motivo);
-      }
+      .select('id, produto_nome, largura, altura, quantidade')
+      .eq('pedido_id', id)
+      .eq('vidro_cliente', true);
+    for (const item of (itensVC ?? []) as Array<{ id: number; produto_nome: string; largura: number; altura: number; quantidade: number }>) {
+      const r = await registrarMovimentoCliente({
+        pedido_id: id, cliente_id: res.cliente_id, item_pedido_id: item.id,
+        tipo: 'saida_producao', descricao: item.produto_nome,
+        largura: item.largura, altura: item.altura, quantidade: item.quantidade,
+        nc_id: null, obs: null,
+      });
+      if (!r.ok && !r.jaExistia) console.error('avancarStatusPedido saida vidro cliente:', r.motivo);
     }
   }
 
@@ -513,72 +466,6 @@ export async function deleteRomaneioAssinado(url: string): Promise<boolean> {
   const { error } = await supabase.storage.from(BUCKET_ROMANEIO_ASSINADO).remove([path]);
   if (error) { console.error('deleteRomaneioAssinado:', error); return false; }
   return true;
-}
-
-// ─── Corte Certo PDF ─────────────────────────────────────────
-const BUCKET_CORTE_CERTO = 'cortes-certo';
-
-export async function uploadCorteCertoPdf(pedidoId: string, file: File): Promise<string | null> {
-  const ext  = file.name.split('.').pop() ?? 'pdf';
-  const path = `${pedidoId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-  const { error } = await supabase.storage.from(BUCKET_CORTE_CERTO).upload(path, file, { upsert: false });
-  if (error) { console.error('uploadCorteCertoPdf:', error); return null; }
-  const { data } = supabase.storage.from(BUCKET_CORTE_CERTO).getPublicUrl(path);
-  const url = data.publicUrl;
-
-  const { data: p } = await supabase.from('pedidos').select('corte_certo_urls').eq('id', pedidoId).single();
-  const existentes: string[] = (p as any)?.corte_certo_urls ?? [];
-  await supabase.from('pedidos').update({ corte_certo_urls: [...existentes, url] } as never).eq('id', pedidoId);
-
-  registrarLog({ acao: 'anexou', tabela: 'pedidos', registro_id: pedidoId, descricao: `Anexou PDF Corte Certo em ${pedidoId}` });
-  return url;
-}
-
-export async function deleteCorteCertoPdf(pedidoId: string, url: string): Promise<boolean> {
-  const marker = `/${BUCKET_CORTE_CERTO}/`;
-  const idx = url.indexOf(marker);
-  if (idx !== -1) {
-    const path = url.slice(idx + marker.length);
-    await supabase.storage.from(BUCKET_CORTE_CERTO).remove([path]);
-  }
-  const { data: p } = await supabase.from('pedidos').select('corte_certo_urls').eq('id', pedidoId).single();
-  const restantes = ((p as any)?.corte_certo_urls ?? []).filter((u: string) => u !== url);
-  await supabase.from('pedidos').update({ corte_certo_urls: restantes.length > 0 ? restantes : [] } as never).eq('id', pedidoId);
-  return true;
-}
-
-// ─── Vínculos de retalho ↔ pedido ───────────────────────────
-export async function vincularRetalhoAoPedido(
-  pedidoId: string, retalhoId: string, obs?: string
-): Promise<{ ok: boolean; id?: number }> {
-  const { data, error } = await supabase
-    .from('retalhos_uso')
-    .insert({ retalho_id: retalhoId, pedido_id: pedidoId, dt_uso: new Date().toISOString().split('T')[0], obs: obs ?? null } as never)
-    .select()
-    .single();
-  if (error) { console.error('vincularRetalhoAoPedido:', error); return { ok: false }; }
-  await supabase.from('retalhos').update({ status: 'Em uso' } as never).eq('id', retalhoId);
-  registrarLog({ acao: 'editou', tabela: 'pedidos', registro_id: pedidoId, descricao: `Vinculou retalho ${retalhoId} ao pedido ${pedidoId}` });
-  return { ok: true, id: (data as any).id };
-}
-
-export async function desvincularRetalhoAoPedido(
-  usoId: number, retalhoId: string
-): Promise<boolean> {
-  const { error } = await supabase.from('retalhos_uso').delete().eq('id', usoId);
-  if (error) { console.error('desvincularRetalhoAoPedido:', error); return false; }
-  await supabase.from('retalhos').update({ status: 'Disponível' } as never).eq('id', retalhoId);
-  return true;
-}
-
-export async function getRetalhosUsadosPorPedido(pedidoId: string) {
-  const { data, error } = await supabase
-    .from('retalhos_uso')
-    .select('id, retalho_id, dt_uso, obs, retalhos(id, produto_nome, largura, altura, m2, espessura, box, observacao)')
-    .eq('pedido_id', pedidoId)
-    .order('id');
-  if (error) { console.error('getRetalhosUsadosPorPedido:', error); return []; }
-  return data as unknown as Array<{ id: number; retalho_id: string; dt_uso: string; obs: string | null; retalhos: { id: string; produto_nome: string; largura: number; altura: number; m2: number; espessura: number | null; box: string | null; observacao: string | null } | null }>;
 }
 
 export async function getProximoIdPedido(): Promise<string> {
