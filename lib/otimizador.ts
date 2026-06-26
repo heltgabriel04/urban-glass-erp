@@ -373,7 +373,7 @@ function kEliminate(
     outerPair: for (let ai = 0; ai < n && !improved; ai++) {
       for (let aj = ai + 1; aj < n && !improved; aj++) {
         if (Date.now() >= deadline) break outerPair;
-        if (byLoad[ai].area + byLoad[aj].area > sheetArea * 0.995) continue;
+        if (byLoad[ai].area + byLoad[aj].area > sheetArea * 0.98) continue;
 
         const pieces = [
           ...current[byLoad[ai].i].placed,
@@ -629,8 +629,14 @@ export function empacotarTodas(
     avaliar(mergeSheets(W, H, bfdRun(W, H, pecas, kerf, ordem), kerf));
   }
 
-  // ── Fase 1: ordenações fixas ──────────────────────────────────────────────────
-  for (const ordem of fixas) avaliarOrdem(ordem);
+  // ── Fase 1: ordenações fixas (com defragmentação antes do merge) ─────────────
+  // Defragmentar antes do primeiro mergeSheets é crítico: o BFD produz freeRects
+  // fragmentados; sem defrag, mergeSheets falha em pares que caberiam facilmente.
+  for (const ordem of fixas) {
+    const raw = bfdRun(W, H, pecas, kerf, ordem);
+    const defragged = raw.map(s => reoptimizeSheet(W, H, s, kerf));
+    avaliar(mergeSheets(W, H, defragged, kerf));
+  }
   if (process.env.OTIM_DEBUG) console.log(`[fase1] melhorN=${melhorN} aprov=${(melhorAprov*100).toFixed(2)}%`);
   if (melhorN === 1) {
     const early: SheetState[] = melhorSheets ?? [];
@@ -642,7 +648,7 @@ export function empacotarTodas(
   const tTotal = Math.max(0, timeLimitMs - 80);
   const deadlineRestarts = tStart + Math.floor(tTotal * 0.60);
 
-  let seed = 0x9e3779b9 ^ (W * 31) ^ H;
+  let seed = (0x9e3779b9 ^ (W * 31) ^ H ^ (Date.now() & 0xffff)) >>> 0;
   function lcg() {
     seed = Math.imul(seed ^ (seed >>> 16), 0x45d9f3b);
     seed = Math.imul(seed ^ (seed >>> 16), 0x45d9f3b);
@@ -733,7 +739,7 @@ export function calcAproveitamento(
     const CH = chapa ? chapa.h : fallbackH;
     const W = CW - bord * 2;
     const H = CH - bord * 2;
-    const chapas = empacotarTodas(W, H, grupo, kerf);
+    const chapas = empacotarTodas(W, H, grupo, kerf, 100);
     chapas.forEach(c => {
       totA += W * H;
       c.placed.forEach(p => (usedA += p.l * p.a));
