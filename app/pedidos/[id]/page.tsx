@@ -213,6 +213,7 @@ export default function PedidoDetalhe() {
   const [retalhosDisponiveis, setRetalhosDisponiveis] = useState<Array<{ id: string; produto_nome: string; largura: number; altura: number; m2: number; espessura: number | null; box: string | null; observacao: string | null }>>([]);
   const [filtroBuscaRetalho, setFiltroBuscaRetalho] = useState("");
   const [sugestoesIgnoradas, setSugestoesIgnoradas] = useState<Set<string>>(new Set());
+  const [itemParaRetalho, setItemParaRetalho] = useState<number | null>(null);
   const [clientes, setClientes]         = useState<{ id: number; nome: string }[]>([]);
   const [vendedores, setVendedores]     = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
   const [creditoCliente, setCreditoCliente] = useState(0);
@@ -686,11 +687,12 @@ export default function PedidoDetalhe() {
 
   function abrirVincularRetalho() {
     setFiltroBuscaRetalho("");
+    setItemParaRetalho(null);
     setShowVincularRetalho(true);
   }
 
-  async function handleVincularRetalho(retalhoId: string) {
-    const r = await vincularRetalhoAoPedido(id, retalhoId);
+  async function handleVincularRetalho(retalhoId: string, itemPedidoId?: number | null) {
+    const r = await vincularRetalhoAoPedido(id, retalhoId, itemPedidoId ?? null);
     if (r.ok) {
       toast(`Retalho ${retalhoId} vinculado`);
       setShowVincularRetalho(false);
@@ -785,8 +787,9 @@ export default function PedidoDetalhe() {
     .filter((item: any) => !item.vidro_cliente)
     .map((item: any) => {
       const cobertoPorRetalhos = retalhosUsados.filter(u =>
-        u.retalhos && nomesCompativeis(item.produto_nome, u.retalhos.produto_nome) &&
-        fitMode(u.retalhos, item.largura, item.altura) !== false
+        u.item_pedido_id === item.id ||
+        (!u.item_pedido_id && u.retalhos && nomesCompativeis(item.produto_nome, u.retalhos.produto_nome) &&
+          fitMode(u.retalhos, item.largura, item.altura) !== false)
       ).length;
       const cobertoPorSugestoes = sugestoes.filter(s => s.itemId === item.id).length;
       return {
@@ -920,7 +923,12 @@ export default function PedidoDetalhe() {
                 RETALHOS UTILIZADOS{retalhosUsados.length > 0 ? ` (${retalhosUsados.length})` : ""}
                 {m2RetalhosUsados > 0 && <span style={{ marginLeft:"10px", color:"var(--ok)", fontFamily:"'DM Mono',monospace", fontWeight:700 }}>{m2RetalhosUsados.toFixed(4)} m² cobertos</span>}
               </div>
-              <button className="btn bg sm" onClick={abrirVincularRetalho}>+ Vincular Retalho</button>
+              <div style={{ display:"flex", gap:"8px" }}>
+                {retalhosUsados.length > 0 && (
+                  <a href={`/pedidos/${id}/plano-retalhos`} className="btn bg sm" style={{ textDecoration:"none", whiteSpace:"nowrap" }}>✂ Plano de Retalhos</a>
+                )}
+                <button className="btn bg sm" onClick={abrirVincularRetalho}>+ Vincular Retalho</button>
+              </div>
             </div>
 
             {/* Cobertura por item */}
@@ -990,7 +998,7 @@ export default function PedidoDetalhe() {
                         </div>
                       </div>
                       <div style={{ display:"flex", gap:"6px", flexShrink:0 }}>
-                        <button className="btn bp sm" onClick={() => handleVincularRetalho(s.retalhoId)}>Usar</button>
+                        <button className="btn bp sm" onClick={() => handleVincularRetalho(s.retalhoId, s.itemId)}>Usar</button>
                         <button className="btn bg sm" onClick={() => setSugestoesIgnoradas(prev => new Set([...prev, s.retalhoId]))}>Pular</button>
                       </div>
                     </div>
@@ -1861,7 +1869,7 @@ export default function PedidoDetalhe() {
               <div className="mtit">Vincular Retalho — Pedido {pedido?.id}</div>
               <button className="mcl" onClick={() => setShowVincularRetalho(false)}>✕</button>
             </div>
-            <div style={{ padding:"12px 20px 10px" }}>
+            <div style={{ padding:"12px 20px 10px", display:"flex", flexDirection:"column", gap:"8px" }}>
               <input
                 placeholder="Buscar por produto, box, cliente..."
                 value={filtroBuscaRetalho}
@@ -1869,6 +1877,27 @@ export default function PedidoDetalhe() {
                 style={{ width:"100%", boxSizing:"border-box", background:"var(--surf2)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"9px 13px", color:"var(--t1)", fontSize:"13px", outline:"none" }}
                 autoFocus
               />
+              {(() => {
+                const itensCorte = (pedido?.itens_pedido ?? []).filter((i: any) => !i.vidro_cliente);
+                if (itensCorte.length < 2) return null;
+                return (
+                  <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
+                    <span style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, whiteSpace:"nowrap" }}>Para qual item?</span>
+                    <select
+                      value={itemParaRetalho ?? ""}
+                      onChange={e => setItemParaRetalho(e.target.value ? Number(e.target.value) : null)}
+                      style={{ flex:1, background:"var(--surf2)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"7px 10px", color:"var(--t1)", fontSize:"12px", outline:"none" }}
+                    >
+                      <option value="">— Auto (primeiro compatível) —</option>
+                      {itensCorte.map((item: any) => (
+                        <option key={item.id} value={item.id}>
+                          {item.produto_nome} · {item.largura}×{item.altura}mm · qtd {item.quantidade}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })()}
             </div>
             <div style={{ flex:1, overflowY:"auto", padding:"0 20px 16px" }}>
               {retalhosDisponiveis.length === 0 ? (
@@ -1892,7 +1921,11 @@ export default function PedidoDetalhe() {
                         <span style={{ fontSize:"11px", color: r.observacao ? "var(--warn)" : "var(--t3)", fontWeight: r.observacao ? 600 : 400, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                           {r.observacao ? `👤 ${r.observacao}` : "—"}
                         </span>
-                        <button className="btn bp sm" style={{ whiteSpace:"nowrap" }} onClick={() => handleVincularRetalho(r.id)}>Vincular</button>
+                        <button className="btn bp sm" style={{ whiteSpace:"nowrap" }} onClick={() => {
+                          const itensCorte = (pedido?.itens_pedido ?? []).filter((i: any) => !i.vidro_cliente);
+                          const itemId = itemParaRetalho ?? (itensCorte.length === 1 ? (itensCorte[0] as any).id : null);
+                          handleVincularRetalho(r.id, itemId);
+                        }}>Vincular</button>
                       </div>
                     ))}
                   </div>
