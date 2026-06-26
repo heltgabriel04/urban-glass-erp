@@ -1855,18 +1855,18 @@ export default function PedidoDetalhe() {
         </div>
       {/* Modal: vincular retalho */}
       {showVincularRetalho && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && setShowVincularRetalho(false)}>
-          <div className="mod" style={{ width:"640px", maxHeight:"85vh", display:"flex", flexDirection:"column" }}>
+        <div className="mov open">
+          <div className="mod" style={{ width:"760px", maxHeight:"88vh", display:"flex", flexDirection:"column" }}>
             <div className="mhd">
-              <div className="mtit">Vincular Retalho ao Pedido {pedido?.id}</div>
+              <div className="mtit">Vincular Retalho — Pedido {pedido?.id}</div>
               <button className="mcl" onClick={() => setShowVincularRetalho(false)}>✕</button>
             </div>
-            <div style={{ padding:"12px 20px 8px" }}>
+            <div style={{ padding:"12px 20px 10px" }}>
               <input
                 placeholder="Buscar por produto, box, cliente..."
                 value={filtroBuscaRetalho}
                 onChange={e => setFiltroBuscaRetalho(e.target.value)}
-                style={{ width:"100%", boxSizing:"border-box", background:"var(--surf2)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"8px 12px", color:"var(--t1)", fontSize:"13px", outline:"none" }}
+                style={{ width:"100%", boxSizing:"border-box", background:"var(--surf2)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"9px 13px", color:"var(--t1)", fontSize:"13px", outline:"none" }}
                 autoFocus
               />
             </div>
@@ -1881,25 +1881,20 @@ export default function PedidoDetalhe() {
                 return filtrados.length === 0 ? (
                   <div style={{ color:"var(--t3)", textAlign:"center", padding:"24px 0" }}>Nenhum retalho encontrado para "{filtroBuscaRetalho}"</div>
                 ) : (
-                  <div className="tw">
-                    <table>
-                      <thead>
-                        <tr><th>ID</th><th>Produto</th><th>Dimensões</th><th>m²</th><th>Box</th><th>Cliente</th><th></th></tr>
-                      </thead>
-                      <tbody>
-                        {filtrados.map(r => (
-                          <tr key={r.id}>
-                            <td><span className="mono" style={{ color:"var(--acc2)" }}>{r.id}</span></td>
-                            <td><strong>{r.produto_nome}</strong>{r.espessura ? <span className="tdim">{r.espessura}mm</span> : null}</td>
-                            <td className="mono">{r.largura} × {r.altura} mm</td>
-                            <td className="mono">{Number(r.m2).toFixed(4)}</td>
-                            <td className="mono" style={{ color:"var(--t2)" }}>{r.box ?? "—"}</td>
-                            <td>{r.observacao ? <span style={{ color:"var(--warn)", fontWeight:700, fontSize:"11px" }}>👤 {r.observacao}</span> : <span style={{ color:"var(--t3)" }}>—</span>}</td>
-                            <td><button className="btn bp sm" onClick={() => handleVincularRetalho(r.id)}>Vincular</button></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
+                    {filtrados.map(r => (
+                      <div key={r.id} style={{ display:"grid", gridTemplateColumns:"90px 1fr 130px 70px 60px 1fr 90px", alignItems:"center", gap:"10px", padding:"10px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)" }}>
+                        <span className="mono" style={{ color:"var(--acc2)", fontWeight:700, fontSize:"12px" }}>{r.id}</span>
+                        <span style={{ fontSize:"13px", fontWeight:600, color:"var(--t1)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.produto_nome}</span>
+                        <span className="mono" style={{ fontSize:"12px", color:"var(--t2)" }}>{r.largura} × {r.altura} mm</span>
+                        <span className="mono" style={{ fontSize:"12px", color:"var(--t2)" }}>{Number(r.m2).toFixed(3)} m²</span>
+                        <span className="mono" style={{ fontSize:"12px", color:"var(--t3)" }}>{r.box ?? "—"}</span>
+                        <span style={{ fontSize:"11px", color: r.observacao ? "var(--warn)" : "var(--t3)", fontWeight: r.observacao ? 600 : 400, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                          {r.observacao ? `👤 ${r.observacao}` : "—"}
+                        </span>
+                        <button className="btn bp sm" style={{ whiteSpace:"nowrap" }} onClick={() => handleVincularRetalho(r.id)}>Vincular</button>
+                      </div>
+                    ))}
                   </div>
                 );
               })()}
