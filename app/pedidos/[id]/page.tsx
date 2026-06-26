@@ -15,6 +15,7 @@ import CurrencyInput from "@/components/ui/CurrencyInput";
 import type { Pedido, Lancamento, Vendedor, NaoConformidade, NaoConformidadeInsert, TipoNC, GravidadeNC, StatusNaoConformidade, RetiradaPedido } from "@/types";
 import type { HistoricoOtimizador } from "@/services/otimizador.service";
 import { supabase } from "@/lib/supabase/client";
+import { CHAPAS_PADRAO, PRODUTO_CHAPA } from "@/lib/chapas";
 
 const TIPOS_NC: TipoNC[] = [
   "Quebra de vidro","Medida incorreta","Corte errado","Lapidação incorreta",
@@ -936,6 +937,25 @@ export default function PedidoDetalhe() {
   const sugestoes = calcSugestoes(pedido.itens_pedido ?? [], retalhosDisponiveis, retalhosUsados as any, sugestoesIgnoradas);
   const assignmentMap = computeAssignmentMap(pedido.itens_pedido ?? [], retalhosUsados as any);
 
+  // Peças que ainda precisam ir ao Corte Certo
+  const itemsParaCorte = (pedido.itens_pedido ?? [])
+    .filter((i: any) => !i.vidro_cliente)
+    .flatMap((item: any) => {
+      const nCoberto  = (assignmentMap.get(item.id) ?? []).length;
+      const nSugerido = sugestoes.filter(s => s.itemId === item.id).length;
+      const nCorte    = Math.max(0, item.quantidade - nCoberto - nSugerido);
+      if (nCorte === 0) return [];
+      const chapaIdx  = PRODUTO_CHAPA[item.produto_nome as keyof typeof PRODUTO_CHAPA] ?? null;
+      const chapa     = chapaIdx != null ? CHAPAS_PADRAO[chapaIdx] : null;
+      const porChapa  = chapa ? Math.floor(chapa.w / item.largura) * Math.floor(chapa.h / item.altura) : null;
+      const chapasEst = porChapa && porChapa > 0 ? Math.ceil(nCorte / porChapa) : null;
+      return [{ id: item.id, produto_nome: item.produto_nome, largura: item.largura, altura: item.altura, nCorte, chapasEst, m2: (item.largura * item.altura / 1_000_000) * nCorte }];
+    });
+  const totalM2Corte = itemsParaCorte.reduce((a, i) => a + i.m2, 0);
+  const otimizadorUrl = itemsParaCorte.length > 0
+    ? `/otimizador?pedido=${id}&pecas=${encodeURIComponent(btoa(JSON.stringify(itemsParaCorte.map(i => ({ l: i.largura, a: i.altura, qtd: i.nCorte, prod: i.produto_nome })))))}`
+    : null;
+
   const fc: React.CSSProperties = {
     background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: "6px",
     padding: "9px 12px", color: "var(--t1)", fontSize: "13px",
@@ -1177,6 +1197,34 @@ export default function PedidoDetalhe() {
                 </div>
               );
             })()}
+
+            {/* Resumo Corte Certo + botão Otimizador */}
+            {itemsParaCorte.length > 0 && (
+              <div style={{ marginTop:"16px", padding:"12px 16px", background:"rgba(245,158,11,.05)", border:"1px solid rgba(245,158,11,.2)", borderRadius:"8px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px", flexWrap:"wrap" }}>
+                <div>
+                  <div style={{ fontSize:"10px", color:"var(--warn)", fontWeight:700, letterSpacing:".06em", marginBottom:"6px" }}>
+                    CORTE CERTO — {itemsParaCorte.reduce((a, i) => a + i.nCorte, 0)} peça{itemsParaCorte.reduce((a, i) => a + i.nCorte, 0) !== 1 ? "s" : ""} · {totalM2Corte.toFixed(4)} m²
+                  </div>
+                  <div style={{ display:"flex", gap:"12px", flexWrap:"wrap" }}>
+                    {itemsParaCorte.map(item => (
+                      <div key={item.id} style={{ display:"flex", alignItems:"center", gap:"6px" }}>
+                        <span style={{ fontFamily:"'DM Mono',monospace", color:"var(--warn)", fontWeight:700, fontSize:"12px" }}>{item.nCorte}×</span>
+                        <span style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600 }}>{item.produto_nome}</span>
+                        <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>{item.largura}×{item.altura}mm</span>
+                        {item.chapasEst && (
+                          <span style={{ fontSize:"10px", color:"var(--t3)", background:"var(--surf3)", border:"1px solid var(--b2)", borderRadius:"3px", padding:"1px 5px" }}>~{item.chapasEst} chapa{item.chapasEst > 1 ? "s" : ""}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {otimizadorUrl && (
+                  <a href={otimizadorUrl} className="btn by sm" style={{ textDecoration:"none", whiteSpace:"nowrap", flexShrink:0 }}>
+                    ✂ Otimizar Corte →
+                  </a>
+                )}
+              </div>
+            )}
           </div>
 
           {/* bloco legado de otimização interna — oculto, mantido para histórico */}

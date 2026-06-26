@@ -112,23 +112,23 @@ function OtimizadorContent() {
     });
   }, []);
 
-  // Carrega peças a partir do parâmetro ?pecas= na URL (modo AVULSO)
+  // Carrega peças a partir do parâmetro ?pecas= na URL
   // Formatos suportados:
   //   CSV: "l,a,qtd|l,a,qtd|..." (com ?prod=nome opcional)
-  //   Legacy base64-JSON: btoa(JSON.stringify([{l,a,qtd,prod},...]))
+  //   JSON base64: btoa(JSON.stringify([{l,a,qtd,prod},...]))
+  // Quando ?pedido= também está presente, as peças vêm de ?pecas= mas o
+  // pedidoRef é definido pelo ?pedido= (modo "somente pendentes").
   useEffect(() => {
-    if (!pecasParam || pedidoParam) return;
+    if (!pecasParam) return;
     try {
       let items: Array<{ l: number; a: number; qtd: number; prod: string }> = [];
       const defaultProd = prodParam ?? "";
       if (pecasParam.includes(",")) {
-        // formato CSV
         items = pecasParam.split("|").map(seg => {
           const [l, a, qtd] = seg.split(",").map(Number);
           return { l, a, qtd: qtd || 1, prod: defaultProd };
         }).filter(p => p.l > 0 && p.a > 0);
       } else {
-        // formato legacy base64-JSON
         items = JSON.parse(atob(pecasParam)) as Array<{ l: number; a: number; qtd: number; prod: string }>;
       }
       if (items.length > 0) {
@@ -136,12 +136,14 @@ function OtimizadorContent() {
         const firstProd = items[0]?.prod || defaultProd;
         if (firstProd) autoSetChapa(firstProd);
         setModoTeste(true);
+        if (pedidoParam) setPedidoRef(pedidoParam);
       }
     } catch { /* URL inválida — ignora */ }
-  }, [pecasParam, prodParam]);
+  }, [pecasParam, prodParam, pedidoParam]);
 
   useEffect(() => {
-    if (!pedidoParam) return;
+    // Quando só ?pedido= (sem ?pecas=): carrega todos os itens do pedido do BD
+    if (!pedidoParam || pecasParam) return;
     setCarregando(true);
     supabase.from("itens_pedido").select("*").eq("pedido_id", pedidoParam).then(async ({ data, error }) => {
       setCarregando(false);
@@ -162,7 +164,7 @@ function OtimizadorContent() {
       const produtosNoPedido = [...new Set(carregadas.map(p => p.prod))];
       buscarSugestoes(pedidoParam, produtosNoPedido, carregadas);
     });
-  }, [pedidoParam]);
+  }, [pedidoParam, pecasParam]);
 
   useEffect(() => {
     if (resultado && resultado[chapaIdx]) {
