@@ -128,6 +128,69 @@ interface EdicaoPago {
   salvando: boolean;
 }
 
+type RetalhoDispInfo = { id: string; produto_nome: string; largura: number; altura: number; m2: number; espessura: number | null; box: string | null; observacao: string | null };
+
+interface SugestaoRetalho {
+  retalhoId: string;
+  retalho: RetalhoDispInfo;
+  itemId: number;
+  itemProduto: string;
+  itemLargura: number;
+  itemAltura: number;
+  rotacionado: boolean;
+  pecaNum: number;
+}
+
+function nomesCompativeis(a: string, b: string): boolean {
+  const n1 = a.toLowerCase().trim();
+  const n2 = b.toLowerCase().trim();
+  return n1 === n2 || n1.includes(n2) || n2.includes(n1);
+}
+
+function fitMode(ret: { largura: number; altura: number }, l: number, a: number): "normal" | "rot" | false {
+  if (ret.largura >= l && ret.altura >= a) return "normal";
+  if (ret.largura >= a && ret.altura >= l) return "rot";
+  return false;
+}
+
+function calcSugestoes(
+  itens: any[],
+  retDisp: RetalhoDispInfo[],
+  retUsados: Array<{ retalho_id: string; retalhos: RetalhoDispInfo | null }>,
+  ignoradas: Set<string>
+): SugestaoRetalho[] {
+  const usadosIds = new Set(retUsados.map(u => u.retalho_id));
+  const pool: RetalhoDispInfo[] = retDisp
+    .filter(r => !usadosIds.has(r.id) && !ignoradas.has(r.id))
+    .map(r => ({ ...r }));
+  const result: SugestaoRetalho[] = [];
+  for (const item of itens) {
+    if (item.vidro_cliente) continue;
+    const cobertos = retUsados.filter(u =>
+      u.retalhos &&
+      nomesCompativeis(item.produto_nome, u.retalhos.produto_nome) &&
+      fitMode(u.retalhos, item.largura, item.altura) !== false
+    ).length;
+    const restantes = item.quantidade - cobertos;
+    for (let p = 0; p < restantes; p++) {
+      const idx = pool.findIndex(r =>
+        nomesCompativeis(item.produto_nome, r.produto_nome) &&
+        fitMode(r, item.largura, item.altura) !== false
+      );
+      if (idx === -1) break;
+      const [ret] = pool.splice(idx, 1);
+      result.push({
+        retalhoId: ret.id, retalho: ret,
+        itemId: item.id, itemProduto: item.produto_nome,
+        itemLargura: item.largura, itemAltura: item.altura,
+        rotacionado: fitMode(ret, item.largura, item.altura) === "rot",
+        pecaNum: cobertos + p + 1,
+      });
+    }
+  }
+  return result;
+}
+
 export default function PedidoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -144,6 +207,7 @@ export default function PedidoDetalhe() {
   const [showVincularRetalho, setShowVincularRetalho] = useState(false);
   const [retalhosDisponiveis, setRetalhosDisponiveis] = useState<Array<{ id: string; produto_nome: string; largura: number; altura: number; m2: number; espessura: number | null; box: string | null; observacao: string | null }>>([]);
   const [filtroBuscaRetalho, setFiltroBuscaRetalho] = useState("");
+  const [sugestoesIgnoradas, setSugestoesIgnoradas] = useState<Set<string>>(new Set());
   const [clientes, setClientes]         = useState<{ id: number; nome: string }[]>([]);
   const [vendedores, setVendedores]     = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
   const [creditoCliente, setCreditoCliente] = useState(0);
@@ -236,6 +300,13 @@ export default function PedidoDetalhe() {
     }
     setPagamentos(initPag);
     setEditandoPago({});
+    setSugestoesIgnoradas(new Set());
+    const { data: retDisp } = await supabase
+      .from("retalhos")
+      .select("id, produto_nome, largura, altura, m2, espessura, box, observacao")
+      .eq("status", "Disponível")
+      .order("produto_nome");
+    setRetalhosDisponiveis((retDisp ?? []) as typeof retalhosDisponiveis);
     setLoading(false);
   }
 
@@ -608,13 +679,7 @@ export default function PedidoDetalhe() {
     await load();
   }
 
-  async function abrirVincularRetalho() {
-    const { data } = await supabase
-      .from("retalhos")
-      .select("id, produto_nome, largura, altura, m2, espessura, box, observacao")
-      .eq("status", "Disponível")
-      .order("produto_nome");
-    setRetalhosDisponiveis((data ?? []) as typeof retalhosDisponiveis);
+  function abrirVincularRetalho() {
     setFiltroBuscaRetalho("");
     setShowVincularRetalho(true);
   }
@@ -709,6 +774,22 @@ export default function PedidoDetalhe() {
 
   const parcelasAReceber = lancamentos.filter(l => l.status === "A Receber").sort((a, b) => (a.vencimento ?? "").localeCompare(b.vencimento ?? ""));
   const lancamentosPagos = lancamentos.filter(l => l.status === "Pago");
+
+  const sugestoes = calcSugestoes(pedido.itens_pedido ?? [], retalhosDisponiveis, retalhosUsados as any, sugestoesIgnoradas);
+  const itensCoberturaData = (pedido.itens_pedido ?? [])
+    .filter((item: any) => !item.vidro_cliente)
+    .map((item: any) => {
+      const cobertoPorRetalhos = retalhosUsados.filter(u =>
+        u.retalhos && nomesCompativeis(item.produto_nome, u.retalhos.produto_nome) &&
+        fitMode(u.retalhos, item.largura, item.altura) !== false
+      ).length;
+      const cobertoPorSugestoes = sugestoes.filter(s => s.itemId === item.id).length;
+      return {
+        id: item.id, produto: item.produto_nome, largura: item.largura, altura: item.altura,
+        quantidade: item.quantidade, cobertoPorRetalhos, cobertoPorSugestoes,
+        paraCorte: Math.max(0, item.quantidade - cobertoPorRetalhos - cobertoPorSugestoes),
+      };
+    });
 
   const fc: React.CSSProperties = {
     background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: "6px",
@@ -837,9 +918,87 @@ export default function PedidoDetalhe() {
               <button className="btn bg sm" onClick={abrirVincularRetalho}>+ Vincular Retalho</button>
             </div>
 
-            {retalhosUsados.length === 0 ? (
+            {/* Cobertura por item */}
+            {itensCoberturaData.length > 0 && (
+              <div style={{ marginBottom:"14px" }}>
+                <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"6px" }}>COBERTURA DO PEDIDO</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:"5px" }}>
+                  {itensCoberturaData.map(item => {
+                    const totCoberto = item.cobertoPorRetalhos + item.cobertoPorSugestoes;
+                    const todoCoberto = totCoberto >= item.quantidade && item.paraCorte === 0;
+                    return (
+                      <div key={item.id} style={{ display:"flex", alignItems:"center", gap:"10px", padding:"8px 12px", background:"var(--surf2)", borderRadius:"8px", border:`1px solid ${todoCoberto ? "rgba(16,185,129,.25)" : "var(--b2)"}` }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <span style={{ fontSize:"12px", fontWeight:600, color:"var(--t1)" }}>{item.produto}</span>
+                          <span style={{ fontSize:"11px", color:"var(--t3)", marginLeft:"8px", fontFamily:"'DM Mono',monospace" }}>{item.largura}×{item.altura}mm</span>
+                          <span style={{ fontSize:"11px", color:"var(--t3)", marginLeft:"6px" }}>· {item.quantidade} pç</span>
+                        </div>
+                        <div style={{ display:"flex", gap:"6px", alignItems:"center", flexShrink:0 }}>
+                          {item.cobertoPorRetalhos > 0 && (
+                            <span style={{ fontSize:"11px", fontFamily:"'DM Mono',monospace", color:"var(--ok)", background:"rgba(16,185,129,.1)", border:"1px solid rgba(16,185,129,.3)", borderRadius:"4px", padding:"2px 8px" }}>
+                              ✓ {item.cobertoPorRetalhos} retalho{item.cobertoPorRetalhos > 1 ? "s" : ""}
+                            </span>
+                          )}
+                          {item.cobertoPorSugestoes > 0 && (
+                            <span style={{ fontSize:"11px", fontFamily:"'DM Mono',monospace", color:"var(--acc)", background:"rgba(99,102,241,.1)", border:"1px solid rgba(99,102,241,.3)", borderRadius:"4px", padding:"2px 8px" }}>
+                              ◎ {item.cobertoPorSugestoes} sugestão
+                            </span>
+                          )}
+                          {item.paraCorte > 0 ? (
+                            <span style={{ fontSize:"11px", fontFamily:"'DM Mono',monospace", color:"var(--warn)", background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.3)", borderRadius:"4px", padding:"2px 8px" }}>
+                              ✂ {item.paraCorte} para corte
+                            </span>
+                          ) : item.cobertoPorRetalhos + item.cobertoPorSugestoes === 0 ? (
+                            <span style={{ fontSize:"11px", fontFamily:"'DM Mono',monospace", color:"var(--t3)", background:"var(--surf3)", border:"1px solid var(--b2)", borderRadius:"4px", padding:"2px 8px" }}>
+                              ✂ {item.quantidade} para corte
+                            </span>
+                          ) : (
+                            <span style={{ fontSize:"11px", color:"var(--ok)" }}>✓ coberto</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Sugestões automáticas */}
+            {sugestoes.length > 0 && (
+              <div style={{ marginBottom:"14px" }}>
+                <div style={{ fontSize:"10px", color:"var(--acc)", fontWeight:700, letterSpacing:".06em", marginBottom:"6px" }}>
+                  SUGESTÕES AUTOMÁTICAS ({sugestoes.length} retalho{sugestoes.length > 1 ? "s" : ""} compatível{sugestoes.length > 1 ? "is" : ""})
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
+                  {sugestoes.map(s => (
+                    <div key={s.retalhoId} style={{ display:"flex", alignItems:"center", gap:"12px", padding:"10px 12px", background:"rgba(99,102,241,.06)", borderRadius:"8px", border:"1px solid rgba(99,102,241,.2)" }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:"8px", flexWrap:"wrap" }}>
+                          <span className="mono" style={{ color:"var(--acc2)", fontWeight:700, fontSize:"12px" }}>{s.retalhoId}</span>
+                          <span style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600 }}>{s.retalho.produto_nome}</span>
+                          <span className="mono" style={{ fontSize:"11px", color:"var(--t2)" }}>{s.retalho.largura}×{s.retalho.altura}mm</span>
+                          {s.retalho.box && <span style={{ fontSize:"10px", color:"var(--t3)" }}>box {s.retalho.box}</span>}
+                          {s.retalho.observacao && <span style={{ fontSize:"10px", color:"var(--warn)", fontWeight:600 }}>👤 {s.retalho.observacao}</span>}
+                        </div>
+                        <div style={{ fontSize:"11px", color:"var(--t3)", marginTop:"2px" }}>
+                          → cobre peça {s.pecaNum} de {s.itemLargura}×{s.itemAltura}mm{s.rotacionado ? " (rotacionado)" : ""}
+                        </div>
+                      </div>
+                      <div style={{ display:"flex", gap:"6px", flexShrink:0 }}>
+                        <button className="btn bp sm" onClick={() => handleVincularRetalho(s.retalhoId)}>Usar</button>
+                        <button className="btn bg sm" onClick={() => setSugestoesIgnoradas(prev => new Set([...prev, s.retalhoId]))}>Pular</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Retalhos já vinculados */}
+            {retalhosUsados.length === 0 && sugestoes.length === 0 && itensCoberturaData.length === 0 && (
               <div style={{ color:"var(--t3)", fontSize:"12px", padding:"12px 0" }}>Nenhum retalho vinculado. Use o botão acima para selecionar retalhos disponíveis.</div>
-            ) : (
+            )}
+            {retalhosUsados.length > 0 && (
               <div className="tw" style={{ marginBottom:0 }}>
                 <table>
                   <thead>
