@@ -75,9 +75,6 @@ function OtimizadorContent() {
   const [msg, setMsg]                     = useState("");
   const [retalhosGerados, setRetalhosGerados] = useState<RetalhoGerado[]>([]);
   const [salvando, setSalvando]           = useState(false);
-  type SobraEdit = RetalhoGerado & { ativa: boolean; espessura: string; box: string };
-  const [showSobrasConfirm, setShowSobrasConfirm] = useState(false);
-  const [sobrasEdit, setSobrasEdit]       = useState<SobraEdit[]>([]);
   const [zerando, setZerando]             = useState(false);
   const [modoTeste, setModoTeste]         = useState(false);
   const [simulando, setSimulando]         = useState(false);
@@ -138,8 +135,7 @@ function OtimizadorContent() {
         setPecas(items.map(p => ({ l: p.l, a: p.a, qtd: p.qtd ?? 1, prod: p.prod ?? defaultProd })));
         const firstProd = items[0]?.prod || defaultProd;
         if (firstProd) autoSetChapa(firstProd);
-        // Modo teste só quando não há pedido associado (simulação avulsa)
-        if (!pedidoParam) setModoTeste(true);
+        setModoTeste(true);
         if (pedidoParam) setPedidoRef(pedidoParam);
       }
     } catch { /* URL inválida — ignora */ }
@@ -766,19 +762,8 @@ function OtimizadorContent() {
     alert("Plano zerado.");
   }
 
-  function handleSalvar() {
+  async function handleSalvar() {
     if (!resultado || !pedidoRef) return;
-    if (retalhosGerados.length > 0) {
-      setSobrasEdit(retalhosGerados.map(fr => ({ ...fr, ativa: true, espessura: "", box: "" })));
-      setShowSobrasConfirm(true);
-    } else {
-      void executarSalvar([]);
-    }
-  }
-
-  async function executarSalvar(sobras: SobraEdit[]) {
-    if (!resultado || !pedidoRef) return;
-    setShowSobrasConfirm(false);
     setSalvando(true);
     const hoje = new Date().toISOString().split("T")[0];
     const todosPedidos = [pedidoRef, ...Array.from(pedidosSelecionados)];
@@ -800,13 +785,10 @@ function OtimizadorContent() {
       });
     }
     for (const pid of todosPedidos) await updatePedido(pid, { status: "Em Produção – Corte" });
-    const sobrasSelecionadas = sobras.filter(s => s.ativa);
-    if (sobrasSelecionadas.length > 0) {
-      const ok = await salvarRetalhos(sobrasSelecionadas.map(fr => ({
+    if (retalhosGerados.length > 0) {
+      const ok = await salvarRetalhos(retalhosGerados.map(fr => ({
         produto_nome: fr.prod, largura: fr.l, altura: fr.a, m2: fr.m2,
-        chapa_origem: `CHAPA ${fr.chapaIdx + 1}`, pedido_origem: pedidoRef ?? "",
-        espessura: fr.espessura ? parseFloat(fr.espessura) : null,
-        box: fr.box || null,
+        chapa_origem: `CHAPA ${fr.chapaIdx + 1}`, pedido_origem: pedidoRef,
         status: "Disponível", dt_gerado: hoje,
       })));
       if (!ok) { setSalvando(false); alert("Erro ao salvar retalhos. Tente novamente."); return; }
@@ -932,66 +914,6 @@ function OtimizadorContent() {
 
   return (
     <AppLayout>
-      {/* Modal de confirmação das sobras do Corte Certo */}
-      {showSobrasConfirm && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
-          <div style={{ background: "var(--surf0)", border: "1px solid var(--b1)", borderRadius: "14px", padding: "24px", width: "100%", maxWidth: "540px", maxHeight: "85vh", overflowY: "auto" }}>
-            <div style={{ fontSize: "16px", fontWeight: 700, color: "#f59e0b", marginBottom: "4px" }}>↺ Sobras do Corte Certo</div>
-            <div style={{ fontSize: "12px", color: "var(--t2)", marginBottom: "18px" }}>
-              Selecione as sobras que deseja cadastrar no estoque de retalhos. Informe espessura e box para facilitar a localização.
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "20px" }}>
-              {sobrasEdit.map((s, i) => (
-                <div key={i} style={{ border: `1px solid ${s.ativa ? "rgba(245,158,11,.4)" : "var(--b1)"}`, borderRadius: "10px", padding: "12px 14px", background: s.ativa ? "rgba(245,158,11,.05)" : "var(--surf1)", opacity: s.ativa ? 1 : 0.5 }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
-                    <input type="checkbox" checked={s.ativa} onChange={e => setSobrasEdit(prev => prev.map((x, j) => j === i ? { ...x, ativa: e.target.checked } : x))} style={{ marginTop: "3px", accentColor: "#f59e0b", width: "15px", height: "15px", flexShrink: 0 }} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", fontFamily: "'DM Mono', monospace" }}>{s.l} × {s.a} mm</div>
-                      <div style={{ fontSize: "11px", color: "var(--t2)", marginTop: "1px" }}>{s.prod} · Chapa {s.chapaIdx + 1} · {s.m2.toFixed(4)} m²</div>
-                      {s.ativa && (
-                        <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: "10px", color: "var(--t3)", marginBottom: "3px" }}>Espessura (mm)</div>
-                            <input
-                              type="number"
-                              placeholder="ex: 6"
-                              value={s.espessura}
-                              onChange={e => setSobrasEdit(prev => prev.map((x, j) => j === i ? { ...x, espessura: e.target.value } : x))}
-                              style={{ width: "100%", padding: "5px 8px", borderRadius: "6px", border: "1px solid var(--b2)", background: "var(--surf0)", color: "var(--t1)", fontSize: "12px" }}
-                            />
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: "10px", color: "var(--t3)", marginBottom: "3px" }}>Box / Localização</div>
-                            <input
-                              type="text"
-                              placeholder="ex: A3"
-                              value={s.box}
-                              onChange={e => setSobrasEdit(prev => prev.map((x, j) => j === i ? { ...x, box: e.target.value } : x))}
-                              style={{ width: "100%", padding: "5px 8px", borderRadius: "6px", border: "1px solid var(--b2)", background: "var(--surf0)", color: "var(--t1)", fontSize: "12px" }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-              <button onClick={() => void executarSalvar([])} style={{ padding: "9px 18px", borderRadius: "8px", border: "1px solid var(--b2)", background: "transparent", color: "var(--t2)", fontSize: "13px", cursor: "pointer" }}>
-                Pular sobras
-              </button>
-              <button
-                onClick={() => void executarSalvar(sobrasEdit)}
-                style={{ padding: "9px 20px", borderRadius: "8px", border: "none", background: "#f59e0b", color: "#000", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}
-              >
-                ↺ Cadastrar {sobrasEdit.filter(s => s.ativa).length} sobra(s) e salvar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="tb">
         <div className="tb-title">Otimizador de Corte</div>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
@@ -1259,7 +1181,7 @@ function OtimizadorContent() {
                 <div style={{ marginTop: "14px" }}>
                   <div style={{ fontSize: "11px", fontWeight: 700, color: "#f59e0b", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
                     <span style={{ fontSize: "14px" }}>↺</span>
-                    {retalhosGerados.length} sobra(s) gerada(s) {modoTeste ? "— NÃO serão salvas" : "— revisar ao salvar plano"}
+                    {retalhosGerados.length} retalho(s) {modoTeste ? "— NÃO serão salvos" : "— salvos ao confirmar"}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                     {retalhosGerados.map((r, i) => (
