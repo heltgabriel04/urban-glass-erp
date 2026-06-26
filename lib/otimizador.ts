@@ -485,6 +485,102 @@ function mergeSheets(W: number, H: number, sheets: SheetState[], kerf: number): 
   return current;
 }
 
+// ── 2-Stage Guillotine Strip Packing (FFDH) ──────────────────────────────────
+// Replica a abordagem de faixas/colunas do Corte Certo (software industrial).
+// mode='H': faixas horizontais (altura fixa por faixa, peças esq→dir)
+// mode='V': colunas verticais  (largura fixa por coluna, peças baixo→cima)
+// Produz cortes guilhotina válidos — toda faixa/coluna é separada por um corte único.
+
+function stripFFDH(
+  W: number, H: number,
+  pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
+  kerf: number,
+  ordem: number[],
+  mode: 'H' | 'V'
+): SheetState[] {
+  // H: eixo primário=Y(altura da faixa), secundário=X(largura p/ encaixe)
+  // V: eixo primário=X(largura da coluna), secundário=Y(altura p/ encaixe)
+  const maxP = mode === 'H' ? H : W;
+  const maxS = mode === 'H' ? W : H;
+
+  type Strip = { primaryPos: number; pieceDim: number; fill: number };
+
+  const sheets: SheetState[] = [];
+  let placed: PecaPlacada[] = [];
+  let strips: Strip[] = [];
+  let totalPrimaryUsed = 0;
+
+  function flush() {
+    if (placed.length === 0) return;
+    const frees: MRect[] = [];
+    for (const s of strips) {
+      const rem = maxS - s.fill;
+      if (rem > 0 && s.pieceDim > 0) {
+        if (mode === 'H') frees.push({ x: s.fill, y: s.primaryPos, l: rem, a: s.pieceDim });
+        else              frees.push({ x: s.primaryPos, y: s.fill, l: s.pieceDim, a: rem });
+      }
+    }
+    const afterAll = maxP - totalPrimaryUsed;
+    if (afterAll > 0) {
+      if (mode === 'H') frees.push({ x: 0, y: totalPrimaryUsed, l: maxS, a: afterAll });
+      else              frees.push({ x: totalPrimaryUsed, y: 0, l: afterAll, a: maxS });
+    }
+    sheets.push({ placed, freeRects: frees });
+    placed = []; strips = []; totalPrimaryUsed = 0;
+  }
+
+  function tryPlace(origIdx: number): boolean {
+    const p = pecas[origIdx];
+    const oris = [
+      { pl: p.l, pa: p.a, rot: false as boolean },
+      { pl: p.a, pa: p.l, rot: true  as boolean },
+    ];
+
+    // 1) Tenta encaixar em faixa/coluna já existente (First Fit)
+    for (const ori of oris) {
+      const pPrim = mode === 'H' ? ori.pa : ori.pl;
+      const pSec  = mode === 'H' ? ori.pl : ori.pa;
+      for (const strip of strips) {
+        if (pPrim <= strip.pieceDim && strip.fill + pSec + kerf <= maxS) {
+          const x = mode === 'H' ? strip.fill : strip.primaryPos;
+          const y = mode === 'H' ? strip.primaryPos : strip.fill;
+          placed.push({ x, y, l: ori.pl, a: ori.pa, idx: origIdx, prod: p.prod, rot: ori.rot, pedidoId: p.pedidoId });
+          strip.fill += pSec + kerf;
+          return true;
+        }
+      }
+    }
+
+    // 2) Abre nova faixa/coluna
+    for (const ori of oris) {
+      const pPrim = mode === 'H' ? ori.pa : ori.pl;
+      const pSec  = mode === 'H' ? ori.pl : ori.pa;
+      if (totalPrimaryUsed + pPrim + kerf <= maxP && pSec + kerf <= maxS) {
+        const s: Strip = { primaryPos: totalPrimaryUsed, pieceDim: pPrim, fill: 0 };
+        strips.push(s);
+        totalPrimaryUsed += pPrim + kerf;
+        const x = mode === 'H' ? 0 : s.primaryPos;
+        const y = mode === 'H' ? s.primaryPos : 0;
+        placed.push({ x, y, l: ori.pl, a: ori.pa, idx: origIdx, prod: p.prod, rot: ori.rot, pedidoId: p.pedidoId });
+        s.fill = pSec + kerf;
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  for (const origIdx of ordem) {
+    if (!tryPlace(origIdx)) {
+      flush();
+      if (!tryPlace(origIdx)) continue; // peça maior que a chapa — ignora
+    }
+  }
+  flush();
+
+  return sheets;
+}
+
 export function empacotarTodas(
   W: number, H: number,
   pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
@@ -535,6 +631,7 @@ export function empacotarTodas(
 
   // ── Fase 1: ordenações fixas ──────────────────────────────────────────────────
   for (const ordem of fixas) avaliarOrdem(ordem);
+  if (process.env.OTIM_DEBUG) console.log(`[fase1] melhorN=${melhorN} aprov=${(melhorAprov*100).toFixed(2)}%`);
   if (melhorN === 1) {
     const early: SheetState[] = melhorSheets ?? [];
     return early.map(sheet => ({ W, H, prod: sheet.placed[0]?.prod ?? '', placed: sheet.placed, free: mrFreeRects(sheet.freeRects) }));
@@ -552,6 +649,7 @@ export function empacotarTodas(
     return ((seed ^ (seed >>> 16)) >>> 0) / 0x100000000;
   }
 
+  let nIter = 0;
   while (Date.now() < deadlineRestarts) {
     const ordem = [...base];
     for (let i = ordem.length - 1; i > 0; i--) {
@@ -559,8 +657,10 @@ export function empacotarTodas(
       const t = ordem[i]; ordem[i] = ordem[j]; ordem[j] = t;
     }
     avaliarOrdem(ordem);
+    nIter++;
     if (melhorN === 1) break;
   }
+  if (process.env.OTIM_DEBUG) console.log(`[fase2] iter=${nIter} melhorN=${melhorN} aprov=${(melhorAprov*100).toFixed(2)}%`);
 
   // ── Fase 3: Defragmentação + kEliminate (40% do tempo) ──────────────────────
   // Pipline: reoptimize cada chapa → mergeSheets → kEliminate (grupos 2-3)
@@ -574,13 +674,36 @@ export function empacotarTodas(
     // Passo B: tenta Sheet Merging com as chapas defragmentadas
     const afterMerge = mergeSheets(W, H, reopt, kerf);
     avaliar(afterMerge);
+    if (process.env.OTIM_DEBUG) console.log(`[fase3-merge] n=${afterMerge.length} melhorN=${melhorN} aprov=${(melhorAprov*100).toFixed(2)}%`);
 
     // Passo C: kEliminate (remonta grupos) sobre o melhor resultado
     const base3: SheetState[] = melhorSheets as SheetState[];
     if (base3.length > 1 && Date.now() < deadlineK) {
       const kResult = kEliminate(W, H, base3, kerf, deadlineK);
       avaliar(kResult);
+      if (process.env.OTIM_DEBUG) console.log(`[fase3-kelim] n=${kResult.length} melhorN=${melhorN} aprov=${(melhorAprov*100).toFixed(2)}% tempoRestante=${deadlineK - Date.now()}ms`);
     }
+  }
+
+  // ── Fase 4: Strip packing guilhotina (estilo Corte Certo) ─────────────────────
+  // Faixas horizontais e colunas verticais (FFDH) com múltiplas ordenações.
+  // Compete diretamente com o MAXRECTS — o melhor resultado global é mantido.
+  {
+    const ordsStrip: number[][] = [
+      [...base].sort((a, b) => (pecas[b].l * pecas[b].a) - (pecas[a].l * pecas[a].a)),
+      [...base].sort((a, b) => Math.max(pecas[b].l, pecas[b].a) - Math.max(pecas[a].l, pecas[a].a)),
+      [...base].sort((a, b) => pecas[b].a - pecas[a].a),
+      [...base].sort((a, b) => pecas[b].l - pecas[a].l),
+      [...base].sort((a, b) => Math.min(pecas[b].l, pecas[b].a) - Math.min(pecas[a].l, pecas[a].a)),
+      [...base],
+    ];
+    for (const ordem of ordsStrip) {
+      for (const mode of ['H', 'V'] as const) {
+        const r = stripFFDH(W, H, pecas, kerf, ordem, mode);
+        if (r.length > 0) avaliar(mergeSheets(W, H, r, kerf));
+      }
+    }
+    if (process.env.OTIM_DEBUG) console.log(`[fase4-strip] melhorN=${melhorN} aprov=${(melhorAprov*100).toFixed(2)}%`);
   }
 
   const sheets: SheetState[] = melhorSheets ?? [];
