@@ -173,12 +173,17 @@ function calcSugestoes(
     ).length;
     const restantes = item.quantidade - cobertos;
     for (let p = 0; p < restantes; p++) {
-      const idx = pool.findIndex(r =>
-        nomesCompativeis(item.produto_nome, r.produto_nome) &&
-        fitMode(r, item.largura, item.altura) !== false
-      );
-      if (idx === -1) break;
-      const [ret] = pool.splice(idx, 1);
+      // best-fit: menor retalho que cobre a peça (evita desperdiçar retalhos grandes)
+      let bestIdx = -1;
+      let bestArea = Infinity;
+      pool.forEach((r, i) => {
+        if (nomesCompativeis(item.produto_nome, r.produto_nome) && fitMode(r, item.largura, item.altura) !== false) {
+          const area = r.largura * r.altura;
+          if (area < bestArea) { bestArea = area; bestIdx = i; }
+        }
+      });
+      if (bestIdx === -1) break;
+      const [ret] = pool.splice(bestIdx, 1);
       result.push({
         retalhoId: ret.id, retalho: ret,
         itemId: item.id, itemProduto: item.produto_nome,
