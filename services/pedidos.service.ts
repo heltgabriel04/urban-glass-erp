@@ -438,24 +438,20 @@ export async function utilizarCreditoEmPedido(
 // várias viagens — por isso aceita múltiplos arquivos por upload.
 const BUCKET_ROMANEIO_ASSINADO = 'romaneios-assinados';
 
-export async function uploadRomaneioAssinado(pedidoId: string, files: File[]): Promise<string[]> {
+export async function uploadRomaneioAssinado(pedidoId: string, files: File[]): Promise<{ urls: string[]; erro?: string }> {
   const urls: string[] = [];
   for (const file of files) {
     const ext  = file.name.split('.').pop() ?? 'pdf';
     const path = `${pedidoId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
     const { error } = await supabase.storage.from(BUCKET_ROMANEIO_ASSINADO).upload(path, file, { upsert: false });
-    if (error) { console.error('uploadRomaneioAssinado:', error); continue; }
+    if (error) { console.error('uploadRomaneioAssinado:', error); return { urls, erro: error.message }; }
     const { data } = supabase.storage.from(BUCKET_ROMANEIO_ASSINADO).getPublicUrl(path);
     urls.push(data.publicUrl);
   }
-
   if (urls.length > 0) {
-    registrarLog({
-      acao: "anexou", tabela: "pedidos", registro_id: pedidoId,
-      descricao: `Anexou ${urls.length} romaneio(s) assinado(s) em ${pedidoId}`,
-    });
+    registrarLog({ acao: "anexou", tabela: "pedidos", registro_id: pedidoId, descricao: `Anexou ${urls.length} romaneio(s) assinado(s) em ${pedidoId}` });
   }
-  return urls;
+  return { urls };
 }
 
 export async function deleteRomaneioAssinado(url: string): Promise<boolean> {
@@ -471,20 +467,20 @@ export async function deleteRomaneioAssinado(url: string): Promise<boolean> {
 // ─── Storage: NF-e ────────────────────────────────────────────────────
 const BUCKET_NFE = 'nfe-pedidos';
 
-export async function uploadNfe(pedidoId: string, files: File[]): Promise<string[]> {
+export async function uploadNfe(pedidoId: string, files: File[]): Promise<{ urls: string[]; erro?: string }> {
   const urls: string[] = [];
   for (const file of files) {
     const ext  = file.name.split('.').pop() ?? 'pdf';
     const path = `${pedidoId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
     const { error } = await supabase.storage.from(BUCKET_NFE).upload(path, file, { upsert: false });
-    if (error) { console.error('uploadNfe:', error); continue; }
+    if (error) { console.error('uploadNfe:', error); return { urls, erro: error.message }; }
     const { data } = supabase.storage.from(BUCKET_NFE).getPublicUrl(path);
     urls.push(data.publicUrl);
   }
   if (urls.length > 0) {
     registrarLog({ acao: "anexou", tabela: "pedidos", registro_id: pedidoId, descricao: `Anexou ${urls.length} NF-e em ${pedidoId}` });
   }
-  return urls;
+  return { urls };
 }
 
 export async function deleteNfe(url: string): Promise<boolean> {
@@ -500,20 +496,20 @@ export async function deleteNfe(url: string): Promise<boolean> {
 // ─── Storage: Boleto ──────────────────────────────────────────────────
 const BUCKET_BOLETO = 'boletos-pedidos';
 
-export async function uploadBoleto(pedidoId: string, files: File[]): Promise<string[]> {
+export async function uploadBoleto(pedidoId: string, files: File[]): Promise<{ urls: string[]; erro?: string }> {
   const urls: string[] = [];
   for (const file of files) {
     const ext  = file.name.split('.').pop() ?? 'pdf';
     const path = `${pedidoId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
     const { error } = await supabase.storage.from(BUCKET_BOLETO).upload(path, file, { upsert: false });
-    if (error) { console.error('uploadBoleto:', error); continue; }
+    if (error) { console.error('uploadBoleto:', error); return { urls, erro: error.message }; }
     const { data } = supabase.storage.from(BUCKET_BOLETO).getPublicUrl(path);
     urls.push(data.publicUrl);
   }
   if (urls.length > 0) {
     registrarLog({ acao: "anexou", tabela: "pedidos", registro_id: pedidoId, descricao: `Anexou ${urls.length} boleto(s) em ${pedidoId}` });
   }
-  return urls;
+  return { urls };
 }
 
 export async function deleteBoleto(url: string): Promise<boolean> {

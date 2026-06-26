@@ -640,14 +640,14 @@ export default function PedidoDetalhe() {
   async function handleUploadRomaneioAssinado(files: File[]) {
     if (!pedido || files.length === 0) return;
     setUploadandoRomaneio(true);
-    const urls = await uploadRomaneioAssinado(id, files);
+    const { urls, erro } = await uploadRomaneioAssinado(id, files);
     if (urls.length > 0) {
       const existentes = pedido.romaneio_assinado_urls ?? [];
       await updatePedido(id, { romaneio_assinado_urls: [...existentes, ...urls] } as any);
       toast(urls.length > 1 ? `${urls.length} romaneios assinados salvos` : "Romaneio assinado salvo");
       await load();
     } else {
-      toast("Erro ao enviar arquivo", "err");
+      toast(`Erro ao enviar arquivo${erro ? `: ${erro}` : ""}`, "err");
     }
     setUploadandoRomaneio(false);
   }
@@ -665,14 +665,14 @@ export default function PedidoDetalhe() {
   async function handleUploadNfe(files: File[]) {
     if (!pedido || files.length === 0) return;
     setUploadandoNfe(true);
-    const urls = await uploadNfe(id, files);
+    const { urls, erro } = await uploadNfe(id, files);
     if (urls.length > 0) {
       const existentes = pedido.nfe_urls ?? [];
       await updatePedido(id, { nfe_urls: [...existentes, ...urls] } as any);
       toast(urls.length > 1 ? `${urls.length} NF-e salvas` : "NF-e salva");
       await load();
     } else {
-      toast("Erro ao enviar arquivo", "err");
+      toast(`Erro ao enviar NF-e${erro ? `: ${erro}` : ""}`, "err");
     }
     setUploadandoNfe(false);
   }
@@ -690,14 +690,14 @@ export default function PedidoDetalhe() {
   async function handleUploadBoleto(files: File[]) {
     if (!pedido || files.length === 0) return;
     setUploadandoBoleto(true);
-    const urls = await uploadBoleto(id, files);
+    const { urls, erro } = await uploadBoleto(id, files);
     if (urls.length > 0) {
       const existentes = pedido.boleto_urls ?? [];
       await updatePedido(id, { boleto_urls: [...existentes, ...urls] } as any);
       toast(urls.length > 1 ? `${urls.length} boletos salvos` : "Boleto salvo");
       await load();
     } else {
-      toast("Erro ao enviar arquivo", "err");
+      toast(`Erro ao enviar boleto${erro ? `: ${erro}` : ""}`, "err");
     }
     setUploadandoBoleto(false);
   }
