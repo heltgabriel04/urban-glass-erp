@@ -567,6 +567,38 @@ export async function vincularRetalhoAoPedido(
   return { ok: true, id: (data as any).id };
 }
 
+export async function criarSobraRetalho(params: {
+  produto_nome: string;
+  largura: number;
+  altura: number;
+  espessura: number | null;
+  box: string | null;
+  pedido_origem: string;
+  observacao?: string | null;
+}): Promise<{ ok: boolean; id?: string }> {
+  const { data: last } = await supabase
+    .from('retalhos').select('id').order('id', { ascending: false }).limit(1);
+  const lastNum = last?.[0] ? parseInt((last[0] as any).id.replace('R-', '')) : 0;
+  const newId = 'R-' + String(lastNum + 1).padStart(3, '0');
+  const m2 = parseFloat(((params.largura * params.altura) / 1_000_000).toFixed(4));
+  const { data, error } = await supabase.from('retalhos').insert([{
+    id: newId,
+    produto_nome: params.produto_nome,
+    largura: params.largura,
+    altura: params.altura,
+    espessura: params.espessura,
+    m2,
+    quantidade: 1,
+    box: params.box,
+    pedido_origem: params.pedido_origem,
+    observacao: params.observacao ?? null,
+    dt_gerado: new Date().toISOString().split('T')[0],
+    status: 'Disponível',
+  }] as never[]).select().single();
+  if (error) { console.error('criarSobraRetalho:', error); return { ok: false }; }
+  return { ok: true, id: (data as any).id };
+}
+
 export async function desvincularRetalhoAoPedido(
   usoId: number, retalhoId: string
 ): Promise<boolean> {

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
-import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido, uploadRomaneioAssinado, deleteRomaneioAssinado, uploadCorteCertoPdf, deleteCorteCertoPdf, vincularRetalhoAoPedido, desvincularRetalhoAoPedido, getRetalhosUsadosPorPedido } from "@/services/pedidos.service";
+import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido, uploadRomaneioAssinado, deleteRomaneioAssinado, uploadCorteCertoPdf, deleteCorteCertoPdf, vincularRetalhoAoPedido, desvincularRetalhoAoPedido, getRetalhosUsadosPorPedido, criarSobraRetalho } from "@/services/pedidos.service";
 import { getLancamentosPorPedido, deletarLancamento, createLancamento, updateLancamento } from "@/services/financeiro.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, updateNaoConformidade } from "@/services/qualidade.service";
@@ -141,6 +141,56 @@ interface SugestaoRetalho {
   pecaNum: number;
 }
 
+interface SobraCandidata {
+  id: string;          // "dir" | "sup"
+  label: string;
+  largura: number;
+  altura: number;
+  ativa: boolean;
+}
+
+interface SobraFila {
+  retalhoId: string;
+  produtoNome: string;
+  espessura: number | null;
+  box: string | null;
+  pedidoOrigem: string;
+  obs: string;
+  candidatas: SobraCandidata[];
+}
+
+const MIN_SOBRA = 80; // mm mínimos para valer registrar
+
+function gerarSobra(
+  ret: { id: string; produto_nome: string; largura: number; altura: number; espessura: number | null; box: string | null },
+  pL: number, pA: number, rotacionado: boolean,
+  pedidoId: string
+): SobraFila | null {
+  const usedL = rotacionado ? pA : pL;
+  const usedA = rotacionado ? pL : pA;
+  const candidatas: SobraCandidata[] = [];
+
+  if (ret.largura - usedL >= MIN_SOBRA) {
+    candidatas.push({
+      id: 'dir', label: 'Faixa lateral (direita)',
+      largura: ret.largura - usedL, altura: ret.altura, ativa: true,
+    });
+  }
+  if (ret.altura - usedA >= MIN_SOBRA) {
+    candidatas.push({
+      id: 'sup', label: 'Faixa superior',
+      largura: usedL, altura: ret.altura - usedA,
+      ativa: candidatas.length === 0,
+    });
+  }
+  if (candidatas.length === 0) return null;
+  return {
+    retalhoId: ret.id, produtoNome: ret.produto_nome,
+    espessura: ret.espessura, box: ret.box,
+    pedidoOrigem: pedidoId, obs: '', candidatas,
+  };
+}
+
 function nomesCompativeis(a: string, b: string): boolean {
   const n1 = a.toLowerCase().trim();
   const n2 = b.toLowerCase().trim();
@@ -249,6 +299,8 @@ export default function PedidoDetalhe() {
   const [filtroBuscaRetalho, setFiltroBuscaRetalho] = useState("");
   const [sugestoesIgnoradas, setSugestoesIgnoradas] = useState<Set<string>>(new Set());
   const [selecionandoTodos, setSelecionandoTodos]   = useState(false);
+  const [sobraFila, setSobraFila]                   = useState<SobraFila[]>([]);
+  const [sobraSalvando, setSobraSalvando]           = useState(false);
   const [itemParaRetalho, setItemParaRetalho] = useState<number | null>(null);
   const [clientes, setClientes]         = useState<{ id: number; nome: string }[]>([]);
   const [vendedores, setVendedores]     = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
@@ -728,11 +780,19 @@ export default function PedidoDetalhe() {
   }
 
   async function handleVincularRetalho(retalhoId: string, itemPedidoId?: number | null) {
+    // Acha o retalho e a sugestão antes de vincular (para calcular sobra depois)
+    const retInfo = retalhosDisponiveis.find(r => r.id === retalhoId);
+    const sug = sugestoes.find(s => s.retalhoId === retalhoId);
     const r = await vincularRetalhoAoPedido(id, retalhoId, itemPedidoId ?? null);
     if (r.ok) {
       toast(`Retalho ${retalhoId} vinculado`);
       setShowVincularRetalho(false);
       await load();
+      // Sugere registrar sobra se o retalho for maior que a peça
+      if (retInfo && sug) {
+        const sobra = gerarSobra(retInfo, sug.itemLargura, sug.itemAltura, sug.rotacionado, id);
+        if (sobra) setSobraFila(prev => [...prev, sobra]);
+      }
     } else {
       toast("Erro ao vincular retalho", "err");
     }
@@ -742,14 +802,25 @@ export default function PedidoDetalhe() {
     if (!sugestoesPendentes.length) return;
     setSelecionandoTodos(true);
     let ok = 0, err = 0;
+    const novasSobras: SobraFila[] = [];
     for (const s of sugestoesPendentes) {
+      const retInfo = retalhosDisponiveis.find(r => r.id === s.retalhoId);
       const r = await vincularRetalhoAoPedido(id, s.retalhoId, s.itemId);
-      if (r.ok) ok++; else err++;
+      if (r.ok) {
+        ok++;
+        if (retInfo) {
+          const sobra = gerarSobra(retInfo, s.itemLargura, s.itemAltura, s.rotacionado, id);
+          if (sobra) novasSobras.push(sobra);
+        }
+      } else {
+        err++;
+      }
     }
     await load();
     setSelecionandoTodos(false);
     if (err === 0) toast(`${ok} retalho${ok > 1 ? "s" : ""} vinculado${ok > 1 ? "s" : ""}`);
     else toast(`${ok} vinculado${ok > 1 ? "s" : ""}, ${err} com erro`, "err");
+    if (novasSobras.length > 0) setSobraFila(prev => [...prev, ...novasSobras]);
   }
 
   async function handleDesvincularRetalho(usoId: number, retalhoId: string) {
@@ -757,6 +828,36 @@ export default function PedidoDetalhe() {
     const ok = await desvincularRetalhoAoPedido(usoId, retalhoId);
     if (ok) { toast("Retalho devolvido ao estoque"); await load(); }
     else toast("Erro ao desvincular", "err");
+  }
+
+  async function handleRegistrarSobra() {
+    const sobra = sobraFila[0];
+    if (!sobra) return;
+    const ativas = sobra.candidatas.filter(c => c.ativa);
+    if (ativas.length === 0) { avancarFila(); return; }
+    setSobraSalvando(true);
+    for (const c of ativas) {
+      await criarSobraRetalho({
+        produto_nome: sobra.produtoNome,
+        largura: c.largura,
+        altura: c.altura,
+        espessura: sobra.espessura,
+        box: sobra.box,
+        pedido_origem: sobra.pedidoOrigem,
+        observacao: sobra.obs || null,
+      });
+    }
+    setSobraSalvando(false);
+    toast(`Sobra${ativas.length > 1 ? "s" : ""} registrada${ativas.length > 1 ? "s" : ""} no estoque`);
+    avancarFila();
+  }
+
+  function avancarFila() {
+    setSobraFila(prev => prev.slice(1));
+  }
+
+  function editarSobraFila(updater: (s: SobraFila) => SobraFila) {
+    setSobraFila(prev => [updater(prev[0]), ...prev.slice(1)]);
   }
 
   async function handleAvancar() {
@@ -1960,6 +2061,111 @@ export default function PedidoDetalhe() {
           </div>
         </div>
       )}
+
+      {/* Modal: registrar sobra de retalho */}
+      {sobraFila.length > 0 && (() => {
+        const sobra = sobraFila[0];
+        const faltam = sobraFila.length - 1;
+        return (
+          <div className="mov open">
+            <div className="mod" style={{ width:"520px" }}>
+              <div className="mhd">
+                <span>Registrar Sobra — {sobra.retalhoId}</span>
+                <button className="mclose" onClick={avancarFila}>×</button>
+              </div>
+              <div className="mbd" style={{ padding:"16px 20px", display:"flex", flexDirection:"column", gap:"14px" }}>
+                {/* Info do retalho original */}
+                <div style={{ padding:"10px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)", fontSize:"12px", color:"var(--t2)" }}>
+                  <span style={{ fontWeight:700, color:"var(--t1)" }}>{sobra.produtoNome}</span>
+                  {sobra.espessura && <span style={{ marginLeft:"6px", color:"var(--t3)" }}>{sobra.espessura}mm</span>}
+                  {sobra.box && <span style={{ marginLeft:"8px", color:"var(--t3)" }}>box {sobra.box}</span>}
+                  <div style={{ marginTop:"4px", color:"var(--t3)", fontSize:"11px" }}>
+                    Após o corte, o material abaixo pode ficar disponível para reuso.
+                  </div>
+                </div>
+
+                {/* Candidatas */}
+                <div>
+                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em", marginBottom:"8px" }}>SOBRAS ESTIMADAS</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
+                    {sobra.candidatas.map((c, ci) => (
+                      <div key={c.id} style={{ display:"flex", alignItems:"center", gap:"10px", padding:"10px 14px", background: c.ativa ? "rgba(16,185,129,.07)" : "var(--surf2)", border:`1px solid ${c.ativa ? "rgba(16,185,129,.3)" : "var(--b2)"}`, borderRadius:"8px" }}>
+                        <input
+                          type="checkbox"
+                          checked={c.ativa}
+                          onChange={e => editarSobraFila(s => ({
+                            ...s,
+                            candidatas: s.candidatas.map((x, xi) => xi === ci ? { ...x, ativa: e.target.checked } : x),
+                          }))}
+                          style={{ width:"16px", height:"16px", flexShrink:0 }}
+                        />
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:"11px", color:"var(--t3)", marginBottom:"4px" }}>{c.label}</div>
+                          <div style={{ display:"flex", gap:"8px", alignItems:"center" }}>
+                            <input
+                              type="number"
+                              value={c.largura}
+                              onChange={e => editarSobraFila(s => ({
+                                ...s,
+                                candidatas: s.candidatas.map((x, xi) => xi === ci ? { ...x, largura: Number(e.target.value) } : x),
+                              }))}
+                              style={{ width:"80px", background:"var(--surf3)", border:"1px solid var(--b2)", borderRadius:"5px", padding:"4px 8px", color:"var(--t1)", fontSize:"12px", fontFamily:"'DM Mono',monospace" }}
+                            />
+                            <span style={{ color:"var(--t3)", fontSize:"12px" }}>×</span>
+                            <input
+                              type="number"
+                              value={c.altura}
+                              onChange={e => editarSobraFila(s => ({
+                                ...s,
+                                candidatas: s.candidatas.map((x, xi) => xi === ci ? { ...x, altura: Number(e.target.value) } : x),
+                              }))}
+                              style={{ width:"80px", background:"var(--surf3)", border:"1px solid var(--b2)", borderRadius:"5px", padding:"4px 8px", color:"var(--t1)", fontSize:"12px", fontFamily:"'DM Mono',monospace" }}
+                            />
+                            <span style={{ color:"var(--t3)", fontSize:"12px" }}>mm</span>
+                            {c.largura > 0 && c.altura > 0 && (
+                              <span style={{ fontSize:"11px", color:"var(--ok)", fontFamily:"'DM Mono',monospace" }}>
+                                {((c.largura * c.altura) / 1_000_000).toFixed(4)} m²
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Observação */}
+                <div>
+                  <label style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, letterSpacing:".04em", display:"block", marginBottom:"4px" }}>OBSERVAÇÃO (opcional)</label>
+                  <input
+                    type="text"
+                    value={sobra.obs}
+                    onChange={e => editarSobraFila(s => ({ ...s, obs: e.target.value }))}
+                    placeholder="Ex.: sobra do corte do pedido..."
+                    style={{ width:"100%", background:"var(--surf2)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"7px 10px", color:"var(--t1)", fontSize:"12px", boxSizing:"border-box" }}
+                  />
+                </div>
+
+                {faltam > 0 && (
+                  <div style={{ fontSize:"11px", color:"var(--t3)", textAlign:"center" }}>
+                    Mais {faltam} sobra{faltam > 1 ? "s" : ""} na fila após esta.
+                  </div>
+                )}
+              </div>
+              <div className="mft">
+                <button className="btn bg" onClick={avancarFila}>Pular</button>
+                <button
+                  className="btn bp"
+                  disabled={sobraSalvando || sobra.candidatas.every(c => !c.ativa)}
+                  onClick={handleRegistrarSobra}
+                >
+                  {sobraSalvando ? "Registrando…" : `Registrar Sobra${sobra.candidatas.filter(c => c.ativa).length > 1 ? "s" : ""}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       </AppLayout>
     </>
