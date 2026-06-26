@@ -549,16 +549,11 @@ export async function deleteCorteCertoPdf(pedidoId: string, url: string): Promis
 
 // ─── Vínculos de retalho ↔ pedido ───────────────────────────
 export async function vincularRetalhoAoPedido(
-  pedidoId: string, retalhoId: string, itemPedidoId?: number | null, obs?: string
+  pedidoId: string, retalhoId: string, obs?: string
 ): Promise<{ ok: boolean; id?: number }> {
-  const payload: Record<string, unknown> = {
-    retalho_id: retalhoId, pedido_id: pedidoId,
-    dt_uso: new Date().toISOString().split('T')[0], obs: obs ?? null,
-  };
-  if (itemPedidoId != null) payload.item_pedido_id = itemPedidoId;
   const { data, error } = await supabase
     .from('retalhos_uso')
-    .insert(payload as never)
+    .insert({ retalho_id: retalhoId, pedido_id: pedidoId, dt_uso: new Date().toISOString().split('T')[0], obs: obs ?? null } as never)
     .select()
     .single();
   if (error) { console.error('vincularRetalhoAoPedido:', error); return { ok: false }; }
@@ -567,70 +562,23 @@ export async function vincularRetalhoAoPedido(
   return { ok: true, id: (data as any).id };
 }
 
-export async function criarSobraRetalho(params: {
-  produto_nome: string;
-  largura: number;
-  altura: number;
-  espessura: number | null;
-  box: string | null;
-  pedido_origem: string;
-  observacao?: string | null;
-}): Promise<{ ok: boolean; id?: string }> {
-  const { data: last } = await supabase
-    .from('retalhos').select('id').order('id', { ascending: false }).limit(1);
-  const lastNum = last?.[0] ? parseInt((last[0] as any).id.replace('R-', '')) : 0;
-  const newId = 'R-' + String(lastNum + 1).padStart(3, '0');
-  const m2 = parseFloat(((params.largura * params.altura) / 1_000_000).toFixed(4));
-  const { data, error } = await supabase.from('retalhos').insert([{
-    id: newId,
-    produto_nome: params.produto_nome,
-    largura: params.largura,
-    altura: params.altura,
-    espessura: params.espessura,
-    m2,
-    quantidade: 1,
-    box: params.box,
-    pedido_origem: params.pedido_origem,
-    observacao: params.observacao ?? null,
-    dt_gerado: new Date().toISOString().split('T')[0],
-    status: 'Disponível',
-  }] as never[]).select().single();
-  if (error) { console.error('criarSobraRetalho:', error); return { ok: false }; }
-  registrarLog({ acao: 'criou', tabela: 'retalhos', registro_id: newId, descricao: `Registrou sobra ${newId} (${params.largura}×${params.altura}mm) gerada pelo pedido ${params.pedido_origem}` });
-  return { ok: true, id: (data as any).id };
-}
-
 export async function desvincularRetalhoAoPedido(
-  usoId: number, retalhoId: string, pedidoId?: string
+  usoId: number, retalhoId: string
 ): Promise<boolean> {
   const { error } = await supabase.from('retalhos_uso').delete().eq('id', usoId);
   if (error) { console.error('desvincularRetalhoAoPedido:', error); return false; }
   await supabase.from('retalhos').update({ status: 'Disponível' } as never).eq('id', retalhoId);
-  if (pedidoId) registrarLog({ acao: 'desvinculou', tabela: 'pedidos', registro_id: pedidoId, descricao: `Desvinculou retalho ${retalhoId} do pedido ${pedidoId}` });
   return true;
 }
 
 export async function getRetalhosUsadosPorPedido(pedidoId: string) {
-  type RetRow = {
-    id: number; retalho_id: string; dt_uso: string; obs: string | null;
-    item_pedido_id: number | null;
-    retalhos: { id: string; produto_nome: string; largura: number; altura: number; m2: number; espessura: number | null; box: string | null; observacao: string | null; pedido_origem: string | null; chapa_origem: string | null } | null;
-    itens_pedido: { id: number; produto_nome: string; largura: number; altura: number; quantidade: number } | null;
-  };
   const { data, error } = await supabase
     .from('retalhos_uso')
-    .select('id, retalho_id, dt_uso, obs, item_pedido_id, retalhos(id, produto_nome, largura, altura, m2, espessura, box, observacao, pedido_origem, chapa_origem), itens_pedido(id, produto_nome, largura, altura, quantidade)')
+    .select('id, retalho_id, dt_uso, obs, retalhos(id, produto_nome, largura, altura, m2, espessura, box, observacao)')
     .eq('pedido_id', pedidoId)
     .order('id');
-  if (!error) return data as unknown as RetRow[];
-  // Fallback pré-migração (coluna item_pedido_id ainda não existe)
-  const { data: d2, error: e2 } = await supabase
-    .from('retalhos_uso')
-    .select('id, retalho_id, dt_uso, obs, retalhos(id, produto_nome, largura, altura, m2, espessura, box, observacao, pedido_origem, chapa_origem)')
-    .eq('pedido_id', pedidoId)
-    .order('id');
-  if (e2) { console.error('getRetalhosUsadosPorPedido:', e2); return []; }
-  return ((d2 ?? []) as any[]).map(r => ({ ...r, item_pedido_id: null, itens_pedido: null })) as RetRow[];
+  if (error) { console.error('getRetalhosUsadosPorPedido:', error); return []; }
+  return data as unknown as Array<{ id: number; retalho_id: string; dt_uso: string; obs: string | null; retalhos: { id: string; produto_nome: string; largura: number; altura: number; m2: number; espessura: number | null; box: string | null; observacao: string | null } | null }>;
 }
 
 export async function getProximoIdPedido(): Promise<string> {

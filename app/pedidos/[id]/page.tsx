@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
-import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido, uploadRomaneioAssinado, deleteRomaneioAssinado, uploadCorteCertoPdf, deleteCorteCertoPdf, vincularRetalhoAoPedido, desvincularRetalhoAoPedido, getRetalhosUsadosPorPedido, criarSobraRetalho } from "@/services/pedidos.service";
-import { registrarLog } from "@/services/log.service";
+import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido, uploadRomaneioAssinado, deleteRomaneioAssinado, uploadCorteCertoPdf, deleteCorteCertoPdf, vincularRetalhoAoPedido, desvincularRetalhoAoPedido, getRetalhosUsadosPorPedido } from "@/services/pedidos.service";
 import { getLancamentosPorPedido, deletarLancamento, createLancamento, updateLancamento } from "@/services/financeiro.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, updateNaoConformidade } from "@/services/qualidade.service";
@@ -16,7 +15,6 @@ import CurrencyInput from "@/components/ui/CurrencyInput";
 import type { Pedido, Lancamento, Vendedor, NaoConformidade, NaoConformidadeInsert, TipoNC, GravidadeNC, StatusNaoConformidade, RetiradaPedido } from "@/types";
 import type { HistoricoOtimizador } from "@/services/otimizador.service";
 import { supabase } from "@/lib/supabase/client";
-import { CHAPAS_PADRAO, PRODUTO_CHAPA } from "@/lib/chapas";
 
 const TIPOS_NC: TipoNC[] = [
   "Quebra de vidro","Medida incorreta","Corte errado","Lapidação incorreta",
@@ -130,159 +128,6 @@ interface EdicaoPago {
   salvando: boolean;
 }
 
-type RetalhoDispInfo = { id: string; produto_nome: string; largura: number; altura: number; m2: number; espessura: number | null; box: string | null; observacao: string | null; pedido_origem: string | null; chapa_origem: string | null };
-
-interface SugestaoRetalho {
-  retalhoId: string;
-  retalho: RetalhoDispInfo;
-  itemId: number;
-  itemProduto: string;
-  itemLargura: number;
-  itemAltura: number;
-  rotacionado: boolean;
-  pecaNum: number;
-}
-
-interface SobraCandidata {
-  id: string;          // "dir" | "sup"
-  label: string;
-  largura: number;
-  altura: number;
-  ativa: boolean;
-}
-
-interface SobraFila {
-  retalhoId: string;
-  produtoNome: string;
-  espessura: number | null;
-  box: string | null;
-  pedidoOrigem: string;
-  obs: string;
-  candidatas: SobraCandidata[];
-}
-
-const MIN_SOBRA = 80; // mm mínimos para valer registrar
-
-function gerarSobra(
-  ret: Pick<RetalhoDispInfo, "id" | "produto_nome" | "largura" | "altura" | "espessura" | "box">,
-  pL: number, pA: number, rotacionado: boolean,
-  pedidoId: string
-): SobraFila | null {
-  const usedL = rotacionado ? pA : pL;
-  const usedA = rotacionado ? pL : pA;
-  const candidatas: SobraCandidata[] = [];
-
-  if (ret.largura - usedL >= MIN_SOBRA) {
-    candidatas.push({
-      id: 'dir', label: 'Faixa lateral (direita)',
-      largura: ret.largura - usedL, altura: ret.altura, ativa: true,
-    });
-  }
-  if (ret.altura - usedA >= MIN_SOBRA) {
-    candidatas.push({
-      id: 'sup', label: 'Faixa superior',
-      largura: usedL, altura: ret.altura - usedA,
-      ativa: candidatas.length === 0,
-    });
-  }
-  if (candidatas.length === 0) return null;
-  return {
-    retalhoId: ret.id, produtoNome: ret.produto_nome,
-    espessura: ret.espessura, box: ret.box,
-    pedidoOrigem: pedidoId, obs: '', candidatas,
-  };
-}
-
-function nomesCompativeis(a: string, b: string): boolean {
-  const n1 = a.toLowerCase().trim();
-  const n2 = b.toLowerCase().trim();
-  return n1 === n2 || n1.includes(n2) || n2.includes(n1);
-}
-
-function fitMode(ret: { largura: number; altura: number }, l: number, a: number): "normal" | "rot" | false {
-  if (ret.largura >= l && ret.altura >= a) return "normal";
-  if (ret.largura >= a && ret.altura >= l) return "rot";
-  return false;
-}
-
-function calcSugestoes(
-  itens: any[],
-  retDisp: RetalhoDispInfo[],
-  retUsados: Array<{ retalho_id: string; retalhos: RetalhoDispInfo | null }>,
-  ignoradas: Set<string>
-): SugestaoRetalho[] {
-  const usadosIds = new Set(retUsados.map(u => u.retalho_id));
-  const pool: RetalhoDispInfo[] = retDisp
-    .filter(r => !usadosIds.has(r.id) && !ignoradas.has(r.id))
-    .map(r => ({ ...r }));
-  const result: SugestaoRetalho[] = [];
-  for (const item of itens) {
-    if (item.vidro_cliente) continue;
-    const cobertos = retUsados.filter(u =>
-      u.retalhos &&
-      nomesCompativeis(item.produto_nome, u.retalhos.produto_nome) &&
-      fitMode(u.retalhos, item.largura, item.altura) !== false
-    ).length;
-    const restantes = item.quantidade - cobertos;
-    for (let p = 0; p < restantes; p++) {
-      // best-fit: menor retalho que cobre a peça (evita desperdiçar retalhos grandes)
-      let bestIdx = -1;
-      let bestArea = Infinity;
-      pool.forEach((r, i) => {
-        if (nomesCompativeis(item.produto_nome, r.produto_nome) && fitMode(r, item.largura, item.altura) !== false) {
-          const area = r.largura * r.altura;
-          if (area < bestArea) { bestArea = area; bestIdx = i; }
-        }
-      });
-      if (bestIdx === -1) break;
-      const [ret] = pool.splice(bestIdx, 1);
-      result.push({
-        retalhoId: ret.id, retalho: ret,
-        itemId: item.id, itemProduto: item.produto_nome,
-        itemLargura: item.largura, itemAltura: item.altura,
-        rotacionado: fitMode(ret, item.largura, item.altura) === "rot",
-        pecaNum: cobertos + p + 1,
-      });
-    }
-  }
-  return result;
-}
-
-function computeAssignmentMap(
-  itens: any[],
-  retUsados: any[]
-): Map<number, any[]> {
-  const map = new Map<number, any[]>();
-  const assignedIds = new Set<number>();
-  // Pass 1: vinculações explícitas por item_pedido_id
-  for (const u of retUsados) {
-    if (u.item_pedido_id) {
-      if (!map.has(u.item_pedido_id)) map.set(u.item_pedido_id, []);
-      map.get(u.item_pedido_id)!.push(u);
-      assignedIds.add(u.id);
-    }
-  }
-  // Pass 2: fallback por algoritmo (retalhos sem item_pedido_id)
-  for (const item of itens) {
-    if (item.vidro_cliente) continue;
-    const lista = map.get(item.id) ?? [];
-    const needed = item.quantidade - lista.length;
-    if (needed <= 0) continue;
-    let added = 0;
-    for (const u of retUsados) {
-      if (added >= needed) break;
-      if (assignedIds.has(u.id) || !u.retalhos || u.item_pedido_id) continue;
-      if (!nomesCompativeis(item.produto_nome, u.retalhos.produto_nome)) continue;
-      if (fitMode(u.retalhos, item.largura, item.altura) === false) continue;
-      lista.push(u);
-      assignedIds.add(u.id);
-      added++;
-    }
-    if (lista.length > 0) map.set(item.id, lista);
-  }
-  return map;
-}
-
 export default function PedidoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -297,15 +142,8 @@ export default function PedidoDetalhe() {
   const [retalhosUsados, setRetalhosUsados] = useState<Awaited<ReturnType<typeof getRetalhosUsadosPorPedido>>>([]);
   const [uploadandoCorteCerto, setUploadandoCorteCerto] = useState(false);
   const [showVincularRetalho, setShowVincularRetalho] = useState(false);
-  const [retalhosDisponiveis, setRetalhosDisponiveis] = useState<RetalhoDispInfo[]>([]);
+  const [retalhosDisponiveis, setRetalhosDisponiveis] = useState<Array<{ id: string; produto_nome: string; largura: number; altura: number; m2: number; espessura: number | null; box: string | null; observacao: string | null }>>([]);
   const [filtroBuscaRetalho, setFiltroBuscaRetalho] = useState("");
-  const [sugestoesIgnoradas, setSugestoesIgnoradas] = useState<Set<string>>(new Set());
-  const [selecionandoTodos, setSelecionandoTodos]   = useState(false);
-  const [sobraFila, setSobraFila]                   = useState<SobraFila[]>([]);
-  const [sobraSalvando, setSobraSalvando]           = useState(false);
-  const [logRetalhos, setLogRetalhos]               = useState<Array<{ id: string; created_at: string; usuario_email: string | null; acao: string; descricao: string }>>([]);
-  const [showLogRetalhos, setShowLogRetalhos]       = useState(false);
-  const [itemParaRetalho, setItemParaRetalho] = useState<number | null>(null);
   const [clientes, setClientes]         = useState<{ id: number; nome: string }[]>([]);
   const [vendedores, setVendedores]     = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
   const [creditoCliente, setCreditoCliente] = useState(0);
@@ -398,22 +236,6 @@ export default function PedidoDetalhe() {
     }
     setPagamentos(initPag);
     setEditandoPago({});
-    setSugestoesIgnoradas(new Set());
-    const { data: retDisp } = await supabase
-      .from("retalhos")
-      .select("id, produto_nome, largura, altura, m2, espessura, box, observacao, pedido_origem, chapa_origem")
-      .eq("status", "Disponível")
-      .order("produto_nome");
-    setRetalhosDisponiveis((retDisp ?? []) as typeof retalhosDisponiveis);
-
-    // Histórico de atividades de retalhos (fire-and-forget, não bloqueia o load)
-    fetch(`/api/logs/pedido/${id}`)
-      .then(r => r.ok ? r.json() : [])
-      .then((entries: any[]) => setLogRetalhos(
-        entries.filter((e: any) => /retalho|sobra/i.test(e.descricao))
-      ))
-      .catch(() => {});
-
     setLoading(false);
   }
 
@@ -786,92 +608,33 @@ export default function PedidoDetalhe() {
     await load();
   }
 
-  function abrirVincularRetalho() {
+  async function abrirVincularRetalho() {
+    const { data } = await supabase
+      .from("retalhos")
+      .select("id, produto_nome, largura, altura, m2, espessura, box, observacao")
+      .eq("status", "Disponível")
+      .order("produto_nome");
+    setRetalhosDisponiveis((data ?? []) as typeof retalhosDisponiveis);
     setFiltroBuscaRetalho("");
-    setItemParaRetalho(null);
     setShowVincularRetalho(true);
   }
 
-  async function handleVincularRetalho(retalhoId: string, itemPedidoId?: number | null) {
-    // Acha o retalho e a sugestão antes de vincular (para calcular sobra depois)
-    const retInfo = retalhosDisponiveis.find(r => r.id === retalhoId);
-    const sug = sugestoes.find(s => s.retalhoId === retalhoId);
-    const r = await vincularRetalhoAoPedido(id, retalhoId, itemPedidoId ?? null);
+  async function handleVincularRetalho(retalhoId: string) {
+    const r = await vincularRetalhoAoPedido(id, retalhoId);
     if (r.ok) {
       toast(`Retalho ${retalhoId} vinculado`);
       setShowVincularRetalho(false);
       await load();
-      // Sugere registrar sobra se o retalho for maior que a peça
-      if (retInfo && sug) {
-        const sobra = gerarSobra(retInfo, sug.itemLargura, sug.itemAltura, sug.rotacionado, id);
-        if (sobra) setSobraFila(prev => [...prev, sobra]);
-      }
     } else {
       toast("Erro ao vincular retalho", "err");
     }
   }
 
-  async function handleSelecionarTodos(sugestoesPendentes: typeof sugestoes) {
-    if (!sugestoesPendentes.length) return;
-    setSelecionandoTodos(true);
-    let ok = 0, err = 0;
-    const novasSobras: SobraFila[] = [];
-    for (const s of sugestoesPendentes) {
-      const retInfo = retalhosDisponiveis.find(r => r.id === s.retalhoId);
-      const r = await vincularRetalhoAoPedido(id, s.retalhoId, s.itemId);
-      if (r.ok) {
-        ok++;
-        if (retInfo) {
-          const sobra = gerarSobra(retInfo, s.itemLargura, s.itemAltura, s.rotacionado, id);
-          if (sobra) novasSobras.push(sobra);
-        }
-      } else {
-        err++;
-      }
-    }
-    await load();
-    setSelecionandoTodos(false);
-    if (err === 0) toast(`${ok} retalho${ok > 1 ? "s" : ""} vinculado${ok > 1 ? "s" : ""}`);
-    else toast(`${ok} vinculado${ok > 1 ? "s" : ""}, ${err} com erro`, "err");
-    if (novasSobras.length > 0) setSobraFila(prev => [...prev, ...novasSobras]);
-    if (ok > 0) registrarLog({ acao: 'usou-todos', tabela: 'pedidos', registro_id: id, descricao: `Usou todos os retalhos sugeridos no pedido ${id}: ${ok} vinculado(s)${err > 0 ? `, ${err} erro(s)` : ""}` });
-  }
-
   async function handleDesvincularRetalho(usoId: number, retalhoId: string) {
     if (!confirm(`Desvincular retalho ${retalhoId} deste pedido e devolver ao estoque?`)) return;
-    const ok = await desvincularRetalhoAoPedido(usoId, retalhoId, id);
+    const ok = await desvincularRetalhoAoPedido(usoId, retalhoId);
     if (ok) { toast("Retalho devolvido ao estoque"); await load(); }
     else toast("Erro ao desvincular", "err");
-  }
-
-  async function handleRegistrarSobra() {
-    const sobra = sobraFila[0];
-    if (!sobra) return;
-    const ativas = sobra.candidatas.filter(c => c.ativa);
-    if (ativas.length === 0) { avancarFila(); return; }
-    setSobraSalvando(true);
-    for (const c of ativas) {
-      await criarSobraRetalho({
-        produto_nome: sobra.produtoNome,
-        largura: c.largura,
-        altura: c.altura,
-        espessura: sobra.espessura,
-        box: sobra.box,
-        pedido_origem: sobra.pedidoOrigem,
-        observacao: sobra.obs || null,
-      });
-    }
-    setSobraSalvando(false);
-    toast(`Sobra${ativas.length > 1 ? "s" : ""} registrada${ativas.length > 1 ? "s" : ""} no estoque`);
-    avancarFila();
-  }
-
-  function avancarFila() {
-    setSobraFila(prev => prev.slice(1));
-  }
-
-  function editarSobraFila(updater: (s: SobraFila) => SobraFila) {
-    setSobraFila(prev => [updater(prev[0]), ...prev.slice(1)]);
   }
 
   async function handleAvancar() {
@@ -946,28 +709,6 @@ export default function PedidoDetalhe() {
 
   const parcelasAReceber = lancamentos.filter(l => l.status === "A Receber").sort((a, b) => (a.vencimento ?? "").localeCompare(b.vencimento ?? ""));
   const lancamentosPagos = lancamentos.filter(l => l.status === "Pago");
-
-  const sugestoes = calcSugestoes(pedido.itens_pedido ?? [], retalhosDisponiveis, retalhosUsados as any, sugestoesIgnoradas);
-  const assignmentMap = computeAssignmentMap(pedido.itens_pedido ?? [], retalhosUsados as any);
-
-  // Peças que ainda precisam ir ao Corte Certo
-  const itemsParaCorte = (pedido.itens_pedido ?? [])
-    .filter((i: any) => !i.vidro_cliente)
-    .flatMap((item: any) => {
-      const nCoberto  = (assignmentMap.get(item.id) ?? []).length;
-      const nSugerido = sugestoes.filter(s => s.itemId === item.id).length;
-      const nCorte    = Math.max(0, item.quantidade - nCoberto - nSugerido);
-      if (nCorte === 0) return [];
-      const chapaIdx  = PRODUTO_CHAPA[item.produto_nome as keyof typeof PRODUTO_CHAPA] ?? null;
-      const chapa     = chapaIdx != null ? CHAPAS_PADRAO[chapaIdx] : null;
-      const porChapa  = chapa ? Math.floor(chapa.w / item.largura) * Math.floor(chapa.h / item.altura) : null;
-      const chapasEst = porChapa && porChapa > 0 ? Math.ceil(nCorte / porChapa) : null;
-      return [{ id: item.id, produto_nome: item.produto_nome, largura: item.largura, altura: item.altura, nCorte, chapasEst, m2: (item.largura * item.altura / 1_000_000) * nCorte }];
-    });
-  const totalM2Corte = itemsParaCorte.reduce((a, i) => a + i.m2, 0);
-  const otimizadorUrl = itemsParaCorte.length > 0
-    ? `/otimizador?pedido=${id}&pecas=${encodeURIComponent(btoa(JSON.stringify(itemsParaCorte.map(i => ({ l: i.largura, a: i.altura, qtd: i.nCorte, prod: i.produto_nome })))))}`
-    : null;
 
   const fc: React.CSSProperties = {
     background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: "6px",
@@ -1088,195 +829,42 @@ export default function PedidoDetalhe() {
 
           {/* Retalhos utilizados */}
           <div className="card" style={{ padding:"16px 20px" }}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"14px" }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"12px" }}>
               <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>
-                RETALHOS &amp; CORTE CERTO
+                RETALHOS UTILIZADOS{retalhosUsados.length > 0 ? ` (${retalhosUsados.length})` : ""}
+                {m2RetalhosUsados > 0 && <span style={{ marginLeft:"10px", color:"var(--ok)", fontFamily:"'DM Mono',monospace", fontWeight:700 }}>{m2RetalhosUsados.toFixed(4)} m² cobertos</span>}
               </div>
-              <div style={{ display:"flex", gap:"8px", flexWrap:"wrap" }}>
-                {retalhosUsados.length > 0 && (
-                  <a href={`/pedidos/${id}/plano-retalhos`} className="btn bg sm" style={{ textDecoration:"none", whiteSpace:"nowrap" }}>✂ Plano de Retalhos</a>
-                )}
-                {sugestoes.length > 0 && (
-                  <button
-                    className="btn bp sm"
-                    disabled={selecionandoTodos}
-                    style={{ whiteSpace:"nowrap" }}
-                    onClick={() => handleSelecionarTodos(sugestoes)}
-                  >
-                    {selecionandoTodos ? "Vinculando…" : `✓ Usar Todos (${sugestoes.length})`}
-                  </button>
-                )}
-                <button className="btn bg sm" onClick={abrirVincularRetalho}>+ Vincular Retalho</button>
-              </div>
+              <button className="btn bg sm" onClick={abrirVincularRetalho}>+ Vincular Retalho</button>
             </div>
 
-            {/* View unificada: por item → por peça */}
-            {(() => {
-              const itensCorte = (pedido.itens_pedido ?? []).filter((i: any) => !i.vidro_cliente);
-              if (itensCorte.length === 0) return (
-                <div style={{ color:"var(--t3)", fontSize:"12px", padding:"8px 0" }}>Nenhum item para corte neste pedido.</div>
-              );
-              return (
-                <div style={{ display:"flex", flexDirection:"column", gap:"16px" }}>
-                  {itensCorte.map((item: any) => {
-                    const retalhosDoItem = assignmentMap.get(item.id) ?? [];
-                    const sugestoesDoItem = sugestoes.filter(s => s.itemId === item.id);
-                    const nCoberto = retalhosDoItem.length;
-                    const nSugerido = sugestoesDoItem.length;
-                    const nCorte = Math.max(0, item.quantidade - nCoberto - nSugerido);
-                    const tudoCoberto = nCorte === 0 && nSugerido === 0;
-
-                    return (
-                      <div key={item.id}>
-                        {/* Cabeçalho do item */}
-                        <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"6px" }}>
-                          <span style={{ fontSize:"13px", fontWeight:700, color:"var(--t1)" }}>{item.produto_nome}</span>
-                          <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>{item.largura}×{item.altura}mm</span>
-                          <span style={{ fontSize:"11px", color:"var(--t3)" }}>· {item.quantidade} pç</span>
-                          {tudoCoberto && <span style={{ fontSize:"10px", color:"var(--ok)", fontWeight:700, marginLeft:"4px" }}>✓ tudo coberto</span>}
-                        </div>
-
-                        {/* Linha por peça */}
-                        <div style={{ display:"flex", flexDirection:"column", gap:"4px", paddingLeft:"4px" }}>
-
-                          {/* Retalhos já vinculados */}
-                          {retalhosDoItem.map((u: any, pi: number) => (
-                            <div key={u.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"7px 12px", background:"rgba(16,185,129,.07)", border:"1px solid rgba(16,185,129,.2)", borderRadius:"7px" }}>
-                              <span style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", minWidth:"36px" }}>pç {pi + 1}</span>
-                              <span style={{ fontSize:"13px", color:"var(--ok)" }}>✓</span>
-                              <span style={{ fontFamily:"'DM Mono',monospace", color:"var(--acc2)", fontWeight:700, fontSize:"12px" }}>{u.retalho_id}</span>
-                              {u.retalhos && (
-                                <>
-                                  <span style={{ fontSize:"11px", color:"var(--t2)", fontFamily:"'DM Mono',monospace" }}>{u.retalhos.largura}×{u.retalhos.altura}mm</span>
-                                  {u.retalhos.box && <span style={{ fontSize:"10px", color:"var(--t3)" }}>box {u.retalhos.box}</span>}
-                                  {u.retalhos.observacao && <span style={{ fontSize:"10px", color:"var(--warn)", fontWeight:600 }}>👤 {u.retalhos.observacao}</span>}
-                                  {u.retalhos.pedido_origem && (
-                                    <a href={`/pedidos/${u.retalhos.pedido_origem}`} style={{ fontSize:"10px", color:"var(--t3)", textDecoration:"underline", textDecorationStyle:"dotted" }} title={`Sobra do pedido ${u.retalhos.pedido_origem}`}>↩ {u.retalhos.pedido_origem}</a>
-                                  )}
-                                  {u.retalhos.chapa_origem && !u.retalhos.pedido_origem && (
-                                    <span style={{ fontSize:"10px", color:"var(--t3)" }}>chapa {u.retalhos.chapa_origem}</span>
-                                  )}
-                                </>
-                              )}
-                              <button
-                                className="btn bw sm"
-                                style={{ marginLeft:"auto", flexShrink:0 }}
-                                onClick={() => handleDesvincularRetalho(u.id, u.retalho_id)}
-                              >Desvincular</button>
-                            </div>
-                          ))}
-
-                          {/* Sugestões pendentes */}
-                          {sugestoesDoItem.map((s, pi) => (
-                            <div key={s.retalhoId} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"7px 12px", background:"rgba(99,102,241,.08)", border:"1px solid rgba(99,102,241,.25)", borderRadius:"7px" }}>
-                              <span style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", minWidth:"36px" }}>pç {nCoberto + pi + 1}</span>
-                              <span style={{ fontSize:"13px", color:"var(--acc)" }}>◎</span>
-                              <span style={{ fontFamily:"'DM Mono',monospace", color:"var(--acc2)", fontWeight:700, fontSize:"12px" }}>{s.retalhoId}</span>
-                              <span style={{ fontSize:"11px", color:"var(--t2)", fontFamily:"'DM Mono',monospace" }}>{s.retalho.largura}×{s.retalho.altura}mm</span>
-                              {s.retalho.box && <span style={{ fontSize:"10px", color:"var(--t3)" }}>box {s.retalho.box}</span>}
-                              <span style={{ fontSize:"10px", color:"var(--acc)", background:"rgba(99,102,241,.12)", border:"1px solid rgba(99,102,241,.2)", borderRadius:"3px", padding:"1px 6px" }}>sugestão{s.rotacionado ? " ↻" : ""}</span>
-                              {s.retalho.pedido_origem && (
-                                <a href={`/pedidos/${s.retalho.pedido_origem}`} style={{ fontSize:"10px", color:"var(--t3)", textDecoration:"underline", textDecorationStyle:"dotted" }} title={`Sobra do pedido ${s.retalho.pedido_origem}`}>↩ {s.retalho.pedido_origem}</a>
-                              )}
-                              {s.retalho.chapa_origem && !s.retalho.pedido_origem && (
-                                <span style={{ fontSize:"10px", color:"var(--t3)" }}>chapa {s.retalho.chapa_origem}</span>
-                              )}
-                              <div style={{ marginLeft:"auto", display:"flex", gap:"5px", flexShrink:0 }}>
-                                <button
-                                  className="btn bp sm"
-                                  onClick={() => { handleVincularRetalho(s.retalhoId, s.itemId); }}
-                                >Usar</button>
-                                <button
-                                  className="btn bg sm"
-                                  onClick={() => { setSugestoesIgnoradas(prev => { const n = new Set(prev); n.add(s.retalhoId); return n; }); }}
-                                >Pular</button>
-                              </div>
-                            </div>
-                          ))}
-
-                          {/* Peças que vão para o Corte Certo */}
-                          {nCorte > 0 && Array.from({ length: nCorte }, (_, pi) => (
-                            <div key={pi} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"7px 12px", background:"rgba(245,158,11,.06)", border:"1px solid rgba(245,158,11,.2)", borderRadius:"7px" }}>
-                              <span style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", minWidth:"36px" }}>pç {nCoberto + nSugerido + pi + 1}</span>
-                              <span style={{ fontSize:"13px", color:"var(--warn)" }}>✂</span>
-                              <span style={{ fontSize:"12px", color:"var(--warn)", fontWeight:600 }}>Corte Certo</span>
-                              <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>{item.largura}×{item.altura}mm</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-
-            {/* Histórico de atividades de retalhos */}
-            {logRetalhos.length > 0 && (
-              <div style={{ marginTop:"16px", borderTop:"1px solid var(--b2)", paddingTop:"12px" }}>
-                <button
-                  onClick={() => setShowLogRetalhos(p => !p)}
-                  style={{ background:"none", border:"none", cursor:"pointer", color:"var(--t3)", fontSize:"11px", fontWeight:600, letterSpacing:".06em", padding:0, display:"flex", alignItems:"center", gap:"6px" }}
-                >
-                  {showLogRetalhos ? "▾" : "▸"} HISTÓRICO ({logRetalhos.length} evento{logRetalhos.length > 1 ? "s" : ""})
-                </button>
-                {showLogRetalhos && (
-                  <div style={{ marginTop:"8px", display:"flex", flexDirection:"column", gap:"4px" }}>
-                    {logRetalhos.map(entry => {
-                      const dt = new Date(entry.created_at);
-                      const label =
-                        entry.acao === 'editou'       ? "Vinculou"    :
-                        entry.acao === 'desvinculou'  ? "Desvinculou" :
-                        entry.acao === 'criou'        ? "Sobra"       :
-                        entry.acao === 'usou-todos'   ? "Usou Todos"  : entry.acao;
-                      const cor =
-                        entry.acao === 'editou'      ? "var(--ok)"   :
-                        entry.acao === 'desvinculou' ? "var(--warn)" :
-                        entry.acao === 'criou'       ? "var(--acc)"  :
-                        entry.acao === 'usou-todos'  ? "var(--ok)"   : "var(--t3)";
-                      return (
-                        <div key={entry.id} style={{ display:"flex", alignItems:"center", gap:"10px", padding:"5px 10px", background:"var(--surf2)", borderRadius:"6px", fontSize:"11px" }}>
-                          <span style={{ color:cor, fontWeight:700, minWidth:"76px" }}>{label}</span>
-                          <span style={{ color:"var(--t2)", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{entry.descricao}</span>
-                          <span style={{ color:"var(--t3)", fontFamily:"'DM Mono',monospace", flexShrink:0, fontSize:"10px" }}>
-                            {dt.toLocaleDateString("pt-BR", { day:"2-digit", month:"2-digit" })} {dt.toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" })}
-                          </span>
-                          {entry.usuario_email && (
-                            <span style={{ color:"var(--t3)", fontSize:"10px", flexShrink:0 }}>{entry.usuario_email.split("@")[0]}</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Resumo Corte Certo + botão Otimizador */}
-            {itemsParaCorte.length > 0 && (
-              <div style={{ marginTop:"16px", padding:"12px 16px", background:"rgba(245,158,11,.05)", border:"1px solid rgba(245,158,11,.2)", borderRadius:"8px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px", flexWrap:"wrap" }}>
-                <div>
-                  <div style={{ fontSize:"10px", color:"var(--warn)", fontWeight:700, letterSpacing:".06em", marginBottom:"6px" }}>
-                    CORTE CERTO — {itemsParaCorte.reduce((a, i) => a + i.nCorte, 0)} peça{itemsParaCorte.reduce((a, i) => a + i.nCorte, 0) !== 1 ? "s" : ""} · {totalM2Corte.toFixed(4)} m²
-                  </div>
-                  <div style={{ display:"flex", gap:"12px", flexWrap:"wrap" }}>
-                    {itemsParaCorte.map(item => (
-                      <div key={item.id} style={{ display:"flex", alignItems:"center", gap:"6px" }}>
-                        <span style={{ fontFamily:"'DM Mono',monospace", color:"var(--warn)", fontWeight:700, fontSize:"12px" }}>{item.nCorte}×</span>
-                        <span style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600 }}>{item.produto_nome}</span>
-                        <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>{item.largura}×{item.altura}mm</span>
-                        {item.chapasEst && (
-                          <span style={{ fontSize:"10px", color:"var(--t3)", background:"var(--surf3)", border:"1px solid var(--b2)", borderRadius:"3px", padding:"1px 5px" }}>~{item.chapasEst} chapa{item.chapasEst > 1 ? "s" : ""}</span>
-                        )}
-                      </div>
+            {retalhosUsados.length === 0 ? (
+              <div style={{ color:"var(--t3)", fontSize:"12px", padding:"12px 0" }}>Nenhum retalho vinculado. Use o botão acima para selecionar retalhos disponíveis.</div>
+            ) : (
+              <div className="tw" style={{ marginBottom:0 }}>
+                <table>
+                  <thead>
+                    <tr><th>Retalho</th><th>Produto</th><th>Dimensões</th><th>m²</th><th>Box</th><th>Cliente</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                    {retalhosUsados.map(u => (
+                      <tr key={u.id}>
+                        <td><span className="mono" style={{ color:"var(--acc2)" }}>{u.retalho_id}</span></td>
+                        <td><strong>{u.retalhos?.produto_nome ?? "—"}</strong>{u.retalhos?.espessura ? <span className="tdim">{u.retalhos.espessura}mm</span> : null}</td>
+                        <td className="mono">{u.retalhos ? `${u.retalhos.largura} × ${u.retalhos.altura} mm` : "—"}</td>
+                        <td className="mono">{u.retalhos ? Number(u.retalhos.m2).toFixed(4) : "—"}</td>
+                        <td className="mono" style={{ color:"var(--t2)" }}>{u.retalhos?.box ?? "—"}</td>
+                        <td>{u.retalhos?.observacao ? <span style={{ color:"var(--warn)", fontWeight:700, fontSize:"11px" }}>👤 {u.retalhos.observacao}</span> : <span style={{ color:"var(--t3)" }}>—</span>}</td>
+                        <td>
+                          <button
+                            className="btn bw sm"
+                            onClick={() => handleDesvincularRetalho(u.id, u.retalho_id)}
+                            title="Desvincular e devolver ao estoque"
+                          >Desvincular</button>
+                        </td>
+                      </tr>
                     ))}
-                  </div>
-                </div>
-                {otimizadorUrl && (
-                  <a href={otimizadorUrl} className="btn by sm" style={{ textDecoration:"none", whiteSpace:"nowrap", flexShrink:0 }}>
-                    ✂ Otimizar Corte →
-                  </a>
-                )}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
@@ -2103,41 +1691,20 @@ export default function PedidoDetalhe() {
         </div>
       {/* Modal: vincular retalho */}
       {showVincularRetalho && (
-        <div className="mov open">
-          <div className="mod" style={{ width:"760px", maxHeight:"88vh", display:"flex", flexDirection:"column" }}>
+        <div className="mov open" onClick={e => e.target === e.currentTarget && setShowVincularRetalho(false)}>
+          <div className="mod" style={{ width:"640px", maxHeight:"85vh", display:"flex", flexDirection:"column" }}>
             <div className="mhd">
-              <div className="mtit">Vincular Retalho — Pedido {pedido?.id}</div>
+              <div className="mtit">Vincular Retalho ao Pedido {pedido?.id}</div>
               <button className="mcl" onClick={() => setShowVincularRetalho(false)}>✕</button>
             </div>
-            <div style={{ padding:"12px 20px 10px", display:"flex", flexDirection:"column", gap:"8px" }}>
+            <div style={{ padding:"12px 20px 8px" }}>
               <input
                 placeholder="Buscar por produto, box, cliente..."
                 value={filtroBuscaRetalho}
                 onChange={e => setFiltroBuscaRetalho(e.target.value)}
-                style={{ width:"100%", boxSizing:"border-box", background:"var(--surf2)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"9px 13px", color:"var(--t1)", fontSize:"13px", outline:"none" }}
+                style={{ width:"100%", boxSizing:"border-box", background:"var(--surf2)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"8px 12px", color:"var(--t1)", fontSize:"13px", outline:"none" }}
                 autoFocus
               />
-              {(() => {
-                const itensCorte = (pedido?.itens_pedido ?? []).filter((i: any) => !i.vidro_cliente);
-                if (itensCorte.length < 2) return null;
-                return (
-                  <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
-                    <span style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, whiteSpace:"nowrap" }}>Para qual item?</span>
-                    <select
-                      value={itemParaRetalho ?? ""}
-                      onChange={e => setItemParaRetalho(e.target.value ? Number(e.target.value) : null)}
-                      style={{ flex:1, background:"var(--surf2)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"7px 10px", color:"var(--t1)", fontSize:"12px", outline:"none" }}
-                    >
-                      <option value="">— Auto (primeiro compatível) —</option>
-                      {itensCorte.map((item: any) => (
-                        <option key={item.id} value={item.id}>
-                          {item.produto_nome} · {item.largura}×{item.altura}mm · qtd {item.quantidade}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                );
-              })()}
             </div>
             <div style={{ flex:1, overflowY:"auto", padding:"0 20px 16px" }}>
               {retalhosDisponiveis.length === 0 ? (
@@ -2150,24 +1717,25 @@ export default function PedidoDetalhe() {
                 return filtrados.length === 0 ? (
                   <div style={{ color:"var(--t3)", textAlign:"center", padding:"24px 0" }}>Nenhum retalho encontrado para "{filtroBuscaRetalho}"</div>
                 ) : (
-                  <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
-                    {filtrados.map(r => (
-                      <div key={r.id} style={{ display:"grid", gridTemplateColumns:"90px 1fr 130px 70px 60px 1fr 90px", alignItems:"center", gap:"10px", padding:"10px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)" }}>
-                        <span className="mono" style={{ color:"var(--acc2)", fontWeight:700, fontSize:"12px" }}>{r.id}</span>
-                        <span style={{ fontSize:"13px", fontWeight:600, color:"var(--t1)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.produto_nome}</span>
-                        <span className="mono" style={{ fontSize:"12px", color:"var(--t2)" }}>{r.largura} × {r.altura} mm</span>
-                        <span className="mono" style={{ fontSize:"12px", color:"var(--t2)" }}>{Number(r.m2).toFixed(3)} m²</span>
-                        <span className="mono" style={{ fontSize:"12px", color:"var(--t3)" }}>{r.box ?? "—"}</span>
-                        <span style={{ fontSize:"11px", color: r.observacao ? "var(--warn)" : "var(--t3)", fontWeight: r.observacao ? 600 : 400, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                          {r.observacao ? `👤 ${r.observacao}` : "—"}
-                        </span>
-                        <button className="btn bp sm" style={{ whiteSpace:"nowrap" }} onClick={() => {
-                          const itensCorte = (pedido?.itens_pedido ?? []).filter((i: any) => !i.vidro_cliente);
-                          const itemId = itemParaRetalho ?? (itensCorte.length === 1 ? (itensCorte[0] as any).id : null);
-                          handleVincularRetalho(r.id, itemId);
-                        }}>Vincular</button>
-                      </div>
-                    ))}
+                  <div className="tw">
+                    <table>
+                      <thead>
+                        <tr><th>ID</th><th>Produto</th><th>Dimensões</th><th>m²</th><th>Box</th><th>Cliente</th><th></th></tr>
+                      </thead>
+                      <tbody>
+                        {filtrados.map(r => (
+                          <tr key={r.id}>
+                            <td><span className="mono" style={{ color:"var(--acc2)" }}>{r.id}</span></td>
+                            <td><strong>{r.produto_nome}</strong>{r.espessura ? <span className="tdim">{r.espessura}mm</span> : null}</td>
+                            <td className="mono">{r.largura} × {r.altura} mm</td>
+                            <td className="mono">{Number(r.m2).toFixed(4)}</td>
+                            <td className="mono" style={{ color:"var(--t2)" }}>{r.box ?? "—"}</td>
+                            <td>{r.observacao ? <span style={{ color:"var(--warn)", fontWeight:700, fontSize:"11px" }}>👤 {r.observacao}</span> : <span style={{ color:"var(--t3)" }}>—</span>}</td>
+                            <td><button className="btn bp sm" onClick={() => handleVincularRetalho(r.id)}>Vincular</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 );
               })()}
@@ -2175,111 +1743,6 @@ export default function PedidoDetalhe() {
           </div>
         </div>
       )}
-
-      {/* Modal: registrar sobra de retalho */}
-      {sobraFila.length > 0 && (() => {
-        const sobra = sobraFila[0];
-        const faltam = sobraFila.length - 1;
-        return (
-          <div className="mov open">
-            <div className="mod" style={{ width:"520px" }}>
-              <div className="mhd">
-                <span>Registrar Sobra — {sobra.retalhoId}</span>
-                <button className="mclose" onClick={avancarFila}>×</button>
-              </div>
-              <div className="mbd" style={{ padding:"16px 20px", display:"flex", flexDirection:"column", gap:"14px" }}>
-                {/* Info do retalho original */}
-                <div style={{ padding:"10px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)", fontSize:"12px", color:"var(--t2)" }}>
-                  <span style={{ fontWeight:700, color:"var(--t1)" }}>{sobra.produtoNome}</span>
-                  {sobra.espessura && <span style={{ marginLeft:"6px", color:"var(--t3)" }}>{sobra.espessura}mm</span>}
-                  {sobra.box && <span style={{ marginLeft:"8px", color:"var(--t3)" }}>box {sobra.box}</span>}
-                  <div style={{ marginTop:"4px", color:"var(--t3)", fontSize:"11px" }}>
-                    Após o corte, o material abaixo pode ficar disponível para reuso.
-                  </div>
-                </div>
-
-                {/* Candidatas */}
-                <div>
-                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em", marginBottom:"8px" }}>SOBRAS ESTIMADAS</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
-                    {sobra.candidatas.map((c, ci) => (
-                      <div key={c.id} style={{ display:"flex", alignItems:"center", gap:"10px", padding:"10px 14px", background: c.ativa ? "rgba(16,185,129,.07)" : "var(--surf2)", border:`1px solid ${c.ativa ? "rgba(16,185,129,.3)" : "var(--b2)"}`, borderRadius:"8px" }}>
-                        <input
-                          type="checkbox"
-                          checked={c.ativa}
-                          onChange={e => editarSobraFila(s => ({
-                            ...s,
-                            candidatas: s.candidatas.map((x, xi) => xi === ci ? { ...x, ativa: e.target.checked } : x),
-                          }))}
-                          style={{ width:"16px", height:"16px", flexShrink:0 }}
-                        />
-                        <div style={{ flex:1 }}>
-                          <div style={{ fontSize:"11px", color:"var(--t3)", marginBottom:"4px" }}>{c.label}</div>
-                          <div style={{ display:"flex", gap:"8px", alignItems:"center" }}>
-                            <input
-                              type="number"
-                              value={c.largura}
-                              onChange={e => editarSobraFila(s => ({
-                                ...s,
-                                candidatas: s.candidatas.map((x, xi) => xi === ci ? { ...x, largura: Number(e.target.value) } : x),
-                              }))}
-                              style={{ width:"80px", background:"var(--surf3)", border:"1px solid var(--b2)", borderRadius:"5px", padding:"4px 8px", color:"var(--t1)", fontSize:"12px", fontFamily:"'DM Mono',monospace" }}
-                            />
-                            <span style={{ color:"var(--t3)", fontSize:"12px" }}>×</span>
-                            <input
-                              type="number"
-                              value={c.altura}
-                              onChange={e => editarSobraFila(s => ({
-                                ...s,
-                                candidatas: s.candidatas.map((x, xi) => xi === ci ? { ...x, altura: Number(e.target.value) } : x),
-                              }))}
-                              style={{ width:"80px", background:"var(--surf3)", border:"1px solid var(--b2)", borderRadius:"5px", padding:"4px 8px", color:"var(--t1)", fontSize:"12px", fontFamily:"'DM Mono',monospace" }}
-                            />
-                            <span style={{ color:"var(--t3)", fontSize:"12px" }}>mm</span>
-                            {c.largura > 0 && c.altura > 0 && (
-                              <span style={{ fontSize:"11px", color:"var(--ok)", fontFamily:"'DM Mono',monospace" }}>
-                                {((c.largura * c.altura) / 1_000_000).toFixed(4)} m²
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Observação */}
-                <div>
-                  <label style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, letterSpacing:".04em", display:"block", marginBottom:"4px" }}>OBSERVAÇÃO (opcional)</label>
-                  <input
-                    type="text"
-                    value={sobra.obs}
-                    onChange={e => editarSobraFila(s => ({ ...s, obs: e.target.value }))}
-                    placeholder="Ex.: sobra do corte do pedido..."
-                    style={{ width:"100%", background:"var(--surf2)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"7px 10px", color:"var(--t1)", fontSize:"12px", boxSizing:"border-box" }}
-                  />
-                </div>
-
-                {faltam > 0 && (
-                  <div style={{ fontSize:"11px", color:"var(--t3)", textAlign:"center" }}>
-                    Mais {faltam} sobra{faltam > 1 ? "s" : ""} na fila após esta.
-                  </div>
-                )}
-              </div>
-              <div className="mft">
-                <button className="btn bg" onClick={avancarFila}>Pular</button>
-                <button
-                  className="btn bp"
-                  disabled={sobraSalvando || sobra.candidatas.every(c => !c.ativa)}
-                  onClick={handleRegistrarSobra}
-                >
-                  {sobraSalvando ? "Registrando…" : `Registrar Sobra${sobra.candidatas.filter(c => c.ativa).length > 1 ? "s" : ""}`}
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       </AppLayout>
     </>

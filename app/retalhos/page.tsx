@@ -616,12 +616,7 @@ export default function RetalhoPage() {
                           }
                         </td>
                         <td className="mono" style={{ color:"var(--t2)" }}>{r.chapa_origem || "—"}</td>
-                        <td>
-                          {r.pedido_origem
-                            ? <a href={`/pedidos/${r.pedido_origem}`} style={{ color:"var(--acc)", fontFamily:"'DM Mono',monospace", fontSize:"13px", fontWeight:600, textDecoration:"underline", textDecorationStyle:"dotted" }}>{r.pedido_origem}</a>
-                            : <span className="mono" style={{ color:"var(--t3)" }}>—</span>
-                          }
-                        </td>
+                        <td className="mono" style={{ color:"var(--acc)" }}>{r.pedido_origem || "—"}</td>
                         <td className="mono">{formatDate(r.dt_gerado)}</td>
                         <td><span className={CHIP[r.status as StatusRetalho] ?? "chip cgr"}>{r.status}</span></td>
                         <td>
