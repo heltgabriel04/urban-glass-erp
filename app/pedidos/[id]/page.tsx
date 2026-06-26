@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido, uploadRomaneioAssinado, deleteRomaneioAssinado, uploadCorteCertoPdf, deleteCorteCertoPdf, vincularRetalhoAoPedido, desvincularRetalhoAoPedido, getRetalhosUsadosPorPedido, criarSobraRetalho } from "@/services/pedidos.service";
+import { registrarLog } from "@/services/log.service";
 import { getLancamentosPorPedido, deletarLancamento, createLancamento, updateLancamento } from "@/services/financeiro.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, updateNaoConformidade } from "@/services/qualidade.service";
@@ -302,6 +303,8 @@ export default function PedidoDetalhe() {
   const [selecionandoTodos, setSelecionandoTodos]   = useState(false);
   const [sobraFila, setSobraFila]                   = useState<SobraFila[]>([]);
   const [sobraSalvando, setSobraSalvando]           = useState(false);
+  const [logRetalhos, setLogRetalhos]               = useState<Array<{ id: string; created_at: string; usuario_email: string | null; acao: string; descricao: string }>>([]);
+  const [showLogRetalhos, setShowLogRetalhos]       = useState(false);
   const [itemParaRetalho, setItemParaRetalho] = useState<number | null>(null);
   const [clientes, setClientes]         = useState<{ id: number; nome: string }[]>([]);
   const [vendedores, setVendedores]     = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
@@ -402,6 +405,15 @@ export default function PedidoDetalhe() {
       .eq("status", "Disponível")
       .order("produto_nome");
     setRetalhosDisponiveis((retDisp ?? []) as typeof retalhosDisponiveis);
+
+    // Histórico de atividades de retalhos (fire-and-forget, não bloqueia o load)
+    fetch(`/api/logs/pedido/${id}`)
+      .then(r => r.ok ? r.json() : [])
+      .then((entries: any[]) => setLogRetalhos(
+        entries.filter((e: any) => /retalho|sobra/i.test(e.descricao))
+      ))
+      .catch(() => {});
+
     setLoading(false);
   }
 
@@ -822,11 +834,12 @@ export default function PedidoDetalhe() {
     if (err === 0) toast(`${ok} retalho${ok > 1 ? "s" : ""} vinculado${ok > 1 ? "s" : ""}`);
     else toast(`${ok} vinculado${ok > 1 ? "s" : ""}, ${err} com erro`, "err");
     if (novasSobras.length > 0) setSobraFila(prev => [...prev, ...novasSobras]);
+    if (ok > 0) registrarLog({ acao: 'usou-todos', tabela: 'pedidos', registro_id: id, descricao: `Usou todos os retalhos sugeridos no pedido ${id}: ${ok} vinculado(s)${err > 0 ? `, ${err} erro(s)` : ""}` });
   }
 
   async function handleDesvincularRetalho(usoId: number, retalhoId: string) {
     if (!confirm(`Desvincular retalho ${retalhoId} deste pedido e devolver ao estoque?`)) return;
-    const ok = await desvincularRetalhoAoPedido(usoId, retalhoId);
+    const ok = await desvincularRetalhoAoPedido(usoId, retalhoId, id);
     if (ok) { toast("Retalho devolvido ao estoque"); await load(); }
     else toast("Erro ao desvincular", "err");
   }
@@ -1197,6 +1210,47 @@ export default function PedidoDetalhe() {
                 </div>
               );
             })()}
+
+            {/* Histórico de atividades de retalhos */}
+            {logRetalhos.length > 0 && (
+              <div style={{ marginTop:"16px", borderTop:"1px solid var(--b2)", paddingTop:"12px" }}>
+                <button
+                  onClick={() => setShowLogRetalhos(p => !p)}
+                  style={{ background:"none", border:"none", cursor:"pointer", color:"var(--t3)", fontSize:"11px", fontWeight:600, letterSpacing:".06em", padding:0, display:"flex", alignItems:"center", gap:"6px" }}
+                >
+                  {showLogRetalhos ? "▾" : "▸"} HISTÓRICO ({logRetalhos.length} evento{logRetalhos.length > 1 ? "s" : ""})
+                </button>
+                {showLogRetalhos && (
+                  <div style={{ marginTop:"8px", display:"flex", flexDirection:"column", gap:"4px" }}>
+                    {logRetalhos.map(entry => {
+                      const dt = new Date(entry.created_at);
+                      const label =
+                        entry.acao === 'editou'       ? "Vinculou"    :
+                        entry.acao === 'desvinculou'  ? "Desvinculou" :
+                        entry.acao === 'criou'        ? "Sobra"       :
+                        entry.acao === 'usou-todos'   ? "Usou Todos"  : entry.acao;
+                      const cor =
+                        entry.acao === 'editou'      ? "var(--ok)"   :
+                        entry.acao === 'desvinculou' ? "var(--warn)" :
+                        entry.acao === 'criou'       ? "var(--acc)"  :
+                        entry.acao === 'usou-todos'  ? "var(--ok)"   : "var(--t3)";
+                      return (
+                        <div key={entry.id} style={{ display:"flex", alignItems:"center", gap:"10px", padding:"5px 10px", background:"var(--surf2)", borderRadius:"6px", fontSize:"11px" }}>
+                          <span style={{ color:cor, fontWeight:700, minWidth:"76px" }}>{label}</span>
+                          <span style={{ color:"var(--t2)", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{entry.descricao}</span>
+                          <span style={{ color:"var(--t3)", fontFamily:"'DM Mono',monospace", flexShrink:0, fontSize:"10px" }}>
+                            {dt.toLocaleDateString("pt-BR", { day:"2-digit", month:"2-digit" })} {dt.toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" })}
+                          </span>
+                          {entry.usuario_email && (
+                            <span style={{ color:"var(--t3)", fontSize:"10px", flexShrink:0 }}>{entry.usuario_email.split("@")[0]}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Resumo Corte Certo + botão Otimizador */}
             {itemsParaCorte.length > 0 && (

@@ -596,15 +596,17 @@ export async function criarSobraRetalho(params: {
     status: 'Disponível',
   }] as never[]).select().single();
   if (error) { console.error('criarSobraRetalho:', error); return { ok: false }; }
+  registrarLog({ acao: 'criou', tabela: 'retalhos', registro_id: newId, descricao: `Registrou sobra ${newId} (${params.largura}×${params.altura}mm) gerada pelo pedido ${params.pedido_origem}` });
   return { ok: true, id: (data as any).id };
 }
 
 export async function desvincularRetalhoAoPedido(
-  usoId: number, retalhoId: string
+  usoId: number, retalhoId: string, pedidoId?: string
 ): Promise<boolean> {
   const { error } = await supabase.from('retalhos_uso').delete().eq('id', usoId);
   if (error) { console.error('desvincularRetalhoAoPedido:', error); return false; }
   await supabase.from('retalhos').update({ status: 'Disponível' } as never).eq('id', retalhoId);
+  if (pedidoId) registrarLog({ acao: 'desvinculou', tabela: 'pedidos', registro_id: pedidoId, descricao: `Desvinculou retalho ${retalhoId} do pedido ${pedidoId}` });
   return true;
 }
 
