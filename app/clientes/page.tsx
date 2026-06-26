@@ -312,7 +312,7 @@ export default function ClientesPage() {
       </div>
 
       {modal && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && setModal(false)}>
+        <div className="mov open">
           <div className="mod" style={{ width:"600px", maxHeight:"90vh", display:"flex", flexDirection:"column" }}>
             <div className="mhd">
               <div className="mtit">{editId ? "Editar Cliente" : "Novo Cliente"}</div>
@@ -335,10 +335,12 @@ export default function ClientesPage() {
 
               {aba === "geral" && (
                 <div style={{ display:"flex", flexDirection:"column", gap:"14px" }}>
+
+                  {/* Tipo + Status */}
                   <div className="fr">
                     <div className="fg">
                       <label className="fl">Tipo de Pessoa *</label>
-                      <select className="fc" value={form.tipo_pessoa} onChange={e => F("tipo_pessoa", e.target.value)}>
+                      <select className="fc" value={form.tipo_pessoa} onChange={e => { F("tipo_pessoa", e.target.value); setCnpjStatus(""); }}>
                         <option value="PJ">Pessoa Jurídica (CNPJ)</option>
                         <option value="PF">Pessoa Física (CPF)</option>
                       </select>
@@ -352,12 +354,44 @@ export default function ClientesPage() {
                     </div>
                   </div>
 
+                  {/* CNPJ / CPF — primeiro campo para busca automática */}
+                  <div className="fr">
+                    {form.tipo_pessoa === "PJ" ? (
+                      <div className="fg">
+                        <label className="fl" style={{ display:"flex", alignItems:"center", gap:"6px" }}>
+                          CNPJ
+                          {buscandoCnpj && <span style={{ fontSize:"10px", color:"var(--acc)", fontWeight:500 }}>buscando...</span>}
+                          {!buscandoCnpj && cnpjStatus === "ok"  && <span style={{ fontSize:"10px", color:"var(--ok)",  fontWeight:600 }}>✓ dados preenchidos</span>}
+                          {!buscandoCnpj && cnpjStatus === "err" && <span style={{ fontSize:"10px", color:"var(--warn)", fontWeight:600 }}>não encontrado</span>}
+                        </label>
+                        <input className="fc" value={form.cnpj} onChange={e => handleCnpjChange(maskCNPJ(e.target.value))} placeholder="00.000.000/0001-00" maxLength={18} inputMode="numeric" autoFocus />
+                      </div>
+                    ) : (
+                      <div className="fg">
+                        <label className="fl">CPF</label>
+                        <input className="fc" value={form.cpf} onChange={e => F("cpf", maskCPF(e.target.value))} placeholder="000.000.000-00" maxLength={14} inputMode="numeric" autoFocus />
+                      </div>
+                    )}
+                    <div className="fg">
+                      <label className="fl">Telefone da Empresa</label>
+                      <input className="fc" value={form.tel} onChange={e => F("tel", maskTel(e.target.value))} placeholder="(00) 00000-0000" maxLength={15} inputMode="numeric" />
+                    </div>
+                  </div>
+
+                  {/* Aviso de busca automática — só para PJ sem resultado ainda */}
+                  {form.tipo_pessoa === "PJ" && cnpjStatus === "" && form.cnpj.replace(/\D/g, "").length < 14 && (
+                    <div style={{ display:"flex", alignItems:"center", gap:"8px", padding:"10px 14px", background:"rgba(99,102,241,.07)", border:"1px solid rgba(99,102,241,.2)", borderRadius:"8px" }}>
+                      <span style={{ fontSize:"15px" }}>💡</span>
+                      <span style={{ fontSize:"12px", color:"var(--t2)" }}>Preencha o CNPJ acima para buscar automaticamente razão social, endereço, telefone e e-mail da empresa.</span>
+                    </div>
+                  )}
+
                   <div className="fg">
                     <label className="fl">Nome / Razão Social *</label>
                     <input className="fc" value={form.nome} onChange={e => F("nome", e.target.value)} placeholder="Nome ou razão social" />
                   </div>
 
-                  {/* Responsável — acima do telefone da empresa */}
+                  {/* Responsável */}
                   <div className="fr">
                     <div className="fg">
                       <label className="fl">Nome do Responsável</label>
@@ -366,29 +400,6 @@ export default function ClientesPage() {
                     <div className="fg">
                       <label className="fl">Telefone do Responsável</label>
                       <input className="fc" value={form.tel_responsavel ?? ""} onChange={e => F("tel_responsavel", maskTel(e.target.value))} placeholder="(00) 00000-0000" maxLength={15} inputMode="numeric" />
-                    </div>
-                  </div>
-
-                  <div className="fr">
-                    {form.tipo_pessoa === "PJ" ? (
-                      <div className="fg">
-                        <label className="fl" style={{ display:"flex", alignItems:"center", gap:"6px" }}>
-                          CNPJ
-                          {buscandoCnpj && <span style={{ fontSize:"10px", color:"var(--acc)", fontWeight:500 }}>buscando...</span>}
-                          {!buscandoCnpj && cnpjStatus === "ok"  && <span style={{ fontSize:"10px", color:"var(--ok)",  fontWeight:600 }}>✓ dados preenchidos</span>}
-                          {!buscandoCnpj && cnpjStatus === "err" && <span style={{ fontSize:"10px", color:"var(--err)", fontWeight:600 }}>CNPJ não encontrado</span>}
-                        </label>
-                        <input className="fc" value={form.cnpj} onChange={e => handleCnpjChange(maskCNPJ(e.target.value))} placeholder="00.000.000/0001-00" maxLength={18} inputMode="numeric" />
-                      </div>
-                    ) : (
-                      <div className="fg">
-                        <label className="fl">CPF</label>
-                        <input className="fc" value={form.cpf} onChange={e => F("cpf", maskCPF(e.target.value))} placeholder="000.000.000-00" maxLength={14} inputMode="numeric" />
-                      </div>
-                    )}
-                    <div className="fg">
-                      <label className="fl">Telefone da Empresa</label>
-                      <input className="fc" value={form.tel} onChange={e => F("tel", maskTel(e.target.value))} placeholder="(00) 00000-0000" maxLength={15} inputMode="numeric" />
                     </div>
                   </div>
 
