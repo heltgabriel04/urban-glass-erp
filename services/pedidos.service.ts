@@ -468,6 +468,64 @@ export async function deleteRomaneioAssinado(url: string): Promise<boolean> {
   return true;
 }
 
+// ─── Storage: NF-e ────────────────────────────────────────────────────
+const BUCKET_NFE = 'nfe-pedidos';
+
+export async function uploadNfe(pedidoId: string, files: File[]): Promise<string[]> {
+  const urls: string[] = [];
+  for (const file of files) {
+    const ext  = file.name.split('.').pop() ?? 'pdf';
+    const path = `${pedidoId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage.from(BUCKET_NFE).upload(path, file, { upsert: false });
+    if (error) { console.error('uploadNfe:', error); continue; }
+    const { data } = supabase.storage.from(BUCKET_NFE).getPublicUrl(path);
+    urls.push(data.publicUrl);
+  }
+  if (urls.length > 0) {
+    registrarLog({ acao: "anexou", tabela: "pedidos", registro_id: pedidoId, descricao: `Anexou ${urls.length} NF-e em ${pedidoId}` });
+  }
+  return urls;
+}
+
+export async function deleteNfe(url: string): Promise<boolean> {
+  const marker = `/${BUCKET_NFE}/`;
+  const idx = url.indexOf(marker);
+  if (idx === -1) return false;
+  const path = url.slice(idx + marker.length);
+  const { error } = await supabase.storage.from(BUCKET_NFE).remove([path]);
+  if (error) { console.error('deleteNfe:', error); return false; }
+  return true;
+}
+
+// ─── Storage: Boleto ──────────────────────────────────────────────────
+const BUCKET_BOLETO = 'boletos-pedidos';
+
+export async function uploadBoleto(pedidoId: string, files: File[]): Promise<string[]> {
+  const urls: string[] = [];
+  for (const file of files) {
+    const ext  = file.name.split('.').pop() ?? 'pdf';
+    const path = `${pedidoId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage.from(BUCKET_BOLETO).upload(path, file, { upsert: false });
+    if (error) { console.error('uploadBoleto:', error); continue; }
+    const { data } = supabase.storage.from(BUCKET_BOLETO).getPublicUrl(path);
+    urls.push(data.publicUrl);
+  }
+  if (urls.length > 0) {
+    registrarLog({ acao: "anexou", tabela: "pedidos", registro_id: pedidoId, descricao: `Anexou ${urls.length} boleto(s) em ${pedidoId}` });
+  }
+  return urls;
+}
+
+export async function deleteBoleto(url: string): Promise<boolean> {
+  const marker = `/${BUCKET_BOLETO}/`;
+  const idx = url.indexOf(marker);
+  if (idx === -1) return false;
+  const path = url.slice(idx + marker.length);
+  const { error } = await supabase.storage.from(BUCKET_BOLETO).remove([path]);
+  if (error) { console.error('deleteBoleto:', error); return false; }
+  return true;
+}
+
 export async function getProximoIdPedido(): Promise<string> {
   const { data } = await supabase
     .from('pedidos')

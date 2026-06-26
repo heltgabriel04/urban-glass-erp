@@ -276,6 +276,8 @@ export interface Pedido {
   qr_token?: string;
   romaneio_pdf_url?: string | null;
   romaneio_assinado_urls?: string[] | null;
+  nfe_urls?: string[] | null;
+  boleto_urls?: string[] | null;
   created_at: string;
   updated_at: string;
   clientes?: Cliente;

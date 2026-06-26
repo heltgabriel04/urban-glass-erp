@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
-import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido, uploadRomaneioAssinado, deleteRomaneioAssinado } from "@/services/pedidos.service";
+import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido, uploadRomaneioAssinado, deleteRomaneioAssinado, uploadNfe, deleteNfe, uploadBoleto, deleteBoleto } from "@/services/pedidos.service";
 import { getLancamentosPorPedido, deletarLancamento, createLancamento, updateLancamento } from "@/services/financeiro.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, updateNaoConformidade } from "@/services/qualidade.service";
@@ -145,6 +145,8 @@ export default function PedidoDetalhe() {
   const [loading, setLoading]           = useState(true);
   const [salvando, setSalvando]         = useState(false);
   const [uploadandoRomaneio, setUploadandoRomaneio] = useState(false);
+  const [uploadandoNfe,     setUploadandoNfe]     = useState(false);
+  const [uploadandoBoleto,  setUploadandoBoleto]  = useState(false);
 
   // Qualidade
   const [ncs, setNcs]               = useState<NaoConformidade[]>([]);
@@ -654,6 +656,56 @@ export default function PedidoDetalhe() {
     const restantes = (pedido.romaneio_assinado_urls ?? []).filter(u => u !== url);
     await updatePedido(id, { romaneio_assinado_urls: restantes.length > 0 ? restantes : null } as any);
     toast("Arquivo removido");
+    await load();
+  }
+
+  async function handleUploadNfe(files: File[]) {
+    if (!pedido || files.length === 0) return;
+    setUploadandoNfe(true);
+    const urls = await uploadNfe(id, files);
+    if (urls.length > 0) {
+      const existentes = pedido.nfe_urls ?? [];
+      await updatePedido(id, { nfe_urls: [...existentes, ...urls] } as any);
+      toast(urls.length > 1 ? `${urls.length} NF-e salvas` : "NF-e salva");
+      await load();
+    } else {
+      toast("Erro ao enviar arquivo", "err");
+    }
+    setUploadandoNfe(false);
+  }
+
+  async function handleRemoverNfe(url: string) {
+    if (!pedido) return;
+    if (!confirm("Remover esta NF-e?")) return;
+    await deleteNfe(url);
+    const restantes = (pedido.nfe_urls ?? []).filter(u => u !== url);
+    await updatePedido(id, { nfe_urls: restantes.length > 0 ? restantes : null } as any);
+    toast("NF-e removida");
+    await load();
+  }
+
+  async function handleUploadBoleto(files: File[]) {
+    if (!pedido || files.length === 0) return;
+    setUploadandoBoleto(true);
+    const urls = await uploadBoleto(id, files);
+    if (urls.length > 0) {
+      const existentes = pedido.boleto_urls ?? [];
+      await updatePedido(id, { boleto_urls: [...existentes, ...urls] } as any);
+      toast(urls.length > 1 ? `${urls.length} boletos salvos` : "Boleto salvo");
+      await load();
+    } else {
+      toast("Erro ao enviar arquivo", "err");
+    }
+    setUploadandoBoleto(false);
+  }
+
+  async function handleRemoverBoleto(url: string) {
+    if (!pedido) return;
+    if (!confirm("Remover este boleto?")) return;
+    await deleteBoleto(url);
+    const restantes = (pedido.boleto_urls ?? []).filter(u => u !== url);
+    await updatePedido(id, { boleto_urls: restantes.length > 0 ? restantes : null } as any);
+    toast("Boleto removido");
     await load();
   }
 
@@ -1311,6 +1363,70 @@ export default function PedidoDetalhe() {
               </span>
               <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple style={{ display: "none" }} disabled={uploadandoRomaneio}
                 onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadRomaneioAssinado(fs); e.target.value = ""; }} />
+            </label>
+          </div>
+
+          {/* NF-e */}
+          <div className="card" style={{ padding: "20px 24px" }}>
+            <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, marginBottom: "16px", letterSpacing: ".06em" }}>
+              NF-e{(pedido.nfe_urls?.length ?? 0) > 0 ? ` (${pedido.nfe_urls!.length})` : ""}
+            </div>
+
+            {(pedido.nfe_urls?.length ?? 0) > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+                {pedido.nfe_urls!.map((url, i) => (
+                  <div key={url} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", background: "rgba(99,102,241,.08)", borderRadius: "8px", border: "1px solid rgba(99,102,241,.2)" }}>
+                    <span style={{ fontSize: "16px" }}>🧾</span>
+                    <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--acc)", fontWeight: 600, fontSize: "13px", textDecoration: "underline" }}>
+                      NF-e {i + 1}
+                    </a>
+                    <button className="btn bw sm" onClick={() => handleRemoverNfe(url)} disabled={uploadandoNfe}>Remover</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px", padding: "20px", border: "2px dashed var(--b2)", borderRadius: "8px", cursor: uploadandoNfe ? "default" : "pointer", background: "var(--surf2)" }}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoNfe) handleUploadNfe(fs); }}>
+              <span style={{ fontSize: "20px" }}>🧾</span>
+              <span style={{ fontSize: "12px", color: "var(--t3)" }}>
+                {uploadandoNfe ? "Enviando..." : "Arraste ou clique para anexar NF-e (PDF ou XML)"}
+              </span>
+              <input type="file" accept=".pdf,.xml,.jpg,.jpeg,.png" multiple style={{ display: "none" }} disabled={uploadandoNfe}
+                onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadNfe(fs); e.target.value = ""; }} />
+            </label>
+          </div>
+
+          {/* Boleto */}
+          <div className="card" style={{ padding: "20px 24px" }}>
+            <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, marginBottom: "16px", letterSpacing: ".06em" }}>
+              BOLETO{(pedido.boleto_urls?.length ?? 0) > 0 ? ` (${pedido.boleto_urls!.length})` : ""}
+            </div>
+
+            {(pedido.boleto_urls?.length ?? 0) > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+                {pedido.boleto_urls!.map((url, i) => (
+                  <div key={url} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", background: "rgba(245,158,11,.08)", borderRadius: "8px", border: "1px solid rgba(245,158,11,.25)" }}>
+                    <span style={{ fontSize: "16px" }}>🏦</span>
+                    <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--warn)", fontWeight: 600, fontSize: "13px", textDecoration: "underline" }}>
+                      Boleto {i + 1}
+                    </a>
+                    <button className="btn bw sm" onClick={() => handleRemoverBoleto(url)} disabled={uploadandoBoleto}>Remover</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px", padding: "20px", border: "2px dashed var(--b2)", borderRadius: "8px", cursor: uploadandoBoleto ? "default" : "pointer", background: "var(--surf2)" }}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoBoleto) handleUploadBoleto(fs); }}>
+              <span style={{ fontSize: "20px" }}>🏦</span>
+              <span style={{ fontSize: "12px", color: "var(--t3)" }}>
+                {uploadandoBoleto ? "Enviando..." : "Arraste ou clique para anexar boleto (PDF ou imagem)"}
+              </span>
+              <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple style={{ display: "none" }} disabled={uploadandoBoleto}
+                onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadBoleto(fs); e.target.value = ""; }} />
             </label>
           </div>
         </div>
