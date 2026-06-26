@@ -61,6 +61,16 @@ async function buscarCep(cep: string) {
   } catch { return null; }
 }
 
+async function buscarCnpjApi(cnpj: string) {
+  const raw = cnpj.replace(/\D/g, "");
+  if (raw.length !== 14) return null;
+  try {
+    const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${raw}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
 export default function ClientesPage() {
   const [clientes, setClientes]       = useState<Cliente[]>([]);
   const [financeiro, setFinanceiro]   = useState<FinanceiroCliente[]>([]);
@@ -72,6 +82,8 @@ export default function ClientesPage() {
   const [editId, setEditId]           = useState<number | null>(null);
   const [salvando, setSalvando]       = useState(false);
   const [buscandoCep, setBuscandoCep] = useState(false);
+  const [buscandoCnpj, setBuscandoCnpj] = useState(false);
+  const [cnpjStatus, setCnpjStatus]     = useState<"" | "ok" | "err">("");
 
   useEffect(() => { load(); }, []);
 
@@ -85,7 +97,7 @@ export default function ClientesPage() {
 
   function finDe(id: number) { return financeiro.find(f => f.cliente_id === id) ?? null; }
 
-  function abrirNovo() { setForm(VAZIO); setEditId(null); setAba("geral"); setModal(true); }
+  function abrirNovo() { setForm(VAZIO); setEditId(null); setAba("geral"); setCnpjStatus(""); setModal(true); }
 
   function abrirEdit(c: Cliente) {
     setForm({
@@ -102,7 +114,47 @@ export default function ClientesPage() {
       obs_nfe: c.obs_nfe ?? "",
       pgto: c.pgto, tabela: c.tabela, ativo: c.ativo,
     });
-    setEditId(c.id); setAba("geral"); setModal(true);
+    setEditId(c.id); setAba("geral"); setCnpjStatus(""); setModal(true);
+  }
+
+  async function handleCnpjChange(masked: string) {
+    F("cnpj", masked);
+    setCnpjStatus("");
+    const raw = masked.replace(/\D/g, "");
+    if (raw.length !== 14) return;
+    setBuscandoCnpj(true);
+    const d = await buscarCnpjApi(raw);
+    setBuscandoCnpj(false);
+    if (!d) { setCnpjStatus("err"); return; }
+    setCnpjStatus("ok");
+
+    function toTitleCase(s: string) {
+      return (s ?? "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+    }
+    function maskCEPInline(v: string) {
+      const n = v.replace(/\D/g, "").slice(0, 8);
+      return n.replace(/^(\d{5})(\d)/, "$1-$2");
+    }
+    function maskTelInline(v: string) {
+      const n = v.replace(/\D/g, "").slice(0, 11);
+      if (n.length <= 10) return n.replace(/^(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3").replace(/-$/, "");
+      return n.replace(/^(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3").replace(/-$/, "");
+    }
+
+    setForm((f: any) => ({
+      ...f,
+      nome:        f.nome        || toTitleCase(d.razao_social ?? ""),
+      logradouro:  toTitleCase(d.logradouro  ?? "") || f.logradouro,
+      numero:      d.numero      || f.numero,
+      complemento: toTitleCase(d.complemento ?? "") || f.complemento,
+      bairro:      toTitleCase(d.bairro      ?? "") || f.bairro,
+      cidade:      toTitleCase(d.municipio   ?? "") || f.cidade,
+      uf:          d.uf          || f.uf,
+      cep:         d.cep ? maskCEPInline(d.cep) : f.cep,
+      cod_ibge:    d.codigo_municipio_ibge ? String(d.codigo_municipio_ibge) : f.cod_ibge,
+      tel:         f.tel         || (d.ddd_telefone_1 ? maskTelInline(d.ddd_telefone_1) : ""),
+      email:       f.email       || (d.email ?? "").toLowerCase(),
+    }));
   }
 
   async function handleCepBlur() {
@@ -320,8 +372,13 @@ export default function ClientesPage() {
                   <div className="fr">
                     {form.tipo_pessoa === "PJ" ? (
                       <div className="fg">
-                        <label className="fl">CNPJ</label>
-                        <input className="fc" value={form.cnpj} onChange={e => F("cnpj", maskCNPJ(e.target.value))} placeholder="00.000.000/0001-00" maxLength={18} inputMode="numeric" />
+                        <label className="fl" style={{ display:"flex", alignItems:"center", gap:"6px" }}>
+                          CNPJ
+                          {buscandoCnpj && <span style={{ fontSize:"10px", color:"var(--acc)", fontWeight:500 }}>buscando...</span>}
+                          {!buscandoCnpj && cnpjStatus === "ok"  && <span style={{ fontSize:"10px", color:"var(--ok)",  fontWeight:600 }}>✓ dados preenchidos</span>}
+                          {!buscandoCnpj && cnpjStatus === "err" && <span style={{ fontSize:"10px", color:"var(--err)", fontWeight:600 }}>CNPJ não encontrado</span>}
+                        </label>
+                        <input className="fc" value={form.cnpj} onChange={e => handleCnpjChange(maskCNPJ(e.target.value))} placeholder="00.000.000/0001-00" maxLength={18} inputMode="numeric" />
                       </div>
                     ) : (
                       <div className="fg">
