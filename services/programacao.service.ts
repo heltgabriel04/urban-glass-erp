@@ -38,7 +38,7 @@ export function getMonday(date: Date): Date {
 // ─── ESTIMATIVA DE TEMPO ────────────────────────────────────
 
 function isVidroEspecial(nome: string): boolean {
-  return /temperado|laminado|serigrafia|serigrafado|espelho|insulado|blindado/i.test(nome);
+  return /laminado/i.test(nome);
 }
 
 export function calcularTempoEstimado(
