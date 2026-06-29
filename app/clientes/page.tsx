@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getClientes, createCliente, updateCliente, deletarCliente } from "@/services/clientes.service";
 import { getFinanceiroClientes } from "@/services/financeiro.service";
@@ -100,6 +101,7 @@ async function buscarCnpjApi(cnpj: string): Promise<{ data: any; notFound: boole
 }
 
 export default function ClientesPage() {
+  const router = useRouter();
   const [clientes, setClientes]       = useState<Cliente[]>([]);
   const [financeiro, setFinanceiro]   = useState<FinanceiroCliente[]>([]);
   const [loading, setLoading]         = useState(true);
@@ -295,7 +297,7 @@ export default function ClientesPage() {
                   return (
                     <tr
                       key={c.id}
-                      onClick={() => abrirEdit(c)}
+                      onClick={() => router.push(`/clientes/${c.id}`)}
                       style={{ cursor:"pointer" }}
                       onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = "var(--surf2)"}
                       onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = ""}
