@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import {
   getLinhas, getConfigTempo, getProgramacao, getPedidosSemProgramacao,
+  getPedidosExpedicao,
   criarProgramacaoPedido, reagendar, atualizarStatusProgramacao, deletarProgramacao,
   calcularTempoEstimado, formatarDuracao, getMetricasProducao,
   addDays, getMonday, diffDays, toISOLocal,
@@ -15,13 +16,17 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from "recharts";
-import { DndContext, useDraggable, DragEndEvent, DragStartEvent } from "@dnd-kit/core";
+import {
+  DndContext, useDraggable, useDroppable,
+  DragEndEvent, DragStartEvent,
+} from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import Link from "next/link";
 
 // ─── CONSTANTES ───────────────────────────────────────────────
 
 const COL_W: Record<string, number> = { dia: 100, semana: 144, mes: 52 };
-const ROW_H  = 104;
+const ROW_H   = 104;
 const LABEL_W = 188;
 
 const COR_STATUS: Record<string, string> = {
@@ -40,10 +45,7 @@ function formatDate(d: Date, short = false): string {
   if (short) return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
   return d.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
 }
-
-function formatHour(h: number): string {
-  return `${String(h).padStart(2, "0")}:00`;
-}
+function formatHour(h: number): string { return `${String(h).padStart(2, "0")}:00`; }
 
 function corBloco(prog: ProgramacaoProducao): string {
   if (prog.status === "Concluído")   return "#1e1e2e";
@@ -76,20 +78,13 @@ function diasVisiveis(zoom: string, base: Date): Date[] {
   const lastDay  = new Date(base.getFullYear(), base.getMonth() + 1, 0);
   return Array.from({ length: lastDay.getDate() }, (_, i) => addDays(firstDay, i));
 }
-
-function horasVisiveis(): number[] {
-  return Array.from({ length: 9 }, (_, i) => i + 8);
-}
+function horasVisiveis() { return Array.from({ length: 9 }, (_, i) => i + 8); }
 
 function blocoLeft(prog: ProgramacaoProducao, zoom: string, visibleStart: Date): number {
   if (!prog.dt_inicio_previsto) return 0;
   const inicio = new Date(prog.dt_inicio_previsto);
-  if (zoom === "dia") {
-    const h = inicio.getHours() - 8;
-    return Math.max(0, h) * COL_W[zoom];
-  }
-  const dias = diffDays(inicio, visibleStart);
-  return Math.max(0, dias) * COL_W[zoom];
+  if (zoom === "dia") return Math.max(0, (inicio.getHours() - 8)) * COL_W[zoom];
+  return Math.max(0, diffDays(inicio, visibleStart)) * COL_W[zoom];
 }
 
 function blocoWidth(prog: ProgramacaoProducao, zoom: string): number {
@@ -100,7 +95,33 @@ function blocoWidth(prog: ProgramacaoProducao, zoom: string): number {
   return Math.max(cw * 0.85, dias * cw - 4);
 }
 
-// ─── COMPONENTE BLOCO (DRAGGABLE) ────────────────────────────
+// ─── LEGENDA DE CORES ─────────────────────────────────────────
+
+function LegendaCores() {
+  const items = [
+    { cor: "#3dffa0", label: "No prazo" },
+    { cor: "#f59e0b", label: "≤ 2 dias p/ vencer" },
+    { cor: "#f43f5e", label: "Atrasado" },
+    { cor: "#3dffa0", label: "Em execução", borda: true },
+    { cor: "#4a4a6a", label: "Concluído" },
+  ];
+  return (
+    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+      {items.map((it, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <div style={{
+            width: 10, height: 10, borderRadius: 3,
+            background: it.borda ? "rgba(61,255,160,.2)" : it.cor,
+            border: `2px solid ${it.cor}`,
+          }} />
+          <span style={{ fontSize: 10, color: "var(--t3)" }}>{it.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── BLOCO DRAGGABLE ──────────────────────────────────────────
 
 function BlocoProducao({
   prog, zoom, visibleStart, onClick,
@@ -117,24 +138,6 @@ function BlocoProducao({
   const borda = bordaBloco(prog);
   const bg    = corBloco(prog);
 
-  const style: React.CSSProperties = {
-    position: "absolute",
-    left, top: 6, width,
-    height: ROW_H - 16,
-    background: bg,
-    border: `1.5px solid ${borda}`,
-    borderRadius: 8,
-    padding: "6px 9px",
-    cursor: isDragging ? "grabbing" : "grab",
-    userSelect: "none",
-    zIndex: isDragging ? 50 : 2,
-    opacity: isDragging ? 0.7 : 1,
-    transform: CSS.Translate.toString(transform),
-    overflow: "hidden",
-    transition: isDragging ? "none" : "box-shadow 0.15s",
-    boxSizing: "border-box",
-  };
-
   const itens = prog.pedidos?.itens_pedido ?? [];
   const pecas = itens.reduce((s, i) => s + i.quantidade, 0);
   const prazo = prog.pedidos?.dt_retirada
@@ -144,35 +147,32 @@ function BlocoProducao({
   return (
     <div
       ref={setNodeRef}
-      style={style}
+      title={`${prog.pedido_id} · ${prog.pedidos?.clientes?.nome ?? ""} · ${prog.etapa}`}
+      style={{
+        position: "absolute", left, top: 6, width, height: ROW_H - 16,
+        background: bg, border: `1.5px solid ${borda}`, borderRadius: 8,
+        padding: "6px 9px", cursor: isDragging ? "grabbing" : "grab",
+        userSelect: "none", zIndex: isDragging ? 50 : 2,
+        opacity: isDragging ? 0.7 : 1,
+        transform: CSS.Translate.toString(transform),
+        overflow: "hidden",
+        transition: isDragging ? "none" : "box-shadow 0.15s",
+        boxSizing: "border-box",
+      }}
       {...attributes}
       {...listeners}
       onClick={(e) => { e.stopPropagation(); onClick(prog); }}
     >
-      {/* ID do pedido */}
-      <div style={{
-        fontSize: 12, fontWeight: 700, color: borda, lineHeight: 1.2,
-        marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-      }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: borda, lineHeight: 1.2, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {prog.pedido_id}
       </div>
-
-      {/* Cliente */}
       {width > 72 && (
-        <div style={{
-          fontSize: 10, color: "var(--t1)", marginBottom: 2,
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
+        <div style={{ fontSize: 10, color: "var(--t1)", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {prog.pedidos?.clientes?.nome ?? "—"}
         </div>
       )}
-
-      {/* Detalhes (m², peças, prazo) */}
       {width > 100 && (
-        <div style={{
-          fontSize: 10, color: "var(--t2)", display: "flex", gap: 6,
-          flexWrap: "nowrap", overflow: "hidden",
-        }}>
+        <div style={{ fontSize: 10, color: "var(--t2)", display: "flex", gap: 4, overflow: "hidden" }}>
           <span>{prog.pedidos?.m2_total?.toFixed(1)}m²</span>
           <span>·</span>
           <span>{pecas}pç</span>
@@ -180,8 +180,6 @@ function BlocoProducao({
           <span>↗{prazo}</span>
         </div>
       )}
-
-      {/* Duração */}
       {width > 100 && (
         <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 1 }}>
           {formatarDuracao(prog.duracao_estimada_min ?? 0)} · {prog.etapa}
@@ -191,7 +189,25 @@ function BlocoProducao({
   );
 }
 
-// ─── MODAL DE AGENDAMENTO ────────────────────────────────────
+// ─── LINHA DROPPABLE ──────────────────────────────────────────
+
+function LinhaDroppable({ id, children }: { id: number; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        flex: 1, position: "relative", minHeight: ROW_H,
+        background: isOver ? "rgba(61,255,160,0.07)" : "transparent",
+        transition: "background 0.12s",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ─── MODAL DE AGENDAMENTO ─────────────────────────────────────
 
 function ModalAgendar({
   pedido, linhas, config, onConfirmar, onFechar,
@@ -207,9 +223,7 @@ function ModalAgendar({
 
   const amanhaBR = (() => {
     const d = new Date(); d.setDate(d.getDate() + 1);
-    const dd = String(d.getDate()).padStart(2, "0");
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    return `${dd}/${mm}/${d.getFullYear()}`;
+    return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
   })();
 
   const [dtDisplay,    setDtDisplay]    = useState(amanhaBR);
@@ -222,31 +236,29 @@ function ModalAgendar({
     if (linhasCorte.length > 0 && !linhaCorteId) setLinhaCorteId(linhasCorte[0].id);
   }, [linhas]);
 
-  const itens = (pedido.itens_pedido ?? []) as { m2: number; quantidade: number; lapidacao: number; produto_nome: string; }[];
+  const itens = (pedido.itens_pedido ?? []) as { m2: number; quantidade: number; lapidacao: number; produto_nome: string }[];
   const tempos: TempoEstimado = calcularTempoEstimado(itens, config);
 
   function maskData(v: string): string {
     const d = v.replace(/\D/g, "").slice(0, 8);
     if (d.length <= 2) return d;
-    if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
-    return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+    if (d.length <= 4) return `${d.slice(0,2)}/${d.slice(2)}`;
+    return `${d.slice(0,2)}/${d.slice(2,4)}/${d.slice(4)}`;
   }
-
-  function parseBR(masked: string): Date | null {
-    const parts = masked.split("/");
-    if (parts.length !== 3 || parts[2].length < 4) return null;
-    const [dd, mm, yyyy] = parts.map(Number);
+  function parseBR(s: string): Date | null {
+    const p = s.split("/");
+    if (p.length !== 3 || p[2].length < 4) return null;
+    const [dd, mm, yyyy] = p.map(Number);
     if (!dd || !mm || !yyyy || mm > 12 || dd > 31) return null;
     const d = new Date(yyyy, mm - 1, dd, 8, 0, 0);
-    if (isNaN(d.getTime())) return null;
-    return d;
+    return isNaN(d.getTime()) ? null : d;
   }
 
   async function handleConfirmar() {
     setErro("");
     if (semTabelas) { setErro("Execute o script SQL no Supabase primeiro."); return; }
     const dt = parseBR(dtDisplay);
-    if (!dt) { setErro("Data inválida. Use dd/mm/aaaa."); return; }
+    if (!dt) { setErro("Data inválida."); return; }
     if (!linhaCorteId) { setErro("Selecione uma linha de corte."); return; }
     setSalvando(true);
     await onConfirmar(dt, linhaCorteId, tempos.tem_lapidacao ? linhaLapId : undefined);
@@ -255,6 +267,10 @@ function ModalAgendar({
 
   const dtValida = !!parseBR(dtDisplay);
 
+  // Verifica capacidade visual para warning (sem query extra — usa info estática)
+  const linhaCorte = linhas.find(l => l.id === linhaCorteId);
+  const capacidadeOk = true; // Detecção de conflito real está no service
+
   return (
     <div className="mov open">
       <div className="mod" style={{ width: 480 }}>
@@ -262,176 +278,224 @@ function ModalAgendar({
           <span>Agendar — Pedido {pedido.id}</span>
           <button className="btn icon" onClick={onFechar}>✕</button>
         </div>
-
         <div className="mbd" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* Aviso RLS / tabelas não encontradas */}
           {semTabelas && (
-            <div style={{
-              background: "rgba(244,63,94,.08)", border: "1px solid var(--err)",
-              borderRadius: 10, padding: "12px 16px",
-            }}>
-              <div style={{ color: "var(--err)", fontWeight: 700, fontSize: 13, marginBottom: 6 }}>
-                ⚠ Linhas de produção não encontradas
-              </div>
-              <div style={{ color: "var(--t1)", fontSize: 12, lineHeight: 1.6 }}>
-                Execute <strong>sql/fix-programacao-rls.sql</strong> no Supabase SQL Editor
-                para desativar o RLS e garantir os dados iniciais.
+            <div style={{ background: "rgba(244,63,94,.08)", border: "1px solid var(--err)", borderRadius: 10, padding: "12px 16px" }}>
+              <div style={{ color: "var(--err)", fontWeight: 700, fontSize: 13, marginBottom: 6 }}>⚠ Linhas não encontradas</div>
+              <div style={{ fontSize: 12, color: "var(--t1)", lineHeight: 1.6 }}>
+                Execute <strong>sql/fix-programacao-rls.sql</strong> no Supabase SQL Editor.
               </div>
             </div>
           )}
 
           {/* Info do pedido */}
-          <div style={{
-            background: "var(--surf2)", borderRadius: 10, padding: "12px 16px",
-            display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10,
-          }}>
-            <div>
-              <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 3 }}>CLIENTE</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--t1)" }}>
-                {(pedido as any).clientes?.nome ?? "—"}
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 3 }}>PEDIDO</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--acc)" }}>{pedido.id}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 3 }}>ÁREA</div>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{pedido.m2_total?.toFixed(2)} m²</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 3 }}>PEÇAS</div>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>
-                {itens.reduce((s, i) => s + i.quantidade, 0)}
-                {itens.length === 0 && (
-                  <span style={{ color: "var(--warn)", fontSize: 11 }}> ⚠ itens não carregados</span>
-                )}
-              </div>
-            </div>
+          <div style={{ background: "var(--surf2)", borderRadius: 10, padding: "12px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <StatBloco label="Cliente" value={(pedido as any).clientes?.nome ?? "—"} />
+            <StatBloco label="Pedido"  value={pedido.id} col="var(--acc)" />
+            <StatBloco label="Área"    value={(pedido.m2_total ?? 0).toFixed(2) + " m²"} />
+            <StatBloco label="Peças"   value={String(itens.reduce((s, i) => s + i.quantidade, 0))} />
           </div>
 
-          {/* Estimativa de tempo */}
-          <div style={{
-            background: "var(--surf3)", borderRadius: 10, padding: "12px 16px",
-            border: "1px solid var(--b2)",
-          }}>
-            <div style={{
-              fontSize: 11, fontWeight: 700, color: "var(--acc)", marginBottom: 10,
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-            }}>
+          {/* Estimativa */}
+          <div style={{ background: "var(--surf3)", borderRadius: 10, padding: "12px 16px", border: "1px solid var(--b2)" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--acc)", marginBottom: 10, display: "flex", justifyContent: "space-between" }}>
               <span>ESTIMATIVA DE TEMPO</span>
-              {semConfig && (
-                <span style={{ color: "var(--warn)", fontWeight: 400, fontSize: 10 }}>
-                  ⚠ config não encontrada
-                </span>
-              )}
+              {semConfig && <span style={{ color: "var(--warn)", fontWeight: 400 }}>⚠ config não encontrada</span>}
             </div>
             {semConfig ? (
-              <div style={{ color: "var(--t3)", fontSize: 12 }}>
-                Tabela <em>config_tempo_producao</em> não encontrada. Execute o script SQL.
-              </div>
+              <div style={{ color: "var(--t3)", fontSize: 12 }}>Execute o script SQL para configurar os parâmetros.</div>
             ) : (
-              <div style={{ display: "flex", gap: 0 }}>
-                <div style={{ flex: 1, textAlign: "center", padding: "6px 0" }}>
+              <div style={{ display: "flex" }}>
+                <div style={{ flex: 1, textAlign: "center" }}>
                   <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 4 }}>CORTE</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "var(--t1)", lineHeight: 1 }}>
-                    {tempos.corte_min > 0 ? formatarDuracao(tempos.corte_min) : "—"}
+                  <div style={{ fontSize: 20, fontWeight: 800, color: "var(--t1)", lineHeight: 1 }}>
+                    {formatarDuracao(tempos.corte_min)}
                   </div>
                 </div>
                 {tempos.tem_lapidacao && (
                   <>
-                    <div style={{ width: 1, background: "var(--b2)", alignSelf: "stretch", margin: "0 4px" }} />
-                    <div style={{ flex: 1, textAlign: "center", padding: "6px 0" }}>
+                    <div style={{ width: 1, background: "var(--b2)", alignSelf: "stretch", margin: "0 8px" }} />
+                    <div style={{ flex: 1, textAlign: "center" }}>
                       <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 4 }}>LAPIDAÇÃO</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: "var(--acc2)", lineHeight: 1 }}>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: "var(--acc2)", lineHeight: 1 }}>
                         {formatarDuracao(tempos.lapidacao_min)}
                       </div>
                     </div>
                   </>
                 )}
-                <div style={{ width: 1, background: "var(--b2)", alignSelf: "stretch", margin: "0 4px" }} />
-                <div style={{ flex: 1, textAlign: "center", padding: "6px 0" }}>
+                <div style={{ width: 1, background: "var(--b2)", alignSelf: "stretch", margin: "0 8px" }} />
+                <div style={{ flex: 1, textAlign: "center" }}>
                   <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 4 }}>TOTAL</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "var(--acc)", lineHeight: 1 }}>
-                    {tempos.total_min > 0 ? formatarDuracao(tempos.total_min) : "—"}
+                  <div style={{ fontSize: 20, fontWeight: 800, color: "var(--acc)", lineHeight: 1 }}>
+                    {formatarDuracao(tempos.total_min)}
                   </div>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Data de início */}
+          {/* Campos */}
           <div className="fg">
-            <label className="fl" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <label className="fl" style={{ display: "flex", justifyContent: "space-between" }}>
               <span>Data de Início</span>
               {dtDisplay.length === 10 && !dtValida && (
                 <span style={{ color: "var(--err)", fontSize: 11, fontWeight: 400 }}>data inválida</span>
               )}
             </label>
-            <input
-              className="fc"
-              value={dtDisplay}
-              onChange={e => setDtDisplay(maskData(e.target.value))}
-              placeholder="dd/mm/aaaa"
-              maxLength={10}
-              inputMode="numeric"
-              style={{
-                borderColor: dtDisplay.length === 10 && !dtValida ? "var(--err)" : undefined,
-                fontSize: 15,
-              }}
-            />
+            <input className="fc" value={dtDisplay} onChange={e => setDtDisplay(maskData(e.target.value))}
+              placeholder="dd/mm/aaaa" maxLength={10} inputMode="numeric"
+              style={{ fontSize: 15, borderColor: dtDisplay.length === 10 && !dtValida ? "var(--err)" : undefined }} />
           </div>
 
-          {/* Linha de corte */}
           <div className="fg">
             <label className="fl">Linha de Corte</label>
-            {linhasCorte.length === 0 ? (
-              <div className="fc" style={{ color: "var(--t3)", pointerEvents: "none" }}>
-                Nenhuma linha configurada
-              </div>
-            ) : (
-              <select className="fc" value={linhaCorteId} onChange={e => setLinhaCorteId(Number(e.target.value))}>
-                {linhasCorte.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
-              </select>
-            )}
+            {linhasCorte.length === 0
+              ? <div className="fc" style={{ color: "var(--t3)", pointerEvents: "none" }}>Nenhuma linha configurada</div>
+              : <select className="fc" value={linhaCorteId} onChange={e => setLinhaCorteId(Number(e.target.value))}>
+                  {linhasCorte.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
+                </select>
+            }
           </div>
 
-          {/* Linha de lapidação */}
           {tempos.tem_lapidacao && (
             <div className="fg">
               <label className="fl">Linha de Lapidação</label>
-              {linhasLap.length === 0 ? (
-                <div className="fc" style={{ color: "var(--t3)", pointerEvents: "none" }}>
-                  Nenhuma linha configurada
-                </div>
-              ) : (
-                <select className="fc" value={linhaLapId ?? ""} onChange={e => setLinhaLapId(Number(e.target.value) || undefined)}>
-                  <option value="">— sem lapidação —</option>
-                  {linhasLap.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
-                </select>
-              )}
+              {linhasLap.length === 0
+                ? <div className="fc" style={{ color: "var(--t3)", pointerEvents: "none" }}>Nenhuma linha configurada</div>
+                : <select className="fc" value={linhaLapId ?? ""} onChange={e => setLinhaLapId(Number(e.target.value) || undefined)}>
+                    <option value="">— sem lapidação —</option>
+                    {linhasLap.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
+                  </select>
+              }
             </div>
           )}
 
           {erro && (
-            <div style={{
-              color: "var(--err)", fontSize: 12, fontWeight: 600,
-              background: "rgba(244,63,94,.08)", borderRadius: 8, padding: "8px 12px",
-            }}>
+            <div style={{ color: "var(--err)", fontSize: 12, fontWeight: 600, background: "rgba(244,63,94,.08)", borderRadius: 8, padding: "8px 12px" }}>
               ⚠ {erro}
             </div>
           )}
         </div>
-
         <div className="mft">
           <button className="btn bg" onClick={onFechar}>Cancelar</button>
-          <button
-            className="btn pri"
-            onClick={handleConfirmar}
-            disabled={salvando || semTabelas || !dtValida || !linhaCorteId}
-          >
+          <button className="btn pri" onClick={handleConfirmar}
+            disabled={salvando || semTabelas || !dtValida || !linhaCorteId}>
             {salvando ? "Agendando…" : "Confirmar Agendamento"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MODAL AGENDAMENTO EM LOTE ────────────────────────────────
+
+function ModalAgendamentoLote({
+  pedidos, linhas, config, onConfirmar, onFechar,
+}: {
+  pedidos: Pedido[]; linhas: ProducaoLinha[]; config: ConfigTempoProducao[];
+  onConfirmar: (dtInicio: Date, linhaCorteId: number) => Promise<void>;
+  onFechar: () => void;
+}) {
+  const linhasCorte = linhas.filter(l => l.tipo === "Corte");
+  const amanhaBR = (() => {
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+  })();
+  const [dtDisplay,    setDtDisplay]    = useState(amanhaBR);
+  const [linhaCorteId, setLinhaCorteId] = useState<number>(linhasCorte[0]?.id ?? 0);
+  const [salvando,     setSalvando]     = useState(false);
+  const [erro,         setErro]         = useState("");
+
+  function maskData(v: string) {
+    const d = v.replace(/\D/g, "").slice(0, 8);
+    if (d.length <= 2) return d;
+    if (d.length <= 4) return `${d.slice(0,2)}/${d.slice(2)}`;
+    return `${d.slice(0,2)}/${d.slice(2,4)}/${d.slice(4)}`;
+  }
+  function parseBR(s: string): Date | null {
+    const p = s.split("/");
+    if (p.length !== 3 || p[2].length < 4) return null;
+    const [dd, mm, yyyy] = p.map(Number);
+    if (!dd || !mm || !yyyy || mm > 12 || dd > 31) return null;
+    const d = new Date(yyyy, mm - 1, dd, 8, 0, 0);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const dtValida = !!parseBR(dtDisplay);
+
+  // Calcula totais estimados
+  const totalMin = pedidos.reduce((sum, p) => {
+    const itens = (p.itens_pedido ?? []) as { m2: number; quantidade: number; lapidacao: number; produto_nome: string }[];
+    return sum + calcularTempoEstimado(itens, config).total_min;
+  }, 0);
+
+  async function handleConfirmar() {
+    setErro("");
+    const dt = parseBR(dtDisplay);
+    if (!dt) { setErro("Data inválida."); return; }
+    if (!linhaCorteId) { setErro("Selecione uma linha."); return; }
+    setSalvando(true);
+    await onConfirmar(dt, linhaCorteId);
+    setSalvando(false);
+  }
+
+  return (
+    <div className="mov open">
+      <div className="mod" style={{ width: 480 }}>
+        <div className="mhd">
+          <span>Agendar em Lote — {pedidos.length} pedidos</span>
+          <button className="btn icon" onClick={onFechar}>✕</button>
+        </div>
+        <div className="mbd" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+          <div style={{ background: "var(--surf2)", borderRadius: 10, padding: "12px 16px" }}>
+            <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 8, fontWeight: 700 }}>PEDIDOS SELECIONADOS</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 180, overflowY: "auto" }}>
+              {pedidos.map(p => (
+                <div key={p.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                  <span style={{ color: "var(--acc)", fontWeight: 700 }}>{p.id}</span>
+                  <span style={{ color: "var(--t2)" }}>{(p as any).clientes?.nome ?? "—"}</span>
+                  <span style={{ color: "var(--t3)" }}>{p.m2_total?.toFixed(1)}m²</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--b2)", display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+              <span style={{ color: "var(--t3)" }}>Tempo total estimado</span>
+              <span style={{ color: "var(--acc)", fontWeight: 700 }}>{formatarDuracao(totalMin)}</span>
+            </div>
+          </div>
+
+          <div style={{ background: "rgba(61,255,160,.06)", border: "1px solid rgba(61,255,160,.2)", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "var(--t2)", lineHeight: 1.6 }}>
+            Os pedidos serão agendados sequencialmente a partir da data informada, sem sobreposição entre eles.
+          </div>
+
+          <div className="fg">
+            <label className="fl" style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>Data de Início (1º pedido)</span>
+              {dtDisplay.length === 10 && !dtValida && <span style={{ color: "var(--err)", fontSize: 11, fontWeight: 400 }}>inválida</span>}
+            </label>
+            <input className="fc" value={dtDisplay} onChange={e => setDtDisplay(maskData(e.target.value))}
+              placeholder="dd/mm/aaaa" maxLength={10} inputMode="numeric"
+              style={{ fontSize: 15, borderColor: dtDisplay.length === 10 && !dtValida ? "var(--err)" : undefined }} />
+          </div>
+
+          <div className="fg">
+            <label className="fl">Linha de Corte</label>
+            <select className="fc" value={linhaCorteId} onChange={e => setLinhaCorteId(Number(e.target.value))}>
+              {linhasCorte.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
+            </select>
+          </div>
+
+          {erro && (
+            <div style={{ color: "var(--err)", fontSize: 12, background: "rgba(244,63,94,.08)", borderRadius: 8, padding: "8px 12px" }}>⚠ {erro}</div>
+          )}
+        </div>
+        <div className="mft">
+          <button className="btn bg" onClick={onFechar}>Cancelar</button>
+          <button className="btn pri" onClick={handleConfirmar}
+            disabled={salvando || !dtValida || !linhaCorteId}>
+            {salvando ? "Agendando…" : `Agendar ${pedidos.length} Pedidos`}
           </button>
         </div>
       </div>
@@ -442,21 +506,28 @@ function ModalAgendar({
 // ─── MODAL DETALHE DO BLOCO ───────────────────────────────────
 
 function ModalBloco({
-  prog, onFechar, onIniciar, onConcluir, onDeletar,
+  prog, linhas, onFechar, onIniciar, onConcluir, onDeletar,
 }: {
-  prog: ProgramacaoProducao; onFechar: () => void;
-  onIniciar: () => void; onConcluir: () => void; onDeletar: () => void;
+  prog: ProgramacaoProducao; linhas: ProducaoLinha[];
+  onFechar: () => void; onIniciar: () => void;
+  onConcluir: () => void; onDeletar: () => void;
 }) {
-  const borda = bordaBloco(prog);
-  const prazo  = prog.pedidos?.dt_retirada ? new Date(prog.pedidos.dt_retirada).toLocaleDateString("pt-BR") : "—";
-  const inicio = prog.dt_inicio_previsto   ? new Date(prog.dt_inicio_previsto).toLocaleDateString("pt-BR") : "—";
-  const fim    = prog.dt_fim_previsto       ? new Date(prog.dt_fim_previsto).toLocaleDateString("pt-BR")   : "—";
-  const inicioReal = prog.dt_inicio_real   ? new Date(prog.dt_inicio_real).toLocaleDateString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }) : null;
-  const fimReal    = prog.dt_fim_real       ? new Date(prog.dt_fim_real).toLocaleDateString("pt-BR",    { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }) : null;
+  const borda      = bordaBloco(prog);
+  const prazo      = prog.pedidos?.dt_retirada ? new Date(prog.pedidos.dt_retirada).toLocaleDateString("pt-BR") : "—";
+  const inicio     = prog.dt_inicio_previsto   ? new Date(prog.dt_inicio_previsto).toLocaleDateString("pt-BR") : "—";
+  const fim        = prog.dt_fim_previsto       ? new Date(prog.dt_fim_previsto).toLocaleDateString("pt-BR")   : "—";
+  const inicioReal = prog.dt_inicio_real
+    ? new Date(prog.dt_inicio_real).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })
+    : null;
+  const fimReal    = prog.dt_fim_real
+    ? new Date(prog.dt_fim_real).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })
+    : null;
 
   const statusColor: Record<string, string> = {
     Agendado: "var(--t2)", "Em Execução": "var(--acc)", Concluído: "var(--ok)", Cancelado: "var(--err)",
   };
+
+  const linhaNome = linhas.find(l => l.id === prog.linha_id)?.nome ?? prog.etapa;
 
   return (
     <div className="mov open">
@@ -464,14 +535,13 @@ function ModalBloco({
         <div className="mhd" style={{ borderLeft: `4px solid ${borda}`, paddingLeft: 14 }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700 }}>{prog.pedido_id}</div>
-            <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 1 }}>{prog.etapa}</div>
+            <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 1 }}>{prog.etapa} · {linhaNome}</div>
           </div>
           <button className="btn icon" onClick={onFechar}>✕</button>
         </div>
-
         <div className="mbd" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
-          {/* Status badge */}
+          {/* Status */}
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{
               display: "inline-flex", alignItems: "center", gap: 6,
@@ -480,64 +550,42 @@ function ModalBloco({
               border: `1px solid ${statusColor[prog.status] ?? "var(--b2)"}`,
             }}>
               <div style={{ width: 6, height: 6, borderRadius: "50%", background: statusColor[prog.status] ?? "var(--t2)" }} />
-              <span style={{ fontSize: 12, fontWeight: 700, color: statusColor[prog.status] ?? "var(--t1)" }}>
-                {prog.status}
-              </span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: statusColor[prog.status] ?? "var(--t1)" }}>{prog.status}</span>
             </div>
             <span style={{ fontSize: 12, color: "var(--t2)" }}>{formatarDuracao(prog.duracao_estimada_min ?? 0)}</span>
           </div>
 
-          {/* Grid de informações */}
-          <div style={{
-            display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10,
-            background: "var(--surf2)", borderRadius: 10, padding: "14px 16px",
-          }}>
-            <StatBloco label="Cliente"         value={prog.pedidos?.clientes?.nome ?? "—"} />
-            <StatBloco label="Cidade"           value={prog.pedidos?.clientes?.cidade ?? "—"} />
-            <StatBloco label="Área Total"       value={(prog.pedidos?.m2_total ?? 0).toFixed(2) + " m²"} />
-            <StatBloco label="Peças"            value={String((prog.pedidos?.itens_pedido ?? []).reduce((s, i) => s + i.quantidade, 0))} />
-            <StatBloco label="Início Previsto"  value={inicio} />
-            <StatBloco label="Fim Previsto"     value={fim} />
-            <StatBloco label="Prazo de Entrega" value={prazo} col={borda} />
-            <StatBloco label="Duração Est."     value={formatarDuracao(prog.duracao_estimada_min ?? 0)} />
+          {/* Grid info */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, background: "var(--surf2)", borderRadius: 10, padding: "14px 16px" }}>
+            <StatBloco label="Cliente"        value={prog.pedidos?.clientes?.nome ?? "—"} />
+            <StatBloco label="Cidade"         value={prog.pedidos?.clientes?.cidade ?? "—"} />
+            <StatBloco label="Área Total"     value={(prog.pedidos?.m2_total ?? 0).toFixed(2) + " m²"} />
+            <StatBloco label="Peças"          value={String((prog.pedidos?.itens_pedido ?? []).reduce((s, i) => s + i.quantidade, 0))} />
+            <StatBloco label="Início Previsto" value={inicio} />
+            <StatBloco label="Fim Previsto"   value={fim} />
+            <StatBloco label="Prazo Entrega"  value={prazo} col={borda} />
+            <StatBloco label="Duração Est."   value={formatarDuracao(prog.duracao_estimada_min ?? 0)} />
           </div>
 
-          {/* Tempos reais (se disponíveis) */}
+          {/* Tempos reais */}
           {(inicioReal || fimReal) && (
-            <div style={{
-              background: "rgba(61,255,160,.06)", border: "1px solid rgba(61,255,160,.2)",
-              borderRadius: 10, padding: "10px 16px",
-              display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10,
-            }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, background: "rgba(61,255,160,.06)", border: "1px solid rgba(61,255,160,.2)", borderRadius: 10, padding: "10px 16px" }}>
               {inicioReal && <StatBloco label="Início Real" value={inicioReal} col="var(--acc)" />}
               {fimReal    && <StatBloco label="Fim Real"    value={fimReal}    col="var(--ok)"  />}
             </div>
           )}
 
-          {/* Observação */}
           {prog.pedidos?.obs && (
-            <div style={{
-              fontSize: 12, color: "var(--t2)", background: "var(--surf2)",
-              padding: "8px 12px", borderRadius: 8, lineHeight: 1.5,
-            }}>
+            <div style={{ fontSize: 12, color: "var(--t2)", background: "var(--surf2)", padding: "8px 12px", borderRadius: 8, lineHeight: 1.5 }}>
               {prog.pedidos.obs}
             </div>
           )}
         </div>
-
         <div className="mft" style={{ gap: 8 }}>
-          {prog.status === "Agendado"    && (
-            <button className="btn pri" onClick={onIniciar}>▶ Iniciar Produção</button>
-          )}
-          {prog.status === "Em Execução" && (
-            <button className="btn pri" onClick={onConcluir} style={{ background: "var(--ok)", borderColor: "var(--ok)" }}>
-              ✓ Marcar Concluído
-            </button>
-          )}
+          {prog.status === "Agendado"    && <button className="btn pri" onClick={onIniciar}>▶ Iniciar Produção</button>}
+          {prog.status === "Em Execução" && <button className="btn pri" onClick={onConcluir} style={{ background: "var(--ok)", borderColor: "var(--ok)" }}>✓ Marcar Concluído</button>}
           <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-            <button className="btn bg" onClick={onDeletar} style={{ color: "var(--err)", borderColor: "var(--err)" }}>
-              Remover
-            </button>
+            <button className="btn bg" onClick={onDeletar} style={{ color: "var(--err)", borderColor: "var(--err)" }}>Remover</button>
             <button className="btn bg" onClick={onFechar}>Fechar</button>
           </div>
         </div>
@@ -555,44 +603,151 @@ function StatBloco({ label, value, col }: { label: string; value: string; col?: 
   );
 }
 
+// ─── ABA EXPEDIÇÃO ────────────────────────────────────────────
+
+function AbaExpedicao({ pedidos }: { pedidos: Pedido[] }) {
+  const hoje     = new Date(); hoje.setHours(0, 0, 0, 0);
+  const amanha   = addDays(hoje, 1);
+  const semana   = addDays(hoje, 7);
+
+  const entregaHoje   = pedidos.filter(p => p.dt_retirada && diffDays(new Date(p.dt_retirada), hoje) === 0);
+  const entregaAmanha = pedidos.filter(p => p.dt_retirada && diffDays(new Date(p.dt_retirada), amanha) === 0);
+  const entregaSemana = pedidos.filter(p => p.dt_retirada && diffDays(new Date(p.dt_retirada), hoje) > 1);
+
+  function CardExpedicao({ p, urgencia }: { p: Pedido; urgencia: "hoje" | "amanha" | "semana" }) {
+    const cor  = urgencia === "hoje" ? "var(--err)" : urgencia === "amanha" ? "var(--warn)" : "var(--t3)";
+    const bg   = urgencia === "hoje" ? "rgba(244,63,94,.07)" : urgencia === "amanha" ? "rgba(245,158,11,.07)" : "var(--surf2)";
+    const itens = (p.itens_pedido ?? []) as any[];
+    const pecas = itens.reduce((s: number, i: any) => s + i.quantidade, 0);
+    const prazoStr = p.dt_retirada
+      ? new Date(p.dt_retirada).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" })
+      : "—";
+    return (
+      <div style={{ background: bg, border: `1px solid ${cor}`, borderRadius: 10, padding: "12px 14px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <span style={{ fontSize: 13, fontWeight: 800, color: cor }}>{p.id}</span>
+          <span style={{ fontSize: 11, color: cor, fontWeight: 700 }}>↗ {prazoStr}</span>
+        </div>
+        <div style={{ fontSize: 13, color: "var(--t1)", fontWeight: 600, marginBottom: 4 }}>
+          {(p as any).clientes?.nome ?? "—"}
+        </div>
+        <div style={{ display: "flex", gap: 12, fontSize: 12, color: "var(--t2)" }}>
+          <span>{p.m2_total?.toFixed(2)} m²</span>
+          <span>·</span>
+          <span>{pecas} peças</span>
+          <span>·</span>
+          <span style={{ color: COR_STATUS[p.status] ?? "var(--t3)" }}>{p.status}</span>
+        </div>
+      </div>
+    );
+  }
+
+  function Secao({ titulo, cor, items, urgencia }: { titulo: string; cor: string; items: Pedido[]; urgencia: "hoje" | "amanha" | "semana" }) {
+    if (items.length === 0) return null;
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: cor }} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: cor }}>{titulo}</span>
+          <span style={{ fontSize: 11, color: "var(--t3)" }}>({items.length})</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {items.map(p => <CardExpedicao key={p.id} p={p} urgencia={urgencia} />)}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+      {pedidos.length === 0 ? (
+        <div style={{ textAlign: "center", color: "var(--t3)", paddingTop: 80, fontSize: 13 }}>
+          Nenhum pedido com entrega nos próximos 7 dias.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 800 }}>
+          <div style={{ display: "flex", gap: 12 }}>
+            {[
+              { label: "Hoje",        value: entregaHoje.length,   cor: "var(--err)"  },
+              { label: "Amanhã",      value: entregaAmanha.length, cor: "var(--warn)" },
+              { label: "Esta semana", value: entregaSemana.length, cor: "var(--t2)"   },
+            ].map(c => (
+              <div key={c.label} style={{ flex: 1, background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: 10, padding: "12px 16px", textAlign: "center" }}>
+                <div style={{ fontSize: 28, fontWeight: 900, color: c.cor, lineHeight: 1 }}>{c.value}</div>
+                <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 6 }}>{c.label}</div>
+              </div>
+            ))}
+          </div>
+          <Secao titulo="Entrega Hoje"   cor="var(--err)"  items={entregaHoje}   urgencia="hoje"   />
+          <Secao titulo="Entrega Amanhã" cor="var(--warn)" items={entregaAmanha} urgencia="amanha" />
+          <Secao titulo="Esta Semana"    cor="var(--t2)"   items={entregaSemana} urgencia="semana" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── PÁGINA PRINCIPAL ─────────────────────────────────────────
 
 export default function ProgramacaoPage() {
-  const [aba,          setAba]          = useState<"gantt" | "dashboard">("gantt");
+  const [aba,          setAba]          = useState<"gantt" | "dashboard" | "expedicao">("gantt");
   const [zoom,         setZoom]         = useState<"dia" | "semana" | "mes">("semana");
   const [dataBase,     setDataBase]     = useState<Date>(() => getMonday(new Date()));
   const [linhas,       setLinhas]       = useState<ProducaoLinha[]>([]);
   const [config,       setConfig]       = useState<ConfigTempoProducao[]>([]);
   const [programacoes, setProg]         = useState<ProgramacaoProducao[]>([]);
   const [semProg,      setSemProg]      = useState<Pedido[]>([]);
+  const [expedicao,    setExpedicao]    = useState<Pedido[]>([]);
   const [loading,      setLoading]      = useState(true);
+  const [erroLoad,     setErroLoad]     = useState("");
   const [dragId,       setDragId]       = useState<string | null>(null);
   const [modalAgendar, setModalAgendar] = useState<Pedido | null>(null);
   const [modalBloco,   setModalBloco]   = useState<ProgramacaoProducao | null>(null);
+  const [modalLote,    setModalLote]    = useState(false);
   const [filtroLinha,  setFiltroLinha]  = useState<number | null>(null);
   const [filtroStatus, setFiltroStatus] = useState<string>("");
+  const [busca,        setBusca]        = useState("");
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [metricas,     setMetricas]     = useState<Awaited<ReturnType<typeof getMetricasProducao>> | null>(null);
+  // Feedback de toast
+  const [toast,        setToast]        = useState("");
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const dias      = diasVisiveis(zoom, dataBase);
-  const horas     = horasVisiveis();
-  const colW      = COL_W[zoom];
+  function showToast(msg: string) {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(""), 3000);
+  }
+
+  const dias   = diasVisiveis(zoom, dataBase);
+  const horas  = horasVisiveis();
+  const colW   = COL_W[zoom];
   const totalWidth = zoom === "dia" ? horas.length * colW : dias.length * colW;
 
   async function load() {
     setLoading(true);
-    const [lin, cfg, sem] = await Promise.all([getLinhas(), getConfigTempo(), getPedidosSemProgramacao()]);
-    setLinhas(lin); setConfig(cfg); setSemProg(sem);
-    const from = zoom === "dia" ? dataBase : dias[0];
-    const to   = addDays(zoom === "dia" ? dataBase : dias[dias.length - 1], 1);
-    const progs = await getProgramacao(from, to);
-    setProg(progs);
-    setLoading(false);
+    setErroLoad("");
+    try {
+      const [lin, cfg, sem, exp] = await Promise.all([
+        getLinhas(), getConfigTempo(), getPedidosSemProgramacao(), getPedidosExpedicao(),
+      ]);
+      setLinhas(lin); setConfig(cfg); setSemProg(sem); setExpedicao(exp);
+      const from = zoom === "dia" ? dataBase : dias[0];
+      const to   = addDays(zoom === "dia" ? dataBase : dias[dias.length - 1], 1);
+      const progs = await getProgramacao(from, to);
+      setProg(progs);
+    } catch (e: any) {
+      setErroLoad("Erro ao carregar dados: " + (e?.message ?? "verifique a conexão."));
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function loadMetricas() {
-    const from = new Date(); from.setDate(1); from.setHours(0, 0, 0, 0);
-    const to = addDays(from, 30);
-    setMetricas(await getMetricasProducao(from, to));
+    try {
+      const from = new Date(); from.setDate(1); from.setHours(0, 0, 0, 0);
+      setMetricas(await getMetricasProducao(from, addDays(from, 30)));
+    } catch {}
   }
 
   useEffect(() => { load(); }, [zoom, dataBase.toISOString().slice(0, 10)]);
@@ -609,15 +764,13 @@ export default function ProgramacaoPage() {
     if (zoom === "mes")    setDataBase(d => new Date(d.getFullYear(), d.getMonth() + 1, 1));
   }
   function irHoje() {
-    if (zoom === "semana")     setDataBase(getMonday(new Date()));
-    else if (zoom === "mes")   setDataBase(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-    else                       setDataBase(new Date());
+    if (zoom === "semana")    setDataBase(getMonday(new Date()));
+    else if (zoom === "mes")  setDataBase(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+    else                      setDataBase(new Date());
   }
 
   function tituloPeriodo() {
-    if (zoom === "dia") {
-      return dataBase.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
-    }
+    if (zoom === "dia") return dataBase.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
     if (zoom === "semana") {
       const fim = addDays(dataBase, 6);
       return `${dataBase.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} – ${fim.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}`;
@@ -627,62 +780,144 @@ export default function ProgramacaoPage() {
 
   async function handleDragEnd(e: DragEndEvent) {
     setDragId(null);
-    const { active, delta } = e;
+    const { active, delta, over } = e;
     const prog = programacoes.find(p => p.id === active.id);
     if (!prog?.dt_inicio_previsto) return;
-    if (zoom === "dia") {
-      const hoursShifted = Math.round(delta.x / colW);
-      if (hoursShifted === 0) return;
-      const novaDt = new Date(prog.dt_inicio_previsto);
-      novaDt.setHours(novaDt.getHours() + hoursShifted);
-      await reagendar(prog.id, novaDt, prog.duracao_estimada_min ?? 60);
-    } else {
-      const daysShifted = Math.round(delta.x / colW);
-      if (daysShifted === 0) return;
-      const novaDt = addDays(new Date(prog.dt_inicio_previsto), daysShifted);
-      await reagendar(prog.id, novaDt, prog.duracao_estimada_min ?? 60);
+
+    const daysShifted  = zoom === "dia" ? 0 : Math.round(delta.x / colW);
+    const hoursShifted = zoom === "dia" ? Math.round(delta.x / colW) : 0;
+    const novaLinhaId  = over?.id && Number(over.id) !== prog.linha_id ? Number(over.id) : undefined;
+
+    if (daysShifted === 0 && hoursShifted === 0 && !novaLinhaId) return;
+
+    const novaDt = new Date(prog.dt_inicio_previsto);
+    if (daysShifted  !== 0) novaDt.setDate(novaDt.getDate() + daysShifted);
+    if (hoursShifted !== 0) novaDt.setHours(novaDt.getHours() + hoursShifted);
+
+    const ok = await reagendar(prog.id, novaDt, prog.duracao_estimada_min ?? 60, novaLinhaId);
+    if (ok) {
+      showToast(novaLinhaId ? "Pedido movido para outra linha." : "Pedido reagendado.");
+      await load();
     }
-    await load();
   }
 
   async function handleAgendar(dtInicio: Date, linhaCorteId: number, linhaLapId?: number) {
     if (!modalAgendar) return;
-    const itens = (modalAgendar.itens_pedido ?? []) as { m2: number; quantidade: number; lapidacao: number; produto_nome: string; }[];
-    await criarProgramacaoPedido(modalAgendar.id, itens, config, linhas, dtInicio, linhaCorteId, linhaLapId);
+    const itens = (modalAgendar.itens_pedido ?? []) as { m2: number; quantidade: number; lapidacao: number; produto_nome: string }[];
+    const result = await criarProgramacaoPedido(modalAgendar.id, itens, config, linhas, dtInicio, linhaCorteId, linhaLapId);
+    if (!result.ok) {
+      alert(result.erro ?? "Erro ao agendar.");
+      return;
+    }
+    showToast("Pedido agendado com sucesso.");
     setModalAgendar(null);
+    await load();
+  }
+
+  async function handleAgendarLote(dtInicio: Date, linhaCorteId: number) {
+    const pedidosLote = semProg.filter(p => selecionados.has(p.id));
+    let dtAtual = new Date(dtInicio);
+    let erros = 0;
+
+    for (const p of pedidosLote) {
+      const itens = (p.itens_pedido ?? []) as { m2: number; quantidade: number; lapidacao: number; produto_nome: string }[];
+      const tempos = calcularTempoEstimado(itens, config);
+      const result = await criarProgramacaoPedido(p.id, itens, config, linhas, dtAtual, linhaCorteId, undefined);
+      if (result.ok) {
+        // avança a data para o próximo pedido (1 dia após o fim estimado)
+        const diasNecessarios = Math.max(1, Math.ceil(tempos.corte_min / 480));
+        dtAtual = addDays(dtAtual, diasNecessarios + 1);
+      } else {
+        erros++;
+      }
+    }
+
+    setModalLote(false);
+    setSelecionados(new Set());
+    showToast(erros > 0 ? `${pedidosLote.length - erros} agendados, ${erros} com conflito.` : `${pedidosLote.length} pedidos agendados.`);
     await load();
   }
 
   async function handleIniciar() {
     if (!modalBloco) return;
     await atualizarStatusProgramacao(modalBloco.id, "Em Execução", new Date());
+    showToast("Produção iniciada.");
     setModalBloco(null); await load();
   }
   async function handleConcluir() {
     if (!modalBloco) return;
     await atualizarStatusProgramacao(modalBloco.id, "Concluído", new Date());
+    showToast("Pedido concluído.");
     setModalBloco(null); await load();
   }
   async function handleDeletar() {
     if (!modalBloco) return;
-    if (!confirm("Remover este agendamento?")) return;
+    if (!confirm(`Remover o agendamento de ${modalBloco.pedido_id}?`)) return;
     await deletarProgramacao(modalBloco.id);
+    showToast("Agendamento removido.");
     setModalBloco(null); await load();
   }
+
+  function toggleSelecionado(id: string) {
+    setSelecionados(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+  function selecionarTodos() {
+    setSelecionados(new Set(semProgFiltrada.map(p => p.id)));
+  }
+  function limparSelecao() { setSelecionados(new Set()); }
 
   const linhasFiltradas = linhas.filter(l => !filtroLinha || l.id === filtroLinha);
   const progFiltradas   = programacoes.filter(p =>
     (!filtroLinha  || p.linha_id === filtroLinha) &&
     (!filtroStatus || p.status   === filtroStatus)
   );
+  const semProgFiltrada = semProg.filter(p => {
+    if (!busca) return true;
+    const b = busca.toLowerCase();
+    return p.id.toLowerCase().includes(b) ||
+      ((p as any).clientes?.nome ?? "").toLowerCase().includes(b);
+  });
+
+  const pedidosLoteAtual = semProg.filter(p => selecionados.has(p.id));
+
+  // Posição da linha "agora" no Gantt
+  const agora = new Date();
+  const agoraLeft = (() => {
+    if (zoom === "dia") {
+      const h = agora.getHours() - 8 + agora.getMinutes() / 60;
+      return h >= 0 && h <= 9 ? h * colW : null;
+    }
+    const idx = dias.findIndex(d => d.toDateString() === agora.toDateString());
+    return idx >= 0 ? idx * colW + (agora.getHours() / 24) * colW : null;
+  })();
+
+  // Contagem de alertas para badge na tab
+  const nAtrasados = metricas?.atrasados ?? 0;
 
   return (
     <AppLayout>
+      {/* Toast de feedback */}
+      {toast && (
+        <div style={{
+          position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
+          background: "var(--surf3)", border: "1px solid var(--acc)", borderRadius: 10,
+          padding: "10px 20px", fontSize: 13, fontWeight: 600, color: "var(--acc)",
+          zIndex: 1000, boxShadow: "0 4px 24px rgba(0,0,0,.4)",
+          animation: "fadeIn .2s ease",
+        }}>
+          ✓ {toast}
+        </div>
+      )}
+
       <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
 
-        {/* ─── CABEÇALHO ──────────────────────────────────────── */}
+        {/* ─── CABEÇALHO ─────────────────────────────────────── */}
         <div style={{
-          padding: "14px 20px 12px", borderBottom: "1px solid var(--b1)",
+          padding: "12px 20px 10px", borderBottom: "1px solid var(--b1)",
           flexShrink: 0, display: "flex", alignItems: "center",
           justifyContent: "space-between", gap: 12, flexWrap: "wrap",
         }}>
@@ -690,37 +925,71 @@ export default function ProgramacaoPage() {
             <h1 style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.4px", margin: 0 }}>
               Programação da Produção
             </h1>
-            <p style={{ fontSize: 11, color: "var(--t3)", margin: "2px 0 0" }}>
-              APS Simplificado · Urban Glass
-            </p>
+            <p style={{ fontSize: 11, color: "var(--t3)", margin: "2px 0 0" }}>APS Simplificado · Urban Glass</p>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            {(["gantt", "dashboard"] as const).map(t => (
-              <button key={t} onClick={() => setAba(t)} style={{
-                padding: "7px 18px", borderRadius: 8, border: "1px solid",
-                borderColor: aba === t ? "var(--acc)" : "var(--b2)",
-                background: aba === t ? "rgba(61,255,160,.12)" : "transparent",
-                color: aba === t ? "var(--acc)" : "var(--t2)",
-                fontWeight: 700, fontSize: 12, cursor: "pointer",
-              }}>
-                {t === "gantt" ? "◧ Gantt" : "◭ Dashboard"}
-              </button>
-            ))}
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {(["gantt", "dashboard", "expedicao"] as const).map(t => {
+              const labels = { gantt: "◧ Gantt", dashboard: "◭ Dashboard", expedicao: "↗ Expedição" };
+              const badge  = t === "dashboard" && nAtrasados > 0 ? nAtrasados : null;
+              return (
+                <button key={t} onClick={() => setAba(t)} style={{
+                  padding: "7px 16px", borderRadius: 8, border: "1px solid",
+                  borderColor: aba === t ? "var(--acc)" : "var(--b2)",
+                  background: aba === t ? "rgba(61,255,160,.12)" : "transparent",
+                  color: aba === t ? "var(--acc)" : "var(--t2)",
+                  fontWeight: 700, fontSize: 12, cursor: "pointer",
+                  position: "relative",
+                }}>
+                  {labels[t]}
+                  {badge && (
+                    <span style={{
+                      position: "absolute", top: -5, right: -5,
+                      background: "var(--err)", color: "#fff",
+                      fontSize: 9, fontWeight: 800,
+                      padding: "1px 4px", borderRadius: 10,
+                      minWidth: 16, textAlign: "center",
+                    }}>
+                      {badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+            <Link href="/programacao/tv" target="_blank" style={{
+              padding: "7px 14px", borderRadius: 8, border: "1px solid var(--b2)",
+              background: "transparent", color: "var(--t3)", fontWeight: 700,
+              fontSize: 12, cursor: "pointer", textDecoration: "none",
+              display: "flex", alignItems: "center", gap: 5,
+            }} title="Abrir modo TV para o chão de fábrica">
+              ⬡ TV
+            </Link>
           </div>
         </div>
 
-        {/* ─── ABA GANTT ──────────────────────────────────────── */}
+        {/* Erro de carregamento */}
+        {erroLoad && (
+          <div style={{
+            padding: "10px 20px", background: "rgba(244,63,94,.1)", borderBottom: "1px solid var(--err)",
+            fontSize: 12, color: "var(--err)", fontWeight: 600, display: "flex", alignItems: "center", gap: 8,
+          }}>
+            <span>⚠ {erroLoad}</span>
+            <button onClick={load} style={{ background: "transparent", border: "1px solid var(--err)", borderRadius: 6, color: "var(--err)", fontSize: 11, padding: "2px 10px", cursor: "pointer" }}>
+              Tentar novamente
+            </button>
+          </div>
+        )}
+
+        {/* ─── ABA GANTT ─────────────────────────────────────── */}
         {aba === "gantt" && (
           <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
-            {/* Timeline principal */}
+            {/* Timeline */}
             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
 
-              {/* Barra de controles */}
+              {/* Controles */}
               <div style={{
-                padding: "10px 14px", borderBottom: "1px solid var(--b1)",
-                display: "flex", alignItems: "center", gap: 8,
-                flexShrink: 0, flexWrap: "wrap",
+                padding: "8px 14px", borderBottom: "1px solid var(--b1)",
+                display: "flex", alignItems: "center", gap: 8, flexShrink: 0, flexWrap: "wrap",
               }}>
                 {/* Zoom */}
                 <div style={{ display: "flex", border: "1px solid var(--b2)", borderRadius: 8, overflow: "hidden" }}>
@@ -735,45 +1004,35 @@ export default function ProgramacaoPage() {
                   ))}
                 </div>
 
-                {/* Navegação */}
                 <button onClick={navAnterior} className="btn bg xs">◀</button>
                 <button onClick={irHoje}      className="btn bg xs">Hoje</button>
                 <button onClick={navProximo}  className="btn bg xs">▶</button>
 
-                <span style={{
-                  fontSize: 12, fontWeight: 700, color: "var(--t1)",
-                  flex: "1 1 auto", minWidth: 0, overflow: "hidden",
-                  textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)", flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {tituloPeriodo()}
                 </span>
 
                 {/* Filtros */}
                 <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                  <select
-                    className="fc"
-                    style={{ padding: "4px 8px", fontSize: 11, width: 150 }}
-                    value={filtroLinha ?? ""}
-                    onChange={e => setFiltroLinha(e.target.value ? Number(e.target.value) : null)}
-                  >
+                  <select className="fc" style={{ padding: "4px 8px", fontSize: 11, width: 150 }}
+                    value={filtroLinha ?? ""} onChange={e => setFiltroLinha(e.target.value ? Number(e.target.value) : null)}>
                     <option value="">Todas as linhas</option>
                     {linhas.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
                   </select>
-                  <select
-                    className="fc"
-                    style={{ padding: "4px 8px", fontSize: 11, width: 140 }}
-                    value={filtroStatus}
-                    onChange={e => setFiltroStatus(e.target.value)}
-                  >
+                  <select className="fc" style={{ padding: "4px 8px", fontSize: 11, width: 140 }}
+                    value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}>
                     <option value="">Todos os status</option>
-                    {["Agendado", "Em Execução", "Concluído"].map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
+                    {["Agendado", "Em Execução", "Concluído"].map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
               </div>
 
-              {/* Grade do Gantt */}
+              {/* Legenda */}
+              <div style={{ padding: "6px 14px", borderBottom: "1px solid var(--b1)", background: "var(--surf2)", flexShrink: 0 }}>
+                <LegendaCores />
+              </div>
+
+              {/* Gantt */}
               {loading ? (
                 <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--t3)", fontSize: 13 }}>
                   Carregando…
@@ -786,25 +1045,14 @@ export default function ProgramacaoPage() {
                   >
                     <div style={{ minWidth: LABEL_W + totalWidth, position: "relative" }}>
 
-                      {/* Cabeçalho de datas/horas */}
-                      <div style={{
-                        display: "flex", position: "sticky", top: 0, zIndex: 10,
-                        background: "var(--surf)", borderBottom: "1px solid var(--b2)",
-                      }}>
-                        {/* Canto fixo topo-esquerdo */}
-                        <div style={{
-                          width: LABEL_W, flexShrink: 0,
-                          padding: "10px 14px", fontSize: 10, color: "var(--t3)",
-                          fontWeight: 700, borderRight: "1px solid var(--b2)",
-                          position: "sticky", left: 0, zIndex: 20,
-                          background: "var(--surf)",
-                        }}>
+                      {/* Cabeçalho de datas */}
+                      <div style={{ display: "flex", position: "sticky", top: 0, zIndex: 10, background: "var(--surf)", borderBottom: "1px solid var(--b2)" }}>
+                        <div style={{ width: LABEL_W, flexShrink: 0, padding: "10px 14px", fontSize: 10, color: "var(--t3)", fontWeight: 700, borderRight: "1px solid var(--b2)", position: "sticky", left: 0, zIndex: 20, background: "var(--surf)" }}>
                           LINHA
                         </div>
-                        <div style={{ display: "flex" }}>
+                        <div style={{ display: "flex", position: "relative" }}>
                           {(zoom === "dia" ? horas : dias).map((slot, i) => {
-                            const isHoje = zoom !== "dia" &&
-                              new Date(slot as Date).toDateString() === new Date().toDateString();
+                            const isHoje = zoom !== "dia" && new Date(slot as Date).toDateString() === agora.toDateString();
                             return (
                               <div key={i} style={{
                                 width: colW, flexShrink: 0,
@@ -814,14 +1062,19 @@ export default function ProgramacaoPage() {
                                 color: isHoje ? "var(--acc)" : "var(--t2)",
                                 textAlign: "center", borderRight: "1px solid var(--b1)",
                                 background: isHoje ? "rgba(61,255,160,0.07)" : "transparent",
-                                lineHeight: 1.3,
                               }}>
-                                {zoom === "dia"
-                                  ? formatHour(slot as number)
-                                  : formatDate(slot as Date, zoom === "mes")}
+                                {zoom === "dia" ? formatHour(slot as number) : formatDate(slot as Date, zoom === "mes")}
                               </div>
                             );
                           })}
+                          {/* Linha de "agora" */}
+                          {agoraLeft !== null && (
+                            <div style={{
+                              position: "absolute", left: agoraLeft, top: 0, bottom: 0,
+                              width: 2, background: "var(--acc)", zIndex: 8, opacity: 0.6,
+                              pointerEvents: "none",
+                            }} />
+                          )}
                         </div>
                       </div>
 
@@ -829,22 +1082,24 @@ export default function ProgramacaoPage() {
                       {linhasFiltradas.length === 0 ? (
                         <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--t3)", fontSize: 13 }}>
                           {linhas.length === 0
-                            ? "Nenhuma linha de produção encontrada. Execute sql/fix-programacao-rls.sql no Supabase."
-                            : "Nenhuma linha corresponde ao filtro selecionado."}
+                            ? "Nenhuma linha encontrada. Execute sql/fix-programacao-rls.sql no Supabase."
+                            : "Nenhuma linha no filtro selecionado."}
                         </div>
                       ) : linhasFiltradas.map(linha => {
                         const blocos = progFiltradas.filter(p => p.linha_id === linha.id);
+                        const minTotal = blocos.reduce((s, p) => s + (p.duracao_estimada_min ?? 0), 0);
+                        const horasCap = linha.capacidade_horas_dia * Math.max(1, dias.length);
+                        const pctCap   = Math.min(100, Math.round((minTotal / (horasCap * 60)) * 100));
+                        const corCap   = pctCap > 90 ? "var(--err)" : pctCap > 70 ? "var(--warn)" : "var(--ok)";
                         return (
                           <div key={linha.id} style={{ display: "flex", borderBottom: "1px solid var(--b1)", minHeight: ROW_H }}>
 
-                            {/* Label sticky-esquerda */}
+                            {/* Label sticky */}
                             <div style={{
-                              width: LABEL_W, flexShrink: 0,
-                              padding: "14px 14px", display: "flex", flexDirection: "column",
-                              justifyContent: "center", gap: 3,
+                              width: LABEL_W, flexShrink: 0, padding: "12px 14px",
+                              display: "flex", flexDirection: "column", justifyContent: "center", gap: 3,
                               borderRight: "1px solid var(--b2)",
-                              position: "sticky", left: 0,
-                              background: "var(--surf)", zIndex: 5,
+                              position: "sticky", left: 0, background: "var(--surf)", zIndex: 5,
                             }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                 <div style={{ width: 9, height: 9, borderRadius: "50%", background: linha.cor, flexShrink: 0 }} />
@@ -852,63 +1107,68 @@ export default function ProgramacaoPage() {
                                   {linha.nome}
                                 </span>
                               </div>
-                              <div style={{ fontSize: 10, color: "var(--t3)", paddingLeft: 17 }}>
-                                {blocos.length} pedido{blocos.length !== 1 ? "s" : ""}
+                              <div style={{ paddingLeft: 17, display: "flex", gap: 6, alignItems: "center" }}>
+                                <span style={{ fontSize: 10, color: "var(--t3)" }}>
+                                  {blocos.length} pedido{blocos.length !== 1 ? "s" : ""}
+                                </span>
+                                {/* Mini barra de ocupação */}
+                                <div style={{ flex: 1, height: 3, background: "var(--b2)", borderRadius: 99, overflow: "hidden" }}>
+                                  <div style={{ width: `${pctCap}%`, height: "100%", background: corCap, borderRadius: 99 }} />
+                                </div>
+                                <span style={{ fontSize: 9, color: corCap, fontWeight: 700 }}>{pctCap}%</span>
                               </div>
                               <div style={{ fontSize: 10, color: "var(--t3)", paddingLeft: 17 }}>
-                                {formatarDuracao(blocos.reduce((s, p) => s + (p.duracao_estimada_min ?? 0), 0))} est.
+                                {formatarDuracao(minTotal)} est.
                               </div>
                             </div>
 
-                            {/* Área de blocos */}
-                            <div style={{ flex: 1, position: "relative", minHeight: ROW_H }}>
-                              {/* Grade de colunas */}
+                            {/* Área droppable */}
+                            <LinhaDroppable id={linha.id}>
+                              {/* Grade */}
                               {(zoom === "dia" ? horas : dias).map((_, i) => {
-                                const isHoje = zoom !== "dia" && dias[i] &&
-                                  new Date(dias[i]).toDateString() === new Date().toDateString();
+                                const isHoje = zoom !== "dia" && dias[i] && new Date(dias[i]).toDateString() === agora.toDateString();
                                 return (
                                   <div key={i} style={{
-                                    position: "absolute", left: i * colW, top: 0,
-                                    width: colW, height: "100%",
+                                    position: "absolute", left: i * colW, top: 0, width: colW, height: "100%",
                                     borderRight: "1px solid var(--b1)",
                                     background: isHoje ? "rgba(61,255,160,0.04)" : "transparent",
                                   }} />
                                 );
                               })}
 
-                              {/* Blocos arrastáveis */}
+                              {/* Linha de agora (vertical) */}
+                              {agoraLeft !== null && (
+                                <div style={{
+                                  position: "absolute", left: agoraLeft, top: 0, bottom: 0,
+                                  width: 2, background: "var(--acc)", zIndex: 3, opacity: 0.4,
+                                  pointerEvents: "none",
+                                }} />
+                              )}
+
+                              {/* Blocos */}
                               {blocos.map(prog => (
                                 <BlocoProducao
-                                  key={prog.id}
-                                  prog={prog}
-                                  zoom={zoom}
+                                  key={prog.id} prog={prog} zoom={zoom}
                                   visibleStart={zoom === "dia" ? dataBase : dias[0]}
                                   onClick={setModalBloco}
                                 />
                               ))}
-                            </div>
+                            </LinhaDroppable>
                           </div>
                         );
                       })}
 
-                      {/* Barra de capacidade */}
+                      {/* Barra de capacidade geral */}
                       <div style={{ display: "flex", borderTop: "2px solid var(--b2)", background: "var(--surf2)" }}>
-                        <div style={{
-                          width: LABEL_W, flexShrink: 0,
-                          padding: "9px 14px", fontSize: 10, color: "var(--t3)",
-                          fontWeight: 700, borderRight: "1px solid var(--b2)",
-                          position: "sticky", left: 0, background: "var(--surf2)", zIndex: 5,
-                        }}>
+                        <div style={{ width: LABEL_W, flexShrink: 0, padding: "9px 14px", fontSize: 10, color: "var(--t3)", fontWeight: 700, borderRight: "1px solid var(--b2)", position: "sticky", left: 0, background: "var(--surf2)", zIndex: 5 }}>
                           OCUPAÇÃO
                         </div>
                         <div style={{ flex: 1, padding: "9px 14px", display: "flex", gap: 20, flexWrap: "wrap" }}>
-                          {linhas.map(l => {
-                            const minTotal   = progFiltradas
-                              .filter(p => p.linha_id === l.id)
-                              .reduce((s, p) => s + (p.duracao_estimada_min ?? 0), 0);
-                            const horasCap   = l.capacidade_horas_dia * Math.max(1, dias.length);
-                            const pct        = Math.min(100, Math.round((minTotal / (horasCap * 60)) * 100));
-                            const cor        = pct > 90 ? "var(--err)" : pct > 70 ? "var(--warn)" : "var(--ok)";
+                          {linhasFiltradas.map(l => {
+                            const minTotal  = progFiltradas.filter(p => p.linha_id === l.id).reduce((s, p) => s + (p.duracao_estimada_min ?? 0), 0);
+                            const horasCap  = l.capacidade_horas_dia * Math.max(1, dias.length);
+                            const pct       = Math.min(100, Math.round((minTotal / (horasCap * 60)) * 100));
+                            const cor       = pct > 90 ? "var(--err)" : pct > 70 ? "var(--warn)" : "var(--ok)";
                             return (
                               <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                 <span style={{ fontSize: 11, color: "var(--t2)", whiteSpace: "nowrap" }}>
@@ -930,81 +1190,113 @@ export default function ProgramacaoPage() {
               )}
             </div>
 
-            {/* ─── PAINEL SEM PROGRAMAÇÃO ─────────────────────── */}
-            <div style={{
-              width: 274, flexShrink: 0, borderLeft: "1px solid var(--b1)",
-              display: "flex", flexDirection: "column", overflow: "hidden",
-            }}>
-              <div style={{
-                padding: "12px 14px", borderBottom: "1px solid var(--b1)",
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                flexShrink: 0,
-              }}>
-                <span style={{ fontSize: 12, fontWeight: 700 }}>Sem Programação</span>
-                <span style={{
-                  fontSize: 12, fontWeight: 800,
-                  color: semProg.length > 0 ? "var(--warn)" : "var(--ok)",
-                  background: semProg.length > 0 ? "rgba(245,158,11,.12)" : "rgba(16,185,129,.12)",
-                  padding: "2px 8px", borderRadius: 20,
-                }}>
-                  {semProg.length}
-                </span>
-              </div>
-              <div style={{ flex: 1, overflowY: "auto", padding: "8px" }}>
-                {semProg.length === 0 ? (
-                  <div style={{ textAlign: "center", color: "var(--t3)", fontSize: 12, padding: "32px 12px" }}>
-                    ✓ Todos os pedidos estão programados
+            {/* ─── PAINEL SEM PROGRAMAÇÃO ──────────────────── */}
+            <div style={{ width: 278, flexShrink: 0, borderLeft: "1px solid var(--b1)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+
+              {/* Header do painel */}
+              <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--b1)", flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700 }}>Sem Programação</span>
+                  <span style={{
+                    fontSize: 12, fontWeight: 800, padding: "2px 8px", borderRadius: 20,
+                    color: semProg.length > 0 ? "var(--warn)" : "var(--ok)",
+                    background: semProg.length > 0 ? "rgba(245,158,11,.12)" : "rgba(16,185,129,.12)",
+                  }}>
+                    {semProg.length}
+                  </span>
+                </div>
+
+                {/* Busca */}
+                <input
+                  value={busca}
+                  onChange={e => setBusca(e.target.value)}
+                  placeholder="Buscar pedido ou cliente…"
+                  className="fc"
+                  style={{ padding: "5px 10px", fontSize: 11, width: "100%", boxSizing: "border-box" }}
+                />
+
+                {/* Controles de seleção */}
+                {selecionados.size > 0 ? (
+                  <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
+                    <span style={{ fontSize: 11, color: "var(--acc)", fontWeight: 700, flex: 1 }}>
+                      {selecionados.size} selecionado{selecionados.size > 1 ? "s" : ""}
+                    </span>
+                    <button className="btn pri" style={{ fontSize: 10, padding: "4px 10px" }}
+                      onClick={() => setModalLote(true)}>
+                      Agendar lote
+                    </button>
+                    <button className="btn bg" style={{ fontSize: 10, padding: "4px 8px" }}
+                      onClick={limparSelecao}>
+                      ✕
+                    </button>
                   </div>
-                ) : semProg.map(p => {
-                  const statusCol = COR_STATUS[p.status] ?? "var(--t3)";
-                  const itens     = p.itens_pedido ?? [];
-                  const pecas     = (itens as any[]).reduce((s: number, i: any) => s + i.quantidade, 0);
-                  const prazoStr  = p.dt_retirada
-                    ? new Date(p.dt_retirada).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
-                    : "—";
-                  const prazoDate  = p.dt_retirada ? new Date(p.dt_retirada) : null;
-                  const diasFaltam = prazoDate ? diffDays(prazoDate, new Date()) : null;
+                ) : (
+                  semProgFiltrada.length > 1 && (
+                    <button className="btn bg" style={{ marginTop: 8, width: "100%", fontSize: 10, padding: "4px 0" }}
+                      onClick={selecionarTodos}>
+                      Selecionar todos ({semProgFiltrada.length})
+                    </button>
+                  )
+                )}
+              </div>
+
+              {/* Lista */}
+              <div style={{ flex: 1, overflowY: "auto", padding: "8px" }}>
+                {semProgFiltrada.length === 0 ? (
+                  <div style={{ textAlign: "center", color: "var(--t3)", fontSize: 12, padding: "32px 12px" }}>
+                    {busca ? "Nenhum resultado para esta busca." : "✓ Todos os pedidos estão programados"}
+                  </div>
+                ) : semProgFiltrada.map(p => {
+                  const statusCol  = COR_STATUS[p.status] ?? "var(--t3)";
+                  const itens      = p.itens_pedido ?? [];
+                  const pecas      = (itens as any[]).reduce((s: number, i: any) => s + i.quantidade, 0);
+                  const prazoStr   = p.dt_retirada ? new Date(p.dt_retirada).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "—";
+                  const diasFaltam = p.dt_retirada ? diffDays(new Date(p.dt_retirada), new Date()) : null;
                   const urgente    = diasFaltam !== null && diasFaltam <= 3;
+                  const sel        = selecionados.has(p.id);
+
                   return (
                     <div key={p.id} style={{
-                      background: "var(--surf2)",
-                      border: `1px solid ${urgente ? "var(--err)" : "var(--b2)"}`,
-                      borderRadius: 10, padding: "10px 12px", marginBottom: 8,
-                    }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-                        <span style={{ fontSize: 12, fontWeight: 800, color: "var(--acc)" }}>{p.id}</span>
-                        {urgente && (
-                          <span style={{
-                            fontSize: 10, color: "var(--err)", fontWeight: 700,
-                            background: "rgba(244,63,94,.12)", padding: "1px 6px", borderRadius: 10,
+                      background: sel ? "rgba(61,255,160,.08)" : "var(--surf2)",
+                      border: `1px solid ${urgente ? "var(--err)" : sel ? "var(--acc)" : "var(--b2)"}`,
+                      borderRadius: 10, padding: "10px 10px", marginBottom: 6, cursor: "pointer",
+                    }}
+                      onClick={() => toggleSelecionado(p.id)}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <div style={{
+                            width: 14, height: 14, borderRadius: 4, border: `2px solid ${sel ? "var(--acc)" : "var(--b2)"}`,
+                            background: sel ? "var(--acc)" : "transparent", flexShrink: 0,
+                            display: "flex", alignItems: "center", justifyContent: "center",
                           }}>
+                            {sel && <span style={{ color: "#090b10", fontSize: 9, fontWeight: 900 }}>✓</span>}
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: "var(--acc)" }}>{p.id}</span>
+                        </div>
+                        {urgente && (
+                          <span style={{ fontSize: 10, color: "var(--err)", fontWeight: 700, background: "rgba(244,63,94,.12)", padding: "1px 6px", borderRadius: 10 }}>
                             URGENTE
                           </span>
                         )}
                       </div>
-                      <div style={{
-                        fontSize: 12, color: "var(--t1)", marginBottom: 4,
-                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                      }}>
+                      <div style={{ fontSize: 12, color: "var(--t1)", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {(p as any).clientes?.nome ?? "—"}
                       </div>
-                      <div style={{ fontSize: 11, color: "var(--t2)", display: "flex", gap: 8, marginBottom: 4 }}>
-                        <span>{p.m2_total?.toFixed(1)} m²</span>
+                      <div style={{ fontSize: 11, color: "var(--t2)", display: "flex", gap: 6, marginBottom: 3 }}>
+                        <span>{p.m2_total?.toFixed(1)}m²</span>
                         <span>·</span>
-                        <span>{pecas} pç</span>
+                        <span>{pecas}pç</span>
                         <span>·</span>
-                        <span style={{ color: urgente ? "var(--err)" : "var(--t3)" }}>↗ {prazoStr}</span>
+                        <span style={{ color: urgente ? "var(--err)" : "var(--t3)" }}>↗{prazoStr}</span>
                       </div>
-                      <div style={{
-                        fontSize: 10, color: statusCol, marginBottom: 8,
-                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                      }}>
+                      <div style={{ fontSize: 10, color: statusCol, marginBottom: 7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {p.status}
                       </div>
                       <button
                         className="btn pri"
-                        style={{ width: "100%", fontSize: 11, padding: "6px 0" }}
-                        onClick={() => setModalAgendar(p)}
+                        style={{ width: "100%", fontSize: 11, padding: "5px 0" }}
+                        onClick={(e) => { e.stopPropagation(); setModalAgendar(p); }}
                       >
                         + Agendar
                       </button>
@@ -1017,39 +1309,35 @@ export default function ProgramacaoPage() {
           </div>
         )}
 
-        {/* ─── ABA DASHBOARD ──────────────────────────────────── */}
+        {/* ─── ABA DASHBOARD ──────────────────────────────── */}
         {aba === "dashboard" && (
           <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
             {!metricas ? (
-              <div style={{ textAlign: "center", color: "var(--t3)", paddingTop: 80, fontSize: 13 }}>
-                Carregando métricas…
-              </div>
+              <div style={{ textAlign: "center", color: "var(--t3)", paddingTop: 80, fontSize: 13 }}>Carregando métricas…</div>
             ) : (
               <DashboardConteudo metricas={metricas} />
             )}
           </div>
         )}
 
+        {/* ─── ABA EXPEDIÇÃO ──────────────────────────────── */}
+        {aba === "expedicao" && <AbaExpedicao pedidos={expedicao} />}
+
       </div>
 
-      {/* ─── MODAIS ─────────────────────────────────────────── */}
+      {/* ─── MODAIS ─────────────────────────────────────── */}
       {modalAgendar && (
-        <ModalAgendar
-          pedido={modalAgendar}
-          linhas={linhas}
-          config={config}
-          onConfirmar={handleAgendar}
-          onFechar={() => setModalAgendar(null)}
-        />
+        <ModalAgendar pedido={modalAgendar} linhas={linhas} config={config}
+          onConfirmar={handleAgendar} onFechar={() => setModalAgendar(null)} />
+      )}
+      {modalLote && pedidosLoteAtual.length > 0 && (
+        <ModalAgendamentoLote pedidos={pedidosLoteAtual} linhas={linhas} config={config}
+          onConfirmar={handleAgendarLote} onFechar={() => setModalLote(false)} />
       )}
       {modalBloco && (
-        <ModalBloco
-          prog={modalBloco}
+        <ModalBloco prog={modalBloco} linhas={linhas}
           onFechar={() => setModalBloco(null)}
-          onIniciar={handleIniciar}
-          onConcluir={handleConcluir}
-          onDeletar={handleDeletar}
-        />
+          onIniciar={handleIniciar} onConcluir={handleConcluir} onDeletar={handleDeletar} />
       )}
     </AppLayout>
   );
@@ -1088,31 +1376,18 @@ function DashboardConteudo({ metricas }: { metricas: Awaited<ReturnType<typeof g
       {(metricas.atrasados > 0 || metricas.vencemHoje > 0 || metricas.vencemSemana > 0 ||
         metricas.capacidadePorLinha.some(l => l.pct > 90) || metricas.histReprogramacoes > 5) && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {metricas.atrasados > 0 && (
-            <Alerta cor="var(--err)"  icon="⚠"  texto={`${metricas.atrasados} pedido${metricas.atrasados > 1 ? "s" : ""} atrasado${metricas.atrasados > 1 ? "s" : ""}`} />
-          )}
-          {metricas.vencemHoje > 0 && (
-            <Alerta cor="var(--warn)" icon="⏰" texto={`${metricas.vencemHoje} pedido${metricas.vencemHoje > 1 ? "s" : ""} vence hoje`} />
-          )}
-          {metricas.vencemSemana > 0 && (
-            <Alerta cor="var(--acc5)" icon="📅" texto={`${metricas.vencemSemana} vencem esta semana`} />
-          )}
-          {metricas.capacidadePorLinha.some(l => l.pct > 90) && (
-            <Alerta cor="var(--err)"  icon="🔴" texto="Linha sobrecarregada (> 90%)" />
-          )}
-          {metricas.histReprogramacoes > 5 && (
-            <Alerta cor="var(--acc4)" icon="↻"  texto={`${metricas.histReprogramacoes} reprogramações no período`} />
-          )}
+          {metricas.atrasados > 0     && <Alerta cor="var(--err)"  icon="⚠"  texto={`${metricas.atrasados} pedido${metricas.atrasados>1?"s":""} atrasado${metricas.atrasados>1?"s":""}`} />}
+          {metricas.vencemHoje > 0    && <Alerta cor="var(--warn)" icon="⏰" texto={`${metricas.vencemHoje} pedido${metricas.vencemHoje>1?"s":""} vence hoje`} />}
+          {metricas.vencemSemana > 0  && <Alerta cor="var(--acc5)" icon="📅" texto={`${metricas.vencemSemana} vencem esta semana`} />}
+          {metricas.capacidadePorLinha.some(l => l.pct > 90) && <Alerta cor="var(--err)" icon="🔴" texto="Linha sobrecarregada (> 90%)" />}
+          {metricas.histReprogramacoes > 5 && <Alerta cor="var(--acc4)" icon="↻" texto={`${metricas.histReprogramacoes} reprogramações no período`} />}
         </div>
       )}
 
-      {/* Cards de métricas */}
+      {/* Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 12 }}>
         {cards.map(c => (
-          <div key={c.label} style={{
-            background: "var(--surf2)", border: "1px solid var(--b2)",
-            borderRadius: 12, padding: "16px 18px", borderTop: `3px solid ${c.col}`,
-          }}>
+          <div key={c.label} style={{ background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: 12, padding: "16px 18px", borderTop: `3px solid ${c.col}` }}>
             <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 8, fontWeight: 700, letterSpacing: "0.5px" }}>
               {c.label.toUpperCase()}
             </div>
@@ -1124,52 +1399,32 @@ function DashboardConteudo({ metricas }: { metricas: Awaited<ReturnType<typeof g
 
       {/* Gráficos */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-
-        {/* Capacidade por linha */}
         <div style={{ background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: 12, padding: "18px 18px 12px" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 16, color: "var(--t1)" }}>
-            Capacidade por Linha
-          </div>
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 16, color: "var(--t1)" }}>Capacidade por Linha</div>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={dadosCapacidade} barSize={36} barGap={4}>
               <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--t2)" }} />
               <YAxis tick={{ fontSize: 10, fill: "var(--t2)" }} unit="h" width={36} />
-              <Tooltip
-                contentStyle={{ background: "var(--surf3)", border: "1px solid var(--b2)", borderRadius: 8, fontSize: 12 }}
-                formatter={(v: number) => [`${v}h`, ""]}
-              />
+              <Tooltip contentStyle={{ background: "var(--surf3)", border: "1px solid var(--b2)", borderRadius: 8, fontSize: 12 }} formatter={(v: number) => [`${v}h`, ""]} />
               <Bar dataKey="ocupadas" name="Ocupadas" fill="#3dffa0" radius={[4, 4, 0, 0]} />
               <Bar dataKey="livres"   name="Livres"   fill="#1c2540" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
-
-        {/* Status dos pedidos */}
         <div style={{ background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: 12, padding: "18px 18px 12px" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 16, color: "var(--t1)" }}>
-            Status dos Pedidos
-          </div>
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 16, color: "var(--t1)" }}>Status dos Pedidos</div>
           {dadosStatus.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie
-                  data={dadosStatus} dataKey="value"
-                  cx="50%" cy="45%" outerRadius={72}
-                  paddingAngle={3}
-                >
+                <Pie data={dadosStatus} dataKey="value" cx="50%" cy="45%" outerRadius={72} paddingAngle={3}>
                   {dadosStatus.map((d, i) => <Cell key={i} fill={d.fill} />)}
                 </Pie>
                 <Tooltip contentStyle={{ background: "var(--surf3)", border: "1px solid var(--b2)", borderRadius: 8, fontSize: 12 }} />
-                <Legend
-                  iconType="circle" iconSize={9}
-                  wrapperStyle={{ fontSize: 11, paddingTop: 8, color: "var(--t2)" }}
-                />
+                <Legend iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 11, paddingTop: 8, color: "var(--t2)" }} />
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div style={{ textAlign: "center", color: "var(--t3)", paddingTop: 70, fontSize: 12 }}>
-              Nenhum dado no período
-            </div>
+            <div style={{ textAlign: "center", color: "var(--t3)", paddingTop: 70, fontSize: 12 }}>Nenhum dado no período</div>
           )}
         </div>
       </div>
@@ -1177,36 +1432,26 @@ function DashboardConteudo({ metricas }: { metricas: Awaited<ReturnType<typeof g
       {/* Métricas secundárias */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 10 }}>
         <MetricaRow label="Peças programadas"     value={String(metricas.pecasProgramadas)} />
-        <MetricaRow label="M² concluído"           value={metricas.m2Concluido + " m²"}     />
-        <MetricaRow label="Taxa de atraso"         value={metricas.taxaAtraso + "%"}          />
-        <MetricaRow label="Tempo médio de corte"   value={formatarDuracao(metricas.tempoMedioCorte)}      />
-        <MetricaRow label="Tempo médio lapidação"  value={formatarDuracao(metricas.tempoMedioLapidacao)}  />
-        <MetricaRow label="Reprogramações"         value={String(metricas.histReprogramacoes)}  />
+        <MetricaRow label="M² concluído"           value={metricas.m2Concluido + " m²"} />
+        <MetricaRow label="Taxa de atraso"         value={metricas.taxaAtraso + "%"} />
+        <MetricaRow label="Tempo médio de corte"   value={formatarDuracao(metricas.tempoMedioCorte)} />
+        <MetricaRow label="Tempo médio lapidação"  value={formatarDuracao(metricas.tempoMedioLapidacao)} />
+        <MetricaRow label="Reprogramações"         value={String(metricas.histReprogramacoes)} />
       </div>
-
     </div>
   );
 }
 
 function Alerta({ cor, icon, texto }: { cor: string; icon: string; texto: string }) {
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 8, padding: "8px 16px",
-      background: "var(--surf2)", border: `1px solid ${cor}`,
-      borderRadius: 8, fontSize: 12, color: cor, fontWeight: 600,
-    }}>
-      <span>{icon}</span>
-      <span>{texto}</span>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", background: "var(--surf2)", border: `1px solid ${cor}`, borderRadius: 8, fontSize: 12, color: cor, fontWeight: 600 }}>
+      <span>{icon}</span><span>{texto}</span>
     </div>
   );
 }
-
 function MetricaRow({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{
-      background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: 10,
-      padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center",
-    }}>
+    <div style={{ background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: 10, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <span style={{ fontSize: 12, color: "var(--t2)" }}>{label}</span>
       <span style={{ fontSize: 14, fontWeight: 700, color: "var(--t1)" }}>{value}</span>
     </div>

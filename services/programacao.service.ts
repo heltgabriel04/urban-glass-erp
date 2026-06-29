@@ -22,8 +22,11 @@ export function startOfDay(date: Date): Date {
   return d;
 }
 
+// Compara apenas a parte da data, ignorando horas — evita off-by-one por fuso
 export function diffDays(a: Date, b: Date): number {
-  return Math.round((a.getTime() - b.getTime()) / 86400000);
+  const da = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+  const db = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.round((da.getTime() - db.getTime()) / 86400000);
 }
 
 export function getMonday(date: Date): Date {
@@ -79,6 +82,7 @@ export function calcularTempoEstimado(
 }
 
 export function formatarDuracao(min: number): string {
+  if (min <= 0) return '—';
   if (min < 60) return `${min}min`;
   const h = Math.floor(min / 60);
   const m = min % 60;
@@ -101,9 +105,7 @@ export async function getLinhas(): Promise<ProducaoLinha[]> {
 }
 
 export async function getConfigTempo(): Promise<ConfigTempoProducao[]> {
-  const { data, error } = await supabase
-    .from('config_tempo_producao')
-    .select('*');
+  const { data, error } = await supabase.from('config_tempo_producao').select('*');
   if (error) { console.error('getConfigTempo:', error); return []; }
   return data as ConfigTempoProducao[];
 }
@@ -148,7 +150,6 @@ export async function getPedidosSemProgramacao(): Promise<Pedido[]> {
     'Separação',
   ];
 
-  // IDs já programados
   const { data: jaProgIds } = await supabase
     .from('programacao_producao')
     .select('pedido_id')
@@ -165,11 +166,93 @@ export async function getPedidosSemProgramacao(): Promise<Pedido[]> {
     .in('status', STATUS_ATIVOS)
     .order('dt_retirada', { ascending: true, nullsFirst: false });
 
-  if (idsJaProg.length) query = query.not('id', 'in', `(${idsJaProg.join(',')})`);
+  if (idsJaProg.length > 0 && idsJaProg.length <= 200) {
+    query = query.not('id', 'in', `(${idsJaProg.join(',')})`);
+  }
 
   const { data, error } = await query;
   if (error) { console.error('getPedidosSemProgramacao:', error); return []; }
+
+  const todos = (data as unknown as Pedido[]) ?? [];
+  // Filtragem local como fallback para >200 IDs
+  if (idsJaProg.length > 200) {
+    const progSet = new Set(idsJaProg);
+    return todos.filter(p => !progSet.has(p.id));
+  }
+  return todos;
+}
+
+// Retorna pedidos com entrega nos próximos N dias para a visão de expedição
+export async function getPedidosExpedicao(dias = 7): Promise<Pedido[]> {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const ate = addDays(hoje, dias);
+
+  const { data, error } = await supabase
+    .from('pedidos')
+    .select(`id, dt_pedido, dt_retirada, m2_total, valor_total, status, obs,
+      clientes ( nome, cidade ),
+      itens_pedido ( id, quantidade, lapidacao, produto_nome, m2 )
+    `)
+    .gte('dt_retirada', hoje.toISOString())
+    .lte('dt_retirada', ate.toISOString())
+    .not('status', 'in', '("Cancelado","Finalizado")')
+    .order('dt_retirada', { ascending: true });
+
+  if (error) { console.error('getPedidosExpedicao:', error); return []; }
   return data as unknown as Pedido[];
+}
+
+// Retorna o atual e o próximo pedido por linha para o modo TV
+export async function getProgramacaoTV(): Promise<
+  Record<number, { linha: ProducaoLinha; atual: ProgramacaoProducao | null; proximo: ProgramacaoProducao | null }>
+> {
+  const linhas = await getLinhas();
+  const from = new Date(); from.setHours(0, 0, 0, 0);
+  const to   = addDays(from, 3);
+  const progs = await getProgramacao(from, to);
+
+  const result: Record<number, { linha: ProducaoLinha; atual: ProgramacaoProducao | null; proximo: ProgramacaoProducao | null }> = {};
+
+  for (const linha of linhas) {
+    const blocos = progs
+      .filter(p => p.linha_id === linha.id && p.status !== 'Cancelado' && p.status !== 'Concluído')
+      .sort((a, b) => new Date(a.dt_inicio_previsto!).getTime() - new Date(b.dt_inicio_previsto!).getTime());
+
+    const emExecucao = blocos.find(p => p.status === 'Em Execução');
+    const agendados  = blocos.filter(p => p.status === 'Agendado');
+
+    result[linha.id] = {
+      linha,
+      atual:   emExecucao ?? agendados[0] ?? null,
+      proximo: emExecucao ? agendados[0] ?? null : agendados[1] ?? null,
+    };
+  }
+
+  return result;
+}
+
+// Verifica se existe sobreposição de horário na linha antes de inserir
+export async function verificarConflito(
+  linhaId: number,
+  dtInicio: Date,
+  dtFim: Date,
+  excluirId?: string,
+): Promise<{ conflito: boolean; pedidoConflitante?: string }> {
+  let q = supabase
+    .from('programacao_producao')
+    .select('id, pedido_id')
+    .eq('linha_id', linhaId)
+    .neq('status', 'Cancelado')
+    .neq('status', 'Concluído')
+    .lt('dt_inicio_previsto', dtFim.toISOString())
+    .gt('dt_fim_previsto', dtInicio.toISOString());
+
+  if (excluirId) q = (q as any).neq('id', excluirId);
+
+  const { data } = await q;
+  if (!data || data.length === 0) return { conflito: false };
+  return { conflito: true, pedidoConflitante: (data[0] as any).pedido_id };
 }
 
 export async function criarProgramacaoPedido(
@@ -180,19 +263,21 @@ export async function criarProgramacaoPedido(
   dtInicioCorte: Date,
   linhaCorteId: number,
   linhaLapId?: number,
-): Promise<boolean> {
+): Promise<{ ok: boolean; erro?: string }> {
   const tempos = calcularTempoEstimado(itens, config);
 
-  const linhaCorte = linhas.find(l => l.id === linhaCorteId);
-  const horasDia = linhaCorte?.capacidade_horas_dia ?? 8;
-  const minsDia = horasDia * 60;
+  const linhaCorte  = linhas.find(l => l.id === linhaCorteId);
+  const minsDia     = (linhaCorte?.capacidade_horas_dia ?? 8) * 60;
+  const diasCorte   = Math.ceil(tempos.corte_min / minsDia);
+  const dtFimCorte  = addDays(dtInicioCorte, Math.max(1, diasCorte));
 
-  const diasCorte = Math.ceil(tempos.corte_min / minsDia);
-  const dtFimCorte = addDays(dtInicioCorte, Math.max(1, diasCorte));
+  // Detecta conflito antes de inserir
+  const confCorte = await verificarConflito(linhaCorteId, dtInicioCorte, dtFimCorte);
+  if (confCorte.conflito) {
+    return { ok: false, erro: `Linha de corte já possui o pedido ${confCorte.pedidoConflitante} neste período.` };
+  }
 
-  const registros: ProgramacaoInsert[] = [];
-
-  registros.push({
+  const registros: ProgramacaoInsert[] = [{
     pedido_id: pedidoId,
     linha_id: linhaCorteId,
     etapa: 'Corte',
@@ -202,13 +287,18 @@ export async function criarProgramacaoPedido(
     duracao_estimada_min: tempos.corte_min,
     responsavel: null,
     obs: null,
-  });
+  }];
 
   if (tempos.tem_lapidacao && linhaLapId) {
-    const dtInicioLap = addDays(dtFimCorte, 1); // 1 dia buffer para qualidade
-    const linhaLap = linhas.find(l => l.id === linhaLapId);
-    const diasLap = Math.ceil(tempos.lapidacao_min / ((linhaLap?.capacidade_horas_dia ?? 8) * 60));
-    const dtFimLap = addDays(dtInicioLap, Math.max(1, diasLap));
+    const dtInicioLap = addDays(dtFimCorte, 1);
+    const linhaLap    = linhas.find(l => l.id === linhaLapId);
+    const diasLap     = Math.ceil(tempos.lapidacao_min / ((linhaLap?.capacidade_horas_dia ?? 8) * 60));
+    const dtFimLap    = addDays(dtInicioLap, Math.max(1, diasLap));
+
+    const confLap = await verificarConflito(linhaLapId, dtInicioLap, dtFimLap);
+    if (confLap.conflito) {
+      return { ok: false, erro: `Linha de lapidação já possui o pedido ${confLap.pedidoConflitante} neste período.` };
+    }
 
     registros.push({
       pedido_id: pedidoId,
@@ -224,7 +314,7 @@ export async function criarProgramacaoPedido(
   }
 
   const { error } = await supabase.from('programacao_producao').insert(registros);
-  if (error) { console.error('criarProgramacaoPedido:', error); return false; }
+  if (error) { console.error('criarProgramacaoPedido:', error); return { ok: false, erro: error.message }; }
 
   await supabase.from('programacao_historico').insert(
     registros.map(r => ({
@@ -237,7 +327,7 @@ export async function criarProgramacaoPedido(
     }))
   );
 
-  return true;
+  return { ok: true };
 }
 
 export async function reagendar(
@@ -299,10 +389,7 @@ export async function atualizarStatusProgramacao(
 }
 
 export async function deletarProgramacao(progId: string): Promise<boolean> {
-  const { error } = await supabase
-    .from('programacao_producao')
-    .delete()
-    .eq('id', progId);
+  const { error } = await supabase.from('programacao_producao').delete().eq('id', progId);
   return !error;
 }
 
@@ -329,7 +416,7 @@ export interface MetricasProducao {
 
 export async function getMetricasProducao(from: Date, to: Date): Promise<MetricasProducao> {
   const progs = await getProgramacao(from, to);
-  const hoje = new Date(); hoje.setHours(23, 59, 59, 0);
+  const hoje  = new Date(); hoje.setHours(23, 59, 59, 0);
   const semana = addDays(hoje, 7);
 
   let atrasados = 0, emRisco = 0, noTempo = 0;
@@ -338,10 +425,10 @@ export async function getMetricasProducao(from: Date, to: Date): Promise<Metrica
   let vencemHoje = 0, vencemSemana = 0;
 
   for (const p of progs) {
-    const prazo  = p.pedidos?.dt_retirada ? new Date(p.pedidos.dt_retirada) : null;
-    const fim    = p.dt_fim_previsto ? new Date(p.dt_fim_previsto) : null;
-    m2Prog  += p.pedidos?.m2_total ?? 0;
-    pecas   += (p.pedidos?.itens_pedido ?? []).reduce((s, i) => s + i.quantidade, 0);
+    const prazo = p.pedidos?.dt_retirada ? new Date(p.pedidos.dt_retirada) : null;
+    const fim   = p.dt_fim_previsto      ? new Date(p.dt_fim_previsto)     : null;
+    m2Prog += p.pedidos?.m2_total ?? 0;
+    pecas  += (p.pedidos?.itens_pedido ?? []).reduce((s, i) => s + i.quantidade, 0);
 
     if (p.status === 'Concluído') m2Conc += p.pedidos?.m2_total ?? 0;
 
@@ -350,12 +437,12 @@ export async function getMetricasProducao(from: Date, to: Date): Promise<Metrica
       if (diff < 0) atrasados++;
       else if (diff <= 2) emRisco++;
       else noTempo++;
-      if (prazo <= hoje) vencemHoje++;
+      if (prazo <= hoje)  vencemHoje++;
       else if (prazo <= semana) vencemSemana++;
     }
 
-    if (p.etapa === 'Corte' && p.duracao_estimada_min) { somaCorte += p.duracao_estimada_min; qtdCorte++; }
-    if (p.etapa === 'Lapidação' && p.duracao_estimada_min) { somaLap += p.duracao_estimada_min; qtdLap++; }
+    if (p.etapa === 'Corte'     && p.duracao_estimada_min) { somaCorte += p.duracao_estimada_min; qtdCorte++; }
+    if (p.etapa === 'Lapidação' && p.duracao_estimada_min) { somaLap   += p.duracao_estimada_min; qtdLap++;   }
   }
 
   const { count: histReprog } = await supabase
@@ -384,16 +471,14 @@ export async function getMetricasProducao(from: Date, to: Date): Promise<Metrica
   return {
     totalProgramados: progs.length,
     emExecucao: progs.filter(p => p.status === 'Em Execução').length,
-    concluidos: progs.filter(p => p.status === 'Concluído').length,
-    atrasados,
-    emRisco,
-    noTempo,
+    concluidos:  progs.filter(p => p.status === 'Concluído').length,
+    atrasados, emRisco, noTempo,
     m2Programado: Math.round(m2Prog * 100) / 100,
     m2Concluido:  Math.round(m2Conc * 100) / 100,
     pecasProgramadas: pecas,
     taxaAtraso: progs.length > 0 ? Math.round((atrasados / progs.length) * 100) : 0,
     tempoMedioCorte: qtdCorte > 0 ? Math.round(somaCorte / qtdCorte) : 0,
-    tempoMedioLapidacao: qtdLap > 0 ? Math.round(somaLap / qtdLap) : 0,
+    tempoMedioLapidacao: qtdLap > 0 ? Math.round(somaLap   / qtdLap)   : 0,
     capacidadePorLinha,
     vencemHoje,
     vencemSemana,
