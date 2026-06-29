@@ -24,8 +24,9 @@ const NAV = [
   {
     grupo: "OPERAÇÃO",
     items: [
-      { href: "/otimizador", label: "Otimizador de Corte", icon: "◇" },
-      { href: "/producao",   label: "Produção",             icon: "⬡" },
+      { href: "/otimizador",    label: "Otimizador de Corte", icon: "◇" },
+      { href: "/programacao",   label: "Programação APS",    icon: "◈" },
+      { href: "/producao",      label: "Produção",            icon: "⬡" },
       { href: "/compras",     label: "Compras",              icon: "↓" },
       { href: "/fornecedores", label: "Fornecedores",        icon: "⬢" },
       { href: "/estoque",    label: "Estoque · Chapas",     icon: "▣" },

@@ -746,6 +746,86 @@ export interface IndicadorQualidadeMensal {
   custo_retrabalho: number | null;
 }
 
+// ─── PROGRAMAÇÃO DA PRODUÇÃO (APS) ────────────────────────
+
+export type StatusProgramacao = 'Agendado' | 'Em Execução' | 'Concluído' | 'Cancelado';
+
+export interface ProducaoLinha {
+  id: number;
+  nome: string;
+  tipo: 'Corte' | 'Lapidação' | 'Furação' | 'Outro';
+  inicio_dia: string;
+  fim_dia: string;
+  capacidade_horas_dia: number;
+  cor: string;
+  ativo: boolean;
+  created_at: string;
+}
+
+export interface ConfigTempoProducao {
+  etapa: string;
+  min_por_m2: number;
+  min_por_peca: number;
+  min_por_lapidacao: number;
+  min_por_furo: number;
+  setup_pedido_min: number;
+  fator_vidro_especial: number;
+  updated_at: string;
+}
+
+export interface ProgramacaoProducao {
+  id: string;
+  pedido_id: string;
+  linha_id: number | null;
+  etapa: string;
+  sequencia: number;
+  dt_inicio_previsto: string | null;
+  dt_fim_previsto: string | null;
+  duracao_estimada_min: number | null;
+  dt_inicio_real: string | null;
+  dt_fim_real: string | null;
+  status: StatusProgramacao;
+  responsavel: string | null;
+  obs: string | null;
+  created_at: string;
+  updated_at: string;
+  pedidos?: {
+    id: string;
+    dt_retirada: string | null;
+    m2_total: number;
+    status: StatusPedido;
+    obs: string;
+    clientes: { nome: string; cidade: string; } | null;
+    itens_pedido: Array<{ id: number; quantidade: number; lapidacao: number; produto_nome: string; m2: number; }>;
+  };
+  producao_linhas?: { nome: string; cor: string; tipo: string; } | null;
+}
+
+export type ProgramacaoInsert = Pick<
+  ProgramacaoProducao,
+  'pedido_id' | 'linha_id' | 'etapa' | 'sequencia' |
+  'dt_inicio_previsto' | 'dt_fim_previsto' | 'duracao_estimada_min' | 'responsavel' | 'obs'
+>;
+
+export interface ProgramacaoHistorico {
+  id: string;
+  programacao_id: string | null;
+  pedido_id: string | null;
+  usuario: string | null;
+  tipo_alteracao: string;
+  dados_anteriores: Record<string, unknown> | null;
+  dados_novos: Record<string, unknown> | null;
+  motivo: string | null;
+  created_at: string;
+}
+
+export interface TempoEstimado {
+  corte_min: number;
+  lapidacao_min: number;
+  total_min: number;
+  tem_lapidacao: boolean;
+}
+
 // ─── DATABASE TYPES (Supabase) ─────────────────────────────
 export type Database = {
   public: {
