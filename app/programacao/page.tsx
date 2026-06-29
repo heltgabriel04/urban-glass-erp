@@ -5,10 +5,14 @@ import AppLayout from "@/components/layout/AppLayout";
 import {
   getLinhas, getConfigTempo, getProgramacao, getPedidosSemProgramacao,
   getPedidosExpedicao,
-  criarProgramacaoPedido, reagendar, atualizarStatusProgramacao, deletarProgramacao,
+  criarProgramacaoPedido, agendarChapaInteira, reagendar,
+  atualizarStatusProgramacao, deletarProgramacao,
+  registrarRetiradaParcial, getRetiradas,
   calcularTempoEstimado, formatarDuracao, getMetricasProducao,
+  isPedidoSomenteChapas,
   addDays, getMonday, diffDays, toISOLocal,
 } from "@/services/programacao.service";
+import type { RetiradaParcial } from "@/services/programacao.service";
 import type {
   ProducaoLinha, ConfigTempoProducao, ProgramacaoProducao, Pedido, TempoEstimado,
 } from "@/types";
@@ -277,6 +281,7 @@ function ModalAgendar({
   onConfirmar: (dtInicio: Date, linhaCorteId: number, linhaLapId: number | undefined) => Promise<void>;
   onFechar: () => void;
 }) {
+  const eChapa      = isPedidoSomenteChapas(pedido);
   const linhasCorte = linhas.filter(l => l.tipo === "Corte");
   const linhasLap   = linhas.filter(l => l.tipo === "Lapidação");
   const semTabelas  = linhas.length === 0;
@@ -320,17 +325,14 @@ function ModalAgendar({
     if (semTabelas) { setErro("Execute o script SQL no Supabase primeiro."); return; }
     const dt = parseBR(dtDisplay);
     if (!dt) { setErro("Data inválida."); return; }
-    if (!linhaCorteId) { setErro("Selecione uma linha de corte."); return; }
+    if (!eChapa && !linhaCorteId) { setErro("Selecione uma linha de corte."); return; }
     setSalvando(true);
-    await onConfirmar(dt, linhaCorteId, tempos.tem_lapidacao ? linhaLapId : undefined);
+    // Chapas inteiras não precisam de linha de corte
+    await onConfirmar(dt, eChapa ? -1 : linhaCorteId, eChapa ? undefined : (tempos.tem_lapidacao ? linhaLapId : undefined));
     setSalvando(false);
   }
 
   const dtValida = !!parseBR(dtDisplay);
-
-  // Verifica capacidade visual para warning (sem query extra — usa info estática)
-  const linhaCorte = linhas.find(l => l.id === linhaCorteId);
-  const capacidadeOk = true; // Detecção de conflito real está no service
 
   return (
     <div className="mov open">
@@ -340,6 +342,18 @@ function ModalAgendar({
           <button className="btn icon" onClick={onFechar}>✕</button>
         </div>
         <div className="mbd" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+          {eChapa && (
+            <div style={{ background: "rgba(167,139,250,.08)", border: "1px solid #a78bfa", borderRadius: 10, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 18 }}>▣</span>
+              <div>
+                <div style={{ color: "#a78bfa", fontWeight: 700, fontSize: 13, marginBottom: 2 }}>Retirada de Chapa Inteira</div>
+                <div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.5 }}>
+                  Todos os itens deste pedido têm dimensões de chapa inteira — não passa pela linha de corte.
+                </div>
+              </div>
+            </div>
+          )}
 
           {semTabelas && (
             <div style={{ background: "rgba(244,63,94,.08)", border: "1px solid var(--err)", borderRadius: 10, padding: "12px 16px" }}>
@@ -409,17 +423,19 @@ function ModalAgendar({
               style={{ fontSize: 15, borderColor: dtDisplay.length === 10 && !dtValida ? "var(--err)" : undefined }} />
           </div>
 
-          <div className="fg">
-            <label className="fl">Linha de Corte</label>
-            {linhasCorte.length === 0
-              ? <div className="fc" style={{ color: "var(--t3)", pointerEvents: "none" }}>Nenhuma linha configurada</div>
-              : <select className="fc" value={linhaCorteId} onChange={e => setLinhaCorteId(Number(e.target.value))}>
-                  {linhasCorte.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
-                </select>
-            }
-          </div>
+          {!eChapa && (
+            <div className="fg">
+              <label className="fl">Linha de Corte</label>
+              {linhasCorte.length === 0
+                ? <div className="fc" style={{ color: "var(--t3)", pointerEvents: "none" }}>Nenhuma linha configurada</div>
+                : <select className="fc" value={linhaCorteId} onChange={e => setLinhaCorteId(Number(e.target.value))}>
+                    {linhasCorte.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
+                  </select>
+              }
+            </div>
+          )}
 
-          {tempos.tem_lapidacao && (
+          {!eChapa && tempos.tem_lapidacao && (
             <div className="fg">
               <label className="fl">Linha de Lapidação</label>
               {linhasLap.length === 0
@@ -567,16 +583,48 @@ function ModalAgendamentoLote({
 // ─── MODAL DETALHE DO BLOCO ───────────────────────────────────
 
 function ModalBloco({
-  prog, linhas, onFechar, onIniciar, onConcluir, onDeletar,
+  prog, linhas, onFechar, onIniciar, onConcluir, onDeletar, onRetirada,
 }: {
   prog: ProgramacaoProducao; linhas: ProducaoLinha[];
   onFechar: () => void; onIniciar: () => void;
   onConcluir: () => void; onDeletar: () => void;
+  onRetirada: () => void;
 }) {
   const borda      = bordaBloco(prog);
   const prazo      = prog.pedidos?.dt_retirada ? new Date(prog.pedidos.dt_retirada).toLocaleDateString("pt-BR") : "—";
   const inicio     = prog.dt_inicio_previsto   ? new Date(prog.dt_inicio_previsto).toLocaleDateString("pt-BR") : "—";
   const fim        = prog.dt_fim_previsto       ? new Date(prog.dt_fim_previsto).toLocaleDateString("pt-BR")   : "—";
+
+  // Retiradas parciais
+  const [retiradas,     setRetiradas]     = useState<RetiradaParcial[]>([]);
+  const [mostraForm,    setMostraForm]    = useState(false);
+  const [qtdRetirada,   setQtdRetirada]   = useState("");
+  const [obsRetirada,   setObsRetirada]   = useState("");
+  const [salvandoRet,   setSalvandoRet]   = useState(false);
+
+  useEffect(() => {
+    getRetiradas(prog.id).then(setRetiradas);
+  }, [prog.id]);
+
+  const pecasTotal    = (prog.pedidos?.itens_pedido ?? []).reduce((s, i) => s + i.quantidade, 0);
+  const pecasEntregues = retiradas.reduce((s, r) => s + r.pecas_retiradas, 0);
+  const pctEntregue   = pecasTotal > 0 ? Math.min(100, Math.round((pecasEntregues / pecasTotal) * 100)) : 0;
+
+  async function handleSalvarRetirada() {
+    const qtd = parseInt(qtdRetirada);
+    if (!qtd || qtd <= 0) return;
+    setSalvandoRet(true);
+    const ok = await registrarRetiradaParcial(prog.id, prog.pedido_id, qtd, obsRetirada || undefined);
+    if (ok) {
+      const updated = await getRetiradas(prog.id);
+      setRetiradas(updated);
+      setQtdRetirada("");
+      setObsRetirada("");
+      setMostraForm(false);
+      onRetirada();
+    }
+    setSalvandoRet(false);
+  }
   const inicioReal = prog.dt_inicio_real
     ? new Date(prog.dt_inicio_real).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })
     : null;
@@ -639,6 +687,71 @@ function ModalBloco({
           {prog.pedidos?.obs && (
             <div style={{ fontSize: 12, color: "var(--t2)", background: "var(--surf2)", padding: "8px 12px", borderRadius: 8, lineHeight: 1.5 }}>
               {prog.pedidos.obs}
+            </div>
+          )}
+
+          {/* ── Retiradas parciais ── */}
+          {pecasTotal > 0 && (
+            <div style={{ background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: 10, padding: "12px 14px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--t2)" }}>RETIRADAS</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: pctEntregue === 100 ? "var(--ok)" : "var(--t1)" }}>
+                  {pecasEntregues}/{pecasTotal} peças ({pctEntregue}%)
+                </span>
+              </div>
+              {/* Barra de progresso */}
+              <div style={{ height: 6, background: "var(--b2)", borderRadius: 99, overflow: "hidden", marginBottom: 8 }}>
+                <div style={{
+                  height: "100%", borderRadius: 99,
+                  width: `${pctEntregue}%`,
+                  background: pctEntregue === 100 ? "var(--ok)" : pctEntregue > 50 ? "var(--acc)" : "var(--warn)",
+                  transition: "width 0.3s ease",
+                }} />
+              </div>
+              {/* Histórico de retiradas */}
+              {retiradas.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+                  {retiradas.map(r => (
+                    <div key={r.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--t2)" }}>
+                      <span>{new Date(r.dt_retirada).toLocaleDateString("pt-BR")}</span>
+                      <span style={{ color: "var(--acc)", fontWeight: 700 }}>{r.pecas_retiradas} peças</span>
+                      {r.obs && <span style={{ color: "var(--t3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 120 }}>{r.obs}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Formulário de nova retirada */}
+              {mostraForm ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingTop: 8, borderTop: "1px solid var(--b1)" }}>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <input
+                      type="number" min={1} max={pecasTotal - pecasEntregues}
+                      value={qtdRetirada} onChange={e => setQtdRetirada(e.target.value)}
+                      placeholder={`Qtd (máx ${pecasTotal - pecasEntregues})`}
+                      className="fc" style={{ flex: 1, fontSize: 12, padding: "5px 8px" }}
+                    />
+                    <input
+                      value={obsRetirada} onChange={e => setObsRetirada(e.target.value)}
+                      placeholder="Obs (opcional)"
+                      className="fc" style={{ flex: 2, fontSize: 12, padding: "5px 8px" }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button className="btn bg" style={{ flex: 1, fontSize: 11 }} onClick={() => setMostraForm(false)}>Cancelar</button>
+                    <button className="btn pri" style={{ flex: 1, fontSize: 11 }} onClick={handleSalvarRetirada}
+                      disabled={salvandoRet || !qtdRetirada}>
+                      {salvandoRet ? "…" : "Registrar"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                pctEntregue < 100 && (
+                  <button className="btn bg" style={{ width: "100%", fontSize: 11, padding: "5px 0", marginTop: 4 }}
+                    onClick={() => setMostraForm(true)}>
+                    + Registrar Retirada
+                  </button>
+                )
+              )}
             </div>
           )}
         </div>
@@ -865,7 +978,13 @@ export default function ProgramacaoPage() {
   async function handleAgendar(dtInicio: Date, linhaCorteId: number, linhaLapId?: number) {
     if (!modalAgendar) return;
     const itens = (modalAgendar.itens_pedido ?? []) as { m2: number; quantidade: number; lapidacao: number; produto_nome: string }[];
-    const result = await criarProgramacaoPedido(modalAgendar.id, itens, config, linhas, dtInicio, linhaCorteId, linhaLapId);
+    const pecasTotal = itens.reduce((s, i) => s + i.quantidade, 0);
+
+    // linhaCorteId === -1 sinaliza chapa inteira (sem corte)
+    const result = linhaCorteId === -1
+      ? await agendarChapaInteira(modalAgendar.id, pecasTotal, linhas, dtInicio)
+      : await criarProgramacaoPedido(modalAgendar.id, itens, config, linhas, dtInicio, linhaCorteId, linhaLapId);
+
     if (!result.ok) {
       alert(result.erro ?? "Erro ao agendar.");
       return;
@@ -1423,11 +1542,12 @@ export default function ProgramacaoPage() {
                   const diasFaltam = p.dt_retirada ? diffDays(new Date(p.dt_retirada), new Date()) : null;
                   const urgente    = diasFaltam !== null && diasFaltam <= 3;
                   const sel        = selecionados.has(p.id);
+                  const isChapa    = isPedidoSomenteChapas(p);
 
                   return (
                     <div key={p.id} style={{
                       background: sel ? "rgba(61,255,160,.08)" : "var(--surf2)",
-                      border: `1px solid ${urgente ? "var(--err)" : sel ? "var(--acc)" : "var(--b2)"}`,
+                      border: `1px solid ${urgente ? "var(--err)" : isChapa ? "#a78bfa" : sel ? "var(--acc)" : "var(--b2)"}`,
                       borderRadius: 10, padding: "10px 10px", marginBottom: 6, cursor: "pointer",
                     }}
                       onClick={() => toggleSelecionado(p.id)}
@@ -1441,13 +1561,20 @@ export default function ProgramacaoPage() {
                           }}>
                             {sel && <span style={{ color: "#090b10", fontSize: 9, fontWeight: 900 }}>✓</span>}
                           </div>
-                          <span style={{ fontSize: 12, fontWeight: 800, color: "var(--acc)" }}>{p.id}</span>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: isChapa ? "#a78bfa" : "var(--acc)" }}>{p.id}</span>
                         </div>
-                        {urgente && (
-                          <span style={{ fontSize: 10, color: "var(--err)", fontWeight: 700, background: "rgba(244,63,94,.12)", padding: "1px 6px", borderRadius: 10 }}>
-                            URGENTE
-                          </span>
-                        )}
+                        <div style={{ display: "flex", gap: 4 }}>
+                          {isChapa && (
+                            <span style={{ fontSize: 10, color: "#a78bfa", fontWeight: 700, background: "rgba(167,139,250,.12)", padding: "1px 6px", borderRadius: 10 }}>
+                              ▣ Chapa
+                            </span>
+                          )}
+                          {urgente && (
+                            <span style={{ fontSize: 10, color: "var(--err)", fontWeight: 700, background: "rgba(244,63,94,.12)", padding: "1px 6px", borderRadius: 10 }}>
+                              URGENTE
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div style={{ fontSize: 12, color: "var(--t1)", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {(p as any).clientes?.nome ?? "—"}
@@ -1506,7 +1633,8 @@ export default function ProgramacaoPage() {
       {modalBloco && (
         <ModalBloco prog={modalBloco} linhas={linhas}
           onFechar={() => setModalBloco(null)}
-          onIniciar={handleIniciar} onConcluir={handleConcluir} onDeletar={handleDeletar} />
+          onIniciar={handleIniciar} onConcluir={handleConcluir} onDeletar={handleDeletar}
+          onRetirada={load} />
       )}
     </AppLayout>
   );

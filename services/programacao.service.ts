@@ -89,6 +89,29 @@ export function formatarDuracao(min: number): string {
   return m > 0 ? `${h}h ${m}min` : `${h}h`;
 }
 
+// ─── CHAPA INTEIRA — DETECÇÃO AUTOMÁTICA ────────────────────
+
+type ItemComDimensoes = {
+  quantidade: number; lapidacao: number; produto_nome: string; m2: number;
+  largura?: number; altura?: number;
+  produtos?: { chapa_largura_mm: number | null; chapa_altura_mm: number | null } | null;
+};
+
+function isItemChapaInteira(item: ItemComDimensoes): boolean {
+  const cw = item.produtos?.chapa_largura_mm;
+  const ch = item.produtos?.chapa_altura_mm;
+  if (!cw || !ch || !item.largura || !item.altura) return false;
+  const tol = 0.05;
+  const norm = (v: number, ref: number) => Math.abs(v - ref) / ref < tol;
+  return (norm(item.largura, cw) && norm(item.altura, ch))
+      || (norm(item.largura, ch) && norm(item.altura, cw));
+}
+
+export function isPedidoSomenteChapas(pedido: { itens_pedido?: unknown[] }): boolean {
+  const itens = (pedido.itens_pedido ?? []) as ItemComDimensoes[];
+  return itens.length > 0 && itens.every(isItemChapaInteira);
+}
+
 // ─── LINHAS DE PRODUÇÃO ─────────────────────────────────────
 
 export async function getLinhas(): Promise<ProducaoLinha[]> {
@@ -161,7 +184,7 @@ export async function getPedidosSemProgramacao(): Promise<Pedido[]> {
     .from('pedidos')
     .select(`id, dt_pedido, dt_retirada, m2_total, valor_total, status, obs,
       clientes ( nome, cidade ),
-      itens_pedido ( id, quantidade, lapidacao, produto_nome, m2 )
+      itens_pedido ( id, quantidade, lapidacao, produto_nome, m2, largura, altura, produtos ( chapa_largura_mm, chapa_altura_mm ) )
     `)
     .in('status', STATUS_ATIVOS)
     .order('dt_retirada', { ascending: true, nullsFirst: false });
@@ -392,6 +415,75 @@ export async function atualizarStatusProgramacao(
 export async function deletarProgramacao(progId: string): Promise<boolean> {
   const { error } = await supabase.from('programacao_producao').delete().eq('id', progId);
   return !error;
+}
+
+// ─── CHAPA INTEIRA — AGENDAMENTO ────────────────────────────
+
+export async function agendarChapaInteira(
+  pedidoId: string,
+  pecasTotal: number,
+  linhas: ProducaoLinha[],
+  dtRetirada: Date,
+): Promise<{ ok: boolean; erro?: string }> {
+  const linhaSep = linhas.find(l => l.tipo === 'Separação');
+  if (!linhaSep) return { ok: false, erro: 'Linha de Separação não encontrada. Execute o script SQL.' };
+
+  const duracao = Math.max(30, pecasTotal * 5);
+  const dtFim = new Date(dtRetirada.getTime() + duracao * 60000);
+
+  const { error } = await supabase.from('programacao_producao').insert({
+    pedido_id: pedidoId,
+    linha_id: linhaSep.id,
+    etapa: 'Retirada de Chapa',
+    sequencia: 0,
+    dt_inicio_previsto: toISOLocal(dtRetirada),
+    dt_fim_previsto: toISOLocal(dtFim),
+    duracao_estimada_min: duracao,
+    responsavel: null,
+    obs: null,
+  });
+
+  if (error) { console.error('agendarChapaInteira:', error); return { ok: false, erro: error.message }; }
+  return { ok: true };
+}
+
+// ─── RETIRADAS PARCIAIS ──────────────────────────────────────
+
+export interface RetiradaParcial {
+  id: string;
+  programacao_id: string;
+  pedido_id: string;
+  dt_retirada: string;
+  pecas_retiradas: number;
+  obs: string | null;
+  created_at: string;
+}
+
+export async function registrarRetiradaParcial(
+  programacaoId: string,
+  pedidoId: string,
+  pecasRetiradas: number,
+  obs?: string,
+): Promise<boolean> {
+  const { error } = await supabase.from('programacao_retiradas').insert({
+    programacao_id: programacaoId,
+    pedido_id: pedidoId,
+    dt_retirada: new Date().toISOString().slice(0, 10),
+    pecas_retiradas: pecasRetiradas,
+    obs: obs ?? null,
+  });
+  if (error) { console.error('registrarRetiradaParcial:', error); return false; }
+  return true;
+}
+
+export async function getRetiradas(programacaoId: string): Promise<RetiradaParcial[]> {
+  const { data, error } = await supabase
+    .from('programacao_retiradas')
+    .select('*')
+    .eq('programacao_id', programacaoId)
+    .order('dt_retirada', { ascending: true });
+  if (error) { console.error('getRetiradas:', error); return []; }
+  return data as RetiradaParcial[];
 }
 
 // ─── MÉTRICAS PARA DASHBOARD ────────────────────────────────

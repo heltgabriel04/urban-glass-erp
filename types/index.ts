@@ -753,7 +753,7 @@ export type StatusProgramacao = 'Agendado' | 'Em Execução' | 'Concluído' | 'C
 export interface ProducaoLinha {
   id: number;
   nome: string;
-  tipo: 'Corte' | 'Lapidação' | 'Furação' | 'Outro';
+  tipo: 'Corte' | 'Lapidação' | 'Furação' | 'Separação' | 'Outro';
   inicio_dia: string;
   fim_dia: string;
   capacidade_horas_dia: number;
