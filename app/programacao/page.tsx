@@ -1405,7 +1405,7 @@ function DashboardConteudo({ metricas }: { metricas: Awaited<ReturnType<typeof g
             <BarChart data={dadosCapacidade} barSize={36} barGap={4}>
               <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--t2)" }} />
               <YAxis tick={{ fontSize: 10, fill: "var(--t2)" }} unit="h" width={36} />
-              <Tooltip contentStyle={{ background: "var(--surf3)", border: "1px solid var(--b2)", borderRadius: 8, fontSize: 12 }} formatter={(v: number) => [`${v}h`, ""]} />
+              <Tooltip contentStyle={{ background: "#1c2130", border: "1px solid #243050", borderRadius: 8, fontSize: 12, color: "#dde1f0" }} formatter={(v: number) => [`${v}h`, ""]} />
               <Bar dataKey="ocupadas" name="Ocupadas" fill="#3dffa0" radius={[4, 4, 0, 0]} />
               <Bar dataKey="livres"   name="Livres"   fill="#1c2540" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -1419,7 +1419,7 @@ function DashboardConteudo({ metricas }: { metricas: Awaited<ReturnType<typeof g
                 <Pie data={dadosStatus} dataKey="value" cx="50%" cy="45%" outerRadius={72} paddingAngle={3}>
                   {dadosStatus.map((d, i) => <Cell key={i} fill={d.fill} />)}
                 </Pie>
-                <Tooltip contentStyle={{ background: "var(--surf3)", border: "1px solid var(--b2)", borderRadius: 8, fontSize: 12 }} />
+                <Tooltip contentStyle={{ background: "#1c2130", border: "1px solid #243050", borderRadius: 8, fontSize: 12, color: "#dde1f0" }} />
                 <Legend iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 11, paddingTop: 8, color: "var(--t2)" }} />
               </PieChart>
             </ResponsiveContainer>
