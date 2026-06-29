@@ -193,84 +193,184 @@ function ModalAgendar({
 }) {
   const linhasCorte = linhas.filter(l => l.tipo === "Corte");
   const linhasLap   = linhas.filter(l => l.tipo === "Lapidação");
-  const [dtInicio, setDtInicio] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split("T")[0];
-  });
-  const [linhaCorteId, setLinhaCorteId] = useState(linhasCorte[0]?.id ?? 0);
+  const semTabelas  = linhas.length === 0;
+  const semConfig   = config.length === 0;
+
+  // Data em dd/mm/aaaa
+  const amanhaBR = (() => {
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    return `${dd}/${mm}/${d.getFullYear()}`;
+  })();
+  const [dtDisplay, setDtDisplay] = useState(amanhaBR);
+  const [linhaCorteId, setLinhaCorteId] = useState<number>(linhasCorte[0]?.id ?? 0);
   const [linhaLapId,   setLinhaLapId]   = useState<number | undefined>(linhasLap[0]?.id);
   const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+
+  // Atualiza seleção quando linhas carregam depois do modal abrir
+  useEffect(() => {
+    if (linhasCorte.length > 0 && !linhaCorteId) setLinhaCorteId(linhasCorte[0].id);
+  }, [linhas]);
 
   const itens = (pedido.itens_pedido ?? []) as { m2: number; quantidade: number; lapidacao: number; produto_nome: string; }[];
   const tempos: TempoEstimado = calcularTempoEstimado(itens, config);
 
+  function maskData(v: string): string {
+    const d = v.replace(/\D/g, "").slice(0, 8);
+    if (d.length <= 2) return d;
+    if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+    return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+  }
+
+  function parseBR(masked: string): Date | null {
+    const parts = masked.split("/");
+    if (parts.length !== 3 || parts[2].length < 4) return null;
+    const [dd, mm, yyyy] = parts.map(Number);
+    if (!dd || !mm || !yyyy || mm > 12 || dd > 31) return null;
+    const d = new Date(yyyy, mm - 1, dd, 8, 0, 0);
+    if (isNaN(d.getTime())) return null;
+    return d;
+  }
+
   async function handleConfirmar() {
-    if (!dtInicio || !linhaCorteId) return;
+    setErro("");
+    if (semTabelas) { setErro("Execute o script SQL no Supabase primeiro."); return; }
+    const dt = parseBR(dtDisplay);
+    if (!dt) { setErro("Data inválida. Use o formato dd/mm/aaaa."); return; }
+    if (!linhaCorteId) { setErro("Selecione uma linha de corte."); return; }
     setSalvando(true);
-    const dt = startOfDay(new Date(dtInicio + "T12:00:00"));
     await onConfirmar(dt, linhaCorteId, tempos.tem_lapidacao ? linhaLapId : undefined);
     setSalvando(false);
   }
 
+  const dtValida = !!parseBR(dtDisplay);
+
   return (
     <div className="mov open">
-      <div className="mod" style={{ width: 440 }}>
+      <div className="mod" style={{ width: 460 }}>
         <div className="mhd">
           <span>Agendar Pedido {pedido.id}</span>
           <button className="btn icon" onClick={onFechar}>✕</button>
         </div>
-        <div className="mbd" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div className="mbd" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+          {/* Aviso de tabelas não criadas */}
+          {semTabelas && (
+            <div style={{ background: "rgba(244,63,94,.12)", border: "1px solid var(--err)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--err)" }}>
+              <strong>⚠ Configuração pendente</strong>
+              <div style={{ marginTop: 4, color: "var(--t1)", lineHeight: 1.5 }}>
+                Execute o arquivo <strong>sql/programacao-producao.sql</strong> no Supabase SQL Editor para criar as tabelas e linhas de produção.
+              </div>
+            </div>
+          )}
+
+          {/* Info do pedido */}
           <div style={{ background: "var(--surf2)", borderRadius: 8, padding: "10px 14px", fontSize: 12 }}>
-            <strong>{(pedido as any).clientes?.nome ?? "—"}</strong>
-            <div style={{ color: "var(--t2)", marginTop: 4 }}>
-              {pedido.m2_total?.toFixed(2)} m² · {itens.reduce((s, i) => s + i.quantidade, 0)} peças
+            <strong style={{ color: "var(--t1)" }}>{(pedido as any).clientes?.nome ?? "—"}</strong>
+            <div style={{ color: "var(--t2)", marginTop: 4, display: "flex", gap: 12 }}>
+              <span>{pedido.m2_total?.toFixed(2)} m²</span>
+              <span>{itens.reduce((s, i) => s + i.quantidade, 0)} peças</span>
+              {itens.length === 0 && <span style={{ color: "var(--warn)" }}>⚠ itens não carregados</span>}
             </div>
           </div>
 
+          {/* Estimativa de tempo */}
           <div style={{ background: "var(--surf3)", borderRadius: 8, padding: "10px 14px", fontSize: 12 }}>
-            <div style={{ fontWeight: 700, marginBottom: 8, color: "var(--acc)" }}>Estimativa de Tempo</div>
-            <div style={{ display: "flex", gap: 20 }}>
-              <div>
-                <div style={{ color: "var(--t2)" }}>Corte</div>
-                <div style={{ color: "var(--t1)", fontWeight: 700 }}>{formatarDuracao(tempos.corte_min)}</div>
-              </div>
-              {tempos.tem_lapidacao && (
-                <div>
-                  <div style={{ color: "var(--t2)" }}>Lapidação</div>
-                  <div style={{ color: "var(--acc2)", fontWeight: 700 }}>{formatarDuracao(tempos.lapidacao_min)}</div>
-                </div>
-              )}
-              <div>
-                <div style={{ color: "var(--t2)" }}>Total</div>
-                <div style={{ color: "var(--t1)", fontWeight: 700 }}>{formatarDuracao(tempos.total_min)}</div>
-              </div>
+            <div style={{ fontWeight: 700, marginBottom: 8, color: "var(--acc)", display: "flex", justifyContent: "space-between" }}>
+              <span>Estimativa de Tempo</span>
+              {semConfig && <span style={{ color: "var(--warn)", fontWeight: 400, fontSize: 10 }}>⚠ configuração não encontrada</span>}
             </div>
+            {semConfig ? (
+              <div style={{ color: "var(--t3)", fontSize: 11 }}>
+                Tabela <em>config_tempo_producao</em> não encontrada. Execute o script SQL.
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 20 }}>
+                <div>
+                  <div style={{ color: "var(--t2)" }}>Corte</div>
+                  <div style={{ color: "var(--t1)", fontWeight: 700 }}>
+                    {tempos.corte_min > 0 ? formatarDuracao(tempos.corte_min) : "—"}
+                  </div>
+                </div>
+                {tempos.tem_lapidacao && (
+                  <div>
+                    <div style={{ color: "var(--t2)" }}>Lapidação</div>
+                    <div style={{ color: "var(--acc2)", fontWeight: 700 }}>{formatarDuracao(tempos.lapidacao_min)}</div>
+                  </div>
+                )}
+                <div>
+                  <div style={{ color: "var(--t2)" }}>Total</div>
+                  <div style={{ color: "var(--t1)", fontWeight: 700 }}>
+                    {tempos.total_min > 0 ? formatarDuracao(tempos.total_min) : "—"}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
+          {/* Data de início dd/mm/aaaa */}
           <div className="fg">
-            <label className="fl">Data de Início</label>
-            <input className="fc" type="date" value={dtInicio} onChange={e => setDtInicio(e.target.value)} />
+            <label className="fl" style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>Data de Início</span>
+              {dtDisplay.length === 10 && !dtValida && (
+                <span style={{ color: "var(--err)", fontSize: 10 }}>data inválida</span>
+              )}
+            </label>
+            <input
+              className="fc"
+              value={dtDisplay}
+              onChange={e => setDtDisplay(maskData(e.target.value))}
+              placeholder="dd/mm/aaaa"
+              maxLength={10}
+              inputMode="numeric"
+              style={{ borderColor: dtDisplay.length === 10 && !dtValida ? "var(--err)" : undefined }}
+            />
           </div>
 
+          {/* Linha de corte */}
           <div className="fg">
             <label className="fl">Linha de Corte</label>
-            <select className="fc" value={linhaCorteId} onChange={e => setLinhaCorteId(Number(e.target.value))}>
-              {linhasCorte.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
-            </select>
+            {linhasCorte.length === 0 ? (
+              <div className="fc" style={{ color: "var(--t3)", display: "flex", alignItems: "center", pointerEvents: "none" }}>
+                Nenhuma linha configurada
+              </div>
+            ) : (
+              <select className="fc" value={linhaCorteId} onChange={e => setLinhaCorteId(Number(e.target.value))}>
+                {linhasCorte.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
+              </select>
+            )}
           </div>
 
+          {/* Linha de lapidação (só se tiver itens com lapidação) */}
           {tempos.tem_lapidacao && (
             <div className="fg">
               <label className="fl">Linha de Lapidação</label>
-              <select className="fc" value={linhaLapId ?? ""} onChange={e => setLinhaLapId(Number(e.target.value) || undefined)}>
-                <option value="">— sem lapidação —</option>
-                {linhasLap.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
-              </select>
+              {linhasLap.length === 0 ? (
+                <div className="fc" style={{ color: "var(--t3)", display: "flex", alignItems: "center", pointerEvents: "none" }}>
+                  Nenhuma linha configurada
+                </div>
+              ) : (
+                <select className="fc" value={linhaLapId ?? ""} onChange={e => setLinhaLapId(Number(e.target.value) || undefined)}>
+                  <option value="">— sem lapidação —</option>
+                  {linhasLap.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
+                </select>
+              )}
             </div>
+          )}
+
+          {erro && (
+            <div style={{ color: "var(--err)", fontSize: 12, fontWeight: 600 }}>⚠ {erro}</div>
           )}
         </div>
         <div className="mft">
           <button className="btn bg" onClick={onFechar}>Cancelar</button>
-          <button className="btn pri" onClick={handleConfirmar} disabled={salvando}>
+          <button
+            className="btn pri"
+            onClick={handleConfirmar}
+            disabled={salvando || semTabelas || !dtValida || !linhaCorteId}
+          >
             {salvando ? "Agendando…" : "Confirmar Agendamento"}
           </button>
         </div>
