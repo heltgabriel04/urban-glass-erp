@@ -5,14 +5,16 @@ import AppLayout from "@/components/layout/AppLayout";
 import {
   getLinhas, getConfigTempo, getProgramacao, getPedidosSemProgramacao,
   getPedidosExpedicao, getCalendario,
+  getBloqueiosLinha, adicionarBloqueioLinha, removerBloqueioLinha,
   criarProgramacaoPedido, agendarChapaInteira, reagendar,
   atualizarStatusProgramacao, deletarProgramacao,
   registrarRetiradaParcial, getRetiradas,
+  registrarRetrabalho, getCalibracaoTempos,
   calcularTempoEstimado, formatarDuracao, getMetricasProducao,
   isPedidoSomenteChapas,
   addDays, addDiasUteis, proximoDiaUtil, getMonday, diffDays, toISOLocal,
 } from "@/services/programacao.service";
-import type { RetiradaParcial } from "@/services/programacao.service";
+import type { RetiradaParcial, BloqueioLinha, DadosCalibracao } from "@/services/programacao.service";
 import type {
   ProducaoLinha, ConfigTempoProducao, ProgramacaoProducao, Pedido, TempoEstimado,
 } from "@/types";
@@ -98,26 +100,58 @@ function calcBlocoWidth(dur: number, zoom: string): number {
   return Math.max(cw * 0.85, dias * cw - 4);
 }
 
+type TipoDia = 'fim_semana' | 'feriado' | 'bloqueio_global' | 'bloqueio_linha' | null;
+function getDiaTipo(date: Date, linhaId: number, calendario: Set<string>, bloqueios: BloqueioLinha[]): TipoDia {
+  const dow = date.getDay();
+  const iso = date.toISOString().slice(0, 10);
+  if (dow === 0 || dow === 6) return 'fim_semana';
+  if (calendario.has(iso))   return 'feriado';
+  const dts = date.getTime(), dte = dts + 86400000;
+  for (const b of bloqueios) {
+    const bi = new Date(b.dt_inicio).getTime(), bf = new Date(b.dt_fim).getTime();
+    if (bi < dte && bf > dts) {
+      if (b.linha_id === null)     return 'bloqueio_global';
+      if (b.linha_id === linhaId)  return 'bloqueio_linha';
+    }
+  }
+  return null;
+}
+
+const HATCH: Record<NonNullable<TipoDia>, { bg: string }> = {
+  fim_semana:     { bg: "rgba(255,255,255,0.02)" },
+  feriado:        { bg: "repeating-linear-gradient(45deg, rgba(244,63,94,.06) 0,rgba(244,63,94,.06) 3px,transparent 3px,transparent 12px)" },
+  bloqueio_global:{ bg: "repeating-linear-gradient(45deg, rgba(245,158,11,.08) 0,rgba(245,158,11,.08) 3px,transparent 3px,transparent 12px)" },
+  bloqueio_linha: { bg: "repeating-linear-gradient(45deg, rgba(245,158,11,.12) 0,rgba(245,158,11,.12) 3px,transparent 3px,transparent 12px)" },
+};
+
 // ─── LEGENDA DE CORES ─────────────────────────────────────────
 
 function LegendaCores() {
-  const items = [
-    { cor: "#3dffa0", label: "No prazo" },
-    { cor: "#f59e0b", label: "≤ 2 dias p/ vencer" },
-    { cor: "#f43f5e", label: "Atrasado" },
+  const blocos = [
+    { cor: "#3dffa0", label: "No prazo", borda: false },
+    { cor: "#f59e0b", label: "≤ 2 dias p/ vencer", borda: false },
+    { cor: "#f43f5e", label: "Atrasado", borda: false },
     { cor: "#3dffa0", label: "Em execução", borda: true },
-    { cor: "#4a4a6a", label: "Concluído" },
+    { cor: "#4a4a6a", label: "Concluído", borda: false },
+  ];
+  const hatches = [
+    { bg: "rgba(244,63,94,.5)",   pat: HATCH.feriado.bg,        label: "Feriado" },
+    { bg: "rgba(245,158,11,.5)",  pat: HATCH.bloqueio_linha.bg,  label: "Manutenção" },
+    { bg: "rgba(255,255,255,.15)",pat: HATCH.fim_semana.bg,      label: "Fim de semana" },
   ];
   return (
-    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-      {items.map((it, i) => (
+    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+      {blocos.map((it, i) => (
         <div key={i} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <div style={{
-            width: 10, height: 10, borderRadius: 3,
-            background: it.borda ? "rgba(61,255,160,.2)" : it.cor,
-            border: `2px solid ${it.cor}`,
-          }} />
+          <div style={{ width: 10, height: 10, borderRadius: 3, background: it.borda ? "rgba(61,255,160,.2)" : it.cor, border: `2px solid ${it.cor}` }} />
           <span style={{ fontSize: 10, color: "var(--t3)" }}>{it.label}</span>
+        </div>
+      ))}
+      <div style={{ width: 1, height: 10, background: "var(--b2)" }} />
+      {hatches.map((h, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <div style={{ width: 10, height: 10, borderRadius: 2, background: h.pat, border: `1px solid ${h.bg}` }} />
+          <span style={{ fontSize: 10, color: "var(--t3)" }}>{h.label}</span>
         </div>
       ))}
     </div>
@@ -583,12 +617,12 @@ function ModalAgendamentoLote({
 // ─── MODAL DETALHE DO BLOCO ───────────────────────────────────
 
 function ModalBloco({
-  prog, linhas, onFechar, onIniciar, onConcluir, onDeletar, onRetirada,
+  prog, linhas, onFechar, onIniciar, onConcluir, onDeletar, onRetirada, onRetrabalho,
 }: {
   prog: ProgramacaoProducao; linhas: ProducaoLinha[];
   onFechar: () => void; onIniciar: () => void;
   onConcluir: () => void; onDeletar: () => void;
-  onRetirada: () => void;
+  onRetirada: () => void; onRetrabalho: () => void;
 }) {
   const borda      = bordaBloco(prog);
   const prazo      = prog.pedidos?.dt_retirada ? new Date(prog.pedidos.dt_retirada).toLocaleDateString("pt-BR") : "—";
@@ -758,10 +792,206 @@ function ModalBloco({
         <div className="mft" style={{ gap: 8 }}>
           {prog.status === "Agendado"    && <button className="btn pri" onClick={onIniciar}>▶ Iniciar Produção</button>}
           {prog.status === "Em Execução" && <button className="btn pri" onClick={onConcluir} style={{ background: "var(--ok)", borderColor: "var(--ok)" }}>✓ Marcar Concluído</button>}
+          {prog.status !== "Concluído"   && (
+            <button className="btn bg" onClick={onRetrabalho}
+              style={{ color: "var(--warn)", borderColor: "var(--warn)" }}
+              title="Registrar problema — cria bloco de retrabalho">
+              ⚠ Retrabalho
+            </button>
+          )}
           <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
             <button className="btn bg" onClick={onDeletar} style={{ color: "var(--err)", borderColor: "var(--err)" }}>Remover</button>
             <button className="btn bg" onClick={onFechar}>Fechar</button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MODAL RETRABALHO ────────────────────────────────────────
+
+function ModalRetrabalho({
+  prog, onFechar, onSalvo,
+}: {
+  prog: ProgramacaoProducao;
+  onFechar: () => void;
+  onSalvo: () => void;
+}) {
+  const [motivo,    setMotivo]    = useState("");
+  const [dias,      setDias]      = useState("1");
+  const [salvando,  setSalvando]  = useState(false);
+  const [erro,      setErro]      = useState("");
+
+  async function handleSalvar() {
+    if (!motivo.trim()) { setErro("Informe o motivo."); return; }
+    const d = parseInt(dias);
+    if (!d || d < 1) { setErro("Informe quantos dias de retrabalho."); return; }
+    setSalvando(true);
+    const result = await registrarRetrabalho(prog.id, motivo, d);
+    setSalvando(false);
+    if (!result.ok) { setErro(result.erro ?? "Erro ao salvar."); return; }
+    onSalvo();
+  }
+
+  return (
+    <div className="mov open">
+      <div className="mod" style={{ width: 420 }}>
+        <div className="mhd">
+          <span style={{ color: "var(--warn)" }}>⚠ Registrar Retrabalho</span>
+          <button className="btn icon" onClick={onFechar}>✕</button>
+        </div>
+        <div className="mbd" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ background: "rgba(245,158,11,.07)", border: "1px solid var(--warn)", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "var(--t2)" }}>
+            Pedido <strong style={{ color: "var(--t1)" }}>{prog.pedido_id}</strong> · Etapa: {prog.etapa}
+          </div>
+          <div className="fg">
+            <label className="fl">Motivo / descrição do problema</label>
+            <textarea className="fc" rows={3} value={motivo} onChange={e => setMotivo(e.target.value)}
+              placeholder="Ex: Peças fora de esquadro, precisa reprocessar..." />
+          </div>
+          <div className="fg">
+            <label className="fl">Dias de retrabalho estimados</label>
+            <input className="fc" type="number" min={1} max={30} value={dias}
+              onChange={e => setDias(e.target.value)} style={{ width: 100 }} />
+          </div>
+          {erro && <div style={{ color: "var(--err)", fontSize: 12 }}>⚠ {erro}</div>}
+        </div>
+        <div className="mft">
+          <button className="btn bg" onClick={onFechar}>Cancelar</button>
+          <button className="btn" style={{ background: "rgba(245,158,11,.15)", borderColor: "var(--warn)", color: "var(--warn)" }}
+            onClick={handleSalvar} disabled={salvando}>
+            {salvando ? "Salvando…" : "Registrar Retrabalho"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MODAL BLOQUEIO DE LINHA ──────────────────────────────────
+
+function ModalBloqueioLinha({
+  linha, bloqueiosExistentes, onFechar, onSalvo,
+}: {
+  linha: { id: number; nome: string } | null; // null = bloquear todas
+  bloqueiosExistentes: BloqueioLinha[];
+  onFechar: () => void;
+  onSalvo: () => void;
+}) {
+  const nomeDisplay = linha ? linha.nome : "Todas as Linhas";
+  const bloqueiosFiltrados = bloqueiosExistentes.filter(b =>
+    linha ? b.linha_id === linha.id : b.linha_id === null
+  );
+
+  function maskData(v: string) {
+    const d = v.replace(/\D/g, "").slice(0, 8);
+    if (d.length <= 2) return d;
+    if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+    return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+  }
+  function parseBR(s: string): Date | null {
+    const p = s.split("/");
+    if (p.length !== 3 || p[2].length < 4) return null;
+    const [dd, mm, yyyy] = p.map(Number);
+    if (!dd || !mm || !yyyy || mm > 12 || dd > 31) return null;
+    const d = new Date(yyyy, mm - 1, dd, 8, 0, 0);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  const [dtIni,    setDtIni]    = useState("");
+  const [dtFim,    setDtFim]    = useState("");
+  const [motivo,   setMotivo]   = useState("");
+  const [tipo,     setTipo]     = useState<BloqueioLinha['tipo']>("manutencao");
+  const [salvando, setSalvando] = useState(false);
+  const [erro,     setErro]     = useState("");
+
+  async function handleSalvar() {
+    const di = parseBR(dtIni), df = parseBR(dtFim);
+    if (!di || !df) { setErro("Datas inválidas."); return; }
+    if (df <= di)   { setErro("Data fim deve ser depois do início."); return; }
+    setSalvando(true);
+    df.setHours(18, 0, 0, 0);
+    const result = await adicionarBloqueioLinha(linha?.id ?? null, di, df, motivo, tipo);
+    setSalvando(false);
+    if (!result.ok) { setErro(result.erro ?? "Erro."); return; }
+    onSalvo();
+  }
+
+  async function handleRemover(id: string) {
+    await removerBloqueioLinha(id);
+    onSalvo();
+  }
+
+  const tipoLabels: Record<BloqueioLinha['tipo'], string> = {
+    manutencao: "Manutenção", recesso: "Recesso", outro: "Outro",
+  };
+
+  return (
+    <div className="mov open">
+      <div className="mod" style={{ width: 480 }}>
+        <div className="mhd">
+          <span>Bloqueios — {nomeDisplay}</span>
+          <button className="btn icon" onClick={onFechar}>✕</button>
+        </div>
+        <div className="mbd" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+          {/* Bloqueios existentes */}
+          {bloqueiosFiltrados.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--t3)", marginBottom: 8 }}>BLOQUEIOS ATIVOS</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {bloqueiosFiltrados.map(b => (
+                  <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--surf2)", borderRadius: 8, padding: "8px 12px" }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--warn)" }}>
+                        {new Date(b.dt_inicio).toLocaleDateString("pt-BR")} – {new Date(b.dt_fim).toLocaleDateString("pt-BR")}
+                        <span style={{ fontSize: 10, color: "var(--t3)", fontWeight: 400, marginLeft: 8 }}>{tipoLabels[b.tipo]}</span>
+                      </div>
+                      {b.motivo && <div style={{ fontSize: 11, color: "var(--t2)", marginTop: 2 }}>{b.motivo}</div>}
+                    </div>
+                    <button className="btn icon" style={{ color: "var(--err)", fontSize: 11 }}
+                      onClick={() => handleRemover(b.id)}>✕</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Formulário de novo bloqueio */}
+          <div style={{ borderTop: bloqueiosFiltrados.length > 0 ? "1px solid var(--b2)" : "none", paddingTop: bloqueiosFiltrados.length > 0 ? 14 : 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--t3)", marginBottom: 10 }}>NOVO BLOQUEIO</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+              <div className="fg">
+                <label className="fl">Data Início</label>
+                <input className="fc" value={dtIni} onChange={e => setDtIni(maskData(e.target.value))} placeholder="dd/mm/aaaa" maxLength={10} inputMode="numeric" />
+              </div>
+              <div className="fg">
+                <label className="fl">Data Fim</label>
+                <input className="fc" value={dtFim} onChange={e => setDtFim(maskData(e.target.value))} placeholder="dd/mm/aaaa" maxLength={10} inputMode="numeric" />
+              </div>
+            </div>
+            <div className="fg" style={{ marginBottom: 10 }}>
+              <label className="fl">Tipo</label>
+              <select className="fc" value={tipo} onChange={e => setTipo(e.target.value as BloqueioLinha['tipo'])}>
+                <option value="manutencao">Manutenção</option>
+                <option value="recesso">Recesso</option>
+                <option value="outro">Outro</option>
+              </select>
+            </div>
+            <div className="fg">
+              <label className="fl">Motivo (opcional)</label>
+              <input className="fc" value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Ex: Revisão preventiva da máquina" />
+            </div>
+          </div>
+
+          {erro && <div style={{ color: "var(--err)", fontSize: 12 }}>⚠ {erro}</div>}
+        </div>
+        <div className="mft">
+          <button className="btn bg" onClick={onFechar}>Fechar</button>
+          <button className="btn pri" onClick={handleSalvar} disabled={salvando || !dtIni || !dtFim}>
+            {salvando ? "Salvando…" : "Adicionar Bloqueio"}
+          </button>
         </div>
       </div>
     </div>
@@ -884,6 +1114,10 @@ export default function ProgramacaoPage() {
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [metricas,     setMetricas]     = useState<Awaited<ReturnType<typeof getMetricasProducao>> | null>(null);
   const [calendario,   setCalendario]   = useState<Set<string>>(new Set());
+  const [bloqueios,    setBloqueios]    = useState<BloqueioLinha[]>([]);
+  const [calibracao,   setCalibracao]   = useState<DadosCalibracao[]>([]);
+  const [modalBloqueio, setModalBloqueio] = useState<{ id: number; nome: string } | null | "global">(undefined as any);
+  const [modalRetrabalho, setModalRetrabalho] = useState<ProgramacaoProducao | null>(null);
   // Feedback de toast
   const [toast,        setToast]        = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -903,10 +1137,14 @@ export default function ProgramacaoPage() {
     setLoading(true);
     setErroLoad("");
     try {
-      const [lin, cfg, sem, exp, cal] = await Promise.all([
-        getLinhas(), getConfigTempo(), getPedidosSemProgramacao(), getPedidosExpedicao(), getCalendario(),
+      const from2 = zoom === "dia" ? dataBase : dias[0];
+      const to2   = addDays(zoom === "dia" ? dataBase : dias[dias.length - 1], 1);
+      const [lin, cfg, sem, exp, cal, blq] = await Promise.all([
+        getLinhas(), getConfigTempo(), getPedidosSemProgramacao(), getPedidosExpedicao(),
+        getCalendario(), getBloqueiosLinha(from2, addDays(to2, 30)),
       ]);
       setCalendario(cal);
+      setBloqueios(blq);
       setLinhas(lin); setConfig(cfg); setSemProg(sem); setExpedicao(exp);
       const from = zoom === "dia" ? dataBase : dias[0];
       const to   = addDays(zoom === "dia" ? dataBase : dias[dias.length - 1], 1);
@@ -922,7 +1160,12 @@ export default function ProgramacaoPage() {
   async function loadMetricas() {
     try {
       const from = new Date(); from.setDate(1); from.setHours(0, 0, 0, 0);
-      setMetricas(await getMetricasProducao(from, addDays(from, 30)));
+      const [m, c] = await Promise.all([
+        getMetricasProducao(from, addDays(from, 30)),
+        getCalibracaoTempos(),
+      ]);
+      setMetricas(m);
+      setCalibracao(c);
     } catch {}
   }
 
@@ -1376,11 +1619,17 @@ export default function ProgramacaoPage() {
                               borderRight: "1px solid var(--b2)",
                               position: "sticky", left: 0, background: "var(--surf)", zIndex: 5,
                             }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                 <div style={{ width: 9, height: 9, borderRadius: "50%", background: linha.cor, flexShrink: 0 }} />
-                                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
                                   {linha.nome}
                                 </span>
+                                <button
+                                  title="Gerenciar bloqueios desta linha"
+                                  onClick={() => setModalBloqueio({ id: linha.id, nome: linha.nome })}
+                                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t3)", fontSize: 12, padding: "1px 3px", lineHeight: 1, flexShrink: 0 }}>
+                                  🔒
+                                </button>
                               </div>
                               <div style={{ paddingLeft: 17, display: "flex", gap: 6, alignItems: "center" }}>
                                 <span style={{ fontSize: 10, color: "var(--t3)" }}>
@@ -1402,11 +1651,15 @@ export default function ProgramacaoPage() {
                               {/* Grade */}
                               {(zoom === "dia" ? horas : dias).map((_, i) => {
                                 const isHoje = zoom !== "dia" && dias[i] && new Date(dias[i]).toDateString() === agora.toDateString();
+                                const tipo   = zoom !== "dia" && dias[i]
+                                  ? getDiaTipo(new Date(dias[i]), linha.id, calendario, bloqueios)
+                                  : null;
+                                const hachura = tipo ? HATCH[tipo].bg : null;
                                 return (
                                   <div key={i} style={{
                                     position: "absolute", left: i * colW, top: 0, width: colW, height: "100%",
                                     borderRight: "1px solid var(--b1)",
-                                    background: isHoje ? "rgba(61,255,160,0.04)" : "transparent",
+                                    background: hachura ?? (isHoje ? "rgba(61,255,160,0.04)" : "transparent"),
                                   }} />
                                 );
                               })}
@@ -1612,7 +1865,46 @@ export default function ProgramacaoPage() {
             {!metricas ? (
               <div style={{ textAlign: "center", color: "var(--t3)", paddingTop: 80, fontSize: 13 }}>Carregando métricas…</div>
             ) : (
-              <DashboardConteudo metricas={metricas} />
+              <>
+                <DashboardConteudo metricas={metricas} />
+                {calibracao.length > 0 && (
+                  <div style={{ marginTop: 24, background: "var(--surf2)", borderRadius: 12, border: "1px solid var(--b2)", padding: 20 }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "var(--acc)", marginBottom: 14, letterSpacing: ".05em" }}>
+                      CALIBRAÇÃO DE TEMPOS — Estimado vs Real
+                    </div>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ color: "var(--t3)", fontWeight: 700 }}>
+                          {["Etapa","Amostras","Estimado","Real","Fator"].map(h => (
+                            <th key={h} style={{ textAlign: "left", padding: "4px 10px", borderBottom: "1px solid var(--b2)" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {calibracao.map(row => {
+                          const fatorCor = row.fator_ajuste > 1.2 ? "var(--err)" : row.fator_ajuste < 0.8 ? "var(--ok)" : "var(--t2)";
+                          return (
+                            <tr key={row.etapa} style={{ borderBottom: "1px solid var(--b1)" }}>
+                              <td style={{ padding: "6px 10px", color: "var(--t1)", fontWeight: 600 }}>{row.etapa}</td>
+                              <td style={{ padding: "6px 10px", color: "var(--t3)" }}>{row.count}</td>
+                              <td style={{ padding: "6px 10px", color: "var(--t2)" }}>{formatarDuracao(row.media_estimado_min)}</td>
+                              <td style={{ padding: "6px 10px", color: "var(--t2)" }}>{formatarDuracao(row.media_real_min)}</td>
+                              <td style={{ padding: "6px 10px", fontWeight: 700, color: fatorCor }}>
+                                {row.fator_ajuste}×
+                                {row.fator_ajuste > 1.2 && <span style={{ fontSize: 10, marginLeft: 4 }}>↑ subestimado</span>}
+                                {row.fator_ajuste < 0.8 && <span style={{ fontSize: 10, marginLeft: 4 }}>↓ superestimado</span>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 8 }}>
+                      Fator &gt; 1.0 = real demorou mais que o estimado. Use esses valores para ajustar a Config de Tempo.
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -1635,7 +1927,23 @@ export default function ProgramacaoPage() {
         <ModalBloco prog={modalBloco} linhas={linhas}
           onFechar={() => setModalBloco(null)}
           onIniciar={handleIniciar} onConcluir={handleConcluir} onDeletar={handleDeletar}
-          onRetirada={load} />
+          onRetirada={load}
+          onRetrabalho={() => { setModalRetrabalho(modalBloco); setModalBloco(null); }} />
+      )}
+
+      {modalRetrabalho && (
+        <ModalRetrabalho
+          prog={modalRetrabalho}
+          onFechar={() => setModalRetrabalho(null)}
+          onSalvo={async () => { setModalRetrabalho(null); showToast("Retrabalho registrado."); await load(); }} />
+      )}
+
+      {modalBloqueio !== undefined && modalBloqueio !== null && (
+        <ModalBloqueioLinha
+          linha={typeof modalBloqueio === "object" ? modalBloqueio : null}
+          bloqueiosExistentes={bloqueios}
+          onFechar={() => setModalBloqueio(undefined as any)}
+          onSalvo={async () => { await load(); }} />
       )}
     </AppLayout>
   );

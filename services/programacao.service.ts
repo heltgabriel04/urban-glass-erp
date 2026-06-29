@@ -570,6 +570,150 @@ export async function getRetiradas(programacaoId: string): Promise<RetiradaParci
   return data as RetiradaParcial[];
 }
 
+// ─── BLOQUEIOS DE LINHA ──────────────────────────────────────
+
+export interface BloqueioLinha {
+  id: string;
+  linha_id: number | null;  // null = todos as linhas
+  dt_inicio: string;
+  dt_fim: string;
+  motivo: string | null;
+  tipo: 'manutencao' | 'recesso' | 'outro';
+  criado_por: string | null;
+  created_at: string;
+}
+
+export async function getBloqueiosLinha(dtInicio?: Date, dtFim?: Date): Promise<BloqueioLinha[]> {
+  let q = supabase.from('bloqueios_linha').select('*');
+  if (dtInicio && dtFim) {
+    q = (q as any)
+      .lt('dt_inicio', dtFim.toISOString())
+      .gt('dt_fim', dtInicio.toISOString());
+  }
+  const { data } = await (q as any).order('dt_inicio');
+  return (data ?? []) as BloqueioLinha[];
+}
+
+export async function adicionarBloqueioLinha(
+  linhaId: number | null,
+  dtInicio: Date,
+  dtFim: Date,
+  motivo: string,
+  tipo: BloqueioLinha['tipo'] = 'manutencao',
+): Promise<{ ok: boolean; erro?: string }> {
+  const usuario = await getUsuario();
+  const { error } = await supabase.from('bloqueios_linha').insert({
+    linha_id: linhaId,
+    dt_inicio: dtInicio.toISOString(),
+    dt_fim: dtFim.toISOString(),
+    motivo: motivo || null,
+    tipo,
+    criado_por: usuario,
+  });
+  if (error) return { ok: false, erro: error.message };
+  return { ok: true };
+}
+
+export async function removerBloqueioLinha(id: string): Promise<boolean> {
+  const { error } = await supabase.from('bloqueios_linha').delete().eq('id', id);
+  return !error;
+}
+
+// ─── RETRABALHO / QUEBRA ─────────────────────────────────────
+
+export async function registrarRetrabalho(
+  progId: string,
+  motivo: string,
+  diasAtraso: number = 1,
+  diasBloqueados: Set<string> = new Set(),
+): Promise<{ ok: boolean; erro?: string }> {
+  const { data: prog } = await supabase
+    .from('programacao_producao')
+    .select('pedido_id, linha_id, etapa, sequencia, duracao_estimada_min')
+    .eq('id', progId)
+    .single();
+
+  if (!prog) return { ok: false, erro: 'Programação não encontrada.' };
+
+  const dtInicio = proximoDiaUtil(new Date(), diasBloqueados);
+  dtInicio.setHours(8, 0, 0, 0);
+  const dtFim = addDiasUteis(dtInicio, Math.max(1, diasAtraso), diasBloqueados);
+
+  const { error } = await supabase.from('programacao_producao').insert({
+    pedido_id:            prog.pedido_id,
+    linha_id:             prog.linha_id,
+    etapa:                'Retrabalho',
+    sequencia:            (prog.sequencia ?? 0) + 10,
+    dt_inicio_previsto:   toISOLocal(dtInicio),
+    dt_fim_previsto:      toISOLocal(dtFim),
+    duracao_estimada_min: Math.max(1, diasAtraso) * 480,
+    responsavel:          null,
+    obs:                  motivo,
+  });
+
+  if (error) return { ok: false, erro: error.message };
+
+  const usuario = await getUsuario();
+  await supabase.from('programacao_historico').insert({
+    pedido_id:        prog.pedido_id,
+    tipo_alteracao:   'retrabalho',
+    dados_anteriores: { prog_id: progId } as Record<string, unknown>,
+    dados_novos:      { motivo, dias_atraso: diasAtraso } as Record<string, unknown>,
+    motivo,
+    usuario,
+  });
+
+  return { ok: true };
+}
+
+// ─── CALIBRAÇÃO DE TEMPOS ────────────────────────────────────
+
+export interface DadosCalibracao {
+  etapa: string;
+  count: number;
+  media_estimado_min: number;
+  media_real_min: number;
+  fator_ajuste: number;
+}
+
+export async function getCalibracaoTempos(): Promise<DadosCalibracao[]> {
+  const { data } = await supabase
+    .from('programacao_producao')
+    .select('etapa, duracao_estimada_min, dt_inicio_real, dt_fim_real')
+    .eq('status', 'Concluído')
+    .not('dt_inicio_real', 'is', null)
+    .not('dt_fim_real', 'is', null);
+
+  if (!data) return [];
+
+  const porEtapa: Record<string, { estimados: number[]; reais: number[] }> = {};
+
+  for (const row of data as any[]) {
+    const estimado = row.duracao_estimada_min as number;
+    const real     = (new Date(row.dt_fim_real).getTime() - new Date(row.dt_inicio_real).getTime()) / 60000;
+    if (!estimado || estimado <= 0 || real <= 0 || real > 14400) continue; // ignora > 10 dias
+    if (!porEtapa[row.etapa]) porEtapa[row.etapa] = { estimados: [], reais: [] };
+    porEtapa[row.etapa].estimados.push(estimado);
+    porEtapa[row.etapa].reais.push(real);
+  }
+
+  return Object.entries(porEtapa)
+    .filter(([, d]) => d.estimados.length > 0)
+    .map(([etapa, d]) => {
+      const n         = d.estimados.length;
+      const mediaEst  = d.estimados.reduce((a, b) => a + b, 0) / n;
+      const mediaReal = d.reais.reduce((a, b) => a + b, 0) / n;
+      return {
+        etapa,
+        count: n,
+        media_estimado_min: Math.round(mediaEst),
+        media_real_min:     Math.round(mediaReal),
+        fator_ajuste:       Math.round((mediaReal / mediaEst) * 100) / 100,
+      };
+    })
+    .sort((a, b) => a.etapa.localeCompare(b.etapa));
+}
+
 // ─── MÉTRICAS PARA DASHBOARD ────────────────────────────────
 
 export interface MetricasProducao {
