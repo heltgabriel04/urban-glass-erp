@@ -147,8 +147,20 @@ export default function ClientesPage() {
 
   async function handleCnpjChange(masked: string) {
     F("cnpj", masked);
-    setCnpjStatus("");
     const raw = masked.replace(/\D/g, "");
+
+    if (cnpjStatus === "ok" && raw.length < 14) {
+      setCnpjStatus("");
+      setForm((f: any) => ({
+        ...f,
+        nome: "", logradouro: "", numero: "", complemento: "",
+        bairro: "", cidade: "", uf: "", cep: "", cod_ibge: "",
+        tel: "", email: "",
+      }));
+      return;
+    }
+
+    setCnpjStatus("");
     if (raw.length !== 14) return;
     setBuscandoCnpj(true);
     const result = await buscarCnpjApi(raw);
