@@ -293,7 +293,13 @@ export default function ClientesPage() {
                   const docNum = c.tipo_pessoa === "PF" ? c.cpf : c.cnpj;
                   const cidade = [c.cidade, c.uf].filter(Boolean).join(" / ");
                   return (
-                    <tr key={c.id}>
+                    <tr
+                      key={c.id}
+                      onClick={() => abrirEdit(c)}
+                      style={{ cursor:"pointer" }}
+                      onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = "var(--surf2)"}
+                      onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = ""}
+                    >
                       <td>
                         <strong>{c.nome}</strong>
                         {c.email && <div className="tdim">{c.email}</div>}
@@ -331,14 +337,14 @@ export default function ClientesPage() {
                       <td>{riscoChip(fin)}</td>
                       <td>
                         <div style={{ display:"flex", gap:"6px" }}>
-                          <a href={`/clientes/${c.id}`} className="btn bg xs">Ver</a>
-                          <button className="btn bg xs" onClick={() => abrirEdit(c)}>Editar</button>
+                          <a href={`/clientes/${c.id}`} className="btn bg xs" onClick={e => e.stopPropagation()}>Ver</a>
+                          <button className="btn bg xs" onClick={e => { e.stopPropagation(); abrirEdit(c); }}>Editar</button>
                         </div>
                       </td>
                       <td style={{ width:"40px", textAlign:"center" }}>
                         <button
                           title="Excluir"
-                          onClick={() => handleDeletar(c)}
+                          onClick={e => { e.stopPropagation(); handleDeletar(c); }}
                           style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"13px", cursor:"pointer", transition:"all 0.15s" }}
                           onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="rgba(244,63,94,.15)"; b.style.borderColor="var(--err)"; b.style.color="var(--err)"; }}
                           onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="transparent"; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
