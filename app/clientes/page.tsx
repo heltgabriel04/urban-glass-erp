@@ -61,13 +61,41 @@ async function buscarCep(cep: string) {
   } catch { return null; }
 }
 
-async function buscarCnpjApi(cnpj: string) {
+async function buscarCnpjApi(cnpj: string): Promise<{ data: any; notFound: boolean } | null> {
   const raw = cnpj.replace(/\D/g, "");
   if (raw.length !== 14) return null;
+
+  // Tenta BrasilAPI primeiro
   try {
     const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${raw}`);
+    if (res.status === 404) return { data: null, notFound: true };
+    if (res.ok) return { data: await res.json(), notFound: false };
+    // rate-limit ou erro de servidor → tenta fallback abaixo
+  } catch { /* fallback */ }
+
+  // Fallback: ReceitaWS
+  try {
+    const res = await fetch(`https://receitaws.com.br/v1/cnpj/${raw}`);
     if (!res.ok) return null;
-    return await res.json();
+    const d = await res.json();
+    if (d.status === "ERROR") return { data: null, notFound: true };
+    // Normaliza para o mesmo formato do BrasilAPI
+    return {
+      data: {
+        razao_social:            d.nome,
+        logradouro:              d.logradouro,
+        numero:                  d.numero,
+        complemento:             d.complemento,
+        bairro:                  d.bairro,
+        municipio:               d.municipio,
+        uf:                      d.uf,
+        cep:                     d.cep,
+        ddd_telefone_1:          (d.telefone ?? "").replace(/\D/g, ""),
+        email:                   d.email,
+        codigo_municipio_ibge:   null,
+      },
+      notFound: false,
+    };
   } catch { return null; }
 }
 
@@ -83,7 +111,7 @@ export default function ClientesPage() {
   const [salvando, setSalvando]       = useState(false);
   const [buscandoCep, setBuscandoCep] = useState(false);
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
-  const [cnpjStatus, setCnpjStatus]     = useState<"" | "ok" | "err">("");
+  const [cnpjStatus, setCnpjStatus]     = useState<"" | "ok" | "err" | "offline">("");
 
   useEffect(() => { load(); }, []);
 
@@ -123,11 +151,13 @@ export default function ClientesPage() {
     const raw = masked.replace(/\D/g, "");
     if (raw.length !== 14) return;
     setBuscandoCnpj(true);
-    const d = await buscarCnpjApi(raw);
+    const result = await buscarCnpjApi(raw);
     setBuscandoCnpj(false);
-    if (!d) { setCnpjStatus("err"); return; }
+    if (!result) { setCnpjStatus("offline"); return; }
+    if (result.notFound) { setCnpjStatus("err"); return; }
     setCnpjStatus("ok");
 
+    const d = result.data;
     function toTitleCase(s: string) {
       return (s ?? "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
     }
@@ -361,8 +391,9 @@ export default function ClientesPage() {
                         <label className="fl" style={{ display:"flex", alignItems:"center", gap:"6px" }}>
                           CNPJ
                           {buscandoCnpj && <span style={{ fontSize:"10px", color:"var(--acc)", fontWeight:500 }}>buscando...</span>}
-                          {!buscandoCnpj && cnpjStatus === "ok"  && <span style={{ fontSize:"10px", color:"var(--ok)",  fontWeight:600 }}>✓ dados preenchidos</span>}
-                          {!buscandoCnpj && cnpjStatus === "err" && <span style={{ fontSize:"10px", color:"var(--warn)", fontWeight:600 }}>não encontrado</span>}
+                          {!buscandoCnpj && cnpjStatus === "ok"      && <span style={{ fontSize:"10px", color:"var(--ok)",   fontWeight:600 }}>✓ dados preenchidos</span>}
+                          {!buscandoCnpj && cnpjStatus === "err"     && <span style={{ fontSize:"10px", color:"var(--warn)", fontWeight:600 }}>CNPJ não encontrado</span>}
+                          {!buscandoCnpj && cnpjStatus === "offline" && <span style={{ fontSize:"10px", color:"var(--warn)", fontWeight:600 }}>serviço indisponível, tente novamente</span>}
                         </label>
                         <input className="fc" value={form.cnpj} onChange={e => handleCnpjChange(maskCNPJ(e.target.value))} placeholder="00.000.000/0001-00" maxLength={18} inputMode="numeric" autoFocus />
                       </div>
