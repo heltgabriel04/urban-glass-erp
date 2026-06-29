@@ -12,6 +12,45 @@ export function addDays(date: Date, days: number): Date {
   return d;
 }
 
+// Avança N dias úteis, pulando fins de semana e datas bloqueadas (feriados/manutenções)
+export function addDiasUteis(date: Date, dias: number, bloqueados: Set<string> = new Set()): Date {
+  let d = new Date(date);
+  let restante = dias;
+  while (restante > 0) {
+    d = new Date(d.getTime() + 86400000);
+    const dow = d.getDay();
+    const iso = d.toISOString().slice(0, 10);
+    if (dow !== 0 && dow !== 6 && !bloqueados.has(iso)) restante--;
+  }
+  return d;
+}
+
+// Próximo dia útil a partir de uma data (pode ser a própria data se já for útil)
+export function proximoDiaUtil(date: Date, bloqueados: Set<string> = new Set()): Date {
+  let d = new Date(date);
+  while (true) {
+    const dow = d.getDay();
+    const iso = d.toISOString().slice(0, 10);
+    if (dow !== 0 && dow !== 6 && !bloqueados.has(iso)) return d;
+    d = new Date(d.getTime() + 86400000);
+  }
+}
+
+export async function getCalendario(): Promise<Set<string>> {
+  const ano = new Date().getFullYear();
+  const { data } = await supabase
+    .from('calendario_producao')
+    .select('data')
+    .gte('data', `${ano}-01-01`)
+    .lte('data', `${ano + 1}-12-31`);
+  return new Set((data ?? []).map((r: { data: string }) => r.data));
+}
+
+async function getUsuario(): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  return user?.email ?? user?.id ?? 'sistema';
+}
+
 export function toISOLocal(date: Date): string {
   return date.toISOString();
 }
@@ -286,16 +325,18 @@ export async function criarProgramacaoPedido(
   dtInicioCorte: Date,
   linhaCorteId: number,
   linhaLapId?: number,
+  diasBloqueados: Set<string> = new Set(),
 ): Promise<{ ok: boolean; erro?: string }> {
   const tempos = calcularTempoEstimado(itens, config);
 
-  const linhaCorte  = linhas.find(l => l.id === linhaCorteId);
-  const minsDia     = (linhaCorte?.capacidade_horas_dia ?? 8) * 60;
-  const diasCorte   = Math.ceil(tempos.corte_min / minsDia);
-  const dtFimCorte  = addDays(dtInicioCorte, Math.max(1, diasCorte));
+  const dtInicioUtil = proximoDiaUtil(dtInicioCorte, diasBloqueados);
+  const linhaCorte   = linhas.find(l => l.id === linhaCorteId);
+  const minsDia      = (linhaCorte?.capacidade_horas_dia ?? 8) * 60;
+  const diasCorte    = Math.ceil(tempos.corte_min / minsDia);
+  const dtFimCorte   = addDiasUteis(dtInicioUtil, Math.max(1, diasCorte), diasBloqueados);
 
   // Detecta conflito antes de inserir
-  const confCorte = await verificarConflito(linhaCorteId, dtInicioCorte, dtFimCorte);
+  const confCorte = await verificarConflito(linhaCorteId, dtInicioUtil, dtFimCorte);
   if (confCorte.conflito) {
     return { ok: false, erro: `Linha de corte já possui o pedido ${confCorte.pedidoConflitante} neste período.` };
   }
@@ -305,7 +346,7 @@ export async function criarProgramacaoPedido(
     linha_id: linhaCorteId,
     etapa: 'Corte',
     sequencia: 0,
-    dt_inicio_previsto: toISOLocal(dtInicioCorte),
+    dt_inicio_previsto: toISOLocal(dtInicioUtil),
     dt_fim_previsto: toISOLocal(dtFimCorte),
     duracao_estimada_min: tempos.corte_min,
     responsavel: null,
@@ -313,10 +354,10 @@ export async function criarProgramacaoPedido(
   }];
 
   if (tempos.tem_lapidacao && linhaLapId) {
-    const dtInicioLap = addDays(dtFimCorte, 1);
+    const dtInicioLap = proximoDiaUtil(addDays(dtFimCorte, 1), diasBloqueados);
     const linhaLap    = linhas.find(l => l.id === linhaLapId);
     const diasLap     = Math.ceil(tempos.lapidacao_min / ((linhaLap?.capacidade_horas_dia ?? 8) * 60));
-    const dtFimLap    = addDays(dtInicioLap, Math.max(1, diasLap));
+    const dtFimLap    = addDiasUteis(dtInicioLap, Math.max(1, diasLap), diasBloqueados);
 
     const confLap = await verificarConflito(linhaLapId, dtInicioLap, dtFimLap);
     if (confLap.conflito) {
@@ -339,6 +380,7 @@ export async function criarProgramacaoPedido(
   const { error } = await supabase.from('programacao_producao').insert(registros);
   if (error) { console.error('criarProgramacaoPedido:', error); return { ok: false, erro: error.message }; }
 
+  const usuario = await getUsuario();
   await supabase.from('programacao_historico').insert(
     registros.map(r => ({
       pedido_id: pedidoId,
@@ -346,7 +388,7 @@ export async function criarProgramacaoPedido(
       dados_anteriores: null,
       dados_novos: r as unknown as Record<string, unknown>,
       motivo: null,
-      usuario: 'sistema',
+      usuario,
     }))
   );
 
@@ -382,6 +424,7 @@ export async function reagendar(
 
   if (error) { console.error('reagendar:', error); return false; }
 
+  const usuario = await getUsuario();
   await supabase.from('programacao_historico').insert({
     programacao_id: progId,
     pedido_id: null,
@@ -389,10 +432,29 @@ export async function reagendar(
     dados_anteriores: antes as unknown as Record<string, unknown>,
     dados_novos: updates as unknown as Record<string, unknown>,
     motivo: motivo ?? null,
-    usuario: 'sistema',
+    usuario,
   });
 
   return true;
+}
+
+// Mapeamento: (etapa, novoStatusProg) → novo status do pedido
+function mapearStatusPedido(
+  etapa: string,
+  novoStatus: ProgramacaoProducao['status'],
+): StatusPedido | null {
+  if (novoStatus === 'Em Execução') {
+    if (etapa === 'Corte')              return 'Em Produção – Corte';
+    if (etapa === 'Lapidação')          return 'Em Produção – Lapidação';
+    if (etapa === 'Retirada de Chapa')  return 'Separação';
+  }
+  if (novoStatus === 'Concluído') {
+    if (etapa === 'Corte')              return 'Qualidade (Corte)';
+    if (etapa === 'Lapidação')          return 'Qualidade (Lapidação)';
+    if (etapa === 'Retirada de Chapa')  return 'Finalizado';
+    if (etapa === 'Separação')          return 'Finalizado';
+  }
+  return null;
 }
 
 export async function atualizarStatusProgramacao(
@@ -400,6 +462,13 @@ export async function atualizarStatusProgramacao(
   status: ProgramacaoProducao['status'],
   dtReal?: Date,
 ): Promise<boolean> {
+  // Busca a prog atual para saber etapa e pedido_id
+  const { data: prog } = await supabase
+    .from('programacao_producao')
+    .select('pedido_id, etapa')
+    .eq('id', progId)
+    .single();
+
   const updates: Partial<ProgramacaoProducao> = { status };
   if (status === 'Em Execução' && dtReal) updates.dt_inicio_real = toISOLocal(dtReal);
   if (status === 'Concluído'   && dtReal) updates.dt_fim_real    = toISOLocal(dtReal);
@@ -409,7 +478,20 @@ export async function atualizarStatusProgramacao(
     .update(updates)
     .eq('id', progId);
 
-  return !error;
+  if (error) return false;
+
+  // Sincroniza pedidos.status automaticamente
+  if (prog) {
+    const novoStatusPedido = mapearStatusPedido(prog.etapa, status);
+    if (novoStatusPedido) {
+      await supabase
+        .from('pedidos')
+        .update({ status: novoStatusPedido })
+        .eq('id', prog.pedido_id);
+    }
+  }
+
+  return true;
 }
 
 export async function deletarProgramacao(progId: string): Promise<boolean> {
@@ -424,19 +506,21 @@ export async function agendarChapaInteira(
   pecasTotal: number,
   linhas: ProducaoLinha[],
   dtRetirada: Date,
+  diasBloqueados: Set<string> = new Set(),
 ): Promise<{ ok: boolean; erro?: string }> {
   const linhaSep = linhas.find(l => l.tipo === 'Separação');
   if (!linhaSep) return { ok: false, erro: 'Linha de Separação não encontrada. Execute o script SQL.' };
 
-  const duracao = Math.max(30, pecasTotal * 5);
-  const dtFim = new Date(dtRetirada.getTime() + duracao * 60000);
+  const dtInicio = proximoDiaUtil(dtRetirada, diasBloqueados);
+  const duracao  = Math.max(30, pecasTotal * 5);
+  const dtFim    = new Date(dtInicio.getTime() + duracao * 60000);
 
   const { error } = await supabase.from('programacao_producao').insert({
     pedido_id: pedidoId,
     linha_id: linhaSep.id,
     etapa: 'Retirada de Chapa',
     sequencia: 0,
-    dt_inicio_previsto: toISOLocal(dtRetirada),
+    dt_inicio_previsto: toISOLocal(dtInicio),
     dt_fim_previsto: toISOLocal(dtFim),
     duracao_estimada_min: duracao,
     responsavel: null,

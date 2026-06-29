@@ -4,13 +4,13 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import {
   getLinhas, getConfigTempo, getProgramacao, getPedidosSemProgramacao,
-  getPedidosExpedicao,
+  getPedidosExpedicao, getCalendario,
   criarProgramacaoPedido, agendarChapaInteira, reagendar,
   atualizarStatusProgramacao, deletarProgramacao,
   registrarRetiradaParcial, getRetiradas,
   calcularTempoEstimado, formatarDuracao, getMetricasProducao,
   isPedidoSomenteChapas,
-  addDays, getMonday, diffDays, toISOLocal,
+  addDays, addDiasUteis, proximoDiaUtil, getMonday, diffDays, toISOLocal,
 } from "@/services/programacao.service";
 import type { RetiradaParcial } from "@/services/programacao.service";
 import type {
@@ -883,6 +883,7 @@ export default function ProgramacaoPage() {
   const [busca,        setBusca]        = useState("");
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [metricas,     setMetricas]     = useState<Awaited<ReturnType<typeof getMetricasProducao>> | null>(null);
+  const [calendario,   setCalendario]   = useState<Set<string>>(new Set());
   // Feedback de toast
   const [toast,        setToast]        = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -902,9 +903,10 @@ export default function ProgramacaoPage() {
     setLoading(true);
     setErroLoad("");
     try {
-      const [lin, cfg, sem, exp] = await Promise.all([
-        getLinhas(), getConfigTempo(), getPedidosSemProgramacao(), getPedidosExpedicao(),
+      const [lin, cfg, sem, exp, cal] = await Promise.all([
+        getLinhas(), getConfigTempo(), getPedidosSemProgramacao(), getPedidosExpedicao(), getCalendario(),
       ]);
+      setCalendario(cal);
       setLinhas(lin); setConfig(cfg); setSemProg(sem); setExpedicao(exp);
       const from = zoom === "dia" ? dataBase : dias[0];
       const to   = addDays(zoom === "dia" ? dataBase : dias[dias.length - 1], 1);
@@ -982,8 +984,8 @@ export default function ProgramacaoPage() {
 
     // linhaCorteId === -1 sinaliza chapa inteira (sem corte)
     const result = linhaCorteId === -1
-      ? await agendarChapaInteira(modalAgendar.id, pecasTotal, linhas, dtInicio)
-      : await criarProgramacaoPedido(modalAgendar.id, itens, config, linhas, dtInicio, linhaCorteId, linhaLapId);
+      ? await agendarChapaInteira(modalAgendar.id, pecasTotal, linhas, dtInicio, calendario)
+      : await criarProgramacaoPedido(modalAgendar.id, itens, config, linhas, dtInicio, linhaCorteId, linhaLapId, calendario);
 
     if (!result.ok) {
       alert(result.erro ?? "Erro ao agendar.");
@@ -1100,7 +1102,7 @@ export default function ProgramacaoPage() {
         (nextFree[l.id]?.getTime() ?? 0) < (nextFree[best.id]?.getTime() ?? 0) ? l : best
       );
 
-      const dtInicio = new Date(nextFree[melhorLinha.id]);
+      const dtInicio = proximoDiaUtil(new Date(nextFree[melhorLinha.id]), calendario);
       dtInicio.setHours(8, 0, 0, 0);
 
       const itens = (pedido.itens_pedido ?? []) as { m2: number; quantidade: number; lapidacao: number; produto_nome: string }[];
@@ -1108,18 +1110,17 @@ export default function ProgramacaoPage() {
       const diasNecessarios = Math.max(1, Math.ceil(tempos.corte_min / ((melhorLinha.capacidade_horas_dia ?? 8) * 60)));
 
       const result = await criarProgramacaoPedido(
-        pedido.id, itens, config, linhas, dtInicio, melhorLinha.id, undefined
+        pedido.id, itens, config, linhas, dtInicio, melhorLinha.id, undefined, calendario
       );
 
       if (result.ok) {
         agendados++;
-        const proximo = addDays(dtInicio, diasNecessarios + 1);
+        const proximo = proximoDiaUtil(addDiasUteis(dtInicio, diasNecessarios + 1, calendario), calendario);
         proximo.setHours(8, 0, 0, 0);
         nextFree[melhorLinha.id] = proximo;
       } else {
         erros++;
-        // Avança 1 dia para não travar no mesmo conflito
-        nextFree[melhorLinha.id] = addDays(nextFree[melhorLinha.id], 1);
+        nextFree[melhorLinha.id] = proximoDiaUtil(addDays(nextFree[melhorLinha.id], 1), calendario);
       }
     }
 
