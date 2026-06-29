@@ -256,12 +256,15 @@ function ModalAgendar({
         </div>
         <div className="mbd" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
-          {/* Aviso de tabelas não criadas */}
+          {/* Aviso de tabelas sem acesso (RLS ou não criadas) */}
           {semTabelas && (
-            <div style={{ background: "rgba(244,63,94,.12)", border: "1px solid var(--err)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--err)" }}>
-              <strong>⚠ Configuração pendente</strong>
-              <div style={{ marginTop: 4, color: "var(--t1)", lineHeight: 1.5 }}>
-                Execute o arquivo <strong>sql/programacao-producao.sql</strong> no Supabase SQL Editor para criar as tabelas e linhas de produção.
+            <div style={{ background: "rgba(244,63,94,.1)", border: "1px solid var(--err)", borderRadius: 8, padding: "12px 14px", fontSize: 12 }}>
+              <div style={{ color: "var(--err)", fontWeight: 700, marginBottom: 6 }}>⚠ Linhas de produção não encontradas</div>
+              <div style={{ color: "var(--t1)", lineHeight: 1.6 }}>
+                Execute o arquivo <strong>sql/fix-programacao-rls.sql</strong> no Supabase SQL Editor — ele desativa o RLS e garante os dados de seed.
+              </div>
+              <div style={{ marginTop: 8, fontSize: 10, color: "var(--t3)" }}>
+                Se já executou o script principal, o problema é Row Level Security (RLS) bloqueando o acesso. O arquivo acima corrige isso.
               </div>
             </div>
           )}

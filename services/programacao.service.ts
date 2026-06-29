@@ -93,7 +93,10 @@ export async function getLinhas(): Promise<ProducaoLinha[]> {
     .select('*')
     .eq('ativo', true)
     .order('id');
-  if (error) { console.error('getLinhas:', error); return []; }
+  if (error) {
+    console.error('[APS] getLinhas erro:', error.code, error.message, error.hint ?? '');
+    return [];
+  }
   return data as ProducaoLinha[];
 }
 
