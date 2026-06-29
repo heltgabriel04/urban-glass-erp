@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import {
   getLinhas, getConfigTempo, getProgramacao, getPedidosSemProgramacao,
@@ -87,9 +87,8 @@ function blocoLeft(prog: ProgramacaoProducao, zoom: string, visibleStart: Date):
   return Math.max(0, diffDays(inicio, visibleStart)) * COL_W[zoom];
 }
 
-function blocoWidth(prog: ProgramacaoProducao, zoom: string): number {
-  const dur = prog.duracao_estimada_min ?? 60;
-  const cw  = COL_W[zoom];
+function calcBlocoWidth(dur: number, zoom: string): number {
+  const cw = COL_W[zoom];
   if (zoom === "dia") return Math.max(cw * 0.9, (dur / 60) * cw);
   const dias = Math.max(0.5, dur / 480);
   return Math.max(cw * 0.85, dias * cw - 4);
@@ -121,22 +120,60 @@ function LegendaCores() {
   );
 }
 
-// ─── BLOCO DRAGGABLE ──────────────────────────────────────────
+// ─── BLOCO DRAGGABLE + REDIMENSIONÁVEL ───────────────────────
 
 function BlocoProducao({
-  prog, zoom, visibleStart, onClick,
+  prog, zoom, visibleStart, onClick, onResizeFim,
 }: {
   prog: ProgramacaoProducao; zoom: string; visibleStart: Date;
   onClick: (p: ProgramacaoProducao) => void;
+  onResizeFim: (id: string, novaDur: number) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: prog.id, data: { prog },
   });
 
+  // Preview local de duração durante o resize
+  const [previewDur, setPreviewDur] = useState<number | null>(null);
+  const isResizing = useRef(false);
+
+  const displayDur = previewDur ?? (prog.duracao_estimada_min ?? 60);
   const left  = blocoLeft(prog, zoom, visibleStart);
-  const width = blocoWidth(prog, zoom);
+  const width = calcBlocoWidth(displayDur, zoom);
   const borda = bordaBloco(prog);
   const bg    = corBloco(prog);
+
+  // Snap em minutos conforme zoom
+  const snapMin = zoom === "dia" ? 15 : zoom === "semana" ? 30 : 60;
+  // Minutos por pixel conforme zoom
+  const minsPorPx = zoom === "dia"
+    ? 60 / COL_W.dia
+    : 480 / COL_W[zoom];
+
+  function handleResizeDown(e: React.PointerEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    isResizing.current = true;
+    const startX   = e.clientX;
+    const startDur = prog.duracao_estimada_min ?? 60;
+
+    function onMove(ev: PointerEvent) {
+      if (!isResizing.current) return;
+      const deltaMin = Math.round((ev.clientX - startX) * minsPorPx / snapMin) * snapMin;
+      setPreviewDur(Math.max(snapMin, startDur + deltaMin));
+    }
+    function onUp(ev: PointerEvent) {
+      isResizing.current = false;
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup",   onUp);
+      const deltaMin = Math.round((ev.clientX - startX) * minsPorPx / snapMin) * snapMin;
+      const newDur   = Math.max(snapMin, startDur + deltaMin);
+      setPreviewDur(null);
+      if (newDur !== startDur) onResizeFim(prog.id, newDur);
+    }
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup",   onUp);
+  }
 
   const itens = prog.pedidos?.itens_pedido ?? [];
   const pecas = itens.reduce((s, i) => s + i.quantidade, 0);
@@ -151,7 +188,8 @@ function BlocoProducao({
       style={{
         position: "absolute", left, top: 6, width, height: ROW_H - 16,
         background: bg, border: `1.5px solid ${borda}`, borderRadius: 8,
-        padding: "6px 9px", cursor: isDragging ? "grabbing" : "grab",
+        padding: "6px 9px 6px 9px",
+        cursor: isDragging ? "grabbing" : "grab",
         userSelect: "none", zIndex: isDragging ? 50 : 2,
         opacity: isDragging ? 0.7 : 1,
         transform: CSS.Translate.toString(transform),
@@ -163,28 +201,51 @@ function BlocoProducao({
       {...listeners}
       onClick={(e) => { e.stopPropagation(); onClick(prog); }}
     >
-      <div style={{ fontSize: 12, fontWeight: 700, color: borda, lineHeight: 1.2, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {prog.pedido_id}
+      {/* Conteúdo do bloco */}
+      <div style={{ paddingRight: 10, overflow: "hidden" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: borda, lineHeight: 1.2, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {prog.pedido_id}
+        </div>
+        {width > 72 && (
+          <div style={{ fontSize: 10, color: "var(--t1)", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {prog.pedidos?.clientes?.nome ?? "—"}
+          </div>
+        )}
+        {width > 100 && (
+          <div style={{ fontSize: 10, color: "var(--t2)", display: "flex", gap: 4, overflow: "hidden" }}>
+            <span>{prog.pedidos?.m2_total?.toFixed(1)}m²</span>
+            <span>·</span>
+            <span>{pecas}pç</span>
+            <span>·</span>
+            <span>↗{prazo}</span>
+          </div>
+        )}
+        {width > 100 && (
+          <div style={{ fontSize: 10, color: previewDur ? "var(--acc)" : "var(--t3)", marginTop: 1, fontWeight: previewDur ? 700 : 400 }}>
+            {formatarDuracao(displayDur)} · {prog.etapa}
+          </div>
+        )}
       </div>
-      {width > 72 && (
-        <div style={{ fontSize: 10, color: "var(--t1)", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {prog.pedidos?.clientes?.nome ?? "—"}
-        </div>
-      )}
-      {width > 100 && (
-        <div style={{ fontSize: 10, color: "var(--t2)", display: "flex", gap: 4, overflow: "hidden" }}>
-          <span>{prog.pedidos?.m2_total?.toFixed(1)}m²</span>
-          <span>·</span>
-          <span>{pecas}pç</span>
-          <span>·</span>
-          <span>↗{prazo}</span>
-        </div>
-      )}
-      {width > 100 && (
-        <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 1 }}>
-          {formatarDuracao(prog.duracao_estimada_min ?? 0)} · {prog.etapa}
-        </div>
-      )}
+
+      {/* Resize handle — borda direita */}
+      <div
+        style={{
+          position: "absolute", right: 0, top: 0, bottom: 0, width: 12,
+          cursor: "ew-resize", zIndex: 10,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: "transparent",
+        }}
+        onPointerDown={handleResizeDown}
+        onClick={e => e.stopPropagation()}
+        title="Arraste para ajustar a duração"
+      >
+        <div style={{
+          width: 3, height: 18, borderRadius: 2,
+          background: previewDur ? borda : `${borda}55`,
+          transition: "background 0.1s",
+          flexShrink: 0,
+        }} />
+      </div>
     </div>
   );
 }
@@ -858,6 +919,100 @@ export default function ProgramacaoPage() {
     setModalBloco(null); await load();
   }
 
+  // ── Resize de duração ──────────────────────────────────────
+  async function handleResizeFim(id: string, novaDur: number) {
+    const prog = programacoes.find(p => p.id === id);
+    if (!prog?.dt_inicio_previsto) return;
+    const ok = await reagendar(prog.id, new Date(prog.dt_inicio_previsto), novaDur);
+    if (ok) {
+      showToast(`Duração ajustada para ${formatarDuracao(novaDur)}.`);
+      await load();
+    }
+  }
+
+  // ── Auto-agendamento ────────────────────────────────────────
+  const [autoAgendando, setAutoAgendando] = useState(false);
+
+  async function handleAutoAgendar() {
+    if (semProg.length === 0) { showToast("Não há pedidos para agendar."); return; }
+    const linhasCorte = linhas.filter(l => l.tipo === "Corte");
+    if (linhasCorte.length === 0) { showToast("Nenhuma linha de corte configurada."); return; }
+
+    const confirmar = window.confirm(
+      `Auto-agendar ${semProg.length} pedido${semProg.length > 1 ? "s" : ""}?\n\n` +
+      `Critério: prazo mais urgente primeiro + distribuição entre linhas.\n` +
+      `Lapidação não é incluída automaticamente.`
+    );
+    if (!confirmar) return;
+
+    setAutoAgendando(true);
+
+    // Próxima data livre por linha (baseado nos blocos já existentes)
+    const nextFree: Record<number, Date> = {};
+    for (const l of linhasCorte) {
+      const ultimo = [...programacoes]
+        .filter(p => p.linha_id === l.id && p.status !== "Cancelado" && p.dt_fim_previsto)
+        .sort((a, b) => new Date(b.dt_fim_previsto!).getTime() - new Date(a.dt_fim_previsto!).getTime())[0];
+
+      if (ultimo?.dt_fim_previsto) {
+        const d = addDays(new Date(ultimo.dt_fim_previsto), 1);
+        d.setHours(8, 0, 0, 0);
+        nextFree[l.id] = d;
+      } else {
+        const d = addDays(new Date(), 1);
+        d.setHours(8, 0, 0, 0);
+        nextFree[l.id] = d;
+      }
+    }
+
+    // Ordena: prazo mais urgente primeiro; desempata por m² maior
+    const pedidosOrdenados = [...semProg].sort((a, b) => {
+      const pa = a.dt_retirada ? new Date(a.dt_retirada).getTime() : Infinity;
+      const pb = b.dt_retirada ? new Date(b.dt_retirada).getTime() : Infinity;
+      if (pa !== pb) return pa - pb;
+      return (b.m2_total ?? 0) - (a.m2_total ?? 0);
+    });
+
+    let agendados = 0, erros = 0;
+
+    for (const pedido of pedidosOrdenados) {
+      // Linha com menor tempo de espera
+      const melhorLinha = linhasCorte.reduce((best, l) =>
+        (nextFree[l.id]?.getTime() ?? 0) < (nextFree[best.id]?.getTime() ?? 0) ? l : best
+      );
+
+      const dtInicio = new Date(nextFree[melhorLinha.id]);
+      dtInicio.setHours(8, 0, 0, 0);
+
+      const itens = (pedido.itens_pedido ?? []) as { m2: number; quantidade: number; lapidacao: number; produto_nome: string }[];
+      const tempos = calcularTempoEstimado(itens, config);
+      const diasNecessarios = Math.max(1, Math.ceil(tempos.corte_min / ((melhorLinha.capacidade_horas_dia ?? 8) * 60)));
+
+      const result = await criarProgramacaoPedido(
+        pedido.id, itens, config, linhas, dtInicio, melhorLinha.id, undefined
+      );
+
+      if (result.ok) {
+        agendados++;
+        const proximo = addDays(dtInicio, diasNecessarios + 1);
+        proximo.setHours(8, 0, 0, 0);
+        nextFree[melhorLinha.id] = proximo;
+      } else {
+        erros++;
+        // Avança 1 dia para não travar no mesmo conflito
+        nextFree[melhorLinha.id] = addDays(nextFree[melhorLinha.id], 1);
+      }
+    }
+
+    setAutoAgendando(false);
+    showToast(
+      erros > 0
+        ? `${agendados} agendados · ${erros} com conflito`
+        : `✓ ${agendados} pedido${agendados > 1 ? "s" : ""} agendado${agendados > 1 ? "s" : ""} automaticamente`
+    );
+    await load();
+  }
+
   function toggleSelecionado(id: string) {
     setSelecionados(prev => {
       const next = new Set(prev);
@@ -1151,6 +1306,7 @@ export default function ProgramacaoPage() {
                                   key={prog.id} prog={prog} zoom={zoom}
                                   visibleStart={zoom === "dia" ? dataBase : dias[0]}
                                   onClick={setModalBloco}
+                                  onResizeFim={handleResizeFim}
                                 />
                               ))}
                             </LinhaDroppable>
@@ -1197,13 +1353,26 @@ export default function ProgramacaoPage() {
               <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--b1)", flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                   <span style={{ fontSize: 12, fontWeight: 700 }}>Sem Programação</span>
-                  <span style={{
-                    fontSize: 12, fontWeight: 800, padding: "2px 8px", borderRadius: 20,
-                    color: semProg.length > 0 ? "var(--warn)" : "var(--ok)",
-                    background: semProg.length > 0 ? "rgba(245,158,11,.12)" : "rgba(16,185,129,.12)",
-                  }}>
-                    {semProg.length}
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{
+                      fontSize: 12, fontWeight: 800, padding: "2px 8px", borderRadius: 20,
+                      color: semProg.length > 0 ? "var(--warn)" : "var(--ok)",
+                      background: semProg.length > 0 ? "rgba(245,158,11,.12)" : "rgba(16,185,129,.12)",
+                    }}>
+                      {semProg.length}
+                    </span>
+                    {semProg.length > 0 && (
+                      <button
+                        className="btn pri"
+                        style={{ fontSize: 10, padding: "3px 8px" }}
+                        onClick={handleAutoAgendar}
+                        disabled={autoAgendando}
+                        title="Agendar todos automaticamente — prazo mais urgente primeiro, distribuindo entre linhas"
+                      >
+                        {autoAgendando ? "…" : "⚡ Auto"}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Busca */}

@@ -348,6 +348,7 @@ export async function reagendar(
   const updates: Partial<ProgramacaoProducao> = {
     dt_inicio_previsto: toISOLocal(novaDtInicio),
     dt_fim_previsto: toISOLocal(novaDtFim),
+    duracao_estimada_min: duracaoMin,
   };
   if (novaLinhaId !== undefined) updates.linha_id = novaLinhaId;
 
