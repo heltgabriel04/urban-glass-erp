@@ -414,6 +414,36 @@ function kEliminate(
         }
       }
     }
+
+    if (improved) continue;
+
+    // ── Tentativa 3: quadrupla de chapas → 3 chapas (4→3) ──
+    // Cobre o caso comum: 4 chapas com ~75% cada (total ~300%) → 3 chapas com ~100% cada.
+    // Mais custoso (O(n⁴)) mas filtrado agressivamente pela área combinada.
+    outerQuad: for (let ai = 0; ai < n && !improved; ai++) {
+      for (let aj = ai + 1; aj < n && !improved; aj++) {
+        for (let ak = aj + 1; ak < n && !improved; ak++) {
+          for (let al = ak + 1; al < n && !improved; al++) {
+            if (Date.now() >= deadline) break outerQuad;
+            const combined = byLoad[ai].area + byLoad[aj].area + byLoad[ak].area + byLoad[al].area;
+            if (combined > sheetArea * 2.97) continue;
+            const pieces = [
+              ...current[byLoad[ai].i].placed,
+              ...current[byLoad[aj].i].placed,
+              ...current[byLoad[ak].i].placed,
+              ...current[byLoad[al].i].placed,
+            ];
+            const result = repackGroup(W, H, pieces, kerf, 3);
+            if (result) {
+              const kill = new Set([byLoad[ai].i, byLoad[aj].i, byLoad[ak].i, byLoad[al].i]);
+              const rest = current.filter((_, k) => !kill.has(k));
+              current = mergeSheets(W, H, [...rest, ...result], kerf);
+              improved = true;
+            }
+          }
+        }
+      }
+    }
   }
 
   return current;
@@ -590,6 +620,14 @@ export function empacotarTodas(
   if (pecas.length === 0) return [];
   const base = pecas.map((_, i) => i);
 
+  // Ordenação intercalada: une peças grandes com pequenas para evitar o efeito
+  // "última chapa leve" — distribui tamanhos menores junto das maiores no BFD.
+  const sortedByLong = [...base].sort((a, b) => Math.max(pecas[b].l, pecas[b].a) - Math.max(pecas[a].l, pecas[a].a));
+  const intercaladaFixa: number[] = [];
+  { let lo = 0, hi = sortedByLong.length - 1;
+    while (lo <= hi) { intercaladaFixa.push(sortedByLong[lo++]); if (lo <= hi) intercaladaFixa.push(sortedByLong[hi--]); }
+  }
+
   // Ordenações fixas diversificadas — cobrem diferentes heurísticas conhecidas
   const fixas: number[][] = [
     [...base].sort((a, b) => (pecas[b].l * pecas[b].a) - (pecas[a].l * pecas[a].a)),          // área dec
@@ -609,6 +647,7 @@ export function empacotarTodas(
       const rB = Math.max(pecas[b].l, pecas[b].a) / Math.min(pecas[b].l, pecas[b].a);
       return rA - rB;
     }),
+    intercaladaFixa,                                                                              // grande+pequena intercaladas
     [...base],                                                                                     // ordem original
   ];
 
@@ -682,34 +721,73 @@ export function empacotarTodas(
     avaliar(afterMerge);
     if (process.env.OTIM_DEBUG) console.log(`[fase3-merge] n=${afterMerge.length} melhorN=${melhorN} aprov=${(melhorAprov*100).toFixed(2)}%`);
 
-    // Passo C: kEliminate (remonta grupos) sobre o melhor resultado
-    const base3: SheetState[] = melhorSheets as SheetState[];
-    if (base3.length > 1 && Date.now() < deadlineK) {
-      const kResult = kEliminate(W, H, base3, kerf, deadlineK);
+    // Passo C: kEliminate sobre afterMerge (espaços livres mais limpos) e também
+    // sobre melhorSheets bruto se diferente (melhor aproveitamento individual das chapas).
+    // Testar os dois garante que nenhuma oportunidade seja perdida.
+    const base3a = afterMerge;
+    const base3b = melhorSheets as SheetState[];
+    if (base3a.length > 1 && Date.now() < deadlineK) {
+      const kResult = kEliminate(W, H, base3a, kerf, deadlineK);
       avaliar(kResult);
-      if (process.env.OTIM_DEBUG) console.log(`[fase3-kelim] n=${kResult.length} melhorN=${melhorN} aprov=${(melhorAprov*100).toFixed(2)}% tempoRestante=${deadlineK - Date.now()}ms`);
+      if (process.env.OTIM_DEBUG) console.log(`[fase3-kelim-a] n=${kResult.length} melhorN=${melhorN} aprov=${(melhorAprov*100).toFixed(2)}% tempoRestante=${deadlineK - Date.now()}ms`);
+    }
+    if (base3b.length > 1 && base3b !== base3a && Date.now() < deadlineK) {
+      const kResult2 = kEliminate(W, H, base3b, kerf, deadlineK);
+      avaliar(kResult2);
+      if (process.env.OTIM_DEBUG) console.log(`[fase3-kelim-b] n=${kResult2.length} melhorN=${melhorN} aprov=${(melhorAprov*100).toFixed(2)}% tempoRestante=${deadlineK - Date.now()}ms`);
     }
   }
 
   // ── Fase 4: Strip packing guilhotina (estilo Corte Certo) ─────────────────────
   // Faixas horizontais e colunas verticais (FFDH) com múltiplas ordenações.
   // Compete diretamente com o MAXRECTS — o melhor resultado global é mantido.
+  // Após o melhor strip, aplica kEliminate para consolidar chapas fracas.
   {
+    // Ordenação "intercalada": combina peças grandes e pequenas na mesma faixa,
+    // evitando que faixas fiquem com 2 peças grandes e espaço residual inutilizado.
+    const sorted = [...base].sort((a, b) => Math.max(pecas[b].l, pecas[b].a) - Math.max(pecas[a].l, pecas[a].a));
+    const intercalada: number[] = [];
+    let lo = 0, hi = sorted.length - 1;
+    while (lo <= hi) {
+      intercalada.push(sorted[lo++]);
+      if (lo <= hi) intercalada.push(sorted[hi--]);
+    }
+
     const ordsStrip: number[][] = [
       [...base].sort((a, b) => (pecas[b].l * pecas[b].a) - (pecas[a].l * pecas[a].a)),
       [...base].sort((a, b) => Math.max(pecas[b].l, pecas[b].a) - Math.max(pecas[a].l, pecas[a].a)),
       [...base].sort((a, b) => pecas[b].a - pecas[a].a),
       [...base].sort((a, b) => pecas[b].l - pecas[a].l),
       [...base].sort((a, b) => Math.min(pecas[b].l, pecas[b].a) - Math.min(pecas[a].l, pecas[a].a)),
+      intercalada,
       [...base],
     ];
+
+    let bestStripSheets: SheetState[] | null = null;
+    let bestStripN = Infinity;
+
     for (const ordem of ordsStrip) {
       for (const mode of ['H', 'V'] as const) {
         const r = stripFFDH(W, H, pecas, kerf, ordem, mode);
-        if (r.length > 0) avaliar(mergeSheets(W, H, r, kerf));
+        if (r.length > 0) {
+          const merged = mergeSheets(W, H, r, kerf);
+          avaliar(merged);
+          if (merged.length < bestStripN) {
+            bestStripN = merged.length;
+            bestStripSheets = merged;
+          }
+        }
       }
     }
     if (process.env.OTIM_DEBUG) console.log(`[fase4-strip] melhorN=${melhorN} aprov=${(melhorAprov*100).toFixed(2)}%`);
+
+    // Aplica kEliminate sobre o melhor resultado strip — combina as forças de ambos os algoritmos.
+    if (bestStripSheets !== null && bestStripSheets.length > 1) {
+      const deadlineStrip = Date.now() + 150;
+      const kStrip = kEliminate(W, H, bestStripSheets, kerf, deadlineStrip);
+      avaliar(kStrip);
+      if (process.env.OTIM_DEBUG) console.log(`[fase4-strip-kelim] n=${kStrip.length} melhorN=${melhorN}`);
+    }
   }
 
   const sheets: SheetState[] = melhorSheets ?? [];
