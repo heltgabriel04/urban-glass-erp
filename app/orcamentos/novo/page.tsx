@@ -12,7 +12,9 @@ import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
 import ImportarMedidasModal from "@/components/ui/ImportarMedidasModal";
+import ImportarPdfModal from "@/components/ui/ImportarPdfModal";
 import type { MedidaImportada } from "@/lib/importPlanilhaMedidas";
+import type { ItemPdfImportado } from "@/lib/importPdfOrcamento";
 import type { Cliente, Produto, TabelaPreco, TabelaPrecoItem } from "@/types";
 
 interface ParcelaForm {
@@ -114,6 +116,7 @@ function NovoOrcamentoPageInner() {
   const [valorGeralInput, setValorGeralInput] = useState(0);
   const [parcelasForm, setParcelasForm] = useState<ParcelaForm[]>([{ data: "", valor: 0, editado: false, conta: "", formaPgto: "" }]);
   const [modalImportar, setModalImportar] = useState(false);
+  const [modalImportarPdf, setModalImportarPdf] = useState(false);
 
   const largRefs   = useRef<(HTMLInputElement | null)[]>([]);
   const altRefs    = useRef<(HTMLInputElement | null)[]>([]);
@@ -294,6 +297,37 @@ function NovoOrcamentoPageInner() {
   }
 
   function remItem(i: number) { setItens(items => items.filter((_, idx) => idx !== i)); }
+
+  function handleImportarPdf(itens: ItemPdfImportado[], produtoOverride: number | null) {
+    const novos: ItemForm[] = itens.map(item => {
+      let prodId = produtoOverride;
+      if (prodId === null) {
+        const found = produtos.find(p =>
+          p.nome.toLowerCase().includes(item.produto_nome.toLowerCase()) ||
+          item.produto_nome.toLowerCase().includes(p.nome.toLowerCase())
+        );
+        prodId = found?.id ?? null;
+      }
+      const prod = prodId ? produtos.find(p => p.id === prodId) : undefined;
+      const { valor: valorTab, margem } = prodId ? getPrecoProduto(prodId) : { valor: 0, margem: 0 };
+      return {
+        ...ITEM_VAZIO,
+        produto_id: prodId,
+        produto_nome: prod?.nome ?? item.produto_nome,
+        largura: item.largura,
+        altura: item.altura,
+        quantidade: item.quantidade,
+        valor_m2: item.valor_m2 > 0 ? item.valor_m2 : valorTab,
+        preco_base: valorTab || item.valor_m2,
+        margem_prod: margem,
+      };
+    });
+    setItens(prev => {
+      const base = prev.length === 1 && prev[0].largura === 0 && prev[0].altura === 0 && prev[0].produto_id === null ? [] : prev;
+      return [...base, ...novos];
+    });
+    setModalImportarPdf(false);
+  }
 
   function handleImportarMedidas(medidas: MedidaImportada[], produtoId: number | null) {
     const prod = produtoId ? produtos.find(p => p.id === produtoId) : undefined;
@@ -652,6 +686,7 @@ function NovoOrcamentoPageInner() {
               <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>
                 Enter avança · Enter em Qtd cria nova linha
               </span>
+              <button tabIndex={-1} className="btn bg sm" onClick={() => setModalImportarPdf(true)}>⇪ Importar PDF</button>
               <button tabIndex={-1} className="btn bg sm" onClick={() => setModalImportar(true)}>⇪ Importar Planilha</button>
               <button tabIndex={-1} className="btn bp sm" onClick={addItem}>+ Item</button>
             </div>
@@ -797,6 +832,14 @@ function NovoOrcamentoPageInner() {
           </div>
         </div>
       </div>
+
+      {modalImportarPdf && (
+        <ImportarPdfModal
+          produtos={produtos.map(p => ({ id: p.id, nome: p.nome }))}
+          onImportar={handleImportarPdf}
+          onClose={() => setModalImportarPdf(false)}
+        />
+      )}
 
       {modalImportar && (
         <ImportarMedidasModal
