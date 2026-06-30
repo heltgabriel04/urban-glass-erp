@@ -92,6 +92,14 @@ export default function VendedoresPage() {
     load();
   }
 
+  async function excluir(v: Vendedor) {
+    if (!confirm(`Excluir "${v.nome}" permanentemente? Esta ação não pode ser desfeita.`)) return;
+    const { error } = await supabase.from("vendedores").delete().eq("id", v.id);
+    if (error) { toast("Erro ao excluir: " + error.message, "err"); return; }
+    toast(`${v.nome} excluído`);
+    load();
+  }
+
   const lista = vendedores.filter(v =>
     filtro === "todos" ? true : filtro === "ativos" ? v.ativo : !v.ativo
   );
@@ -186,11 +194,18 @@ export default function VendedoresPage() {
                         <span className={`chip ${v.ativo ? "cg" : "cr"}`}>{v.ativo ? "Ativo" : "Inativo"}</span>
                       </td>
                       <td>
-                        <div style={{ display: "flex", gap: "6px" }}>
+                        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                           <button className="btn bg xs" onClick={() => abrirEdit(v)}>Editar</button>
                           <button className="btn bg xs" style={{ color: v.ativo ? "var(--err)" : "var(--ok)" }} onClick={() => toggleAtivo(v)}>
                             {v.ativo ? "Desativar" : "Ativar"}
                           </button>
+                          <button
+                            title="Excluir vendedor"
+                            onClick={() => excluir(v)}
+                            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "28px", height: "28px", borderRadius: "6px", background: "transparent", border: "1px solid var(--b2)", color: "var(--t3)", fontSize: "13px", cursor: "pointer", transition: "all 0.15s" }}
+                            onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
+                            onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
+                          >🗑</button>
                         </div>
                       </td>
                     </tr>
