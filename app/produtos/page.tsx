@@ -146,20 +146,6 @@ export default function ProdutosPage() {
       </div>
 
       <div className="con">
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:"12px", marginBottom:"20px" }}>
-          {[
-            { label:"Total Produtos", value: String(produtos.length), color:"var(--t1)",   sub: ativos + " ativos" },
-            { label:"Ativos",         value: String(ativos),          color:"var(--ok)",   sub:"disponíveis para pedido" },
-            { label:"Inativos",       value: String(produtos.length - ativos), color:"var(--err)", sub:"descontinuados" },
-          ].map(card => (
-            <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
-              <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
-              <div style={{ fontSize:"22px", fontWeight:700, color:card.color, fontFamily:"'DM Mono', monospace", lineHeight:1.2 }}>{card.value}</div>
-              <div style={{ fontSize:"11px", color:"var(--t3)" }}>{card.sub}</div>
-            </div>
-          ))}
-        </div>
-
         {loading ? (
           <div className="loading">Carregando produtos...</div>
         ) : (

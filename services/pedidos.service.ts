@@ -83,6 +83,7 @@ export interface PedidosTotais {
   valorTotal: number;
   recebido: number;
   emProducao: number;
+  aguardandoOtim: number;
 }
 
 /** Totais para os cards — payload leve, sem joins. Se `busca` for informado, restringe aos pedidos que casam com a pesquisa (ex.: cliente selecionado). */
@@ -92,13 +93,14 @@ export async function getPedidosTotais(busca?: string): Promise<PedidosTotais> {
   if (termo) query = query.or(await buildFiltroBuscaOr(termo));
 
   const { data, error } = await query;
-  if (error) { console.error('getPedidosTotais:', error); return { count: 0, valorTotal: 0, recebido: 0, emProducao: 0 }; }
+  if (error) { console.error('getPedidosTotais:', error); return { count: 0, valorTotal: 0, recebido: 0, emProducao: 0, aguardandoOtim: 0 }; }
   const rows = (data ?? []) as Array<{ valor_total: number; valor_recebido: number; status: string }>;
   return {
-    count:      rows.length,
-    valorTotal: rows.reduce((a, r) => a + Number(r.valor_total), 0),
-    recebido:   rows.reduce((a, r) => a + Number(r.valor_recebido), 0),
-    emProducao: rows.filter(r => r.status.startsWith('Em Produção')).length,
+    count:          rows.length,
+    valorTotal:     rows.reduce((a, r) => a + Number(r.valor_total), 0),
+    recebido:       rows.reduce((a, r) => a + Number(r.valor_recebido), 0),
+    emProducao:     rows.filter(r => r.status.startsWith('Em Produção')).length,
+    aguardandoOtim: rows.filter(r => r.status === 'Aguardando otimização').length,
   };
 }
 

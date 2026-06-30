@@ -4,8 +4,11 @@ import { useEffect, useState, useMemo } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidos } from "@/services/pedidos.service";
 import { getFinanceiroClientes, getFaturamentoMensal } from "@/services/financeiro.service";
+import { getResumoQualidade } from "@/services/qualidade.service";
+import { getCompras } from "@/services/compras.service";
+import { getEstoque } from "@/services/estoque.service";
 import { formatBRL, formatPercent } from "@/lib/formatters";
-import type { Pedido, FinanceiroCliente, FaturamentoMensal } from "@/types";
+import type { Pedido, FinanceiroCliente, FaturamentoMensal, EstoqueItem } from "@/types";
 
 const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
@@ -24,6 +27,10 @@ export default function DashboardPage() {
   const [pedidos, setPedidos]       = useState<Pedido[]>([]);
   const [financeiro, setFinanceiro] = useState<FinanceiroCliente[]>([]);
   const [fatMensal, setFatMensal]   = useState<FaturamentoMensal[]>([]);
+  const [estoque, setEstoque]       = useState<EstoqueItem[]>([]);
+  const [ncsAbertas, setNcsAbertas] = useState(0);
+  const [ncsCriticas, setNcsCriticas] = useState(0);
+  const [comprasPend, setComprasPend] = useState(0);
   const [loading, setLoading]       = useState(true);
   const [mesSel, setMesSel]         = useState<number | null>(null);
 
@@ -31,14 +38,21 @@ export default function DashboardPage() {
 
   async function load() {
     setLoading(true);
-    const [peds, fin, fat] = await Promise.all([
+    const [peds, fin, fat, est, qualidade, compras] = await Promise.all([
       getPedidos(),
       getFinanceiroClientes(),
       getFaturamentoMensal(new Date().getFullYear()),
+      getEstoque(),
+      getResumoQualidade(),
+      getCompras(),
     ]);
     setPedidos(peds);
     setFinanceiro(fin);
     setFatMensal(fat);
+    setEstoque(est as unknown as EstoqueItem[]);
+    setNcsAbertas(qualidade.ncsAbertas);
+    setNcsCriticas(qualidade.ncsCriticas);
+    setComprasPend(compras.filter(c => c.status !== 'recebido').length);
     setLoading(false);
   }
 
@@ -82,7 +96,22 @@ export default function DashboardPage() {
   const inadimplentes  = financeiro.filter(f => Number(f.recebido) === 0 && Number(f.faturado) > 0);
   const parciais       = financeiro.filter(f => Number(f.recebido) > 0 && Number(f.a_receber) > 0);
   const aguardandoOtim = pedidos.filter(p => p.status === "Aguardando otimização");
-  const alertTotal     = inadimplentes.length + parciais.length + aguardandoOtim.length;
+
+  const itensRuptura = estoque.filter(e => {
+    const min = Number(e.estoque_minimo_chapas ?? 0);
+    return min > 0 && Number(e.chapas_saldo) <= min;
+  });
+
+  const hoje3d = new Date(); hoje3d.setDate(hoje3d.getDate() + 3);
+  const retiradas3d = pedidos.filter(p => {
+    if (!p.dt_retirada) return false;
+    const d = new Date(p.dt_retirada);
+    const agora = new Date();
+    return d >= agora && d <= hoje3d && p.status !== "Entregue" && p.status !== "Cancelado";
+  });
+
+  const alertTotal = inadimplentes.length + parciais.length + aguardandoOtim.length
+    + itensRuptura.length + ncsAbertas + comprasPend + retiradas3d.length;
 
   const topCli = useMemo(() => {
     if (!mesSel) {
@@ -199,9 +228,30 @@ export default function DashboardPage() {
                   Requer acao
                 </span>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flex: 1 }}>
+                  {itensRuptura.length > 0 && (
+                    <a href="/estoque" style={{ textDecoration: "none" }}>
+                      <span className="chip cr" style={{ cursor: "pointer" }}>
+                        {itensRuptura.length} produto{itensRuptura.length > 1 ? "s" : ""} em ruptura
+                      </span>
+                    </a>
+                  )}
+                  {ncsCriticas > 0 && (
+                    <a href="/qualidade" style={{ textDecoration: "none" }}>
+                      <span className="chip cr" style={{ cursor: "pointer" }}>
+                        {ncsCriticas} NC{ncsCriticas > 1 ? "s" : ""} critica{ncsCriticas > 1 ? "s" : ""}
+                      </span>
+                    </a>
+                  )}
+                  {retiradas3d.length > 0 && (
+                    <a href="/producao" style={{ textDecoration: "none" }}>
+                      <span className="chip cy" style={{ cursor: "pointer" }}>
+                        {retiradas3d.length} retirada{retiradas3d.length > 1 ? "s" : ""} em 3 dias
+                      </span>
+                    </a>
+                  )}
                   {inadimplentes.length > 0 && (
                     <a href="/contas-receber" style={{ textDecoration: "none" }}>
-                      <span className="chip cr" style={{ cursor: "pointer" }}>
+                      <span className="chip cy" style={{ cursor: "pointer" }}>
                         {inadimplentes.length} inadimplente{inadimplentes.length > 1 ? "s" : ""} &middot; {formatBRL(inadimplentes.reduce((a, f) => a + Number(f.faturado), 0))}
                       </span>
                     </a>
@@ -210,6 +260,20 @@ export default function DashboardPage() {
                     <a href="/contas-receber" style={{ textDecoration: "none" }}>
                       <span className="chip cy" style={{ cursor: "pointer" }}>
                         {parciais.length} parcial{parciais.length > 1 ? "is" : ""} &middot; {formatBRL(parciais.reduce((a, f) => a + Number(f.a_receber), 0))}
+                      </span>
+                    </a>
+                  )}
+                  {ncsAbertas > 0 && ncsCriticas === 0 && (
+                    <a href="/qualidade" style={{ textDecoration: "none" }}>
+                      <span className="chip cy" style={{ cursor: "pointer" }}>
+                        {ncsAbertas} NC{ncsAbertas > 1 ? "s" : ""} em aberto
+                      </span>
+                    </a>
+                  )}
+                  {comprasPend > 0 && (
+                    <a href="/compras" style={{ textDecoration: "none" }}>
+                      <span className="chip cb" style={{ cursor: "pointer" }}>
+                        {comprasPend} compra{comprasPend > 1 ? "s" : ""} pendente{comprasPend > 1 ? "s" : ""} de recebimento
                       </span>
                     </a>
                   )}

@@ -261,19 +261,27 @@ export default function ClientesPage() {
       </div>
 
       <div className="con">
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:"12px", marginBottom:"20px" }}>
-          {[
-            { label:"Total",          value: String(clientes.length),    color:"var(--t1)",   sub:"clientes" },
-            { label:"Faturado Total", value: formatBRL(totalFaturado),   color:"var(--acc)",  sub:"soma geral" },
-            { label:"A Receber",      value: formatBRL(totalAReceber),   color:"var(--warn)", sub:"em aberto" },
-            { label:"Inadimplentes",  value: String(totalInadimplentes), color:"var(--err)",  sub:"sem pagamento" },
-          ].map(card => (
-            <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
-              <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
-              <div style={{ fontSize:"22px", fontWeight:700, color:card.color, fontFamily:"'DM Mono', monospace", lineHeight:1.2 }}>{card.value}</div>
-              <div style={{ fontSize:"11px", color:"var(--t3)" }}>{card.sub}</div>
+        <div className="g3 mb14">
+          <div className="kpi">
+            <div className="kpi-l">Faturado Total</div>
+            <div className="kpi-v" style={{ color:"var(--acc)" }}>{formatBRL(totalFaturado)}</div>
+            <div className="kpi-s up">{clientes.length} clientes cadastrados</div>
+            <div className="kpi-bar" style={{ background:"var(--acc)", width:"65%" }} />
+          </div>
+          <div className="kpi">
+            <div className="kpi-l">A Receber</div>
+            <div className="kpi-v" style={{ color: totalAReceber > 0 ? "var(--warn)" : "var(--ok)" }}>{formatBRL(totalAReceber)}</div>
+            <div className="kpi-s">saldo em aberto</div>
+            <div className="kpi-bar" style={{ background: totalAReceber > 0 ? "var(--warn)" : "var(--ok)", width:"45%" }} />
+          </div>
+          <div className="kpi">
+            <div className="kpi-l">Inadimplentes</div>
+            <div className="kpi-v" style={{ color: totalInadimplentes > 0 ? "var(--err)" : "var(--ok)" }}>{totalInadimplentes}</div>
+            <div className={`kpi-s ${totalInadimplentes > 0 ? "dn" : ""}`}>
+              {totalInadimplentes > 0 ? "sem nenhum pagamento" : "sem inadimplencia"}
             </div>
-          ))}
+            <div className="kpi-bar" style={{ background: totalInadimplentes > 0 ? "var(--err)" : "var(--ok)", width: totalInadimplentes > 0 ? "55%" : "5%" }} />
+          </div>
         </div>
 
         {loading ? <div className="loading">Carregando clientes...</div> : (

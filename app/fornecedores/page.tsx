@@ -95,20 +95,6 @@ export default function FornecedoresPage() {
       </div>
 
       <div className="con">
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:"12px", marginBottom:"20px" }}>
-          {[
-            { label:"Total",   value: String(fornecedores.length), color:"var(--t1)",  sub:"fornecedores" },
-            { label:"Ativos",  value: String(totalAtivos),         color:"var(--ok)",  sub:"em operação" },
-            { label:"Inativos",value: String(fornecedores.length - totalAtivos), color:"var(--t3)", sub:"desativados" },
-          ].map(card => (
-            <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
-              <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
-              <div style={{ fontSize:"22px", fontWeight:700, color:card.color, fontFamily:"'DM Mono', monospace", lineHeight:1.2 }}>{card.value}</div>
-              <div style={{ fontSize:"11px", color:"var(--t3)" }}>{card.sub}</div>
-            </div>
-          ))}
-        </div>
-
         {loading ? (
           <div className="loading">Carregando fornecedores...</div>
         ) : (

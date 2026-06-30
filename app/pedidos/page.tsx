@@ -54,7 +54,7 @@ function PedidosPageInner() {
   const [tab, setTab]                     = useState<TabPedidos>((searchParams.get("tab") as TabPedidos) || "todos");
   const [page, setPage]                   = useState(Number(searchParams.get("page") ?? 0)); // 0-based
   const [total, setTotal]                 = useState(0);
-  const [totais, setTotais]               = useState<PedidosTotais>({ count: 0, valorTotal: 0, recebido: 0, emProducao: 0 });
+  const [totais, setTotais]               = useState<PedidosTotais>({ count: 0, valorTotal: 0, recebido: 0, emProducao: 0, aguardandoOtim: 0 });
   const [comOtimizacao, setComOtimizacao] = useState<Set<string>>(new Set());
   const [pedidosChapa, setPedidosChapa]   = useState<Set<string>>(new Set());
   const [pedidosVidroCliente, setPedidosVidroCliente] = useState<Set<string>>(new Set());
@@ -164,7 +164,6 @@ function PedidosPageInner() {
     else toast(erro ? `Erro ao excluir: ${erro}` : "Erro ao excluir pedido", "err");
   }
 
-  const totalAberto = totais.valorTotal - totais.recebido;
   const totalPages  = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   function btnAcao(corHover: string, bgHover: string, titulo: string, icone: string, onClick: () => void) {
@@ -254,20 +253,33 @@ function PedidosPageInner() {
           </div>
         )}
 
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:"12px", marginBottom:"20px" }}>
-          {[
-            { label:"Total",       value: String(totais.count),        color:"var(--t1)",   sub:"pedidos" },
-            { label:"Valor Total", value: formatBRL(totais.valorTotal), color:"var(--acc)",  sub:"soma geral" },
-            { label:"Recebido",    value: formatBRL(totais.recebido),   color:"var(--ok)",   sub:"pagamentos" },
-            { label:"A Receber",   value: formatBRL(totalAberto),       color:"var(--warn)", sub:"em aberto" },
-            { label:"Em Produção", value: String(totais.emProducao),    color:"var(--acc2)", sub:"em andamento" },
-          ].map(card => (
-            <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>
-              <div style={{ fontSize:"11px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{card.label}</div>
-              <div style={{ fontSize:"22px", fontWeight:700, color:card.color, fontFamily:"'DM Mono', monospace", lineHeight:1.2 }}>{card.value}</div>
-              <div style={{ fontSize:"11px", color:"var(--t3)" }}>{card.sub}</div>
+        <div className="g4 mb14">
+          <div className="kpi">
+            <div className="kpi-l">Total</div>
+            <div className="kpi-v" style={{ color:"var(--t1)" }}>{totais.count}</div>
+            <div className="kpi-s">pedidos cadastrados</div>
+            <div className="kpi-bar" style={{ background:"var(--b3)", width:"50%" }} />
+          </div>
+          <div className="kpi">
+            <div className="kpi-l">Valor Total</div>
+            <div className="kpi-v" style={{ color:"var(--acc)" }}>{formatBRL(totais.valorTotal)}</div>
+            <div className="kpi-s up">soma do portfólio</div>
+            <div className="kpi-bar" style={{ background:"var(--acc)", width:"70%" }} />
+          </div>
+          <div className="kpi">
+            <div className="kpi-l">Em Produção</div>
+            <div className="kpi-v" style={{ color:"var(--acc2)" }}>{totais.emProducao}</div>
+            <div className="kpi-s">pedidos em andamento</div>
+            <div className="kpi-bar" style={{ background:"var(--acc2)", width:"45%" }} />
+          </div>
+          <div className="kpi">
+            <div className="kpi-l">Ag. Otimização</div>
+            <div className="kpi-v" style={{ color: totais.aguardandoOtim > 0 ? "var(--warn)" : "var(--ok)" }}>{totais.aguardandoOtim}</div>
+            <div className={`kpi-s ${totais.aguardandoOtim > 0 ? "wa" : ""}`}>
+              {totais.aguardandoOtim > 0 ? "bloqueados — precisam de corte" : "nenhum bloqueado"}
             </div>
-          ))}
+            <div className="kpi-bar" style={{ background: totais.aguardandoOtim > 0 ? "var(--warn)" : "var(--ok)", width: totais.aguardandoOtim > 0 ? "60%" : "10%" }} />
+          </div>
         </div>
 
         {/* Tabs de filtro */}
