@@ -310,6 +310,17 @@ function NovoOrcamentoPageInner() {
       }
       const prod = prodId ? produtos.find(p => p.id === prodId) : undefined;
       const { valor: valorTab, margem } = prodId ? getPrecoProduto(prodId) : { valor: 0, margem: 0 };
+
+      // Back-calcula valor_m2 a partir do total do PDF para que o sistema mostre o mesmo total,
+      // independente do arredondamento de dimensões (múltiplo de 50) usado pelo sistema.
+      let valorM2Final = item.valor_m2 > 0 ? item.valor_m2 : valorTab;
+      if (item.total_pdf > 0 && item.largura > 0 && item.altura > 0 && item.quantidade > 0) {
+        const lArred = arredondarParaMultiplo50(item.largura);
+        const aArred = arredondarParaMultiplo50(item.altura);
+        const m2Sistema = (lArred / 1000) * (aArred / 1000) * item.quantidade;
+        if (m2Sistema > 0) valorM2Final = item.total_pdf / m2Sistema;
+      }
+
       return {
         ...ITEM_VAZIO,
         produto_id: prodId,
@@ -317,7 +328,7 @@ function NovoOrcamentoPageInner() {
         largura: item.largura,
         altura: item.altura,
         quantidade: item.quantidade,
-        valor_m2: item.valor_m2 > 0 ? item.valor_m2 : valorTab,
+        valor_m2: valorM2Final,
         preco_base: valorTab || item.valor_m2,
         margem_prod: margem,
       };

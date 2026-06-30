@@ -136,13 +136,13 @@ export default function ImportarPdfModal({ produtos, onImportar, onClose }: Prop
             </div>
 
             <div style={{ maxHeight: "200px", overflowY: "auto", border: "1px solid var(--b1)", borderRadius: "8px", marginBottom: "16px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 70px 70px 50px 80px", gap: "4px", padding: "6px 10px", background: "var(--surf2)", borderBottom: "1px solid var(--b1)", position: "sticky", top: 0 }}>
-                {["#", "Produto", "Larg.", "Alt.", "Qtd", "R$/m²"].map(h => (
+              <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 60px 60px 40px 72px 80px", gap: "4px", padding: "6px 10px", background: "var(--surf2)", borderBottom: "1px solid var(--b1)", position: "sticky", top: 0 }}>
+                {["#", "Produto", "Larg.", "Alt.", "Qtd", "R$/m²", "Total"].map(h => (
                   <div key={h} style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>{h}</div>
                 ))}
               </div>
               {itens.map((item, i) => (
-                <div key={i} style={{ display: "grid", gridTemplateColumns: "28px 1fr 70px 70px 50px 80px", gap: "4px", padding: "5px 10px", borderBottom: i < itens.length - 1 ? "1px solid var(--b1)" : "none", alignItems: "center" }}>
+                <div key={i} style={{ display: "grid", gridTemplateColumns: "28px 1fr 60px 60px 40px 72px 80px", gap: "4px", padding: "5px 10px", borderBottom: i < itens.length - 1 ? "1px solid var(--b1)" : "none", alignItems: "center" }}>
                   <div style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>{i + 1}</div>
                   <div style={{ fontSize: "11px", color: "var(--t2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.produto_nome || "—"}>{item.produto_nome || "—"}</div>
                   <div style={{ fontSize: "11px", fontFamily: "'DM Mono',monospace", color: "var(--t1)" }}>{item.largura}</div>
@@ -150,6 +150,9 @@ export default function ImportarPdfModal({ produtos, onImportar, onClose }: Prop
                   <div style={{ fontSize: "11px", fontFamily: "'DM Mono',monospace", color: "var(--t3)" }}>{item.quantidade}</div>
                   <div style={{ fontSize: "11px", fontFamily: "'DM Mono',monospace", color: "var(--acc)" }}>
                     {item.valor_m2 > 0 ? `R$ ${item.valor_m2.toFixed(2).replace(".", ",")}` : "—"}
+                  </div>
+                  <div style={{ fontSize: "11px", fontFamily: "'DM Mono',monospace", color: "var(--t1)" }}>
+                    {item.total_pdf > 0 ? `R$ ${item.total_pdf.toFixed(2).replace(".", ",")}` : "—"}
                   </div>
                 </div>
               ))}

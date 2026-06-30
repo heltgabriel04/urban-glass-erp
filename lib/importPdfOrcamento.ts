@@ -4,6 +4,8 @@ export interface ItemPdfImportado {
   altura: number;
   quantidade: number;
   valor_m2: number;
+  /** Total da linha extraído diretamente do PDF (sem arredondamento de dimensões). */
+  total_pdf: number;
 }
 
 const SKIP_RE =
@@ -29,7 +31,8 @@ export function parsePdfOrcamentoText(text: string): ItemPdfImportado[] {
     const largura = parseInt(m[2], 10);
     const altura = parseInt(m[3], 10);
     // m[4]=m², m[5]=R$/m², m[6]=total
-    const valorM2 = parseFloat(m[5].replace(/\./g, "").replace(",", "."));
+    const valorM2  = parseFloat(m[5].replace(/\./g, "").replace(",", "."));
+    const totalPdf = parseFloat(m[6].replace(/\./g, "").replace(",", "."));
 
     if (largura <= 0 || altura <= 0 || qty <= 0) continue;
 
@@ -49,7 +52,7 @@ export function parsePdfOrcamentoText(text: string): ItemPdfImportado[] {
       break;
     }
 
-    items.push({ produto_nome: produtoNome, largura, altura, quantidade: qty, valor_m2: valorM2 });
+    items.push({ produto_nome: produtoNome, largura, altura, quantidade: qty, valor_m2: valorM2, total_pdf: totalPdf });
   }
 
   return items;
