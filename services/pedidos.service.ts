@@ -169,7 +169,47 @@ export async function createPedido(pedido: PedidoInsert, itens: ItemPedidoInsert
   return data as Pedido;
 }
 
+// Transições válidas de status:
+//  • De qualquer status ativo → 'Cancelado'
+//  • Avanço/retrocesso de 1 passo no fluxo principal
+//  • Nunca sair de 'Entregue' ou 'Cancelado'
+const STATUS_FINAIS: StatusPedido[] = ['Entregue', 'Cancelado'];
+
+function transicaoValida(de: StatusPedido, para: StatusPedido): boolean {
+  if (de === para) return true;
+  if (STATUS_FINAIS.includes(de)) return false;
+  if (para === 'Cancelado') return true;
+  const idxDe   = FLUXO.indexOf(de);
+  const idxPara = FLUXO.indexOf(para);
+  if (idxDe === -1 || idxPara === -1) return false;
+  return Math.abs(idxPara - idxDe) === 1;
+}
+
 export async function updatePedido(id: string, updates: PedidoUpdate) {
+  // C1: arrays de pagamento devem ter o mesmo comprimento
+  if (updates.datas_pgto !== undefined || updates.valores_pgto !== undefined) {
+    const datas   = updates.datas_pgto   ?? [];
+    const valores = updates.valores_pgto ?? [];
+    if (datas.length !== valores.length) {
+      console.error(`updatePedido: datas_pgto (${datas.length}) ≠ valores_pgto (${valores.length})`);
+      return null;
+    }
+  }
+
+  // C8: máquina de estado — valida transição antes de gravar
+  if ('status' in updates && updates.status) {
+    const { data: cur } = await supabase
+      .from('pedidos')
+      .select('status')
+      .eq('id', id)
+      .maybeSingle();
+    const statusAtual = (cur as { status?: StatusPedido } | null)?.status;
+    if (statusAtual && !transicaoValida(statusAtual, updates.status as StatusPedido)) {
+      console.warn(`updatePedido: transição inválida ${statusAtual} → ${updates.status}`);
+      return null;
+    }
+  }
+
   const { data, error } = await supabase
     .from('pedidos')
     .update({ ...updates, updated_at: new Date().toISOString() } as never)

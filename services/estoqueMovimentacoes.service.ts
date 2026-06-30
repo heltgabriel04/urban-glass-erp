@@ -28,6 +28,9 @@ export interface ResultadoMovimentacao {
   ok: boolean;
   jaExistia?: boolean;
   motivo?: string;
+  /** true quando saldo ficou abaixo do mínimo configurado */
+  alertaMinimo?: boolean;
+  alertaMensagem?: string;
 }
 
 /**
@@ -58,15 +61,24 @@ export async function registrarMovimentacao(params: RegistrarMovimentacaoParams)
 
   const { data: estoqueItem } = await supabase
     .from('estoque')
-    .select('id, chapas_saldo, m2_saldo, m2_consumido, custo_m2')
+    .select('id, chapas_saldo, m2_saldo, m2_consumido, custo_m2, estoque_minimo_chapas')
     .eq('produto_id', produtoId)
     .limit(1)
     .maybeSingle();
   if (!estoqueItem) return { ok: false, motivo: `produto ${produtoId} sem registro em estoque` };
 
-  const item = estoqueItem as { id: number; chapas_saldo: number; m2_saldo: number; m2_consumido: number; custo_m2: number };
-  const novoSaldoChapas = Math.max(0, Number(item.chapas_saldo) + chapas);
-  const novoSaldoM2     = Math.max(0, parseFloat((Number(item.m2_saldo) + m2).toFixed(4)));
+  const item = estoqueItem as { id: number; chapas_saldo: number; m2_saldo: number; m2_consumido: number; custo_m2: number; estoque_minimo_chapas: number | null };
+
+  // C7: bloqueia saída que levaria saldo a negativo
+  if (chapas < 0 && Number(item.chapas_saldo) + chapas < 0) {
+    return { ok: false, motivo: `Saldo insuficiente: ${item.chapas_saldo} chapas disponíveis, tentativa de saída de ${Math.abs(chapas)}` };
+  }
+  if (m2 < 0 && Number(item.m2_saldo) + m2 < -0.001) {
+    return { ok: false, motivo: `Saldo insuficiente: ${item.m2_saldo} m² disponíveis, tentativa de saída de ${Math.abs(m2).toFixed(4)} m²` };
+  }
+
+  const novoSaldoChapas = Number(item.chapas_saldo) + chapas;
+  const novoSaldoM2     = parseFloat((Number(item.m2_saldo) + m2).toFixed(4));
   // Saída (m2 negativo) soma ao consumido; entrada não altera consumido.
   const novoConsumido   = m2 < 0
     ? parseFloat((Number(item.m2_consumido) - m2).toFixed(4))
@@ -108,6 +120,16 @@ export async function registrarMovimentacao(params: RegistrarMovimentacaoParams)
     obs:     obs ?? null,
   } as never);
   if (errIns) return { ok: false, motivo: errIns.message };
+
+  // C6: alerta quando saldo fica abaixo do mínimo configurado
+  const minimo = item.estoque_minimo_chapas;
+  if (minimo != null && minimo > 0 && novoSaldoChapas <= minimo) {
+    return {
+      ok: true,
+      alertaMinimo: true,
+      alertaMensagem: `Estoque abaixo do mínimo: ${novoSaldoChapas} chapas (mínimo: ${minimo})`,
+    };
+  }
 
   return { ok: true };
 }

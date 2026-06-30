@@ -378,8 +378,8 @@ export default function EditarPedidoPage() {
       conta,
       parcelas,
       obs,
-      datas_pgto:   parcelasForm.map(p => p.data).filter(d => d),
-      valores_pgto: parcelasForm.map(p => p.valor),
+      datas_pgto:   parcelasForm.filter(p => p.data && p.valor > 0).map(p => p.data),
+      valores_pgto: parcelasForm.filter(p => p.data && p.valor > 0).map(p => p.valor),
       valor_total:  parseFloat(valorTotal.toFixed(2)),
       m2_total:     parseFloat(m2Total.toFixed(4)),
     });

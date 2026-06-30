@@ -812,7 +812,10 @@ function OtimizadorContent() {
       if (res.jaExistia) {
         console.warn(`Baixa de estoque para o pedido ${pedidoRef} já tinha sido registrada — não aplicada de novo. Use "Zerar" antes de reotimizar.`);
       } else if (!res.ok) {
+        alert(`⚠️ Erro ao baixar estoque de "${prodNome}": ${res.motivo}`);
         console.error("registrarMovimentacao (otimizador):", res.motivo);
+      } else if (res.alertaMinimo) {
+        alert(`⚠️ ${res.alertaMensagem}`);
       }
     }
     router.push("/pedidos/" + pedidoRef);

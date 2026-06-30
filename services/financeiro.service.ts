@@ -48,9 +48,43 @@ export async function getLancamentosPorTipo(tipo: 'Entrada' | 'Saída') {
   return data as Lancamento[];
 }
 
-export async function deletarLancamento(id: number) {
+// Recalcula pedido.valor_recebido a partir dos lançamentos Entrada+Pago.
+// Mantido aqui para evitar dependência circular com pedidos.service.ts.
+async function _recalcularRecebidoPedido(pedidoId: string): Promise<void> {
+  const { data } = await supabase
+    .from('lancamentos')
+    .select('valor')
+    .eq('pedido_id', pedidoId)
+    .eq('tipo', 'Entrada')
+    .eq('status', 'Pago');
+  const total = (data ?? []).reduce((a, l) => a + Number((l as { valor: number }).valor), 0);
+  await supabase
+    .from('pedidos')
+    .update({ valor_recebido: total, updated_at: new Date().toISOString() } as never)
+    .eq('id', pedidoId);
+}
+
+// C4: lançamento 'Pago' não pode ser excluído (exige estorno explícito)
+export async function deletarLancamento(id: number): Promise<boolean> {
+  const { data: lanc } = await supabase
+    .from('lancamentos')
+    .select('status, tipo, pedido_id')
+    .eq('id', id)
+    .maybeSingle();
+
+  const l = lanc as { status: string; tipo: string; pedido_id: string | null } | null;
+  if (l?.status === 'Pago') {
+    console.warn(`deletarLancamento #${id}: bloqueado — lançamento já pago`);
+    return false;
+  }
+
   const { error } = await supabase.from('lancamentos').delete().eq('id', id);
   if (error) { console.error('deletarLancamento:', error); return false; }
+
+  // C2: sincroniza valor_recebido do pedido após excluir parcela
+  if (l?.pedido_id && l.tipo === 'Entrada') {
+    await _recalcularRecebidoPedido(l.pedido_id);
+  }
   return true;
 }
 
@@ -61,7 +95,13 @@ export async function createLancamento(lancamento: LancamentoInsert) {
     .select()
     .single();
   if (error) { console.error('createLancamento:', error); return null; }
-  return data as Lancamento;
+
+  // C2: sincroniza valor_recebido se for recebimento de pedido
+  const lanc = data as Lancamento;
+  if (lanc.pedido_id && lanc.tipo === 'Entrada' && lanc.status === 'Pago') {
+    await _recalcularRecebidoPedido(lanc.pedido_id);
+  }
+  return lanc;
 }
 
 export async function updateLancamento(id: number, updates: Partial<LancamentoInsert>) {
@@ -72,7 +112,13 @@ export async function updateLancamento(id: number, updates: Partial<LancamentoIn
     .select()
     .single();
   if (error) { console.error('updateLancamento:', error); return null; }
-  return data as Lancamento;
+
+  // C2: sincroniza valor_recebido após qualquer mudança em lançamento de entrada vinculado a pedido
+  const lanc = data as Lancamento;
+  if (lanc.pedido_id && lanc.tipo === 'Entrada') {
+    await _recalcularRecebidoPedido(lanc.pedido_id);
+  }
+  return lanc;
 }
 
 // ── Contas a pagar ────────────────────────────────────────────────────────────

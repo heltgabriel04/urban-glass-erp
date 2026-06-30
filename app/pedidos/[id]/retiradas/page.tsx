@@ -125,7 +125,7 @@ export default function RetiradasPedidoPage() {
       : await createRetirada(id, dadosHeader, itensPayload);
     setSalvando(false);
 
-    if (!res) { toast(editandoId ? "Erro ao salvar alterações" : "Erro ao registrar retirada", "err"); return; }
+    if (!res.ok) { toast(res.erro ?? (editandoId ? "Erro ao salvar alterações" : "Erro ao registrar retirada"), "err"); return; }
     toast(editandoId ? "✓ Retirada atualizada" : "✓ Retirada registrada");
     await load();
   }

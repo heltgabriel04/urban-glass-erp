@@ -220,6 +220,7 @@ export default function EstoquePage() {
         chapas: chapasNum, m2: m2Final, custoUnitarioM2: custoM2 > 0 ? custoM2 : null,
       });
       if (!res.ok) { alert("Erro ao registrar entrada no livro-razão: " + res.motivo); setSalvando(false); return; }
+      if (res.alertaMinimo) alert("⚠️ " + res.alertaMensagem);
 
     } else {
       if (!prodSelecionado) { setSalvando(false); return; }

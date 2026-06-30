@@ -315,6 +315,20 @@ export default function PedidoDetalhe() {
 
   async function salvarEdicao() {
     if (!pedido) return;
+
+    // C3: pedidos finalizados não podem ser editados
+    if (pedido.status === "Entregue" || pedido.status === "Cancelado") {
+      toast(`Pedido ${pedido.status.toLowerCase()} não pode ser editado`, "err");
+      return;
+    }
+
+    // C1: garante que datas e valores de pagamento ficam alinhados
+    const parcelasValidas = editParcelas.filter(p => p.data && p.valor > 0);
+    if (parcelasValidas.length === 0 && editParcelas.length > 0) {
+      toast("Informe data e valor em pelo menos uma parcela", "err");
+      return;
+    }
+
     setSalvando(true);
 
     const result = await updatePedido(pedido.id, {
@@ -326,8 +340,8 @@ export default function PedidoDetalhe() {
       conta:        editForm.conta,
       parcelas:     editForm.parcelas,
       obs:          editForm.obs,
-      datas_pgto:   editParcelas.map(p => p.data).filter(d => d),
-      valores_pgto: editParcelas.map(p => p.valor),
+      datas_pgto:   parcelasValidas.map(p => p.data),
+      valores_pgto: parcelasValidas.map(p => p.valor),
       valor_total:  parseFloat(valorTotalEditado.toFixed(2)),
       m2_total:     parseFloat(m2TotalEditado.toFixed(4)),
     });
@@ -604,7 +618,7 @@ export default function PedidoDetalhe() {
     setSalvandoRet(true);
     const res = await createRetirada(id, { dt_retirada: retTudoData, motorista: retTudoMot || null, veiculo: retTudoVei || null, obs: null }, itensPendentes);
     setSalvandoRet(false);
-    if (!res) { toast("Erro ao registrar retirada", "err"); return; }
+    if (!res.ok) { toast(res.erro ?? "Erro ao registrar retirada", "err"); return; }
     toast(`✓ ${itensPendentes.reduce((a, i) => a + i.quantidade, 0)} peça(s) registrada(s) como retirada`);
     setShowRetTudo(false);
     setRetTudoMot("");
