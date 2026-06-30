@@ -29,6 +29,7 @@ interface ItemForm {
   vidro_cliente: boolean;
   preco_base: number;
   margem_prod: number;
+  codigo_adicional: string;
 }
 
 interface ParcelaForm {
@@ -45,6 +46,7 @@ const ITEM_VAZIO: ItemForm = {
   ml_larg: true, ml_alt: true,
   vidro_cliente: false,
   preco_base: 0, margem_prod: 0,
+  codigo_adicional: "",
 };
 
 const CHAPAS_DIMS = [
@@ -154,19 +156,20 @@ export default function EditarPedidoPage() {
     setModoPedido(todosMl ? "ml" : "m2");
 
     setItens(rawItens.map(i => ({
-      id:           i.id,
-      produto_id:   i.produto_id,
-      produto_nome: i.produto_nome,
-      largura:      i.largura,
-      altura:       i.altura,
-      quantidade:   i.quantidade,
-      valor_m2:     Number(i.valor_m2),
-      lapidacao:    Number(i.lapidacao ?? 0),
-      ml_larg:      true,
-      ml_alt:       true,
-      vidro_cliente: Boolean(i.vidro_cliente),
-      preco_base:   Number(i.valor_m2),
-      margem_prod:  0,
+      id:               i.id,
+      produto_id:       i.produto_id,
+      produto_nome:     i.produto_nome,
+      largura:          i.largura,
+      altura:           i.altura,
+      quantidade:       i.quantidade,
+      valor_m2:         Number(i.valor_m2),
+      lapidacao:        Number(i.lapidacao ?? 0),
+      ml_larg:          true,
+      ml_alt:           true,
+      vidro_cliente:    Boolean(i.vidro_cliente),
+      preco_base:       Number(i.valor_m2),
+      margem_prod:      0,
+      codigo_adicional: i.codigo_adicional ?? "",
     })));
     setItensDeletados([]);
 
@@ -403,6 +406,7 @@ export default function EditarPedidoPage() {
         vidro_cliente: item.vidro_cliente,
         m2: parseFloat(m2val.toFixed(4)),
         subtotal: parseFloat(subtot.toFixed(2)),
+        codigo_adicional: item.codigo_adicional || null,
       };
       if (item.id) {
         await supabase.from("itens_pedido").update(payload).eq("id", item.id);
@@ -742,6 +746,20 @@ export default function EditarPedidoPage() {
                         ⚠ Preço {foraAbaixo ? `abaixo — mínimo ${formatBRL(margemMin!)}/m²` : `acima — máximo ${formatBRL(margemMax!)}/m²`} (±{item.margem_prod}%)
                       </div>
                     )}
+                    <div style={{ display:"flex", alignItems:"center", gap:"6px", marginTop:"4px", paddingLeft:"2px" }}>
+                      <span style={{ fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px", fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap" }}>Código</span>
+                      <input
+                        className="fc"
+                        type="text"
+                        value={item.codigo_adicional}
+                        onChange={e => updItem(i, "codigo_adicional", e.target.value)}
+                        placeholder="—"
+                        style={{ width:"120px", fontSize:"11px", padding:"2px 6px", height:"22px", fontFamily:"'DM Mono',monospace" }}
+                      />
+                      {item.codigo_adicional && (
+                        <span style={{ fontSize:"10px", color:"var(--acc2)", fontFamily:"'DM Mono',monospace" }}>{item.codigo_adicional}</span>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
