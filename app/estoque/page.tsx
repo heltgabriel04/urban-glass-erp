@@ -435,266 +435,177 @@ export default function EstoquePage() {
           </div>
         )}
 
-        {/* ── KPI TILES ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10, marginBottom: 16 }}>
-          {/* m² Total */}
-          <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 12, padding: "14px 16px", position: "relative", overflow: "hidden" }}>
-            <div style={{ fontSize: 18, marginBottom: 6 }}>📐</div>
-            <div style={{ fontSize: 10.5, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>m² em Estoque</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: "var(--acc)", fontFamily: "'DM Mono', monospace", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formatM2(m2Total)}</div>
-            <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 5 }}>saldo total</div>
-            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "var(--acc)", opacity: 0.5 }} />
-          </div>
-
-          {/* Comprometido */}
-          <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 12, padding: "14px 16px", position: "relative", overflow: "hidden" }}>
-            <div style={{ fontSize: 18, marginBottom: 6 }}>🔒</div>
-            <div style={{ fontSize: 10.5, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>Comprometido</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: "var(--warn)", fontFamily: "'DM Mono', monospace", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formatM2(m2Comprometido)}</div>
-            <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 5 }}>em pedidos abertos</div>
-            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "var(--warn)", opacity: 0.5 }} />
-          </div>
-
-          {/* Disponível */}
-          <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 12, padding: "14px 16px", position: "relative", overflow: "hidden" }}>
-            <div style={{ fontSize: 18, marginBottom: 6 }}>✅</div>
-            <div style={{ fontSize: 10.5, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>Disponível</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: "var(--ok)", fontFamily: "'DM Mono', monospace", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formatM2(m2Disponivel)}</div>
-            <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 5 }}>livre para vender</div>
-            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "var(--ok)", opacity: 0.5 }} />
-          </div>
-
-          {/* Chapas */}
-          <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 12, padding: "14px 16px", position: "relative", overflow: "hidden" }}>
-            <div style={{ fontSize: 18, marginBottom: 6 }}>📦</div>
-            <div style={{ fontSize: 10.5, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>Chapas</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: "var(--acc2)", fontFamily: "'DM Mono', monospace", lineHeight: 1 }}>{chapasTotal}</div>
-            <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 5 }}>unidades em estoque</div>
-            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "var(--acc2)", opacity: 0.5 }} />
-          </div>
-
-          {/* Valor */}
-          <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 12, padding: "14px 16px", position: "relative", overflow: "hidden" }}>
-            <div style={{ fontSize: 18, marginBottom: 6 }}>💰</div>
-            <div style={{ fontSize: 10.5, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>Valor do Estoque</div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: "var(--acc5)", fontFamily: "'DM Mono', monospace", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formatBRL(valorEstoque)}</div>
-            <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 5 }}>custo de aquisição</div>
-            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "var(--acc5)", opacity: 0.5 }} />
-          </div>
-
-          {/* Em Ruptura */}
-          <div style={{
-            background: emRupturaCount > 0 ? "rgba(244,63,94,.06)" : "var(--surf1)",
-            border: `1px solid ${emRupturaCount > 0 ? "rgba(244,63,94,.4)" : "var(--b1)"}`,
-            borderRadius: 12, padding: "14px 16px", position: "relative", overflow: "hidden",
-            boxShadow: emRupturaCount > 0 ? "0 0 0 1px rgba(244,63,94,.15)" : undefined,
-          }}>
-            <div style={{ fontSize: 18, marginBottom: 6 }}>⚠️</div>
-            <div style={{ fontSize: 10.5, color: emRupturaCount > 0 ? "var(--err)" : "var(--t3)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>Em Ruptura</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: emRupturaCount > 0 ? "var(--err)" : "var(--ok)", fontFamily: "'DM Mono', monospace", lineHeight: 1 }}>
-              {emRupturaCount > 0 ? emRupturaCount : "✓"}
+        {/* ── HERO BALANCE CARD ── */}
+        <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 20, padding: "28px 32px", marginBottom: 12 }}>
+          {/* Linha principal: disponível (hero) + valor (secundário) */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22 }}>
+            <div>
+              <div style={{ fontSize: 11, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1.2px", marginBottom: 10 }}>
+                Saldo Disponível
+              </div>
+              <div style={{ fontSize: 40, fontWeight: 800, color: "var(--ok)", fontFamily: "'DM Mono', monospace", lineHeight: 1, letterSpacing: "-1.5px" }}>
+                {formatM2(m2Disponivel)}
+              </div>
             </div>
-            <div style={{ fontSize: 11, color: emRupturaCount > 0 ? "var(--err)" : "var(--ok)", marginTop: 5, fontWeight: 600 }}>
-              {emRupturaCount > 0 ? "requer reposição" : "todos ok"}
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 11, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1.2px", marginBottom: 10 }}>
+                Valor em Estoque
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 700, color: "var(--t1)", fontFamily: "'DM Mono', monospace", lineHeight: 1 }}>
+                {formatBRL(valorEstoque)}
+              </div>
             </div>
-            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: emRupturaCount > 0 ? "var(--err)" : "var(--ok)", opacity: 0.5 }} />
+          </div>
+
+          {/* Barra comprometido / disponível */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ height: 5, background: "var(--surf3)", borderRadius: 99, overflow: "hidden", display: "flex" }}>
+              <div style={{ width: `${pctComprometido}%`, background: "var(--warn)", transition: "width .5s" }} />
+              <div style={{ flex: 1, background: "var(--ok)", opacity: 0.35 }} />
+            </div>
+          </div>
+
+          {/* Stats inline */}
+          <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
+            {[
+              { label: "Total",         value: formatM2(m2Total),         color: "var(--t1)" },
+              { label: "Comprometido",  value: formatM2(m2Comprometido),  color: "var(--warn)" },
+              { label: "Chapas",        value: `${chapasTotal} un`,       color: "var(--t2)" },
+              { label: "Produtos",      value: String(estoque.length),    color: "var(--t2)" },
+              ...(emRupturaCount > 0 ? [{ label: "⚠ Ruptura", value: `${emRupturaCount} produto${emRupturaCount > 1 ? "s" : ""}`, color: "var(--err)" }] : []),
+            ].map(s => (
+              <div key={s.label}>
+                <div style={{ fontSize: 10, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 3 }}>{s.label}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: s.color, fontFamily: "'DM Mono', monospace" }}>{s.value}</div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* ── ALERTA DE RUPTURA ── */}
+        {/* ── RUPTURA BANNER ── */}
         {itensRuptura.length > 0 && (
-          <div style={{ marginBottom: 14, padding: "12px 16px", background: "rgba(244,63,94,.07)", border: "1px solid rgba(244,63,94,.3)", borderRadius: 10, display: "flex", alignItems: "flex-start", gap: 12 }}>
-            <span style={{ fontSize: 20, flexShrink: 0 }}>⚠️</span>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--err)", marginBottom: 3 }}>
-                {itensRuptura.length} produto{itensRuptura.length > 1 ? "s" : ""} abaixo do estoque mínimo — reposição necessária
-              </div>
-              <div style={{ fontSize: 11, color: "var(--t2)", lineHeight: 1.5 }}>
-                {itensRuptura.map((e, i) => (
-                  <span key={e.id}>
-                    <strong style={{ color: "var(--t1)" }}>{e.produtos?.nome ?? e.cod}</strong>
-                    <span style={{ color: "var(--t3)" }}> ({e.chapas_saldo} ch. · mín: {e.estoque_minimo_chapas})</span>
-                    {i < itensRuptura.length - 1 && <span style={{ color: "var(--b3)", margin: "0 6px" }}>·</span>}
-                  </span>
-                ))}
-              </div>
+          <div style={{ marginBottom: 12, padding: "12px 18px", background: "rgba(244,63,94,.07)", border: "1px solid rgba(244,63,94,.25)", borderRadius: 14, display: "flex", gap: 12, alignItems: "center" }}>
+            <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+            <div style={{ fontSize: 12, color: "var(--t2)" }}>
+              <strong style={{ color: "var(--err)" }}>{itensRuptura.length} produto{itensRuptura.length > 1 ? "s" : ""} abaixo do mínimo:</strong>
+              {" "}{itensRuptura.map((e, i) => (
+                <span key={e.id}>
+                  <strong style={{ color: "var(--t1)" }}>{e.produtos?.nome ?? e.cod}</strong>
+                  <span style={{ color: "var(--t3)" }}> ({e.chapas_saldo}/{e.estoque_minimo_chapas} ch)</span>
+                  {i < itensRuptura.length - 1 && <span style={{ color: "var(--b3)", margin: "0 5px" }}>·</span>}
+                </span>
+              ))}
             </div>
           </div>
         )}
 
-        {/* ── BARRA COMPROMETIDO / DISPONÍVEL ── */}
-        {m2Total > 0 && (
-          <div style={{ marginBottom: 14, background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 10, padding: "12px 16px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 10, color: "var(--t3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.2px", fontFamily: "'DM Mono', monospace" }}>
-                Disponibilidade do Estoque
-              </span>
-              <span style={{ fontSize: 11, color: "var(--t2)" }}>
-                Total: <strong style={{ color: "var(--t1)", fontFamily: "'DM Mono', monospace" }}>{formatM2(m2Total)}</strong>
-              </span>
-            </div>
-            <div style={{ height: 8, background: "var(--surf3)", borderRadius: 99, overflow: "hidden", display: "flex" }}>
-              <div style={{ width: `${pctComprometido}%`, height: "100%", background: "var(--warn)", transition: "width .5s", borderRadius: "99px 0 0 99px" }} />
-              <div style={{ flex: 1, height: "100%", background: "var(--ok)" }} />
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-              <span style={{ fontSize: 11, color: "var(--warn)", display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ width: 8, height: 8, borderRadius: 2, background: "var(--warn)", display: "inline-block" }} />
-                Comprometido: <strong>{formatM2(m2Comprometido)}</strong>
-                <span style={{ color: "var(--t3)" }}>({pctComprometido.toFixed(0)}%)</span>
-              </span>
-              <span style={{ fontSize: 11, color: "var(--ok)", display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ width: 8, height: 8, borderRadius: 2, background: "var(--ok)", display: "inline-block" }} />
-                Disponível: <strong>{formatM2(m2Disponivel)}</strong>
-                <span style={{ color: "var(--t3)" }}>({(100 - pctComprometido).toFixed(0)}%)</span>
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* ── PRODUCT CARDS ── */}
+        {/* ── LISTA DE PRODUTOS (estilo extrato bancário) ── */}
         {loading ? (
           <div className="loading">Carregando estoque…</div>
         ) : estoque.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--t3)", fontSize: 13 }}>
-            Nenhum item no estoque — clique em "+ Entrada de Estoque" para começar.
+            Nenhum item no estoque — clique em "+ Entrada" para começar.
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {estoqueSorted.map(e => {
-              const pct       = Number(e.m2_entrada) > 0 ? (Number(e.m2_saldo) / Number(e.m2_entrada)) * 100 : 0;
-              const ruptura   = emRuptura(e);
-              const nivelCor  = ruptura ? "var(--err)" : pct >= 60 ? "var(--ok)" : pct >= 30 ? "var(--warn)" : "var(--err)";
-              const nivelBorda = ruptura ? "var(--err)" : pct >= 60 ? "var(--ok)" : pct >= 30 ? "var(--warn)" : "var(--err)";
-              const compM2    = comprometidoPorProduto[e.produto_id] ?? 0;
-              const livreM2   = Math.max(0, Number(e.m2_saldo) - compM2);
-              const colaresInt = e.produtos?.chapas_por_colar ? Math.floor(Number(e.chapas_saldo) / e.produtos.chapas_por_colar) : null;
-              const colaresRest = e.produtos?.chapas_por_colar ? Number(e.chapas_saldo) % e.produtos.chapas_por_colar : null;
+          <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 20, overflow: "hidden" }}>
+            {/* Cabeçalho da lista */}
+            <div style={{ padding: "14px 24px", borderBottom: "1px solid var(--b1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1.2px" }}>
+                Produtos em Estoque
+              </span>
+              <span style={{ fontSize: 11, color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>
+                {estoque.length} ite{estoque.length !== 1 ? "ns" : "m"}
+              </span>
+            </div>
+
+            {/* Itens */}
+            {estoqueSorted.map((e, idx) => {
+              const pct        = Number(e.m2_entrada) > 0 ? (Number(e.m2_saldo) / Number(e.m2_entrada)) * 100 : 0;
+              const ruptura    = emRuptura(e);
+              const nivelCor   = ruptura ? "var(--err)" : pct >= 60 ? "var(--ok)" : pct >= 30 ? "var(--warn)" : "var(--err)";
+              const nivelLabel = ruptura ? "Ruptura" : pct >= 60 ? "Alto" : pct >= 30 ? "Médio" : "Baixo";
+              const valor      = Number(e.m2_saldo) * Number(e.custo_m2);
+              const compM2     = comprometidoPorProduto[e.produto_id] ?? 0;
 
               return (
-                <div key={e.id} style={{
-                  background: ruptura ? "rgba(244,63,94,.03)" : "var(--surf1)",
-                  border: "1px solid var(--b1)",
-                  borderLeft: `3px solid ${nivelBorda}`,
-                  borderRadius: "0 10px 10px 0",
-                  padding: "16px 20px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                }}>
-                  {/* ─ Cabeçalho ─ */}
-                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: "var(--t1)", fontFamily: "'Syne', sans-serif", lineHeight: 1.2, letterSpacing: "-0.2px" }}>
-                        {e.produtos?.nome ?? e.cod}
-                      </div>
-                      <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 4 }}>
-                        <span style={{ color: "var(--acc)", fontFamily: "'DM Mono', monospace" }}>{e.cod}</span>
-                        {e.produtos?.tipo && <span> · {e.produtos.tipo} · {e.produtos.espessura} · {e.produtos.cor}</span>}
-                      </div>
+                <div key={e.id}>
+                  <div
+                    style={{ display: "flex", alignItems: "center", padding: "15px 24px", gap: 16, transition: "background .12s" }}
+                    onMouseEnter={ev => (ev.currentTarget.style.background = "var(--surf2)")}
+                    onMouseLeave={ev => (ev.currentTarget.style.background = "transparent")}
+                  >
+                    {/* Ponto de status */}
+                    <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: "50%", background: nivelCor, boxShadow: `0 0 5px ${nivelCor}70` }} />
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                      {ruptura
-                        ? <span className="chip cr" style={{ fontSize: 10 }}>⚠ Ruptura</span>
-                        : pct >= 60
-                          ? <span className="chip cg" style={{ fontSize: 10 }}>● Alto</span>
-                          : pct >= 30
-                            ? <span className="chip cy" style={{ fontSize: 10 }}>● Médio</span>
-                            : <span className="chip cr" style={{ fontSize: 10 }}>● Baixo</span>
-                      }
-                      <button className="btn bg xs" onClick={() => abrirEditar(e)}>Editar</button>
-                      <button
-                        title="Excluir item do estoque"
-                        onClick={() => excluir(e)}
-                        style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 6, background: "transparent", border: "1px solid var(--b2)", color: "var(--t3)", fontSize: 12, cursor: "pointer" }}
-                        onMouseEnter={ev => { const b = ev.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
-                        onMouseLeave={ev => { const b = ev.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
-                      >
-                        🗑
-                      </button>
-                    </div>
-                  </div>
 
-                  {/* ─ Barra de nível ─ */}
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--t3)", marginBottom: 5, fontFamily: "'DM Mono', monospace" }}>
-                      <span>
-                        {e.chapas_saldo} chapas restantes
-                        {Number(e.m2_entrada) > 0 && <span style={{ color: "var(--t4)" }}> ({pct.toFixed(0)}% do estoque inicial)</span>}
-                      </span>
-                      {ruptura && (
-                        <span style={{ color: "var(--err)", fontWeight: 700 }}>
-                          ⚠ mínimo: {e.estoque_minimo_chapas} chapas
+                    {/* Informações principais */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 3 }}>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: "var(--t1)", lineHeight: 1.2 }}>
+                          {e.produtos?.nome ?? e.cod}
                         </span>
-                      )}
-                    </div>
-                    <div style={{ height: 6, background: "var(--surf3)", borderRadius: 99, overflow: "hidden" }}>
-                      <div style={{ width: `${Math.min(100, pct)}%`, height: "100%", background: nivelCor, borderRadius: 99, transition: "width .5s" }} />
-                    </div>
-                    {/* Mini-barra de comprometido dentro do disponível */}
-                    {compM2 > 0 && Number(e.m2_saldo) > 0 && (
-                      <div style={{ height: 3, background: "var(--surf3)", borderRadius: 99, overflow: "hidden", marginTop: 3 }}>
-                        <div style={{ width: `${Math.min(100, (compM2 / Number(e.m2_saldo)) * 100)}%`, height: "100%", background: "var(--warn)", borderRadius: 99 }} />
+                        {ruptura && (
+                          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--err)", textTransform: "uppercase", letterSpacing: "0.5px" }}>⚠ ruptura</span>
+                        )}
                       </div>
-                    )}
-                  </div>
+                      <div style={{ fontSize: 12, color: "var(--t3)", display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ color: "var(--acc)", fontFamily: "'DM Mono', monospace", fontSize: 11 }}>{e.cod}</span>
+                        <span style={{ color: nivelCor, fontWeight: 600 }}>● {nivelLabel}</span>
+                        <span>{e.chapas_saldo} chapas</span>
+                        {e.produtos?.tipo && <span>{e.produtos.tipo} {e.produtos.espessura}</span>}
+                        {compM2 > 0 && (
+                          <span style={{ color: "var(--warn)" }}>{formatM2(compM2)} comprometido</span>
+                        )}
+                      </div>
+                    </div>
 
-                  {/* ─ Grid de métricas ─ */}
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-                    {[
-                      { label: "CHAPAS SALDO", value: `${e.chapas_saldo} un`, color: "var(--t1)" },
-                      { label: "m² SALDO",     value: formatM2(e.m2_saldo),   color: "var(--acc)" },
-                      { label: "CUSTO / m²",   value: formatBRL(e.custo_m2),  color: "var(--t2)" },
-                      { label: "VALOR TOTAL",  value: formatBRL(Number(e.m2_saldo) * Number(e.custo_m2)), color: "var(--acc5)" },
-                    ].map(m => (
-                      <div key={m.label} style={{ background: "var(--surf2)", borderRadius: 8, padding: "10px 12px" }}>
-                        <div style={{ fontSize: 10, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.6px", fontFamily: "'DM Mono', monospace", marginBottom: 5 }}>{m.label}</div>
-                        <div style={{ fontSize: 16, fontWeight: 600, color: m.color, fontFamily: "'DM Mono', monospace", lineHeight: 1 }}>{m.value}</div>
+                    {/* Barra de nível (compacta) */}
+                    <div style={{ width: 72, flexShrink: 0 }}>
+                      <div style={{ height: 4, background: "var(--surf3)", borderRadius: 99, overflow: "hidden", marginBottom: 4 }}>
+                        <div style={{ width: `${Math.min(100, pct)}%`, height: "100%", background: nivelCor, borderRadius: 99 }} />
                       </div>
-                    ))}
-                  </div>
+                      <div style={{ fontSize: 10, color: "var(--t3)", textAlign: "center", fontFamily: "'DM Mono', monospace" }}>{pct.toFixed(0)}%</div>
+                    </div>
 
-                  {/* ─ Rodapé: comprometido / livre / colares / mínimo ─ */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 16, paddingTop: 10, borderTop: "1px solid var(--b1)", flexWrap: "wrap" }}>
-                    <div style={{ fontSize: 12, color: "var(--t3)" }}>
-                      Comprometido:{" "}
-                      <strong style={{ color: compM2 > 0 ? "var(--warn)" : "var(--t2)", fontFamily: "'DM Mono', monospace" }}>
-                        {formatM2(compM2)}
-                      </strong>
-                    </div>
-                    <div style={{ fontSize: 12, color: "var(--t3)" }}>
-                      Livre:{" "}
-                      <strong style={{ color: "var(--ok)", fontFamily: "'DM Mono', monospace" }}>
-                        {formatM2(livreM2)}
-                      </strong>
-                    </div>
-                    {colaresInt !== null && (
-                      <div style={{ fontSize: 12, color: "var(--t3)" }}>
-                        Colares:{" "}
-                        <strong style={{ color: "var(--acc2)", fontFamily: "'DM Mono', monospace" }}>
-                          {colaresInt}
-                          {colaresRest! > 0 && <span style={{ color: "var(--t3)" }}> +{colaresRest}ch</span>}
-                        </strong>
-                      </div>
-                    )}
-                    <div style={{ fontSize: 12, color: "var(--t3)" }}>
-                      m²/chapa:{" "}
-                      <span style={{ color: "var(--t2)", fontFamily: "'DM Mono', monospace" }}>
-                        {Number(e.m2_por_chapa).toFixed(4)} m²
-                      </span>
-                    </div>
-                    <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 11, color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>MÍN</span>
+                    {/* Mínimo inline */}
+                    <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
+                      <span style={{ fontSize: 10, color: "var(--t3)" }}>mín</span>
                       <input
                         type="number" min="0"
                         defaultValue={Number(e.estoque_minimo_chapas ?? 0)}
                         onBlur={ev => salvarMinimo(e, parseInt(ev.target.value || "0"))}
-                        title="Estoque mínimo em chapas — alerta de ruptura quando atingido"
-                        style={inpMin}
+                        title="Estoque mínimo (chapas)"
+                        style={{ ...inpMin, width: 42 }}
                       />
-                      <span style={{ fontSize: 10, color: "var(--t3)" }}>ch</span>
+                    </div>
+
+                    {/* Valor (alinhado à direita, como saldo bancário) */}
+                    <div style={{ textAlign: "right", flexShrink: 0, minWidth: 110 }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: nivelCor, fontFamily: "'DM Mono', monospace", lineHeight: 1 }}>
+                        {formatM2(e.m2_saldo)}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 3, fontFamily: "'DM Mono', monospace" }}>
+                        {formatBRL(valor)}
+                      </div>
+                    </div>
+
+                    {/* Ações */}
+                    <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+                      <button className="btn bg xs" onClick={() => abrirEditar(e)}>Editar</button>
+                      <button
+                        onClick={() => excluir(e)}
+                        style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 6, background: "transparent", border: "1px solid var(--b2)", color: "var(--t3)", fontSize: 12, cursor: "pointer" }}
+                        onMouseEnter={ev => { const b = ev.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
+                        onMouseLeave={ev => { const b = ev.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
+                      >🗑</button>
                     </div>
                   </div>
+
+                  {/* Divisor fino (estilo extrato) */}
+                  {idx < estoqueSorted.length - 1 && (
+                    <div style={{ height: 1, background: "var(--b1)", margin: "0 24px" }} />
+                  )}
                 </div>
               );
             })}
