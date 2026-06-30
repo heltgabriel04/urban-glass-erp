@@ -291,25 +291,40 @@ export default function EstoquePage() {
     fontWeight: 600, background: "var(--surf3)", border: "1px solid var(--b1)", cursor: "default",
   };
 
-  const btnExcluir: React.CSSProperties = {
-    display: "inline-flex", alignItems: "center", justifyContent: "center",
-    width: "28px", height: "28px", borderRadius: "6px", background: "transparent",
-    border: "1px solid var(--b2)", color: "var(--t3)", fontSize: "13px",
-    cursor: "pointer", transition: "all 0.15s",
+  // Ordena: ruptura primeiro → depois por nível crescente (Baixo → Médio → Alto)
+  const estoqueSorted = [...estoque].sort((a, b) => {
+    const ra = emRuptura(a) ? 0 : 1;
+    const rb = emRuptura(b) ? 0 : 1;
+    if (ra !== rb) return ra - rb;
+    const pa = Number(a.m2_entrada) > 0 ? (Number(a.m2_saldo) / Number(a.m2_entrada)) * 100 : 100;
+    const pb = Number(b.m2_entrada) > 0 ? (Number(b.m2_saldo) / Number(b.m2_entrada)) * 100 : 100;
+    return pa - pb;
+  });
+
+  const pctComprometido = m2Total > 0 ? Math.min(100, (m2Comprometido / m2Total) * 100) : 0;
+  const itensRuptura    = estoque.filter(emRuptura);
+
+  const inpMin: React.CSSProperties = {
+    width: 48, padding: "3px 6px", fontSize: 11, textAlign: "center",
+    background: "var(--surf3)", border: "1px solid var(--b2)",
+    borderRadius: 5, color: "var(--t1)", fontFamily: "'DM Mono', monospace",
+    outline: "none",
   };
 
   return (
     <AppLayout>
+      {/* ── TOPBAR ── */}
       <div className="tb">
-        <div className="tb-title">Estoque · Chapas</div>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button
-            className="btn bg sm"
-            onClick={handleSincronizarBaixas}
-            disabled={sincronizando}
-            title="A baixa por otimização já é automática. Use isto só se suspeitar que alguma ficou pendente — é seguro rodar mais de uma vez."
-          >
-            {sincronizando ? "Reconciliando..." : "Reconciliar Baixas"}
+        <div>
+          <div className="tb-title">Estoque · Chapas</div>
+          <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 1 }}>
+            {estoque.length} produto{estoque.length !== 1 ? "s" : ""} cadastrado{estoque.length !== 1 ? "s" : ""}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn bg sm" onClick={handleSincronizarBaixas} disabled={sincronizando}
+            title="A baixa por otimização já é automática. Use apenas se suspeitar de pendências — é idempotente.">
+            {sincronizando ? "↺ Reconciliando…" : "↺ Reconciliar"}
           </button>
           <button className="btn bp sm" onClick={() => { if (showForm) { setShowForm(false); resetForm(); } else abrirNovo(); }}>
             {showForm ? "✕ Cancelar" : "+ Entrada de Estoque"}
@@ -319,14 +334,14 @@ export default function EstoquePage() {
 
       <div className="con">
 
+        {/* ── FORMULÁRIO DE ENTRADA ── */}
         {showForm && (
-          <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "20px 24px", marginBottom: "20px" }}>
-            <div style={{ fontSize: "12px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em", marginBottom: "16px" }}>
-              {editItem ? `EDITANDO: ${editItem.produtos?.nome ?? editItem.cod}` : "ENTRADA DE ESTOQUE"}
+          <div style={{ background: "var(--surf1)", border: "1px solid var(--b2)", borderRadius: 12, padding: "20px 24px", marginBottom: 20 }}>
+            <div style={{ fontSize: 11, color: "var(--t3)", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 16 }}>
+              {editItem ? `✏ Editando — ${editItem.produtos?.nome ?? editItem.cod}` : "📦 Nova Entrada de Estoque"}
             </div>
 
-            {/* Produto + qtd — bloqueado na edição */}
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px", marginBottom: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12, marginBottom: 12 }}>
               <div>
                 <label style={lbl}>Produto *</label>
                 {editItem ? (
@@ -348,17 +363,15 @@ export default function EstoquePage() {
               </div>
             </div>
 
-            {/* Medida padrão */}
-            <div style={{ marginBottom: "12px" }}>
-              <label style={lbl}>Medida Padrão da Chapa</label>
+            <div style={{ marginBottom: 12 }}>
+              <label style={lbl}>Medida Padrão</label>
               <select style={{ ...inp, cursor: "pointer" }} value={medidaPadrao} onChange={e => handleMedidaPadrao(e.target.value)}>
-                <option value="">Selecione uma medida padrão ou preencha manualmente abaixo...</option>
+                <option value="">Selecione uma medida padrão ou preencha manualmente...</option>
                 {MEDIDAS_PADRAO.map(m => <option key={m.label} value={m.label}>{m.label}</option>)}
               </select>
             </div>
 
-            {/* Dimensões + calculados + custo */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
               <div>
                 <label style={lbl}>Largura (mm) *</label>
                 <input style={inp} type="number" placeholder="Ex: 3210"
@@ -378,9 +391,7 @@ export default function EstoquePage() {
                 <div style={ro}>
                   {m2PorChapa > 0
                     ? `${m2PorChapa.toFixed(4)} m²`
-                    : editItem
-                      ? `${Number(editItem.m2_por_chapa).toFixed(4)} m² (atual)`
-                      : "—"}
+                    : editItem ? `${Number(editItem.m2_por_chapa).toFixed(4)} m² (atual)` : "—"}
                 </div>
               </div>
               <div>
@@ -393,171 +404,301 @@ export default function EstoquePage() {
                 <div style={ro}>
                   {m2Preview > 0
                     ? formatM2(m2Preview)
-                    : editItem && chapasNum > 0
-                      ? formatM2(chapasNum * Number(editItem.m2_por_chapa))
-                      : "—"}
+                    : editItem && chapasNum > 0 ? formatM2(chapasNum * Number(editItem.m2_por_chapa)) : "—"}
                 </div>
               </div>
             </div>
 
-            {/* Info edição */}
             {editItem && (
-              <div style={{ display: "flex", gap: "20px", padding: "10px 14px", background: "var(--surf2)", borderRadius: "8px", fontSize: "12px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", marginBottom: "12px" }}>
+              <div style={{ display: "flex", gap: 20, padding: "10px 14px", background: "var(--surf2)", borderRadius: 8, fontSize: 12, color: "var(--t3)", fontFamily: "'DM Mono', monospace", marginBottom: 12 }}>
                 <span>Saldo atual: <strong style={{ color: "var(--acc)" }}>{formatM2(editItem.m2_saldo)}</strong></span>
-                <span>Chapas atuais: <strong style={{ color: "var(--t1)" }}>{editItem.chapas_saldo} un.</strong></span>
-                <span style={{ color: "var(--warn)", fontSize: "11px" }}>⚠ Edição substitui os valores atuais</span>
+                <span>Chapas: <strong style={{ color: "var(--t1)" }}>{editItem.chapas_saldo} un.</strong></span>
+                <span style={{ color: "var(--warn)" }}>⚠ Edição substitui os valores atuais</span>
               </div>
             )}
-
-            {/* Info novo produto */}
             {!editItem && !itemExistente && prodSelecionado && (
-              <div className="al al-i" style={{ marginBottom: "12px", fontSize: "12px" }}>
-                Produto sem entrada no estoque — será criado automaticamente.
-              </div>
+              <div className="al al-i" style={{ marginBottom: 12, fontSize: 12 }}>Produto sem entrada — será criado automaticamente.</div>
             )}
-
-            {/* Info produto com estoque existente */}
             {!editItem && itemExistente && (
-              <div style={{ display: "flex", gap: "20px", padding: "10px 14px", background: "var(--surf2)", borderRadius: "8px", fontSize: "12px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", marginBottom: "12px" }}>
+              <div style={{ display: "flex", gap: 20, padding: "10px 14px", background: "var(--surf2)", borderRadius: 8, fontSize: 12, color: "var(--t3)", fontFamily: "'DM Mono', monospace", marginBottom: 12 }}>
                 <span>Saldo atual: <strong style={{ color: "var(--acc)" }}>{formatM2(itemExistente.m2_saldo)}</strong></span>
                 <span>Chapas: <strong style={{ color: "var(--t1)" }}>{itemExistente.chapas_saldo} un.</strong></span>
                 {m2Preview > 0 && <span>Novo saldo: <strong style={{ color: "var(--ok)" }}>{formatM2(Number(itemExistente.m2_saldo) + m2Preview)}</strong></span>}
               </div>
             )}
-
-            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button className="btn bg sm" onClick={() => { setShowForm(false); resetForm(); }}>Cancelar</button>
               <button className="btn bp sm" onClick={handleEntrada} disabled={salvando}>
-                {salvando ? "Salvando..." : editItem ? "Salvar Alterações" : "Registrar Entrada"}
+                {salvando ? "Salvando…" : editItem ? "Salvar Alterações" : "Registrar Entrada"}
               </button>
             </div>
           </div>
         )}
 
-        {/* Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px", marginBottom: "20px" }}>
-          {[
-            { label: "m² em Estoque",      value: formatM2(m2Total),        color: "var(--acc)",  sub: "saldo total" },
-            { label: "m² Comprometido",    value: formatM2(m2Comprometido), color: "var(--warn)", sub: "em pedidos não baixados" },
-            { label: "m² Disponível",      value: formatM2(m2Disponivel),   color: "var(--ok)",   sub: "livre pra vender" },
-            { label: "Chapas em Estoque",  value: String(chapasTotal),      color: "var(--acc2)", sub: "chapas disponíveis" },
-            { label: "Valor do Estoque",   value: formatBRL(valorEstoque),  color: "var(--acc5)", sub: "custo de aquisição" },
-            { label: "Em Ruptura",         value: String(emRupturaCount),   color: emRupturaCount > 0 ? "var(--err)" : "var(--ok)", sub: "no/abaixo do mínimo" },
-          ].map(card => (
-            <div key={card.label} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: "4px" }}>
-              <div style={{ fontSize: "11px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{card.label}</div>
-              <div style={{ fontSize: "22px", fontWeight: 700, color: card.color, fontFamily: "'DM Mono', monospace", lineHeight: 1.2 }}>{card.value}</div>
-              <div style={{ fontSize: "11px", color: "var(--t3)" }}>{card.sub}</div>
+        {/* ── KPI TILES ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10, marginBottom: 16 }}>
+          {/* m² Total */}
+          <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 12, padding: "14px 16px", position: "relative", overflow: "hidden" }}>
+            <div style={{ fontSize: 18, marginBottom: 6 }}>📐</div>
+            <div style={{ fontSize: 9, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1.5px", fontFamily: "'DM Mono', monospace", marginBottom: 4 }}>m² em Estoque</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "var(--acc)", fontFamily: "'Syne', sans-serif", lineHeight: 1, letterSpacing: "-1px" }}>{formatM2(m2Total)}</div>
+            <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 4 }}>saldo total</div>
+            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "var(--acc)", opacity: 0.5 }} />
+          </div>
+
+          {/* Comprometido */}
+          <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 12, padding: "14px 16px", position: "relative", overflow: "hidden" }}>
+            <div style={{ fontSize: 18, marginBottom: 6 }}>🔒</div>
+            <div style={{ fontSize: 9, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1.5px", fontFamily: "'DM Mono', monospace", marginBottom: 4 }}>Comprometido</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "var(--warn)", fontFamily: "'Syne', sans-serif", lineHeight: 1, letterSpacing: "-1px" }}>{formatM2(m2Comprometido)}</div>
+            <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 4 }}>em pedidos abertos</div>
+            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "var(--warn)", opacity: 0.5 }} />
+          </div>
+
+          {/* Disponível */}
+          <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 12, padding: "14px 16px", position: "relative", overflow: "hidden" }}>
+            <div style={{ fontSize: 18, marginBottom: 6 }}>✅</div>
+            <div style={{ fontSize: 9, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1.5px", fontFamily: "'DM Mono', monospace", marginBottom: 4 }}>Disponível</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "var(--ok)", fontFamily: "'Syne', sans-serif", lineHeight: 1, letterSpacing: "-1px" }}>{formatM2(m2Disponivel)}</div>
+            <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 4 }}>livre para vender</div>
+            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "var(--ok)", opacity: 0.5 }} />
+          </div>
+
+          {/* Chapas */}
+          <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 12, padding: "14px 16px", position: "relative", overflow: "hidden" }}>
+            <div style={{ fontSize: 18, marginBottom: 6 }}>📦</div>
+            <div style={{ fontSize: 9, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1.5px", fontFamily: "'DM Mono', monospace", marginBottom: 4 }}>Chapas</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "var(--acc2)", fontFamily: "'Syne', sans-serif", lineHeight: 1, letterSpacing: "-1px" }}>{chapasTotal}</div>
+            <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 4 }}>unidades em estoque</div>
+            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "var(--acc2)", opacity: 0.5 }} />
+          </div>
+
+          {/* Valor */}
+          <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 12, padding: "14px 16px", position: "relative", overflow: "hidden" }}>
+            <div style={{ fontSize: 18, marginBottom: 6 }}>💰</div>
+            <div style={{ fontSize: 9, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1.5px", fontFamily: "'DM Mono', monospace", marginBottom: 4 }}>Valor do Estoque</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "var(--acc5)", fontFamily: "'Syne', sans-serif", lineHeight: 1, letterSpacing: "-0.5px" }}>{formatBRL(valorEstoque)}</div>
+            <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 4 }}>custo de aquisição</div>
+            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "var(--acc5)", opacity: 0.5 }} />
+          </div>
+
+          {/* Em Ruptura */}
+          <div style={{
+            background: emRupturaCount > 0 ? "rgba(244,63,94,.06)" : "var(--surf1)",
+            border: `1px solid ${emRupturaCount > 0 ? "rgba(244,63,94,.4)" : "var(--b1)"}`,
+            borderRadius: 12, padding: "14px 16px", position: "relative", overflow: "hidden",
+            boxShadow: emRupturaCount > 0 ? "0 0 0 1px rgba(244,63,94,.15)" : undefined,
+          }}>
+            <div style={{ fontSize: 18, marginBottom: 6 }}>⚠️</div>
+            <div style={{ fontSize: 9, color: emRupturaCount > 0 ? "var(--err)" : "var(--t3)", textTransform: "uppercase", letterSpacing: "1.5px", fontFamily: "'DM Mono', monospace", marginBottom: 4 }}>Em Ruptura</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: emRupturaCount > 0 ? "var(--err)" : "var(--ok)", fontFamily: "'Syne', sans-serif", lineHeight: 1, letterSpacing: "-1px" }}>
+              {emRupturaCount > 0 ? emRupturaCount : "✓"}
             </div>
-          ))}
+            <div style={{ fontSize: 10, color: emRupturaCount > 0 ? "var(--err)" : "var(--ok)", marginTop: 4, fontWeight: 600 }}>
+              {emRupturaCount > 0 ? "requer reposição" : "todos ok"}
+            </div>
+            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: emRupturaCount > 0 ? "var(--err)" : "var(--ok)", opacity: 0.5 }} />
+          </div>
         </div>
 
-        {loading ? <div className="loading">Carregando estoque...</div> : (
-          <>
-            <div className="tw mb14">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Produto</th><th>Código</th><th>Chapas Entrada</th>
-                    <th>m² Entrada</th><th>m² Consumido</th><th>Chapas Saldo</th>
-                    <th>Colares</th>
-                    <th>Mín.</th>
-                    <th>m² Saldo</th><th>Custo/m²</th><th>Valor Total</th><th>Nível</th>
-                    <th>Ações</th><th style={{ width: "40px" }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {estoque.length === 0 && (
-                    <tr><td colSpan={14} style={{ textAlign: "center", color: "var(--t3)", padding: "32px" }}>Nenhum item no estoque — registre uma entrada acima</td></tr>
-                  )}
-                  {estoque.map(e => {
-                    const pct = Number(e.m2_entrada) > 0 ? (Number(e.m2_saldo) / Number(e.m2_entrada)) * 100 : 0;
-                    return (
-                      <tr key={e.id}>
-                        <td>
-                          <strong>{e.produtos?.nome ?? "—"}</strong>
-                          {e.produtos?.tipo && <div className="tdim">{e.produtos.tipo} · {e.produtos.espessura} · {e.produtos.cor}</div>}
-                        </td>
-                        <td className="mono" style={{ color: "var(--acc)" }}>{e.cod}</td>
-                        <td className="mono">{e.chapas_entrada}</td>
-                        <td className="mono">{formatM2(e.m2_entrada)}</td>
-                        <td className="mono" style={{ color: "var(--warn)" }}>{formatM2(e.m2_consumido)}</td>
-                        <td className="mono" style={{ color: emRuptura(e) ? "var(--err)" : undefined }}>
-                          {e.chapas_saldo}
-                          {emRuptura(e) && <span title="No/abaixo do estoque mínimo" style={{ marginLeft: "4px" }}>⚠</span>}
-                        </td>
-                        <td className="mono">
-                          {e.produtos?.chapas_por_colar
-                            ? `${Math.floor(Number(e.chapas_saldo) / e.produtos.chapas_por_colar)} (+${Number(e.chapas_saldo) % e.produtos.chapas_por_colar} ch.)`
-                            : <span className="tdim" title="Cadastre 'chapas por colar' no produto">—</span>}
-                        </td>
-                        <td>
-                          <input
-                            type="number" min="0"
-                            defaultValue={Number(e.estoque_minimo_chapas ?? 0)}
-                            onBlur={ev => salvarMinimo(e, parseInt(ev.target.value || "0"))}
-                            title="Estoque mínimo (chapas) — alerta de ruptura"
-                            style={{ ...inp, width: "56px", padding: "4px 6px", fontSize: "12px" }}
-                          />
-                        </td>
-                        <td className="mono" style={{ color: "var(--acc)" }}>{formatM2(e.m2_saldo)}</td>
-                        <td className="mono">{formatBRL(e.custo_m2)}</td>
-                        <td className="mono">{formatBRL(Number(e.m2_saldo) * Number(e.custo_m2))}</td>
-                        <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <div className="prg" style={{ width: "50px", height: "5px" }}>
-                              <div className="prg-f" style={{ width: `${pct}%`, background: pct >= 60 ? "var(--ok)" : pct >= 30 ? "var(--warn)" : "var(--err)" }} />
-                            </div>
-                            {nivelChip(pct)}
-                          </div>
-                        </td>
-                        <td>
-                          <button className="btn bg xs" onClick={() => abrirEditar(e)}>Editar</button>
-                        </td>
-                        <td style={{ width: "40px", textAlign: "center" }}>
-                          <button
-                            title="Excluir item do estoque"
-                            onClick={() => excluir(e)}
-                            style={btnExcluir}
-                            onMouseEnter={e2 => { const b = e2.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
-                            onMouseLeave={e2 => { const b = e2.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
-                          >
-                            🗑
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+        {/* ── ALERTA DE RUPTURA ── */}
+        {itensRuptura.length > 0 && (
+          <div style={{ marginBottom: 14, padding: "12px 16px", background: "rgba(244,63,94,.07)", border: "1px solid rgba(244,63,94,.3)", borderRadius: 10, display: "flex", alignItems: "flex-start", gap: 12 }}>
+            <span style={{ fontSize: 20, flexShrink: 0 }}>⚠️</span>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--err)", marginBottom: 3 }}>
+                {itensRuptura.length} produto{itensRuptura.length > 1 ? "s" : ""} abaixo do estoque mínimo — reposição necessária
+              </div>
+              <div style={{ fontSize: 11, color: "var(--t2)", lineHeight: 1.5 }}>
+                {itensRuptura.map((e, i) => (
+                  <span key={e.id}>
+                    <strong style={{ color: "var(--t1)" }}>{e.produtos?.nome ?? e.cod}</strong>
+                    <span style={{ color: "var(--t3)" }}> ({e.chapas_saldo} ch. · mín: {e.estoque_minimo_chapas})</span>
+                    {i < itensRuptura.length - 1 && <span style={{ color: "var(--b3)", margin: "0 6px" }}>·</span>}
+                  </span>
+                ))}
+              </div>
             </div>
+          </div>
+        )}
 
-            <div className="g2">
-              {estoque.map(e => {
-                const pct = Number(e.m2_entrada) > 0 ? (Number(e.m2_saldo) / Number(e.m2_entrada)) * 100 : 0;
-                return (
-                  <div key={e.id} className="card">
-                    <div className="ct">
-                      {e.produtos?.nome ?? e.cod}
-                      <span className="mono" style={{ fontSize: "10px", color: "var(--t3)" }}>{e.cod}</span>
-                    </div>
-                    <div className="sr"><div className="sl">m² disponível</div><div className="sv" style={{ color: "var(--acc)" }}>{formatM2(e.m2_saldo)}</div></div>
-                    <div className="sr"><div className="sl">Chapas</div><div className="sv">{e.chapas_saldo} un.</div></div>
-                    <div className="sr"><div className="sl">Consumido</div><div className="sv" style={{ color: "var(--warn)" }}>{formatM2(e.m2_consumido)}</div></div>
-                    <div className="sr"><div className="sl">m² / Chapa</div><div className="sv mono">{Number(e.m2_por_chapa).toFixed(2)} m²</div></div>
-                    <div style={{ marginTop: "10px" }}>
-                      <div className="prg" style={{ height: "6px" }}>
-                        <div className="prg-f" style={{ width: `${pct}%`, background: pct >= 60 ? "var(--ok)" : pct >= 30 ? "var(--warn)" : "var(--err)" }} />
+        {/* ── BARRA COMPROMETIDO / DISPONÍVEL ── */}
+        {m2Total > 0 && (
+          <div style={{ marginBottom: 14, background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 10, padding: "12px 16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontSize: 10, color: "var(--t3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.2px", fontFamily: "'DM Mono', monospace" }}>
+                Disponibilidade do Estoque
+              </span>
+              <span style={{ fontSize: 11, color: "var(--t2)" }}>
+                Total: <strong style={{ color: "var(--t1)", fontFamily: "'DM Mono', monospace" }}>{formatM2(m2Total)}</strong>
+              </span>
+            </div>
+            <div style={{ height: 8, background: "var(--surf3)", borderRadius: 99, overflow: "hidden", display: "flex" }}>
+              <div style={{ width: `${pctComprometido}%`, height: "100%", background: "var(--warn)", transition: "width .5s", borderRadius: "99px 0 0 99px" }} />
+              <div style={{ flex: 1, height: "100%", background: "var(--ok)" }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+              <span style={{ fontSize: 11, color: "var(--warn)", display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: "var(--warn)", display: "inline-block" }} />
+                Comprometido: <strong>{formatM2(m2Comprometido)}</strong>
+                <span style={{ color: "var(--t3)" }}>({pctComprometido.toFixed(0)}%)</span>
+              </span>
+              <span style={{ fontSize: 11, color: "var(--ok)", display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: "var(--ok)", display: "inline-block" }} />
+                Disponível: <strong>{formatM2(m2Disponivel)}</strong>
+                <span style={{ color: "var(--t3)" }}>({(100 - pctComprometido).toFixed(0)}%)</span>
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* ── PRODUCT CARDS ── */}
+        {loading ? (
+          <div className="loading">Carregando estoque…</div>
+        ) : estoque.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--t3)", fontSize: 13 }}>
+            Nenhum item no estoque — clique em "+ Entrada de Estoque" para começar.
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {estoqueSorted.map(e => {
+              const pct       = Number(e.m2_entrada) > 0 ? (Number(e.m2_saldo) / Number(e.m2_entrada)) * 100 : 0;
+              const ruptura   = emRuptura(e);
+              const nivelCor  = ruptura ? "var(--err)" : pct >= 60 ? "var(--ok)" : pct >= 30 ? "var(--warn)" : "var(--err)";
+              const nivelBorda = ruptura ? "var(--err)" : pct >= 60 ? "var(--ok)" : pct >= 30 ? "var(--warn)" : "var(--err)";
+              const compM2    = comprometidoPorProduto[e.produto_id] ?? 0;
+              const livreM2   = Math.max(0, Number(e.m2_saldo) - compM2);
+              const colaresInt = e.produtos?.chapas_por_colar ? Math.floor(Number(e.chapas_saldo) / e.produtos.chapas_por_colar) : null;
+              const colaresRest = e.produtos?.chapas_por_colar ? Number(e.chapas_saldo) % e.produtos.chapas_por_colar : null;
+
+              return (
+                <div key={e.id} style={{
+                  background: ruptura ? "rgba(244,63,94,.03)" : "var(--surf1)",
+                  border: "1px solid var(--b1)",
+                  borderLeft: `3px solid ${nivelBorda}`,
+                  borderRadius: "0 10px 10px 0",
+                  padding: "16px 20px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                }}>
+                  {/* ─ Cabeçalho ─ */}
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--t1)", fontFamily: "'Syne', sans-serif", lineHeight: 1.2 }}>
+                        {e.produtos?.nome ?? e.cod}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 3 }}>
+                        <span style={{ color: "var(--acc)", fontFamily: "'DM Mono', monospace" }}>{e.cod}</span>
+                        {e.produtos?.tipo && <span> · {e.produtos.tipo} · {e.produtos.espessura} · {e.produtos.cor}</span>}
                       </div>
                     </div>
-                    <div style={{ display: "flex", gap: "6px", marginTop: "10px" }}>
-                      <button className="btn bg xs" style={{ flex: 1 }} onClick={() => abrirEditar(e)}>Editar</button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                      {ruptura
+                        ? <span className="chip cr" style={{ fontSize: 10 }}>⚠ Ruptura</span>
+                        : pct >= 60
+                          ? <span className="chip cg" style={{ fontSize: 10 }}>● Alto</span>
+                          : pct >= 30
+                            ? <span className="chip cy" style={{ fontSize: 10 }}>● Médio</span>
+                            : <span className="chip cr" style={{ fontSize: 10 }}>● Baixo</span>
+                      }
+                      <button className="btn bg xs" onClick={() => abrirEditar(e)}>Editar</button>
+                      <button
+                        title="Excluir item do estoque"
+                        onClick={() => excluir(e)}
+                        style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 6, background: "transparent", border: "1px solid var(--b2)", color: "var(--t3)", fontSize: 12, cursor: "pointer" }}
+                        onMouseEnter={ev => { const b = ev.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
+                        onMouseLeave={ev => { const b = ev.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
+                      >
+                        🗑
+                      </button>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </>
+
+                  {/* ─ Barra de nível ─ */}
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--t3)", marginBottom: 4, fontFamily: "'DM Mono', monospace" }}>
+                      <span>
+                        {e.chapas_saldo} chapas restantes
+                        {Number(e.m2_entrada) > 0 && <span style={{ color: "var(--t4)" }}> ({pct.toFixed(0)}% do estoque inicial)</span>}
+                      </span>
+                      {ruptura && (
+                        <span style={{ color: "var(--err)", fontWeight: 700 }}>
+                          ⚠ mínimo: {e.estoque_minimo_chapas} chapas
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ height: 6, background: "var(--surf3)", borderRadius: 99, overflow: "hidden" }}>
+                      <div style={{ width: `${Math.min(100, pct)}%`, height: "100%", background: nivelCor, borderRadius: 99, transition: "width .5s" }} />
+                    </div>
+                    {/* Mini-barra de comprometido dentro do disponível */}
+                    {compM2 > 0 && Number(e.m2_saldo) > 0 && (
+                      <div style={{ height: 3, background: "var(--surf3)", borderRadius: 99, overflow: "hidden", marginTop: 3 }}>
+                        <div style={{ width: `${Math.min(100, (compM2 / Number(e.m2_saldo)) * 100)}%`, height: "100%", background: "var(--warn)", borderRadius: 99 }} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ─ Grid de métricas ─ */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+                    {[
+                      { label: "CHAPAS SALDO", value: `${e.chapas_saldo} un`, color: "var(--t1)" },
+                      { label: "m² SALDO",     value: formatM2(e.m2_saldo),   color: "var(--acc)" },
+                      { label: "CUSTO / m²",   value: formatBRL(e.custo_m2),  color: "var(--t2)" },
+                      { label: "VALOR TOTAL",  value: formatBRL(Number(e.m2_saldo) * Number(e.custo_m2)), color: "var(--acc5)" },
+                    ].map(m => (
+                      <div key={m.label} style={{ background: "var(--surf2)", borderRadius: 8, padding: "10px 12px" }}>
+                        <div style={{ fontSize: 9, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono', monospace", marginBottom: 4 }}>{m.label}</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: m.color, fontFamily: "'Syne', sans-serif", lineHeight: 1 }}>{m.value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* ─ Rodapé: comprometido / livre / colares / mínimo ─ */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 16, paddingTop: 10, borderTop: "1px solid var(--b1)", flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 11, color: "var(--t3)" }}>
+                      Comprometido:{" "}
+                      <strong style={{ color: compM2 > 0 ? "var(--warn)" : "var(--t2)", fontFamily: "'DM Mono', monospace" }}>
+                        {formatM2(compM2)}
+                      </strong>
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--t3)" }}>
+                      Livre:{" "}
+                      <strong style={{ color: "var(--ok)", fontFamily: "'DM Mono', monospace" }}>
+                        {formatM2(livreM2)}
+                      </strong>
+                    </div>
+                    {colaresInt !== null && (
+                      <div style={{ fontSize: 11, color: "var(--t3)" }}>
+                        Colares:{" "}
+                        <strong style={{ color: "var(--acc2)", fontFamily: "'DM Mono', monospace" }}>
+                          {colaresInt}
+                          {colaresRest! > 0 && <span style={{ color: "var(--t3)" }}> +{colaresRest}ch</span>}
+                        </strong>
+                      </div>
+                    )}
+                    <div style={{ fontSize: 11, color: "var(--t3)" }}>
+                      m²/chapa:{" "}
+                      <span style={{ color: "var(--t2)", fontFamily: "'DM Mono', monospace" }}>
+                        {Number(e.m2_por_chapa).toFixed(4)} m²
+                      </span>
+                    </div>
+                    <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>MÍN</span>
+                      <input
+                        type="number" min="0"
+                        defaultValue={Number(e.estoque_minimo_chapas ?? 0)}
+                        onBlur={ev => salvarMinimo(e, parseInt(ev.target.value || "0"))}
+                        title="Estoque mínimo em chapas — alerta de ruptura quando atingido"
+                        style={inpMin}
+                      />
+                      <span style={{ fontSize: 10, color: "var(--t3)" }}>ch</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </AppLayout>
