@@ -440,45 +440,45 @@ export default function EstoquePage() {
           {/* m² Total */}
           <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 12, padding: "14px 16px", position: "relative", overflow: "hidden" }}>
             <div style={{ fontSize: 18, marginBottom: 6 }}>📐</div>
-            <div style={{ fontSize: 9, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1.5px", fontFamily: "'DM Mono', monospace", marginBottom: 4 }}>m² em Estoque</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "var(--acc)", fontFamily: "'Syne', sans-serif", lineHeight: 1, letterSpacing: "-1px" }}>{formatM2(m2Total)}</div>
-            <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 4 }}>saldo total</div>
+            <div style={{ fontSize: 10.5, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>m² em Estoque</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "var(--acc)", fontFamily: "'DM Mono', monospace", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formatM2(m2Total)}</div>
+            <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 5 }}>saldo total</div>
             <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "var(--acc)", opacity: 0.5 }} />
           </div>
 
           {/* Comprometido */}
           <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 12, padding: "14px 16px", position: "relative", overflow: "hidden" }}>
             <div style={{ fontSize: 18, marginBottom: 6 }}>🔒</div>
-            <div style={{ fontSize: 9, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1.5px", fontFamily: "'DM Mono', monospace", marginBottom: 4 }}>Comprometido</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "var(--warn)", fontFamily: "'Syne', sans-serif", lineHeight: 1, letterSpacing: "-1px" }}>{formatM2(m2Comprometido)}</div>
-            <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 4 }}>em pedidos abertos</div>
+            <div style={{ fontSize: 10.5, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>Comprometido</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "var(--warn)", fontFamily: "'DM Mono', monospace", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formatM2(m2Comprometido)}</div>
+            <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 5 }}>em pedidos abertos</div>
             <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "var(--warn)", opacity: 0.5 }} />
           </div>
 
           {/* Disponível */}
           <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 12, padding: "14px 16px", position: "relative", overflow: "hidden" }}>
             <div style={{ fontSize: 18, marginBottom: 6 }}>✅</div>
-            <div style={{ fontSize: 9, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1.5px", fontFamily: "'DM Mono', monospace", marginBottom: 4 }}>Disponível</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "var(--ok)", fontFamily: "'Syne', sans-serif", lineHeight: 1, letterSpacing: "-1px" }}>{formatM2(m2Disponivel)}</div>
-            <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 4 }}>livre para vender</div>
+            <div style={{ fontSize: 10.5, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>Disponível</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "var(--ok)", fontFamily: "'DM Mono', monospace", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formatM2(m2Disponivel)}</div>
+            <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 5 }}>livre para vender</div>
             <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "var(--ok)", opacity: 0.5 }} />
           </div>
 
           {/* Chapas */}
           <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 12, padding: "14px 16px", position: "relative", overflow: "hidden" }}>
             <div style={{ fontSize: 18, marginBottom: 6 }}>📦</div>
-            <div style={{ fontSize: 9, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1.5px", fontFamily: "'DM Mono', monospace", marginBottom: 4 }}>Chapas</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "var(--acc2)", fontFamily: "'Syne', sans-serif", lineHeight: 1, letterSpacing: "-1px" }}>{chapasTotal}</div>
-            <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 4 }}>unidades em estoque</div>
+            <div style={{ fontSize: 10.5, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>Chapas</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "var(--acc2)", fontFamily: "'DM Mono', monospace", lineHeight: 1 }}>{chapasTotal}</div>
+            <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 5 }}>unidades em estoque</div>
             <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "var(--acc2)", opacity: 0.5 }} />
           </div>
 
           {/* Valor */}
           <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: 12, padding: "14px 16px", position: "relative", overflow: "hidden" }}>
             <div style={{ fontSize: 18, marginBottom: 6 }}>💰</div>
-            <div style={{ fontSize: 9, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1.5px", fontFamily: "'DM Mono', monospace", marginBottom: 4 }}>Valor do Estoque</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "var(--acc5)", fontFamily: "'Syne', sans-serif", lineHeight: 1, letterSpacing: "-0.5px" }}>{formatBRL(valorEstoque)}</div>
-            <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 4 }}>custo de aquisição</div>
+            <div style={{ fontSize: 10.5, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>Valor do Estoque</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "var(--acc5)", fontFamily: "'DM Mono', monospace", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formatBRL(valorEstoque)}</div>
+            <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 5 }}>custo de aquisição</div>
             <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "var(--acc5)", opacity: 0.5 }} />
           </div>
 
@@ -490,11 +490,11 @@ export default function EstoquePage() {
             boxShadow: emRupturaCount > 0 ? "0 0 0 1px rgba(244,63,94,.15)" : undefined,
           }}>
             <div style={{ fontSize: 18, marginBottom: 6 }}>⚠️</div>
-            <div style={{ fontSize: 9, color: emRupturaCount > 0 ? "var(--err)" : "var(--t3)", textTransform: "uppercase", letterSpacing: "1.5px", fontFamily: "'DM Mono', monospace", marginBottom: 4 }}>Em Ruptura</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: emRupturaCount > 0 ? "var(--err)" : "var(--ok)", fontFamily: "'Syne', sans-serif", lineHeight: 1, letterSpacing: "-1px" }}>
+            <div style={{ fontSize: 10.5, color: emRupturaCount > 0 ? "var(--err)" : "var(--t3)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>Em Ruptura</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: emRupturaCount > 0 ? "var(--err)" : "var(--ok)", fontFamily: "'DM Mono', monospace", lineHeight: 1 }}>
               {emRupturaCount > 0 ? emRupturaCount : "✓"}
             </div>
-            <div style={{ fontSize: 10, color: emRupturaCount > 0 ? "var(--err)" : "var(--ok)", marginTop: 4, fontWeight: 600 }}>
+            <div style={{ fontSize: 11, color: emRupturaCount > 0 ? "var(--err)" : "var(--ok)", marginTop: 5, fontWeight: 600 }}>
               {emRupturaCount > 0 ? "requer reposição" : "todos ok"}
             </div>
             <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: emRupturaCount > 0 ? "var(--err)" : "var(--ok)", opacity: 0.5 }} />
@@ -585,10 +585,10 @@ export default function EstoquePage() {
                   {/* ─ Cabeçalho ─ */}
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--t1)", fontFamily: "'Syne', sans-serif", lineHeight: 1.2 }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: "var(--t1)", fontFamily: "'Syne', sans-serif", lineHeight: 1.2, letterSpacing: "-0.2px" }}>
                         {e.produtos?.nome ?? e.cod}
                       </div>
-                      <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 3 }}>
+                      <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 4 }}>
                         <span style={{ color: "var(--acc)", fontFamily: "'DM Mono', monospace" }}>{e.cod}</span>
                         {e.produtos?.tipo && <span> · {e.produtos.tipo} · {e.produtos.espessura} · {e.produtos.cor}</span>}
                       </div>
@@ -617,7 +617,7 @@ export default function EstoquePage() {
 
                   {/* ─ Barra de nível ─ */}
                   <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--t3)", marginBottom: 4, fontFamily: "'DM Mono', monospace" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--t3)", marginBottom: 5, fontFamily: "'DM Mono', monospace" }}>
                       <span>
                         {e.chapas_saldo} chapas restantes
                         {Number(e.m2_entrada) > 0 && <span style={{ color: "var(--t4)" }}> ({pct.toFixed(0)}% do estoque inicial)</span>}
@@ -648,28 +648,28 @@ export default function EstoquePage() {
                       { label: "VALOR TOTAL",  value: formatBRL(Number(e.m2_saldo) * Number(e.custo_m2)), color: "var(--acc5)" },
                     ].map(m => (
                       <div key={m.label} style={{ background: "var(--surf2)", borderRadius: 8, padding: "10px 12px" }}>
-                        <div style={{ fontSize: 9, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono', monospace", marginBottom: 4 }}>{m.label}</div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: m.color, fontFamily: "'Syne', sans-serif", lineHeight: 1 }}>{m.value}</div>
+                        <div style={{ fontSize: 10, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.6px", fontFamily: "'DM Mono', monospace", marginBottom: 5 }}>{m.label}</div>
+                        <div style={{ fontSize: 16, fontWeight: 600, color: m.color, fontFamily: "'DM Mono', monospace", lineHeight: 1 }}>{m.value}</div>
                       </div>
                     ))}
                   </div>
 
                   {/* ─ Rodapé: comprometido / livre / colares / mínimo ─ */}
                   <div style={{ display: "flex", alignItems: "center", gap: 16, paddingTop: 10, borderTop: "1px solid var(--b1)", flexWrap: "wrap" }}>
-                    <div style={{ fontSize: 11, color: "var(--t3)" }}>
+                    <div style={{ fontSize: 12, color: "var(--t3)" }}>
                       Comprometido:{" "}
                       <strong style={{ color: compM2 > 0 ? "var(--warn)" : "var(--t2)", fontFamily: "'DM Mono', monospace" }}>
                         {formatM2(compM2)}
                       </strong>
                     </div>
-                    <div style={{ fontSize: 11, color: "var(--t3)" }}>
+                    <div style={{ fontSize: 12, color: "var(--t3)" }}>
                       Livre:{" "}
                       <strong style={{ color: "var(--ok)", fontFamily: "'DM Mono', monospace" }}>
                         {formatM2(livreM2)}
                       </strong>
                     </div>
                     {colaresInt !== null && (
-                      <div style={{ fontSize: 11, color: "var(--t3)" }}>
+                      <div style={{ fontSize: 12, color: "var(--t3)" }}>
                         Colares:{" "}
                         <strong style={{ color: "var(--acc2)", fontFamily: "'DM Mono', monospace" }}>
                           {colaresInt}
@@ -677,14 +677,14 @@ export default function EstoquePage() {
                         </strong>
                       </div>
                     )}
-                    <div style={{ fontSize: 11, color: "var(--t3)" }}>
+                    <div style={{ fontSize: 12, color: "var(--t3)" }}>
                       m²/chapa:{" "}
                       <span style={{ color: "var(--t2)", fontFamily: "'DM Mono', monospace" }}>
                         {Number(e.m2_por_chapa).toFixed(4)} m²
                       </span>
                     </div>
                     <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>MÍN</span>
+                      <span style={{ fontSize: 11, color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>MÍN</span>
                       <input
                         type="number" min="0"
                         defaultValue={Number(e.estoque_minimo_chapas ?? 0)}
