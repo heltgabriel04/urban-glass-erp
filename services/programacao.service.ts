@@ -188,6 +188,7 @@ export async function getProgramacao(from: Date, to: Date): Promise<ProgramacaoP
     .select(`
       *,
       producao_linhas ( nome, cor, tipo ),
+      item_pedido:itens_pedido!item_pedido_id ( id, produto_nome, largura, altura, m2, quantidade, lapidacao ),
       pedidos (
         id, dt_retirada, m2_total, status, obs,
         clientes ( nome, cidade ),
@@ -319,7 +320,7 @@ export async function verificarConflito(
 
 export async function criarProgramacaoPedido(
   pedidoId: string,
-  itens: Pick<ItemPedido, 'm2' | 'quantidade' | 'lapidacao' | 'produto_nome'>[],
+  itens: Pick<ItemPedido, 'm2' | 'quantidade' | 'lapidacao' | 'produto_nome' | 'id'>[],
   config: ConfigTempoProducao[],
   linhas: ProducaoLinha[],
   dtInicioCorte: Date,
@@ -327,57 +328,72 @@ export async function criarProgramacaoPedido(
   linhaLapId?: number,
   diasBloqueados: Set<string> = new Set(),
 ): Promise<{ ok: boolean; erro?: string }> {
-  const tempos = calcularTempoEstimado(itens, config);
-
-  const dtInicioUtil = proximoDiaUtil(dtInicioCorte, diasBloqueados);
   const linhaCorte   = linhas.find(l => l.id === linhaCorteId);
-  const minsDia      = (linhaCorte?.capacidade_horas_dia ?? 8) * 60;
-  const diasCorte    = Math.ceil(tempos.corte_min / minsDia);
-  const dtFimCorte   = addDiasUteis(dtInicioUtil, Math.max(1, diasCorte), diasBloqueados);
+  const linhaLap     = linhaLapId ? linhas.find(l => l.id === linhaLapId) : undefined;
+  const minsDiaCorte = (linhaCorte?.capacidade_horas_dia ?? 8) * 60;
+  const minsDiaLap   = (linhaLap?.capacidade_horas_dia   ?? 8) * 60;
 
-  // Detecta conflito antes de inserir
-  const confCorte = await verificarConflito(linhaCorteId, dtInicioUtil, dtFimCorte);
-  if (confCorte.conflito) {
-    return { ok: false, erro: `Linha de corte já possui o pedido ${confCorte.pedidoConflitante} neste período.` };
-  }
+  type RowInsert = ProgramacaoInsert & { id?: string };
+  const registros: RowInsert[] = [];
 
-  const registros: ProgramacaoInsert[] = [{
-    pedido_id: pedidoId,
-    linha_id: linhaCorteId,
-    etapa: 'Corte',
-    sequencia: 0,
-    dt_inicio_previsto: toISOLocal(dtInicioUtil),
-    dt_fim_previsto: toISOLocal(dtFimCorte),
-    duracao_estimada_min: tempos.corte_min,
-    responsavel: null,
-    obs: null,
-  }];
+  let dtAtualCorte = proximoDiaUtil(dtInicioCorte, diasBloqueados);
+  let dtAtualLap   = dtAtualCorte;
 
-  if (tempos.tem_lapidacao && linhaLapId) {
-    const dtInicioLap = proximoDiaUtil(addDays(dtFimCorte, 1), diasBloqueados);
-    const linhaLap    = linhas.find(l => l.id === linhaLapId);
-    const diasLap     = Math.ceil(tempos.lapidacao_min / ((linhaLap?.capacidade_horas_dia ?? 8) * 60));
-    const dtFimLap    = addDiasUteis(dtInicioLap, Math.max(1, diasLap), diasBloqueados);
+  for (let i = 0; i < itens.length; i++) {
+    const item   = itens[i];
+    const tempos = calcularTempoEstimado([item], config);
+    const corteId = crypto.randomUUID();
 
-    const confLap = await verificarConflito(linhaLapId, dtInicioLap, dtFimLap);
-    if (confLap.conflito) {
-      return { ok: false, erro: `Linha de lapidação já possui o pedido ${confLap.pedidoConflitante} neste período.` };
-    }
+    const dtFimCorte = addDiasUteis(
+      dtAtualCorte,
+      Math.max(1, Math.ceil(tempos.corte_min / minsDiaCorte)),
+      diasBloqueados,
+    );
 
     registros.push({
+      id: corteId,
       pedido_id: pedidoId,
-      linha_id: linhaLapId,
-      etapa: 'Lapidação',
-      sequencia: 1,
-      dt_inicio_previsto: toISOLocal(dtInicioLap),
-      dt_fim_previsto: toISOLocal(dtFimLap),
-      duracao_estimada_min: tempos.lapidacao_min,
+      item_pedido_id: item.id ?? null,
+      predecessor_id: null,
+      linha_id: linhaCorteId,
+      etapa: 'Corte',
+      sequencia: i * 2,
+      dt_inicio_previsto: toISOLocal(dtAtualCorte),
+      dt_fim_previsto: toISOLocal(dtFimCorte),
+      duracao_estimada_min: tempos.corte_min,
       responsavel: null,
       obs: null,
     });
+    dtAtualCorte = dtFimCorte;
+
+    if (tempos.tem_lapidacao && linhaLapId) {
+      const dtInicioLap = new Date(Math.max(
+        proximoDiaUtil(addDays(dtFimCorte, 1), diasBloqueados).getTime(),
+        dtAtualLap.getTime(),
+      ));
+      const dtFimLap = addDiasUteis(
+        dtInicioLap,
+        Math.max(1, Math.ceil(tempos.lapidacao_min / minsDiaLap)),
+        diasBloqueados,
+      );
+      registros.push({
+        pedido_id: pedidoId,
+        item_pedido_id: item.id ?? null,
+        predecessor_id: corteId,
+        linha_id: linhaLapId,
+        etapa: 'Lapidação',
+        sequencia: i * 2 + 1,
+        dt_inicio_previsto: toISOLocal(dtInicioLap),
+        dt_fim_previsto: toISOLocal(dtFimLap),
+        duracao_estimada_min: tempos.lapidacao_min,
+        responsavel: null,
+        obs: null,
+      });
+      dtAtualLap = dtFimLap;
+    }
   }
 
-  const { error } = await supabase.from('programacao_producao').insert(registros);
+  const { error } = await supabase.from('programacao_producao').insert(registros as unknown as ProgramacaoInsert[]);
   if (error) { console.error('criarProgramacaoPedido:', error); return { ok: false, erro: error.message }; }
 
   const usuario = await getUsuario();

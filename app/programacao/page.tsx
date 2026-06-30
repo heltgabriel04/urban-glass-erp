@@ -213,20 +213,23 @@ function BlocoProducao({
     document.addEventListener("pointerup",   onUp);
   }
 
-  const itens = prog.pedidos?.itens_pedido ?? [];
-  const pecas = itens.reduce((s, i) => s + i.quantidade, 0);
+  const item  = prog.item_pedido ?? null;
   const prazo = prog.pedidos?.dt_retirada
     ? new Date(prog.pedidos.dt_retirada).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
     : "—";
 
+  const titleInfo = item
+    ? `${prog.pedido_id} · ${item.produto_nome} · ${item.largura}×${item.altura} · ${prog.etapa}`
+    : `${prog.pedido_id} · ${prog.pedidos?.clientes?.nome ?? ""} · ${prog.etapa}`;
+
   return (
     <div
       ref={setNodeRef}
-      title={`${prog.pedido_id} · ${prog.pedidos?.clientes?.nome ?? ""} · ${prog.etapa}`}
+      title={titleInfo}
       style={{
         position: "absolute", left, top: 6, width, height: ROW_H - 16,
         background: bg, border: `1.5px solid ${borda}`, borderRadius: 8,
-        padding: "6px 9px 6px 9px",
+        padding: "5px 9px 5px 9px",
         cursor: isDragging ? "grabbing" : "grab",
         userSelect: "none", zIndex: isDragging ? 50 : 2,
         opacity: isDragging ? 0.7 : 1,
@@ -241,25 +244,31 @@ function BlocoProducao({
     >
       {/* Conteúdo do bloco */}
       <div style={{ paddingRight: 10, overflow: "hidden" }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: borda, lineHeight: 1.2, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: borda, lineHeight: 1.2, marginBottom: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {prog.pedido_id}
+          {prog.predecessor_id && <span style={{ marginLeft: 4, fontSize: 9, opacity: 0.7 }}>⛓</span>}
         </div>
-        {width > 72 && (
-          <div style={{ fontSize: 10, color: "var(--t1)", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {prog.pedidos?.clientes?.nome ?? "—"}
+        {width > 56 && item && (
+          <div style={{ fontSize: 9, color: "var(--t1)", marginBottom: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {item.produto_nome}
           </div>
         )}
-        {width > 100 && (
-          <div style={{ fontSize: 10, color: "var(--t2)", display: "flex", gap: 4, overflow: "hidden" }}>
-            <span>{prog.pedidos?.m2_total?.toFixed(1)}m²</span>
+        {width > 80 && item && (
+          <div style={{ fontSize: 9, color: "var(--t2)", display: "flex", gap: 3, overflow: "hidden" }}>
+            <span>{item.largura}×{item.altura}</span>
             <span>·</span>
-            <span>{pecas}pç</span>
+            <span>{item.m2.toFixed(2)}m²</span>
             <span>·</span>
             <span>↗{prazo}</span>
           </div>
         )}
-        {width > 100 && (
-          <div style={{ fontSize: 10, color: previewDur ? "var(--acc)" : "var(--t3)", marginTop: 1, fontWeight: previewDur ? 700 : 400 }}>
+        {width > 80 && !item && (
+          <div style={{ fontSize: 9, color: "var(--t2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {prog.pedidos?.clientes?.nome ?? "—"}
+          </div>
+        )}
+        {width > 80 && (
+          <div style={{ fontSize: 9, color: previewDur ? "var(--acc)" : "var(--t3)", marginTop: 1, fontWeight: previewDur ? 700 : 400 }}>
             {formatarDuracao(displayDur)} · {prog.etapa}
           </div>
         )}
@@ -700,14 +709,25 @@ function ModalBloco({
 
           {/* Grid info */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, background: "var(--surf2)", borderRadius: 10, padding: "14px 16px" }}>
-            <StatBloco label="Cliente"        value={prog.pedidos?.clientes?.nome ?? "—"} />
-            <StatBloco label="Cidade"         value={prog.pedidos?.clientes?.cidade ?? "—"} />
-            <StatBloco label="Área Total"     value={(prog.pedidos?.m2_total ?? 0).toFixed(2) + " m²"} />
-            <StatBloco label="Peças"          value={String((prog.pedidos?.itens_pedido ?? []).reduce((s, i) => s + i.quantidade, 0))} />
+            <StatBloco label="Cliente"         value={prog.pedidos?.clientes?.nome ?? "—"} />
+            <StatBloco label="Cidade"          value={prog.pedidos?.clientes?.cidade ?? "—"} />
+            {prog.item_pedido ? (
+              <>
+                <StatBloco label="Produto"     value={prog.item_pedido.produto_nome} />
+                <StatBloco label="Dimensões"   value={`${prog.item_pedido.largura ?? "?"}×${prog.item_pedido.altura ?? "?"} mm`} />
+                <StatBloco label="Área"        value={`${prog.item_pedido.m2.toFixed(4)} m²`} />
+                <StatBloco label="Quantidade"  value={`${prog.item_pedido.quantidade} pç`} />
+              </>
+            ) : (
+              <>
+                <StatBloco label="Área Total"  value={(prog.pedidos?.m2_total ?? 0).toFixed(2) + " m²"} />
+                <StatBloco label="Peças"       value={String((prog.pedidos?.itens_pedido ?? []).reduce((s, i) => s + i.quantidade, 0))} />
+              </>
+            )}
             <StatBloco label="Início Previsto" value={inicio} />
-            <StatBloco label="Fim Previsto"   value={fim} />
-            <StatBloco label="Prazo Entrega"  value={prazo} col={borda} />
-            <StatBloco label="Duração Est."   value={formatarDuracao(prog.duracao_estimada_min ?? 0)} />
+            <StatBloco label="Fim Previsto"    value={fim} />
+            <StatBloco label="Prazo Entrega"   value={prazo} col={borda} />
+            <StatBloco label="Duração Est."    value={formatarDuracao(prog.duracao_estimada_min ?? 0)} />
           </div>
 
           {/* Tempos reais */}
@@ -1222,7 +1242,7 @@ export default function ProgramacaoPage() {
 
   async function handleAgendar(dtInicio: Date, linhaCorteId: number, linhaLapId?: number) {
     if (!modalAgendar) return;
-    const itens = (modalAgendar.itens_pedido ?? []) as { m2: number; quantidade: number; lapidacao: number; produto_nome: string }[];
+    const itens = (modalAgendar.itens_pedido ?? []) as { id: number; m2: number; quantidade: number; lapidacao: number; produto_nome: string }[];
     const pecasTotal = itens.reduce((s, i) => s + i.quantidade, 0);
 
     // linhaCorteId === -1 sinaliza chapa inteira (sem corte)
@@ -1245,7 +1265,7 @@ export default function ProgramacaoPage() {
     let erros = 0;
 
     for (const p of pedidosLote) {
-      const itens = (p.itens_pedido ?? []) as { m2: number; quantidade: number; lapidacao: number; produto_nome: string }[];
+      const itens = (p.itens_pedido ?? []) as { id: number; m2: number; quantidade: number; lapidacao: number; produto_nome: string }[];
       const tempos = calcularTempoEstimado(itens, config);
       const result = await criarProgramacaoPedido(p.id, itens, config, linhas, dtAtual, linhaCorteId, undefined);
       if (result.ok) {
@@ -1348,7 +1368,7 @@ export default function ProgramacaoPage() {
       const dtInicio = proximoDiaUtil(new Date(nextFree[melhorLinha.id]), calendario);
       dtInicio.setHours(8, 0, 0, 0);
 
-      const itens = (pedido.itens_pedido ?? []) as { m2: number; quantidade: number; lapidacao: number; produto_nome: string }[];
+      const itens = (pedido.itens_pedido ?? []) as { id: number; m2: number; quantidade: number; lapidacao: number; produto_nome: string }[];
       const tempos = calcularTempoEstimado(itens, config);
       const diasNecessarios = Math.max(1, Math.ceil(tempos.corte_min / ((melhorLinha.capacidade_horas_dia ?? 8) * 60)));
 
@@ -1603,7 +1623,54 @@ export default function ProgramacaoPage() {
                             ? "Nenhuma linha encontrada. Execute sql/fix-programacao-rls.sql no Supabase."
                             : "Nenhuma linha no filtro selecionado."}
                         </div>
-                      ) : linhasFiltradas.map(linha => {
+                      ) : (
+                      <div style={{ position: "relative" }}>
+                      {/* SVG de setas de dependência (Corte → Lapidação por item) */}
+                      {(() => {
+                        const visStart = zoom === "dia" ? dataBase : dias[0];
+                        const setas = progFiltradas.filter(p => p.predecessor_id);
+                        if (setas.length === 0) return null;
+                        return (
+                          <svg
+                            style={{
+                              position: "absolute", top: 0, left: LABEL_W,
+                              width: totalWidth, height: linhasFiltradas.length * ROW_H,
+                              pointerEvents: "none", zIndex: 4, overflow: "visible",
+                            }}
+                          >
+                            <defs>
+                              <marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                                <path d="M0,0 L6,3 L0,6 Z" fill="rgba(167,139,250,0.7)" />
+                              </marker>
+                            </defs>
+                            {setas.map(prog => {
+                              const pred = programacoes.find(p => p.id === prog.predecessor_id);
+                              if (!pred) return null;
+                              const predRowIdx = linhasFiltradas.findIndex(l => l.id === pred.linha_id);
+                              const currRowIdx = linhasFiltradas.findIndex(l => l.id === prog.linha_id);
+                              if (predRowIdx < 0 || currRowIdx < 0) return null;
+                              const x1 = blocoLeft(pred, zoom, visStart) + calcBlocoWidth(pred.duracao_estimada_min ?? 60, zoom);
+                              const y1 = predRowIdx * ROW_H + ROW_H / 2;
+                              const x2 = blocoLeft(prog, zoom, visStart);
+                              const y2 = currRowIdx * ROW_H + ROW_H / 2;
+                              const cx1 = x1 + Math.min(40, (x2 - x1) * 0.4);
+                              const cx2 = x2 - Math.min(40, (x2 - x1) * 0.4);
+                              return (
+                                <path
+                                  key={`dep-${prog.id}`}
+                                  d={`M ${x1} ${y1} C ${cx1} ${y1} ${cx2} ${y2} ${x2} ${y2}`}
+                                  fill="none"
+                                  stroke="rgba(167,139,250,0.55)"
+                                  strokeWidth={1.5}
+                                  strokeDasharray="5 3"
+                                  markerEnd="url(#arr)"
+                                />
+                              );
+                            })}
+                          </svg>
+                        );
+                      })()}
+                      {linhasFiltradas.map(linha => {
                         const blocos = progFiltradas.filter(p => p.linha_id === linha.id);
                         const minTotal = blocos.reduce((s, p) => s + (p.duracao_estimada_min ?? 0), 0);
                         const horasCap = linha.capacidade_horas_dia * Math.max(1, dias.length);
@@ -1633,7 +1700,7 @@ export default function ProgramacaoPage() {
                               </div>
                               <div style={{ paddingLeft: 17, display: "flex", gap: 6, alignItems: "center" }}>
                                 <span style={{ fontSize: 10, color: "var(--t3)" }}>
-                                  {blocos.length} pedido{blocos.length !== 1 ? "s" : ""}
+                                  {blocos.length} item{blocos.length !== 1 ? "ns" : ""}
                                 </span>
                                 {/* Mini barra de ocupação */}
                                 <div style={{ flex: 1, height: 3, background: "var(--b2)", borderRadius: 99, overflow: "hidden" }}>
@@ -1686,6 +1753,8 @@ export default function ProgramacaoPage() {
                           </div>
                         );
                       })}
+                      </div>
+                      )}
 
                       {/* Barra de capacidade geral */}
                       <div style={{ display: "flex", borderTop: "2px solid var(--b2)", background: "var(--surf2)" }}>

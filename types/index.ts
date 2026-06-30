@@ -779,6 +779,8 @@ export interface ProgramacaoProducao {
   linha_id: number | null;
   etapa: string;
   sequencia: number;
+  item_pedido_id: number | null;
+  predecessor_id: string | null;
   dt_inicio_previsto: string | null;
   dt_fim_previsto: string | null;
   duracao_estimada_min: number | null;
@@ -799,12 +801,22 @@ export interface ProgramacaoProducao {
     itens_pedido: Array<{ id: number; quantidade: number; lapidacao: number; produto_nome: string; m2: number; }>;
   };
   producao_linhas?: { nome: string; cor: string; tipo: string; } | null;
+  item_pedido?: {
+    id: number;
+    produto_nome: string;
+    largura: number | null;
+    altura: number | null;
+    m2: number;
+    quantidade: number;
+    lapidacao: number;
+  } | null;
 }
 
 export type ProgramacaoInsert = Pick<
   ProgramacaoProducao,
   'pedido_id' | 'linha_id' | 'etapa' | 'sequencia' |
-  'dt_inicio_previsto' | 'dt_fim_previsto' | 'duracao_estimada_min' | 'responsavel' | 'obs'
+  'dt_inicio_previsto' | 'dt_fim_previsto' | 'duracao_estimada_min' | 'responsavel' | 'obs' |
+  'item_pedido_id' | 'predecessor_id'
 >;
 
 export interface ProgramacaoHistorico {
