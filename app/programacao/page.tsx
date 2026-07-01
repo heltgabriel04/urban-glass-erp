@@ -9,7 +9,7 @@ import {
   criarProgramacaoPedido, agendarChapaInteira, reagendar,
   atualizarStatusProgramacao, deletarProgramacao,
   registrarRetiradaParcial, getRetiradas,
-  registrarRetrabalho, getCalibracaoTempos,
+  registrarRetrabalho, getCalibracaoTempos, aplicarCalibracaoAutomatica,
   calcularTempoEstimado, formatarDuracao, getMetricasProducao,
   isPedidoSomenteChapas,
   calcularPrioridadePedido, produtoPrincipal,
@@ -1197,6 +1197,43 @@ export default function ProgramacaoPage() {
   useEffect(() => { load(); }, [zoom, dataBase.toISOString().slice(0, 10)]);
   useEffect(() => { if (aba === "dashboard") loadMetricas(); }, [aba]);
 
+  // ── Calibração automática (APS · Fase 4) ────────────────────
+  const [calibrando, setCalibrando] = useState(false);
+
+  async function handleAplicarCalibracao() {
+    const relevantes = calibracao.filter(c => c.count >= 5 && (c.fator_ajuste < 0.9 || c.fator_ajuste > 1.1));
+    if (relevantes.length === 0) { showToast("Nenhuma etapa com amostra e desvio suficientes pra recalibrar."); return; }
+
+    const resumo = relevantes.map(c => `${c.etapa}: ${c.fator_ajuste}× (${c.count} amostras)`).join("\n");
+    const confirmar = window.confirm(
+      `Aplicar calibração automática?\n\nEtapas afetadas:\n${resumo}\n\n` +
+      `Isso multiplica TODAS as taxas da etapa (min_por_m2, min_por_peça, min_por_lapidação, setup) ` +
+      `pelo mesmo fator agregado acima — é uma aproximação simples (não sabemos qual das taxas ` +
+      `individualmente está errada, só a média geral). Revise os valores na tabela antes de aplicar. ` +
+      `Só afeta agendamentos futuros — não altera o que já foi gravado.`
+    );
+    if (!confirmar) return;
+
+    setCalibrando(true);
+    const result = await aplicarCalibracaoAutomatica(calibracao, config);
+    setCalibrando(false);
+    // Atualiza o config local na hora — sem isso, um "Auto-agendar" ou
+    // "Recalcular Agenda" clicado logo em seguida ainda usaria as taxas
+    // antigas até o próximo load() completar.
+    if (result.propostasAplicadas.length > 0) {
+      setConfig(prev => prev.map(cfg => {
+        const aplicada = result.propostasAplicadas.find(p => p.etapa === cfg.etapa);
+        return aplicada ? { ...cfg, ...aplicada.valoresNovos } : cfg;
+      }));
+    }
+    showToast(
+      result.aplicadas.length > 0
+        ? `✓ Calibração aplicada: ${result.aplicadas.join(", ")}`
+        : "Nenhuma etapa foi recalibrada."
+    );
+    await Promise.all([loadMetricas(), load()]);
+  }
+
   function navAnterior() {
     if (zoom === "dia")    setDataBase(d => addDays(d, -1));
     if (zoom === "semana") setDataBase(d => addDays(d, -7));
@@ -2178,8 +2215,18 @@ export default function ProgramacaoPage() {
                 <DashboardConteudo metricas={metricas} />
                 {calibracao.length > 0 && (
                   <div style={{ marginTop: 24, background: "var(--surf2)", borderRadius: 12, border: "1px solid var(--b2)", padding: 20 }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: "var(--acc)", marginBottom: 14, letterSpacing: ".05em" }}>
-                      CALIBRAÇÃO DE TEMPOS — Estimado vs Real
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "var(--acc)", letterSpacing: ".05em" }}>
+                        CALIBRAÇÃO DE TEMPOS — Estimado vs Real
+                      </div>
+                      <button
+                        className="btn pri" style={{ fontSize: 11, padding: "4px 12px" }}
+                        onClick={handleAplicarCalibracao}
+                        disabled={calibrando}
+                        title="Reescala config_tempo_producao pelo fator estimado-vs-real observado — só etapas com amostra suficiente e desvio relevante"
+                      >
+                        {calibrando ? "…" : "🔧 Aplicar Calibração Automática"}
+                      </button>
                     </div>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                       <thead>

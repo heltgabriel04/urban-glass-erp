@@ -133,6 +133,23 @@ export function duracaoTotalCorte(
   return itens.reduce((soma, item) => soma + calcularTempoEstimado([item], config).corte_min, 0);
 }
 
+// Desconta metade do setup de Corte quando o produto principal do pedido
+// repete o do último bloco colocado na mesma linha (nesta mesma rodada de
+// agendamento) — menos troca de configuração de máquina entre peças do
+// mesmo produto/espessura em sequência (APS · Fase 4).
+export function duracaoComSetupAdaptativo(
+  itens: Pick<ItemPedido, 'm2' | 'quantidade' | 'lapidacao' | 'produto_nome'>[],
+  config: ConfigTempoProducao[],
+  mesmoProdutoQueAnterior: boolean,
+): number {
+  const duracaoBase = duracaoTotalCorte(itens, config);
+  if (!mesmoProdutoQueAnterior || itens.length === 0) return duracaoBase;
+  const cfgCorte = config.find(c => c.etapa === 'Corte');
+  if (!cfgCorte) return duracaoBase;
+  const desconto = Math.round((cfgCorte.setup_pedido_min / 2) * itens.length);
+  return Math.max(1, duracaoBase - desconto);
+}
+
 // ─── PRIORIZAÇÃO (APS) ──────────────────────────────────────
 // Fase 1 do motor de agendamento: calcula um score de prioridade por pedido
 // pendente, combinando prazo de entrega + trabalho restante (folga real,
@@ -675,6 +692,7 @@ export interface MudancaProposta {
   dtRetirada: string | null;
   temLapidacao?: boolean; // 'inserir' cujos itens precisam de Lapidação — não agendada automaticamente aqui
   itens?: Pick<ItemPedido, 'id' | 'm2' | 'quantidade' | 'lapidacao' | 'produto_nome'>[];
+  descontoAplicado?: boolean; // duracaoMin já reflete o desconto de setup por repetição de produto — não reordenar sem recalcular
 }
 
 export interface PropostaRecalculo {
@@ -713,6 +731,58 @@ export function alocarBlocoEvitandoOcupados(
   return alocarBloco(cursor, duracaoMin, linha, bloqueados);
 }
 
+function tardinessHoras(fim: Date, dtRetirada: string | null): number {
+  if (!dtRetirada) return 0;
+  return Math.max(0, (fim.getTime() - new Date(dtRetirada).getTime()) / 3_600_000);
+}
+
+// Refinamento local (APS · Fase 4): para cada par de tarefas ADJACENTES e
+// CONTÍGUAS (sem intervalo entre elas — garante que ambas seguem no mesmo
+// dia/expediente) na mesma linha, testa se invertê-las reduz o atraso total
+// do par. A duração combinada das duas não muda (só a ordem), então nada
+// além desse par é afetado. Modifica `mudancas` in-place.
+export function refinarComTrocasAdjacentes(
+  mudancas: MudancaProposta[],
+  linhasCorte: Pick<ProducaoLinha, 'id'>[],
+): number {
+  let trocas = 0;
+
+  for (const linha of linhasCorte) {
+    const seq = mudancas
+      .filter(m => m.linhaNova === linha.id)
+      .sort((a, b) => a.inicioNovo.getTime() - b.inicioNovo.getTime());
+
+    let melhorou = true;
+    let rodadas = 0;
+    while (melhorou && rodadas < 5) {
+      melhorou = false;
+      rodadas++;
+      for (let i = 0; i < seq.length - 1; i++) {
+        const a = seq[i], b = seq[i + 1];
+        if (a.fimNovo.getTime() !== b.inicioNovo.getTime()) continue; // não contíguas — dias diferentes, não mexe
+        if (a.descontoAplicado || b.descontoAplicado) continue; // desconto de setup é condicionado à adjacência original — trocar invalidaria a conta
+
+        const tardAtual = tardinessHoras(a.fimNovo, a.dtRetirada) + tardinessHoras(b.fimNovo, b.dtRetirada);
+
+        const inicioComum = a.inicioNovo;
+        const fimComum = b.fimNovo;
+        const novoFimB = new Date(inicioComum.getTime() + b.duracaoMin * 60_000);
+        const tardTrocado = tardinessHoras(novoFimB, b.dtRetirada) + tardinessHoras(fimComum, a.dtRetirada);
+
+        if (tardTrocado < tardAtual - 1e-9) {
+          b.inicioNovo = inicioComum; b.fimNovo = novoFimB;
+          a.inicioNovo = novoFimB;    a.fimNovo = fimComum;
+          seq[i] = b; seq[i + 1] = a;
+          trocas++;
+          melhorou = true;
+        }
+      }
+    }
+  }
+
+  return trocas;
+}
+
 export function gerarPropostaRecalculo(
   blocosMoviveis: BlocoMovivel[],
   blocosFixos: BlocoFixo[],
@@ -730,6 +800,7 @@ export function gerarPropostaRecalculo(
     origem: BlocoMovivel | null; // null = pedido novo (ainda sem programação)
     itensNovo?: Pick<ItemPedido, 'id' | 'm2' | 'quantidade' | 'lapidacao' | 'produto_nome'>[];
     temLapidacao?: boolean;
+    produtoPrincipalTarefa?: string; // só pedidos novos — usado pro desconto de setup adaptativo
   };
 
   const tarefas: Tarefa[] = [
@@ -748,6 +819,7 @@ export function gerarPropostaRecalculo(
         score: scoreDePrioridade(p.dtRetirada, duracaoMin / 60, agora).score,
         origem: null, itensNovo: p.itens,
         temLapidacao: p.itens.some(i => i.lapidacao > 0),
+        produtoPrincipalTarefa: produtoPrincipal(p.itens),
       };
     }),
   ].sort((a, b) => b.score - a.score);
@@ -758,11 +830,12 @@ export function gerarPropostaRecalculo(
       ? new Date(new Date(t.origem.dtInicioPrevisto).getTime() + t.duracaoMin * 60_000)
       : null;
     if (!fimAtual) return scoreDePrioridade(t.dtRetirada, t.duracaoMin / 60, agora).atrasado;
-    return fimAtual > new Date(t.dtRetirada);
+    return tardinessHoras(fimAtual, t.dtRetirada) > 0;
   }).length;
 
   const cursorPorLinha: Record<number, Date> = {};
   const ocupadosPorLinha: Record<number, Array<{ inicio: Date; fim: Date }>> = {};
+  const ultimoProdutoPorLinha: Record<number, string | undefined> = {};
   for (const l of linhasCorte) {
     cursorPorLinha[l.id] = agora;
     ocupadosPorLinha[l.id] = blocosFixos.filter(f => f.linhaId === l.id).map(f => ({ inicio: f.inicio, fim: f.fim }));
@@ -779,8 +852,21 @@ export function gerarPropostaRecalculo(
     const idx = proximaTarefaParaEncaixe(pendentesOrdenados, minutosLivres, t => t.duracaoMin);
     const tarefa = pendentesOrdenados[idx];
 
+    // Desconto de setup (Fase 4): só pra pedidos novos, cuja duração ainda
+    // não foi persistida — um bloco já existente (tarefa.origem) mantém a
+    // duração que já está gravada no banco. Só aplica se o produto do
+    // ÚLTIMO bloco de fato colocado nesta linha (seja pedido novo ou bloco
+    // já existente reflowado) bater — daí o reset incondicional logo abaixo,
+    // que também zera o rastreador quando um bloco de produto desconhecido
+    // (origem existente, ou item sem produto) é colocado no meio.
+    const descontoAplicavel = !tarefa.origem && tarefa.itensNovo &&
+      tarefa.produtoPrincipalTarefa && tarefa.produtoPrincipalTarefa === ultimoProdutoPorLinha[linha.id];
+    const duracaoReal = descontoAplicavel
+      ? duracaoComSetupAdaptativo(tarefa.itensNovo!, config, true)
+      : tarefa.duracaoMin;
+
     const { inicio, fim } = alocarBlocoEvitandoOcupados(
-      cursorPorLinha[linha.id], tarefa.duracaoMin, linha,
+      cursorPorLinha[linha.id], duracaoReal, linha,
       bloqueadosPorLinha[linha.id] ?? new Set(),
       ocupadosPorLinha[linha.id] ?? [],
     );
@@ -789,24 +875,36 @@ export function gerarPropostaRecalculo(
       mudancasTodas.push({
         tipo: 'mover', pedidoId: tarefa.pedidoId, progId: tarefa.origem.progId,
         linhaAntiga: tarefa.origem.linhaId, inicioAntigo: new Date(tarefa.origem.dtInicioPrevisto),
-        linhaNova: linha.id, inicioNovo: inicio, fimNovo: fim, duracaoMin: tarefa.duracaoMin,
+        linhaNova: linha.id, inicioNovo: inicio, fimNovo: fim, duracaoMin: duracaoReal,
         dtRetirada: tarefa.dtRetirada,
       });
     } else {
       mudancasTodas.push({
         tipo: 'inserir', pedidoId: tarefa.pedidoId,
-        linhaNova: linha.id, inicioNovo: inicio, fimNovo: fim, duracaoMin: tarefa.duracaoMin,
+        linhaNova: linha.id, inicioNovo: inicio, fimNovo: fim, duracaoMin: duracaoReal,
         dtRetirada: tarefa.dtRetirada, temLapidacao: tarefa.temLapidacao,
-        itens: tarefa.itensNovo,
+        itens: tarefa.itensNovo, descontoAplicado: !!descontoAplicavel,
       });
     }
 
     ocupadosPorLinha[linha.id].push({ inicio, fim });
     cursorPorLinha[linha.id] = fim;
+    // Sempre reatribui (mesmo pra undefined) — um bloco de produto
+    // desconhecido no meio da sequência deve "quebrar" a adjacência,
+    // não deixar o valor antigo sobrevivendo por trás dele.
+    ultimoProdutoPorLinha[linha.id] = tarefa.produtoPrincipalTarefa || undefined;
     pendentesOrdenados.splice(idx, 1);
   }
 
-  const atrasadosDepois = mudancasTodas.filter(m => m.dtRetirada && m.fimNovo > new Date(m.dtRetirada)).length;
+  // Refinamento local (Fase 4): troca pares adjacentes contíguos na mesma
+  // linha quando isso reduz o atraso total — cobre casos em que o encaixe
+  // guloso deixou uma ordem subótima entre duas tarefas vizinhas. Nunca
+  // troca um par que tenha desconto de setup aplicado: o desconto é
+  // condicionado à adjacência original, e uma troca invalidaria essa conta
+  // sem recalculá-la — mais simples e seguro não mexer nesses pares.
+  refinarComTrocasAdjacentes(mudancasTodas, linhasCorte);
+
+  const atrasadosDepois = mudancasTodas.filter(m => tardinessHoras(m.fimNovo, m.dtRetirada) > 0).length;
 
   // Só reporta mudanças reais — ignora "mover" pro mesmo lugar/linha
   const mudancas = mudancasTodas.filter(m =>
@@ -1162,6 +1260,84 @@ export async function getCalibracaoTempos(): Promise<DadosCalibracao[]> {
       };
     })
     .sort((a, b) => a.etapa.localeCompare(b.etapa));
+}
+
+// Calibração automática (APS · Fase 4): reescala as taxas de
+// config_tempo_producao pelo fator estimado-vs-real observado, etapa a
+// etapa — só quando há amostra suficiente e o desvio é relevante (fora de
+// [0.9, 1.1]), pra não recalibrar em cima de ruído estatístico. Cada etapa
+// vira uma escrita própria em salvarConfigTempo(); nunca roda sozinha —
+// quem chama decide quando (ver botão na aba Dashboard).
+export interface ResultadoCalibracao {
+  aplicadas: string[];
+  ignoradas: string[];
+  propostasAplicadas: CalibracaoProposta[]; // pra quem chamar poder atualizar o estado local sem esperar um reload
+}
+
+export interface CalibracaoProposta {
+  etapa: string;
+  valoresNovos: Pick<ConfigTempoProducao, 'min_por_m2' | 'min_por_peca' | 'min_por_lapidacao' | 'setup_pedido_min'>;
+}
+
+// Decide QUAIS etapas recalibrar e com quais valores — pura, sem tocar no
+// banco, pra poder testar as regras de corte (amostra mínima, faixa "já
+// calibrado") sem risco de escrever de verdade em config_tempo_producao.
+export function decidirCalibracoes(
+  calibracao: DadosCalibracao[],
+  configAtual: ConfigTempoProducao[],
+  amostraMinima: number = 5,
+): { propostas: CalibracaoProposta[]; ignoradas: string[] } {
+  const propostas: CalibracaoProposta[] = [];
+  const ignoradas: string[] = [];
+
+  for (const c of calibracao) {
+    if (c.count < amostraMinima) { ignoradas.push(c.etapa); continue; }
+    if (c.fator_ajuste >= 0.9 && c.fator_ajuste <= 1.1) { ignoradas.push(c.etapa); continue; }
+
+    const cfg = configAtual.find(x => x.etapa === c.etapa);
+    if (!cfg) { ignoradas.push(c.etapa); continue; }
+
+    // Limita o fator a [0.5, 2.0] — algumas amostras "Concluído" podem ter
+    // ficado pausadas/paradas no meio (máquina parada, não um tempo real de
+    // produção) e inflar a média sem isso ser um erro genuíno de estimativa;
+    // evita recalibrar o turno inteiro em cima de poucas amostras ruins.
+    const fatorSeguro = Math.min(2.0, Math.max(0.5, c.fator_ajuste));
+
+    const arred = (v: number) => Math.round(v * fatorSeguro * 100) / 100;
+    propostas.push({
+      etapa: c.etapa,
+      valoresNovos: {
+        min_por_m2: arred(cfg.min_por_m2),
+        min_por_peca: arred(cfg.min_por_peca),
+        min_por_lapidacao: arred(cfg.min_por_lapidacao),
+        setup_pedido_min: arred(cfg.setup_pedido_min),
+      },
+    });
+  }
+
+  return { propostas, ignoradas };
+}
+
+export async function aplicarCalibracaoAutomatica(
+  calibracao: DadosCalibracao[],
+  configAtual: ConfigTempoProducao[],
+  amostraMinima: number = 5,
+): Promise<ResultadoCalibracao> {
+  const { propostas, ignoradas } = decidirCalibracoes(calibracao, configAtual, amostraMinima);
+  const aplicadas: string[] = [];
+  const propostasAplicadas: CalibracaoProposta[] = [];
+
+  // Cada proposta grava uma linha independente (chave primária = etapa),
+  // então rodar em paralelo é seguro — sem risco de uma sobrescrever a outra.
+  const resultados = await Promise.all(
+    propostas.map(async p => ({ p, ok: await salvarConfigTempo(p.etapa, p.valoresNovos) }))
+  );
+  for (const { p, ok } of resultados) {
+    if (ok) { aplicadas.push(p.etapa); propostasAplicadas.push(p); }
+    else ignoradas.push(p.etapa);
+  }
+
+  return { aplicadas, ignoradas, propostasAplicadas };
 }
 
 // ─── MÉTRICAS PARA DASHBOARD ────────────────────────────────

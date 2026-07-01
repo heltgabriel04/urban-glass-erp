@@ -4,7 +4,9 @@ import {
   proximaTarefaParaEncaixe, calcularPrioridadePedido, produtoPrincipal,
   alocarBlocoEvitandoOcupados, gerarPropostaRecalculo,
   duracaoTotalCorte, calcularTempoEstimado,
+  duracaoComSetupAdaptativo, refinarComTrocasAdjacentes, decidirCalibracoes,
 } from "@/services/programacao.service";
+import type { MudancaProposta, DadosCalibracao } from "@/services/programacao.service";
 import type { ProducaoLinha, ConfigTempoProducao } from "@/types";
 
 const linha: Pick<ProducaoLinha, "inicio_dia" | "fim_dia"> = {
@@ -277,5 +279,150 @@ describe("gerarPropostaRecalculo", () => {
     const proposta = gerarPropostaRecalculo([], [], pendentes, [linhaCorte], config, {}, agora);
     expect(proposta.mudancas[0].temLapidacao).toBe(true);
     expect(proposta.resumo.novosComLapidacaoPendente).toBe(1);
+  });
+
+  it("aplica o desconto de setup quando dois pendentes seguidos são do mesmo produto principal", () => {
+    const agora = segundaAs(8, 0);
+    const itensA = [{ id: 1, m2: 1, quantidade: 1, lapidacao: 0, produto_nome: "Vidro Comum" }];
+    const itensB = [{ id: 2, m2: 1, quantidade: 1, lapidacao: 0, produto_nome: "Vidro Comum" }];
+    const pendentes = [
+      { pedidoId: "P-A", dtRetirada: new Date(agora.getTime() + 10 * 86_400_000).toISOString(), itens: itensA },
+      { pedidoId: "P-B", dtRetirada: new Date(agora.getTime() +  9 * 86_400_000).toISOString(), itens: itensB },
+    ];
+    const proposta = gerarPropostaRecalculo([], [], pendentes, [linhaCorte], config, {}, agora);
+    // P-B tem prazo mais apertado -> maior prioridade -> vai primeiro; P-A
+    // (mesmo produto) vem em seguida e deve levar o desconto de setup.
+    const segundo = proposta.mudancas.find(m => m.inicioNovo.getTime() > proposta.mudancas[0].inicioNovo.getTime());
+    expect(segundo?.duracaoMin).toBeLessThan(duracaoTotalCorte(itensA, config));
+  });
+});
+
+describe("duracaoComSetupAdaptativo", () => {
+  const itens = [{ m2: 1, quantidade: 1, lapidacao: 0, produto_nome: "Comum" }];
+
+  it("sem repetir produto, é igual à duração normal", () => {
+    expect(duracaoComSetupAdaptativo(itens, config, false)).toBe(duracaoTotalCorte(itens, config));
+  });
+
+  it("repetindo o produto, desconta metade do setup", () => {
+    const normal = duracaoTotalCorte(itens, config);
+    const comDesconto = duracaoComSetupAdaptativo(itens, config, true);
+    expect(comDesconto).toBeLessThan(normal);
+    expect(normal - comDesconto).toBe(Math.round(config.find(c => c.etapa === "Corte")!.setup_pedido_min / 2));
+  });
+});
+
+describe("refinarComTrocasAdjacentes", () => {
+  it("troca um par contíguo quando isso reduz o atraso total", () => {
+    const agora = segundaAs(8, 0);
+    const fimA = new Date(agora.getTime() + 100 * 60_000);
+    const fimB = new Date(agora.getTime() + 150 * 60_000);
+    // B tem prazo apertado (fica atrasado se for o segundo); A não tem prazo.
+    const mudancas: MudancaProposta[] = [
+      { tipo: "mover", pedidoId: "P-A", progId: "prog-A", linhaNova: 1, inicioNovo: agora, fimNovo: fimA, duracaoMin: 100, dtRetirada: null },
+      { tipo: "mover", pedidoId: "P-B", progId: "prog-B", linhaNova: 1, inicioNovo: fimA, fimNovo: fimB, duracaoMin: 50, dtRetirada: new Date(agora.getTime() + 80 * 60_000).toISOString() },
+    ];
+    const trocas = refinarComTrocasAdjacentes(mudancas, [linhaCorte]);
+    expect(trocas).toBe(1);
+    const b = mudancas.find(m => m.pedidoId === "P-B")!;
+    expect(b.inicioNovo.getTime()).toBe(agora.getTime()); // B foi pra frente
+    expect(b.fimNovo.getTime()).toBeLessThanOrEqual(new Date(agora.getTime() + 80 * 60_000).getTime()); // não atrasa mais
+  });
+
+  it("não mexe em pares não contíguos (dias diferentes)", () => {
+    const agora = segundaAs(8, 0);
+    const fimA = new Date(agora.getTime() + 100 * 60_000);
+    const inicioBOutroDia = new Date(agora.getTime() + 24 * 3_600_000); // não é logo em seguida
+    const mudancas: MudancaProposta[] = [
+      { tipo: "mover", pedidoId: "P-A", progId: "prog-A", linhaNova: 1, inicioNovo: agora, fimNovo: fimA, duracaoMin: 100, dtRetirada: null },
+      { tipo: "mover", pedidoId: "P-B", progId: "prog-B", linhaNova: 1, inicioNovo: inicioBOutroDia, fimNovo: new Date(inicioBOutroDia.getTime() + 50 * 60_000), duracaoMin: 50, dtRetirada: new Date(agora.getTime() + 80 * 60_000).toISOString() },
+    ];
+    const trocas = refinarComTrocasAdjacentes(mudancas, [linhaCorte]);
+    expect(trocas).toBe(0);
+  });
+});
+
+describe("decidirCalibracoes", () => {
+  const configBase: ConfigTempoProducao[] = [
+    { etapa: "Corte", min_por_m2: 2, min_por_peca: 0.5, min_por_lapidacao: 0, min_por_furo: 0, setup_pedido_min: 10, fator_vidro_especial: 1.3, updated_at: "" },
+  ];
+
+  it("ignora etapa com amostra insuficiente", () => {
+    const calibracao: DadosCalibracao[] = [{ etapa: "Corte", count: 2, media_estimado_min: 100, media_real_min: 150, fator_ajuste: 1.5 }];
+    const { propostas, ignoradas } = decidirCalibracoes(calibracao, configBase, 5);
+    expect(propostas).toHaveLength(0);
+    expect(ignoradas).toContain("Corte");
+  });
+
+  it("ignora etapa já bem calibrada (fator dentro de 0.9-1.1)", () => {
+    const calibracao: DadosCalibracao[] = [{ etapa: "Corte", count: 20, media_estimado_min: 100, media_real_min: 105, fator_ajuste: 1.05 }];
+    const { propostas, ignoradas } = decidirCalibracoes(calibracao, configBase, 5);
+    expect(propostas).toHaveLength(0);
+    expect(ignoradas).toContain("Corte");
+  });
+
+  it("propõe recalibrar quando amostra suficiente e desvio relevante", () => {
+    const calibracao: DadosCalibracao[] = [{ etapa: "Corte", count: 20, media_estimado_min: 100, media_real_min: 130, fator_ajuste: 1.3 }];
+    const { propostas } = decidirCalibracoes(calibracao, configBase, 5);
+    expect(propostas).toHaveLength(1);
+    expect(propostas[0].valoresNovos.min_por_m2).toBeCloseTo(2 * 1.3, 5);
+    expect(propostas[0].valoresNovos.setup_pedido_min).toBeCloseTo(10 * 1.3, 5);
+  });
+
+  it("limita o fator a no máximo 2.0x, mesmo com uma amostra que sugira mais", () => {
+    const calibracao: DadosCalibracao[] = [{ etapa: "Corte", count: 20, media_estimado_min: 100, media_real_min: 500, fator_ajuste: 5.0 }];
+    const { propostas } = decidirCalibracoes(calibracao, configBase, 5);
+    expect(propostas[0].valoresNovos.min_por_m2).toBeCloseTo(2 * 2.0, 5);
+  });
+});
+
+describe("gerarPropostaRecalculo — regressão: rastreio de produto não sobrevive a um bloco de produto desconhecido", () => {
+  it("não aplica desconto de setup a um pendente separado do seu par por um bloco já existente no meio", () => {
+    const agora = segundaAs(8, 0);
+    const itensX = [{ id: 1, m2: 1, quantidade: 1, lapidacao: 0, produto_nome: "Vidro X" }];
+
+    // A: pendente, produto X, extremamente urgente -> maior prioridade, vai primeiro
+    const pendenteA = {
+      pedidoId: "P-A", dtRetirada: new Date(agora.getTime() + 10 * 60_000).toISOString(), itens: itensX,
+    };
+    // Bloco já existente (origem), produto desconhecido pro motor, prioridade intermediária -> vai em segundo
+    const blocoExistente = {
+      progId: "prog-E", pedidoId: "P-E", linhaId: 1,
+      dtInicioPrevisto: agora.toISOString(), duracaoMin: 30,
+      dtRetirada: new Date(agora.getTime() + 24 * 3_600_000).toISOString(),
+    };
+    // B: pendente, MESMO produto X que A, mas prazo bem folgado -> menor prioridade, vai por último
+    const pendenteB = {
+      pedidoId: "P-B", dtRetirada: new Date(agora.getTime() + 30 * 86_400_000).toISOString(), itens: itensX,
+    };
+
+    const proposta = gerarPropostaRecalculo(
+      [blocoExistente], [], [pendenteA, pendenteB], [linhaCorte], config, {}, agora,
+    );
+
+    // Ordem esperada por prioridade: P-A, bloco existente, P-B — B não é
+    // realmente adjacente a A (o bloco existente ficou no meio), então não
+    // deveria levar o desconto de setup.
+    const mudancaB = proposta.mudancas.find(m => m.pedidoId === "P-B")!;
+    expect(mudancaB.duracaoMin).toBe(duracaoTotalCorte(itensX, config));
+    expect(mudancaB.descontoAplicado).toBeFalsy();
+  });
+});
+
+describe("refinarComTrocasAdjacentes — não troca pares com desconto de setup aplicado", () => {
+  it("não mexe mesmo quando a troca reduziria o atraso, se um dos dois tem desconto aplicado", () => {
+    const agora = segundaAs(8, 0);
+    const fimA = new Date(agora.getTime() + 100 * 60_000);
+    const fimB = new Date(agora.getTime() + 150 * 60_000);
+    const mudancas: MudancaProposta[] = [
+      { tipo: "mover", pedidoId: "P-A", progId: "prog-A", linhaNova: 1, inicioNovo: agora, fimNovo: fimA, duracaoMin: 100, dtRetirada: null },
+      {
+        tipo: "inserir", pedidoId: "P-B", linhaNova: 1, inicioNovo: fimA, fimNovo: fimB, duracaoMin: 50,
+        dtRetirada: new Date(agora.getTime() + 80 * 60_000).toISOString(), descontoAplicado: true,
+      },
+    ];
+    const trocas = refinarComTrocasAdjacentes(mudancas, [linhaCorte]);
+    expect(trocas).toBe(0);
+    expect(mudancas.find(m => m.pedidoId === "P-B")!.inicioNovo.getTime()).toBe(fimA.getTime()); // não moveu
   });
 });
