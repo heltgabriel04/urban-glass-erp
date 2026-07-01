@@ -789,6 +789,7 @@ export interface ProgramacaoProducao {
   status: StatusProgramacao;
   responsavel: string | null;
   obs: string | null;
+  travado?: boolean; // reposicionado manualmente (drag/resize) — motor de agendamento automático não deve mover
   created_at: string;
   updated_at: string;
   pedidos?: {

@@ -171,6 +171,105 @@ export function produtoPrincipal(itens: Pick<ItemPedido, 'produto_nome' | 'm2'>[
   return [...porProduto.entries()].sort((a, b) => b[1] - a[1])[0][0];
 }
 
+// ─── MOTOR DE CAPACIDADE FINITA (APS · Fase 2) ──────────────
+// Substitui o cálculo anterior de "1 tarefa = N dias inteiros" por um
+// cursor minuto-a-minuto dentro do expediente de cada linha, permitindo
+// que várias tarefas curtas compartilhem o mesmo dia até a capacidade
+// disponível. Nunca corta um bloco no meio: se não couber antes do fim
+// do expediente, o bloco inteiro vai para o início do próximo dia útil.
+
+function horaParaMinutos(hhmmss: string): number {
+  const [h, m] = hhmmss.split(':').map(Number);
+  return h * 60 + (m || 0);
+}
+
+function comHorario(base: Date, minutosDoDia: number): Date {
+  const d = new Date(base);
+  d.setHours(0, minutosDoDia, 0, 0);
+  return d;
+}
+
+function ehDiaUtil(date: Date, bloqueados: Set<string>): boolean {
+  const dow = date.getDay();
+  return dow !== 0 && dow !== 6 && !bloqueados.has(date.toISOString().slice(0, 10));
+}
+
+export function alocarBloco(
+  cursor: Date,
+  duracaoMin: number,
+  linha: Pick<ProducaoLinha, 'inicio_dia' | 'fim_dia'>,
+  bloqueados: Set<string> = new Set(),
+): { inicio: Date; fim: Date } {
+  const minInicioDia = horaParaMinutos(linha.inicio_dia);
+  const minFimDia = horaParaMinutos(linha.fim_dia);
+
+  let inicio = new Date(cursor);
+  // avança até cair num dia útil dentro do expediente
+  while (true) {
+    if (!ehDiaUtil(inicio, bloqueados)) {
+      inicio = comHorario(new Date(inicio.getTime() + 86_400_000), minInicioDia);
+      continue;
+    }
+    const minAgora = inicio.getHours() * 60 + inicio.getMinutes();
+    if (minAgora < minInicioDia) inicio = comHorario(inicio, minInicioDia);
+    else if (minAgora >= minFimDia) { inicio = comHorario(new Date(inicio.getTime() + 86_400_000), minInicioDia); continue; }
+    break;
+  }
+
+  const fim = new Date(inicio.getTime() + duracaoMin * 60_000);
+  const fimExpedienteHoje = comHorario(inicio, minFimDia);
+  if (fim > fimExpedienteHoje) {
+    // não cabe inteiro antes do fim do expediente — empurra o bloco todo pro próximo dia útil
+    return alocarBloco(comHorario(new Date(inicio.getTime() + 86_400_000), minInicioDia), duracaoMin, linha, bloqueados);
+  }
+
+  return { inicio, fim };
+}
+
+// Combina o calendário global (feriados) com os bloqueios específicos de cada
+// linha (manutenção/recesso) num único Set de datas bloqueadas por linha —
+// hoje esses bloqueios só eram usados para a hachura visual do Gantt, não
+// entravam no cálculo do agendamento.
+export function construirDiasBloqueadosPorLinha(
+  linhas: Pick<ProducaoLinha, 'id'>[],
+  calendario: Set<string>,
+  bloqueios: Array<{ linha_id: number | null; dt_inicio: string; dt_fim: string }>,
+): Record<number, Set<string>> {
+  const porLinha: Record<number, Set<string>> = {};
+  for (const l of linhas) porLinha[l.id] = new Set(calendario);
+
+  for (const b of bloqueios) {
+    const fim = new Date(b.dt_fim);
+    for (let d = new Date(b.dt_inicio); d <= fim; d = new Date(d.getTime() + 86_400_000)) {
+      const iso = d.toISOString().slice(0, 10);
+      if (b.linha_id === null) { for (const l of linhas) porLinha[l.id]?.add(iso); }
+      else porLinha[b.linha_id]?.add(iso);
+    }
+  }
+  return porLinha;
+}
+
+// Minutos restantes de expediente na linha, a partir do cursor atual —
+// usado para decidir se uma tarefa cabe hoje ou se vai empurrar o dia.
+export function minutosRestantesNoDia(cursor: Date, linha: Pick<ProducaoLinha, 'fim_dia'>): number {
+  const fimExpedienteHoje = comHorario(cursor, horaParaMinutos(linha.fim_dia));
+  return Math.max(0, (fimExpedienteHoje.getTime() - cursor.getTime()) / 60_000);
+}
+
+// Escolhe, dentro de uma fila já ordenada por prioridade (score desc), qual
+// tarefa agendar a seguir na linha menos ocupada: a de maior prioridade que
+// ainda caiba no tempo restante do dia (gap-fill); se nenhuma couber, cai de
+// volta pra tarefa mais prioritária mesmo assim (ela só empurra pro próximo
+// dia útil — nunca fura a fila além do necessário pra evitar ociosidade).
+export function proximaTarefaParaEncaixe<T>(
+  pendentesOrdenados: T[],
+  minutosDisponiveis: number,
+  duracaoMin: (t: T) => number,
+): number {
+  const idx = pendentesOrdenados.findIndex(t => duracaoMin(t) <= minutosDisponiveis);
+  return idx === -1 ? 0 : idx;
+}
+
 export function formatarDuracao(min: number): string {
   if (min <= 0) return '—';
   if (min < 60) return `${min}min`;
@@ -378,28 +477,26 @@ export async function criarProgramacaoPedido(
   linhaCorteId: number,
   linhaLapId?: number,
   diasBloqueados: Set<string> = new Set(),
-): Promise<{ ok: boolean; erro?: string }> {
-  const linhaCorte   = linhas.find(l => l.id === linhaCorteId);
-  const linhaLap     = linhaLapId ? linhas.find(l => l.id === linhaLapId) : undefined;
-  const minsDiaCorte = (linhaCorte?.capacidade_horas_dia ?? 8) * 60;
-  const minsDiaLap   = (linhaLap?.capacidade_horas_dia   ?? 8) * 60;
+): Promise<{ ok: boolean; erro?: string; fimCorte?: Date }> {
+  const linhaCorte = linhas.find(l => l.id === linhaCorteId);
+  const linhaLap   = linhaLapId ? linhas.find(l => l.id === linhaLapId) : undefined;
+  if (!linhaCorte) return { ok: false, erro: 'Linha de corte não encontrada.' };
 
   type RowInsert = ProgramacaoInsert & { id?: string };
   const registros: RowInsert[] = [];
 
-  let dtAtualCorte = proximoDiaUtil(dtInicioCorte, diasBloqueados);
-  let dtAtualLap   = dtAtualCorte;
+  // Cursores minuto-a-minuto por linha (APS · Fase 2) — várias tarefas
+  // curtas agora podem compartilhar o mesmo dia até a capacidade da linha,
+  // em vez do antigo "1 tarefa = N dias inteiros".
+  let cursorCorte = dtInicioCorte;
+  let cursorLap   = dtInicioCorte;
 
   for (let i = 0; i < itens.length; i++) {
     const item   = itens[i];
     const tempos = calcularTempoEstimado([item], config);
     const corteId = crypto.randomUUID();
 
-    const dtFimCorte = addDiasUteis(
-      dtAtualCorte,
-      Math.max(1, Math.ceil(tempos.corte_min / minsDiaCorte)),
-      diasBloqueados,
-    );
+    const { inicio: inicioCorte, fim: fimCorte } = alocarBloco(cursorCorte, tempos.corte_min, linhaCorte, diasBloqueados);
 
     registros.push({
       id: corteId,
@@ -409,24 +506,21 @@ export async function criarProgramacaoPedido(
       linha_id: linhaCorteId,
       etapa: 'Corte',
       sequencia: i * 2,
-      dt_inicio_previsto: toISOLocal(dtAtualCorte),
-      dt_fim_previsto: toISOLocal(dtFimCorte),
+      dt_inicio_previsto: toISOLocal(inicioCorte),
+      dt_fim_previsto: toISOLocal(fimCorte),
       duracao_estimada_min: tempos.corte_min,
       responsavel: null,
       obs: null,
     });
-    dtAtualCorte = dtFimCorte;
+    cursorCorte = fimCorte;
 
-    if (tempos.tem_lapidacao && linhaLapId) {
-      const dtInicioLap = new Date(Math.max(
-        proximoDiaUtil(addDays(dtFimCorte, 1), diasBloqueados).getTime(),
-        dtAtualLap.getTime(),
-      ));
-      const dtFimLap = addDiasUteis(
-        dtInicioLap,
-        Math.max(1, Math.ceil(tempos.lapidacao_min / minsDiaLap)),
-        diasBloqueados,
-      );
+    if (tempos.tem_lapidacao && linhaLapId && linhaLap) {
+      // mantém a folga mínima de 1 dia útil entre Corte e Lapidação
+      // (inspeção/Qualidade (Corte) antes de seguir para o polimento)
+      const diaMinimoLap = proximoDiaUtil(addDays(fimCorte, 1), diasBloqueados);
+      const inicioCandidato = new Date(Math.max(diaMinimoLap.getTime(), cursorLap.getTime()));
+      const { inicio: inicioLap, fim: fimLap } = alocarBloco(inicioCandidato, tempos.lapidacao_min, linhaLap, diasBloqueados);
+
       registros.push({
         pedido_id: pedidoId,
         item_pedido_id: item.id ?? null,
@@ -434,13 +528,13 @@ export async function criarProgramacaoPedido(
         linha_id: linhaLapId,
         etapa: 'Lapidação',
         sequencia: i * 2 + 1,
-        dt_inicio_previsto: toISOLocal(dtInicioLap),
-        dt_fim_previsto: toISOLocal(dtFimLap),
+        dt_inicio_previsto: toISOLocal(inicioLap),
+        dt_fim_previsto: toISOLocal(fimLap),
         duracao_estimada_min: tempos.lapidacao_min,
         responsavel: null,
         obs: null,
       });
-      dtAtualLap = dtFimLap;
+      cursorLap = fimLap;
     }
   }
 
@@ -459,7 +553,7 @@ export async function criarProgramacaoPedido(
     }))
   );
 
-  return { ok: true };
+  return { ok: true, fimCorte: cursorCorte };
 }
 
 export async function reagendar(
@@ -468,6 +562,7 @@ export async function reagendar(
   duracaoMin: number,
   novaLinhaId?: number,
   motivo?: string,
+  manual: boolean = false,
 ): Promise<boolean> {
   const novaDtFim = new Date(novaDtInicio.getTime() + duracaoMin * 60000);
 
@@ -490,6 +585,14 @@ export async function reagendar(
     .eq('id', progId);
 
   if (error) { console.error('reagendar:', error); return false; }
+
+  if (manual) {
+    // Marca como travado para que o motor de agendamento automático nunca
+    // reposicione este bloco de novo. Best-effort: se a coluna "travado"
+    // ainda não existir (sql/aps-fase2-travado.sql não executado), essa
+    // chamada falha silenciosamente sem afetar o reagendamento acima.
+    await supabase.from('programacao_producao').update({ travado: true } as never).eq('id', progId);
+  }
 
   const usuario = await getUsuario();
   await supabase.from('programacao_historico').insert({

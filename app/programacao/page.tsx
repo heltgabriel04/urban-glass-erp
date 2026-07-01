@@ -13,7 +13,8 @@ import {
   calcularTempoEstimado, formatarDuracao, getMetricasProducao,
   isPedidoSomenteChapas,
   calcularPrioridadePedido, produtoPrincipal,
-  addDays, addDiasUteis, proximoDiaUtil, getMonday, diffDays, toISOLocal,
+  construirDiasBloqueadosPorLinha, minutosRestantesNoDia, proximaTarefaParaEncaixe,
+  addDays, proximoDiaUtil, getMonday, diffDays, toISOLocal,
 } from "@/services/programacao.service";
 import type { RetiradaParcial, BloqueioLinha, DadosCalibracao } from "@/services/programacao.service";
 import type {
@@ -248,6 +249,7 @@ function BlocoProducao({
         <div style={{ fontSize: 11, fontWeight: 700, color: borda, lineHeight: 1.2, marginBottom: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {prog.pedido_id}
           {prog.predecessor_id && <span style={{ marginLeft: 4, fontSize: 9, opacity: 0.7 }}>⛓</span>}
+          {prog.travado && <span title="Reposicionado manualmente — o auto-agendamento não move este bloco" style={{ marginLeft: 4, fontSize: 9, opacity: 0.7 }}>🔒</span>}
         </div>
         {width > 56 && item && (
           <div style={{ fontSize: 9, color: "var(--t1)", marginBottom: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -1234,7 +1236,8 @@ export default function ProgramacaoPage() {
     if (daysShifted  !== 0) novaDt.setDate(novaDt.getDate() + daysShifted);
     if (hoursShifted !== 0) novaDt.setHours(novaDt.getHours() + hoursShifted);
 
-    const ok = await reagendar(prog.id, novaDt, prog.duracao_estimada_min ?? 60, novaLinhaId);
+    // manual=true: trava o bloco para que o auto-agendamento nunca o mova de novo
+    const ok = await reagendar(prog.id, novaDt, prog.duracao_estimada_min ?? 60, novaLinhaId, undefined, true);
     if (ok) {
       showToast(novaLinhaId ? "Pedido movido para outra linha." : "Pedido reagendado.");
       await load();
@@ -1308,7 +1311,7 @@ export default function ProgramacaoPage() {
   async function handleResizeFim(id: string, novaDur: number) {
     const prog = programacoes.find(p => p.id === id);
     if (!prog?.dt_inicio_previsto) return;
-    const ok = await reagendar(prog.id, new Date(prog.dt_inicio_previsto), novaDur);
+    const ok = await reagendar(prog.id, new Date(prog.dt_inicio_previsto), novaDur, undefined, undefined, true);
     if (ok) {
       showToast(`Duração ajustada para ${formatarDuracao(novaDur)}.`);
       await load();
@@ -1332,29 +1335,28 @@ export default function ProgramacaoPage() {
 
     setAutoAgendando(true);
 
-    // Próxima data livre por linha (baseado nos blocos já existentes)
-    const nextFree: Record<number, Date> = {};
+    // Cursor real por linha (APS · Fase 2): retoma exatamente de onde o
+    // último bloco termina — sem mais o "+1 dia inteiro" fixo de antes.
+    // Se a linha estiver livre agora, usa o próprio "agora" como ponto de
+    // partida, deixando o alocarBloco decidir se ainda cabe hoje.
+    const agora = new Date();
+    const cursorPorLinha: Record<number, Date> = {};
     for (const l of linhasCorte) {
       const ultimo = [...programacoes]
         .filter(p => p.linha_id === l.id && p.status !== "Cancelado" && p.dt_fim_previsto)
         .sort((a, b) => new Date(b.dt_fim_previsto!).getTime() - new Date(a.dt_fim_previsto!).getTime())[0];
-
-      if (ultimo?.dt_fim_previsto) {
-        const d = addDays(new Date(ultimo.dt_fim_previsto), 1);
-        d.setHours(8, 0, 0, 0);
-        nextFree[l.id] = d;
-      } else {
-        const d = addDays(new Date(), 1);
-        d.setHours(8, 0, 0, 0);
-        nextFree[l.id] = d;
-      }
+      cursorPorLinha[l.id] = ultimo?.dt_fim_previsto ? new Date(ultimo.dt_fim_previsto) : agora;
     }
+
+    // Bloqueios específicos de cada linha (manutenção/recesso) + calendário
+    // global, combinados — antes os bloqueios de linha só apareciam como
+    // hachura visual no Gantt, sem impedir o agendamento automático.
+    const bloqueadosPorLinha = construirDiasBloqueadosPorLinha(linhasCorte, calendario, bloqueios);
 
     // Ordena por score de prioridade (atraso > folga real até o prazo,
     // considerando o tempo de produção que falta — não só a data em si);
     // desempata por m² maior
-    const agora = new Date();
-    const pedidosOrdenados = [...semProg].sort((a, b) => {
+    const pendentes = [...semProg].sort((a, b) => {
       const scoreA = calcularPrioridadePedido(a, (a.itens_pedido ?? []) as any[], config, agora).score;
       const scoreB = calcularPrioridadePedido(b, (b.itens_pedido ?? []) as any[], config, agora).score;
       if (scoreA !== scoreB) return scoreB - scoreA;
@@ -1363,32 +1365,39 @@ export default function ProgramacaoPage() {
 
     let agendados = 0, erros = 0;
 
-    for (const pedido of pedidosOrdenados) {
-      // Linha com menor tempo de espera
-      const melhorLinha = linhasCorte.reduce((best, l) =>
-        (nextFree[l.id]?.getTime() ?? 0) < (nextFree[best.id]?.getTime() ?? 0) ? l : best
+    while (pendentes.length > 0) {
+      // Linha menos ocupada (cursor mais cedo)
+      const linha = linhasCorte.reduce((best, l) =>
+        cursorPorLinha[l.id].getTime() < cursorPorLinha[best.id].getTime() ? l : best
       );
 
-      const dtInicio = proximoDiaUtil(new Date(nextFree[melhorLinha.id]), calendario);
-      dtInicio.setHours(8, 0, 0, 0);
+      // Gap-fill: entre os pendentes, prioriza o de maior score que ainda
+      // caiba no tempo restante do expediente de hoje nessa linha; se
+      // nenhum couber, agenda o mais prioritário mesmo assim (só empurra
+      // pro próximo dia útil, nunca fica ocioso à toa).
+      const minutosLivres = minutosRestantesNoDia(cursorPorLinha[linha.id], linha);
+      const idx = proximaTarefaParaEncaixe(
+        pendentes,
+        minutosLivres,
+        p => calcularTempoEstimado((p.itens_pedido ?? []) as any[], config).corte_min,
+      );
 
+      const pedido = pendentes[idx];
       const itens = (pedido.itens_pedido ?? []) as { id: number; m2: number; quantidade: number; lapidacao: number; produto_nome: string }[];
-      const tempos = calcularTempoEstimado(itens, config);
-      const diasNecessarios = Math.max(1, Math.ceil(tempos.corte_min / ((melhorLinha.capacidade_horas_dia ?? 8) * 60)));
 
       const result = await criarProgramacaoPedido(
-        pedido.id, itens, config, linhas, dtInicio, melhorLinha.id, undefined, calendario
+        pedido.id, itens, config, linhas, cursorPorLinha[linha.id], linha.id, undefined,
+        bloqueadosPorLinha[linha.id] ?? calendario,
       );
 
-      if (result.ok) {
+      if (result.ok && result.fimCorte) {
         agendados++;
-        const proximo = proximoDiaUtil(addDiasUteis(dtInicio, diasNecessarios + 1, calendario), calendario);
-        proximo.setHours(8, 0, 0, 0);
-        nextFree[melhorLinha.id] = proximo;
+        cursorPorLinha[linha.id] = result.fimCorte;
       } else {
         erros++;
-        nextFree[melhorLinha.id] = proximoDiaUtil(addDays(nextFree[melhorLinha.id], 1), calendario);
+        cursorPorLinha[linha.id] = proximoDiaUtil(addDays(cursorPorLinha[linha.id], 1), calendario);
       }
+      pendentes.splice(idx, 1);
     }
 
     setAutoAgendando(false);
