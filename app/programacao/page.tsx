@@ -1331,83 +1331,122 @@ export default function ProgramacaoPage() {
   // fábrica já pode estar preparando.
   const JANELA_SEGURANCA_MIN = 120;
 
+  // Núcleo do recálculo — busca o estado atual do banco e monta a proposta.
+  // Reaproveitado tanto pelo botão manual quanto pela checagem silenciosa
+  // automática (ver useEffect de sugestão abaixo): como lê o estado do banco
+  // na hora, qualquer mudança de cenário feita em outra tela (novo pedido,
+  // prazo editado, cancelamento, bloqueio de linha) é capturada aqui sem
+  // precisar de um gatilho específico pra cada tipo de evento.
+  async function gerarPropostaAtual(): Promise<PropostaRecalculo | null> {
+    const linhasCorte = linhas.filter(l => l.tipo === "Corte");
+    if (linhasCorte.length === 0) return null;
+
+    const agora = new Date();
+    const limiteSeguranca = new Date(agora.getTime() + JANELA_SEGURANCA_MIN * 60_000);
+
+    // Busca programações num horizonte amplo: alguns dias pra trás (senão
+    // um bloco "Em Execução" que começou antes de "agora" fica de fora da
+    // busca — dt_inicio_previsto >= from — e vira invisível pro motor, que
+    // poderia então propor algo sobre a máquina que já está cortando) até
+    // 60 dias à frente. Não usa a janela visível do Gantt (que pode estar
+    // em modo "dia"/"semana"), senão o recálculo ignoraria blocos fora da
+    // tela e poderia colidir com eles.
+    const progsFuturas = await getProgramacao(addDays(agora, -3), addDays(agora, 60));
+    const idsLinhasCorte = new Set(linhasCorte.map(l => l.id));
+
+    // Corte que já tem uma Lapidação dependente agendada não pode ser
+    // movido sozinho sem reagendar a Lapidação em cascata (fora do escopo
+    // desta fase) — tratado como obstáculo fixo.
+    const idsComDependente = new Set(
+      progsFuturas.filter(p => p.predecessor_id && p.status !== "Cancelado").map(p => p.predecessor_id!)
+    );
+
+    const blocosMoviveis: BlocoMovivel[] = [];
+    const blocosFixos: BlocoFixo[] = [];
+
+    for (const p of progsFuturas) {
+      if (p.etapa !== "Corte" || !p.linha_id || !idsLinhasCorte.has(p.linha_id)) continue;
+      if (!p.dt_inicio_previsto || !p.dt_fim_previsto) continue;
+      if (p.status === "Cancelado") continue;
+
+      const movivelCandidato = p.status === "Agendado" && !p.travado &&
+        !idsComDependente.has(p.id) &&
+        new Date(p.dt_inicio_previsto) >= limiteSeguranca;
+
+      if (movivelCandidato) {
+        blocosMoviveis.push({
+          progId: p.id, pedidoId: p.pedido_id, linhaId: p.linha_id,
+          dtInicioPrevisto: p.dt_inicio_previsto,
+          duracaoMin: p.duracao_estimada_min ?? 60,
+          dtRetirada: p.pedidos?.dt_retirada ?? null,
+        });
+      } else {
+        // Em Execução, Concluído, travado, com Lapidação dependente, ou
+        // começando cedo demais pra mexer
+        blocosFixos.push({
+          linhaId: p.linha_id,
+          inicio: new Date(p.dt_inicio_previsto),
+          fim: new Date(p.dt_fim_previsto),
+        });
+      }
+    }
+
+    const pendentes: PedidoPendenteRecalculo[] = semProg.map(pedido => ({
+      pedidoId: pedido.id,
+      dtRetirada: pedido.dt_retirada,
+      itens: (pedido.itens_pedido ?? []) as PedidoPendenteRecalculo["itens"],
+    }));
+
+    const bloqueadosPorLinha = construirDiasBloqueadosPorLinha(linhasCorte, calendario, bloqueios);
+
+    const result = gerarPropostaRecalculo(
+      blocosMoviveis, blocosFixos, pendentes, linhasCorte, config, bloqueadosPorLinha, agora,
+    );
+
+    return result.mudancas.length > 0 ? result : null;
+  }
+
   async function handleGerarProposta() {
     setGerandoProposta(true);
     try {
-      const linhasCorte = linhas.filter(l => l.tipo === "Corte");
-      if (linhasCorte.length === 0) { showToast("Nenhuma linha de corte configurada."); return; }
-
-      const agora = new Date();
-      const limiteSeguranca = new Date(agora.getTime() + JANELA_SEGURANCA_MIN * 60_000);
-
-      // Busca programações num horizonte amplo: alguns dias pra trás (senão
-      // um bloco "Em Execução" que começou antes de "agora" fica de fora da
-      // busca — dt_inicio_previsto >= from — e vira invisível pro motor,
-      // que poderia então propor algo sobre a máquina que já está cortando)
-      // até 60 dias à frente. Não usa a janela visível do Gantt (que pode
-      // estar em modo "dia"/"semana"), senão o recálculo ignoraria blocos
-      // fora da tela e poderia colidir com eles.
-      const progsFuturas = await getProgramacao(addDays(agora, -3), addDays(agora, 60));
-      const idsLinhasCorte = new Set(linhasCorte.map(l => l.id));
-
-      // Corte que já tem uma Lapidação dependente agendada não pode ser
-      // movido sozinho sem reagendar a Lapidação em cascata (fora do escopo
-      // desta fase) — tratado como obstáculo fixo.
-      const idsComDependente = new Set(
-        progsFuturas.filter(p => p.predecessor_id && p.status !== "Cancelado").map(p => p.predecessor_id!)
-      );
-
-      const blocosMoviveis: BlocoMovivel[] = [];
-      const blocosFixos: BlocoFixo[] = [];
-
-      for (const p of progsFuturas) {
-        if (p.etapa !== "Corte" || !p.linha_id || !idsLinhasCorte.has(p.linha_id)) continue;
-        if (!p.dt_inicio_previsto || !p.dt_fim_previsto) continue;
-        if (p.status === "Cancelado") continue;
-
-        const movivelCandidato = p.status === "Agendado" && !p.travado &&
-          !idsComDependente.has(p.id) &&
-          new Date(p.dt_inicio_previsto) >= limiteSeguranca;
-
-        if (movivelCandidato) {
-          blocosMoviveis.push({
-            progId: p.id, pedidoId: p.pedido_id, linhaId: p.linha_id,
-            dtInicioPrevisto: p.dt_inicio_previsto,
-            duracaoMin: p.duracao_estimada_min ?? 60,
-            dtRetirada: p.pedidos?.dt_retirada ?? null,
-          });
-        } else {
-          // Em Execução, Concluído, travado, com Lapidação dependente, ou
-          // começando cedo demais pra mexer
-          blocosFixos.push({
-            linhaId: p.linha_id,
-            inicio: new Date(p.dt_inicio_previsto),
-            fim: new Date(p.dt_fim_previsto),
-          });
-        }
-      }
-
-      const pendentes: PedidoPendenteRecalculo[] = semProg.map(pedido => ({
-        pedidoId: pedido.id,
-        dtRetirada: pedido.dt_retirada,
-        itens: (pedido.itens_pedido ?? []) as PedidoPendenteRecalculo["itens"],
-      }));
-
-      const bloqueadosPorLinha = construirDiasBloqueadosPorLinha(linhasCorte, calendario, bloqueios);
-
-      const result = gerarPropostaRecalculo(
-        blocosMoviveis, blocosFixos, pendentes, linhasCorte, config, bloqueadosPorLinha, agora,
-      );
-
-      if (result.mudancas.length === 0) {
-        showToast("A agenda já está no melhor arranjo possível — nada a mudar.");
+      const result = await gerarPropostaAtual();
+      if (!result) {
+        showToast(linhas.filter(l => l.tipo === "Corte").length === 0
+          ? "Nenhuma linha de corte configurada."
+          : "A agenda já está no melhor arranjo possível — nada a mudar.");
         return;
       }
+      setPropostaSugerida(null);
       setProposta(result);
     } finally {
       setGerandoProposta(false);
     }
   }
+
+  // ── Sugestão automática (finaliza a Fase 3) ─────────────────
+  // Em vez de plugar um gatilho em cada ponto de mutação espalhado pelo app
+  // (criação de pedido, edição de prazo, cancelamento — em telas diferentes
+  // de app/pedidos/*, arriscado e fácil esquecer um caso), a checagem lê o
+  // estado atual do banco: cobre qualquer mudança de cenário automaticamente,
+  // sem precisar saber qual evento a causou. Roda só uma vez por visita à
+  // página (não a cada troca de zoom/data) e nunca aplica nada sozinha —
+  // só sugere, com "nervousness control": só avisa se houver pedido novo
+  // pra agendar ou se reduzir o número de atrasados.
+  const [propostaSugerida, setPropostaSugerida] = useState<PropostaRecalculo | null>(null);
+  const sugestaoChecada = useRef(false);
+
+  async function checarSugestaoAutomatica() {
+    const result = await gerarPropostaAtual();
+    const relevante = result && (result.resumo.blocosNovos > 0 || result.resumo.atrasadosDepois < result.resumo.atrasadosAntes);
+    setPropostaSugerida(relevante ? result : null);
+  }
+
+  useEffect(() => {
+    if (sugestaoChecada.current || linhas.length === 0 || loading) return;
+    sugestaoChecada.current = true;
+    checarSugestaoAutomatica();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linhas.length, loading]);
 
   async function handleAplicarProposta() {
     if (!proposta) return;
@@ -1654,6 +1693,33 @@ export default function ProgramacaoPage() {
             <span>⚠ {erroLoad}</span>
             <button onClick={load} style={{ background: "transparent", border: "1px solid var(--err)", borderRadius: 6, color: "var(--err)", fontSize: 11, padding: "2px 10px", cursor: "pointer" }}>
               Tentar novamente
+            </button>
+          </div>
+        )}
+
+        {/* Sugestão automática de recálculo (APS · Fase 3) */}
+        {propostaSugerida && !proposta && (
+          <div style={{
+            padding: "9px 20px", background: "rgba(61,255,160,.08)", borderBottom: "1px solid var(--acc)",
+            fontSize: 12, color: "var(--acc)", fontWeight: 600, display: "flex", alignItems: "center", gap: 10,
+          }}>
+            <span>
+              🔄 A agenda pode ser otimizada — {propostaSugerida.resumo.blocosNovos > 0 && `${propostaSugerida.resumo.blocosNovos} pedido(s) novo(s) pra agendar`}
+              {propostaSugerida.resumo.blocosNovos > 0 && propostaSugerida.resumo.atrasadosDepois < propostaSugerida.resumo.atrasadosAntes && " · "}
+              {propostaSugerida.resumo.atrasadosDepois < propostaSugerida.resumo.atrasadosAntes &&
+                `atrasados ${propostaSugerida.resumo.atrasadosAntes} → ${propostaSugerida.resumo.atrasadosDepois}`}
+            </span>
+            <button
+              className="btn pri" style={{ fontSize: 11, padding: "3px 10px" }}
+              onClick={() => { setProposta(propostaSugerida); setPropostaSugerida(null); }}
+            >
+              Ver prévia
+            </button>
+            <button
+              className="btn bg" style={{ fontSize: 11, padding: "3px 10px", marginLeft: "auto" }}
+              onClick={() => setPropostaSugerida(null)}
+            >
+              Dispensar
             </button>
           </div>
         )}
@@ -2186,7 +2252,7 @@ export default function ProgramacaoPage() {
           linha={typeof modalBloqueio === "object" ? modalBloqueio : null}
           bloqueiosExistentes={bloqueios}
           onFechar={() => setModalBloqueio(undefined as any)}
-          onSalvo={async () => { await load(); }} />
+          onSalvo={async () => { await load(); await checarSugestaoAutomatica(); }} />
       )}
 
       {proposta && (
