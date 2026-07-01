@@ -78,7 +78,7 @@ function OtimizadorContent() {
   const [zerando, setZerando]             = useState(false);
   const [modoTeste, setModoTeste]         = useState(false);
   const [simulando, setSimulando]         = useState(false);
-  const [tempoCalculo, setTempoCalculo]   = useState(3000); // ms
+  const TEMPO_CALCULO_MS = 10000; // sempre o modo mais preciso — tempo não é problema, resultado sim
   const [usarRetalhosEstoque, setUsarRetalhosEstoque] = useState(false);
   const [retalhosDisponiveis, setRetalhosDisponiveis] = useState<Retalho[]>([]);
   const [retalhosUsados, setRetalhosUsados] = useState<string[]>([]);
@@ -343,7 +343,7 @@ function OtimizadorContent() {
   function computeScenario(
     flat: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
     useRetalhos: boolean,
-    tmLimitMs = tempoCalculo
+    tmLimitMs = TEMPO_CALCULO_MS
   ): { results: ResultadoChapa[]; aprov: number; chapas: number; retUsados: string[] } {
     const grupos = new Map<string, typeof flat>();
     flat.forEach(p => { const g = grupos.get(p.prod) ?? []; g.push(p); grupos.set(p.prod, g); });
@@ -925,14 +925,7 @@ function OtimizadorContent() {
             </span>
           )}
           {simulando && <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>simulando combinações...</span>}
-          <div style={{ display: "flex", alignItems: "center", gap: "2px", background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "8px", padding: "2px" }}>
-            {([["⚡", 500, "Rápido (~0.5s)"], ["◈", 3000, "Normal (~3s)"], ["🎯", 10000, "Preciso (~10s)"]] as [string, number, string][]).map(([icon, ms, label]) => (
-              <button key={ms} title={label} onClick={() => setTempoCalculo(ms)} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, cursor: "pointer", border: "none", background: tempoCalculo === ms ? "var(--acc)" : "transparent", color: tempoCalculo === ms ? "#000" : "var(--t3)", transition: "all 0.15s" }}>
-                {icon}
-              </button>
-            ))}
-          </div>
-          <button className="btn bp sm" onClick={rodar} style={{ fontWeight: 700 }}>◈ Calcular</button>
+          <button className="btn bp sm" onClick={rodar} style={{ fontWeight: 700 }} title="Busca o melhor aproveitamento possível (~10s por produto)">◈ Calcular</button>
           {resultado && !modoTeste && pedidoRef && (
            <button className="btn bp sm" onClick={handleSalvar} disabled={salvando} style={{ background: "var(--ok)", borderColor: "var(--ok)", color: "#000", fontWeight: 700 }}>
             {salvando ? "Salvando..." : pedidosSelecionados.size > 0 ? `✓ Salvar ${pedidosSelecionados.size + 1} Pedidos` : "✓ Salvar Plano"}
