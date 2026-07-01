@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import { X } from "lucide-react";
 
 interface Props {
   value: string;
@@ -25,17 +26,17 @@ export default function SearchInput({
         placeholder={placeholder}
         value={value}
         onChange={e => onChange(e.target.value)}
-        style={{ ...inputStyle, paddingRight: value ? "26px" : inputStyle?.paddingRight }}
+        style={{ ...inputStyle, paddingRight: value ? "28px" : inputStyle?.paddingRight }}
       />
       {value && (
         <button
           type="button"
           title="Limpar busca"
           onClick={() => onChange("")}
-          style={{ position:"absolute", right:"6px", top:"50%", transform:"translateY(-50%)", width:"16px", height:"16px", display:"flex", alignItems:"center", justifyContent:"center", border:"none", background:"transparent", color:"var(--t3)", cursor:"pointer", fontSize:"13px", lineHeight:1, padding:0 }}
-          onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.color = "var(--t1)"}
-          onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.color = "var(--t3)"}
-        >×</button>
+          className="tb-search-clear"
+        >
+          <X size={12} strokeWidth={2.5} />
+        </button>
       )}
     </div>
   );

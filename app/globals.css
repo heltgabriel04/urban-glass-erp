@@ -228,6 +228,30 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
   pointer-events: none;
 }
 
+.tb-search-clear {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--t3);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.tb-search-clear:hover {
+  background: var(--b1);
+  color: var(--t1);
+}
+
 .clk {
   font-family: 'DM Mono', monospace;
   font-size: 11px;
