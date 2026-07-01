@@ -225,7 +225,7 @@ export default function DashboardPage() {
                 flexWrap: "wrap",
               }}>
                 <span style={{ fontSize: 10, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1.2px", fontFamily: "'DM Mono', monospace", flexShrink: 0 }}>
-                  Requer acao
+                  Requer ação
                 </span>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flex: 1 }}>
                   {itensRuptura.length > 0 && (
@@ -238,7 +238,7 @@ export default function DashboardPage() {
                   {ncsCriticas > 0 && (
                     <a href="/qualidade" style={{ textDecoration: "none" }}>
                       <span className="chip cr" style={{ cursor: "pointer" }}>
-                        {ncsCriticas} NC{ncsCriticas > 1 ? "s" : ""} critica{ncsCriticas > 1 ? "s" : ""}
+                        {ncsCriticas} NC{ncsCriticas > 1 ? "s" : ""} crítica{ncsCriticas > 1 ? "s" : ""}
                       </span>
                     </a>
                   )}
@@ -280,7 +280,7 @@ export default function DashboardPage() {
                   {aguardandoOtim.length > 0 && (
                     <a href="/otimizador" style={{ textDecoration: "none" }}>
                       <span className="chip cb" style={{ cursor: "pointer" }}>
-                        {aguardandoOtim.length} pedido{aguardandoOtim.length > 1 ? "s" : ""} aguardando otimizacao
+                        {aguardandoOtim.length} pedido{aguardandoOtim.length > 1 ? "s" : ""} aguardando otimização
                       </span>
                     </a>
                   )}
@@ -296,7 +296,7 @@ export default function DashboardPage() {
                 <div className="ct">
                   Faturamento Mensal &middot; {anoAtual}
                   <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>
-                    clique no mes para filtrar
+                    clique no mês para filtrar
                   </span>
                 </div>
                 <div style={{ height: 148, display: "flex", alignItems: "stretch", gap: 5 }}>
@@ -398,7 +398,7 @@ export default function DashboardPage() {
               </div>
               {topCli.length === 0 ? (
                 <div style={{ color: "var(--t3)", fontSize: 12, padding: "20px 0", textAlign: "center" }}>
-                  Nenhum pedido neste periodo.
+                  Nenhum pedido neste período.
                 </div>
               ) : (
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 40px" }}>

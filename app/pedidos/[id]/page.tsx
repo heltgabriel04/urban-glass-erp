@@ -1325,7 +1325,7 @@ export default function PedidoDetalhe() {
               <div className="tw">
                 <table>
                   <thead>
-                    <tr><th>#</th><th>Produto</th><th>Dimensão</th><th>Medida</th><th>Qtd</th><th>Preço/un.</th><th>V.Cliente</th><th>Subtotal</th></tr>
+                    <tr><th>#</th><th>Produto</th><th>Dimensão</th><th>Medida</th><th>Quantidade</th><th>Preço Unitário</th><th>Vidro Cliente</th><th>Subtotal</th></tr>
                   </thead>
                   <tbody>
                     {pedido.itens_pedido!.map((item, i) => {
@@ -1541,8 +1541,8 @@ export default function PedidoDetalhe() {
                 {/* Itens */}
                 <div style={{ padding:"12px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)" }}>
                   <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"12px", textTransform:"uppercase" }}>Itens do Pedido</div>
-                  <div style={{ display:"grid", gridTemplateColumns:"2fr 62px 62px 44px 90px 62px 42px 78px", gap:"6px", marginBottom:"6px", paddingBottom:"6px", borderBottom:"1px solid var(--b1)" }}>
-                    {["Produto","Larg.","Alt.","Qtd","R$/m²","Lapid.","V.Cli","Subtotal"].map(h => (
+                  <div style={{ display:"grid", gridTemplateColumns:"2fr 78px 75px 82px 90px 80px 70px 96px", gap:"6px", marginBottom:"6px", paddingBottom:"6px", borderBottom:"1px solid var(--b1)" }}>
+                    {["Produto","Largura","Altura","Quantidade","R$/m²","Lapidação","Vidro Cliente","Subtotal"].map(h => (
                       <div key={h} style={{ fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px", fontFamily:"'DM Mono',monospace" }}>{h}</div>
                     ))}
                   </div>
@@ -1551,7 +1551,7 @@ export default function PedidoDetalhe() {
                     const sub = calcSubtotalItem(item);
                     return (
                       <div key={item.id} style={{ marginBottom:"10px" }}>
-                        <div style={{ display:"grid", gridTemplateColumns:"2fr 62px 62px 44px 90px 62px 42px 78px", gap:"6px", alignItems:"center" }}>
+                        <div style={{ display:"grid", gridTemplateColumns:"2fr 78px 75px 82px 90px 80px 70px 96px", gap:"6px", alignItems:"center" }}>
                           <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", padding:"7px 10px", background:"var(--surf1)", borderRadius:"6px", border:"1px solid var(--b1)" }}>
                             {item.produto_nome}
                           </div>
@@ -1742,7 +1742,7 @@ export default function PedidoDetalhe() {
           <table style={{ width:"100%", borderCollapse:"collapse", marginBottom:"16px", fontSize:"11px" }}>
             <thead>
               <tr style={{ background:"#2d5fa6" }}>
-                {["#","Produto","Dimensão (mm)","Medida","Qtd","Preço/un.","Subtotal"].map((h, i) => (
+                {["#","Produto","Dimensão (mm)","Medida","Quantidade","Preço Unitário","Subtotal"].map((h, i) => (
                   <th key={i} style={{ padding:"8px", color:"white", fontWeight:700, fontSize:"9px", textAlign: i === 0 || i === 4 ? "center" : i >= 5 ? "right" : "left", letterSpacing:"0.5px" }}>{h}</th>
                 ))}
               </tr>

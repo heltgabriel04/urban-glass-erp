@@ -148,11 +148,11 @@ export default function RetrabalhosPage() {
               <div style={{ textAlign:"center", padding:"60px", color:"var(--t3)", fontSize:"13px" }}>Nenhum retrabalho registrado.</div>
             ) : (
               <>
-                <div style={{ display:"grid", gridTemplateColumns:"90px 1fr 120px 120px 70px 90px 100px", gap:"6px", padding:"7px 18px", fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:".07em", fontFamily:"'DM Mono',monospace", borderBottom:"1px solid var(--b1)" }}>
-                  <div>Data</div><div>Motivo / Produto</div><div>Etapa origem</div><div>Etapa correção</div><div>Qtd</div><div>Custo</div><div>Status</div>
+                <div style={{ display:"grid", gridTemplateColumns:"90px 1fr 120px 120px 95px 90px 100px", gap:"6px", padding:"7px 18px", fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:".07em", fontFamily:"'DM Mono',monospace", borderBottom:"1px solid var(--b1)" }}>
+                  <div>Data</div><div>Motivo / Produto</div><div>Etapa origem</div><div>Etapa correção</div><div>Quantidade</div><div>Custo</div><div>Status</div>
                 </div>
                 {filtrados.map((r, i) => (
-                  <div key={r.id} style={{ display:"grid", gridTemplateColumns:"90px 1fr 120px 120px 70px 90px 100px", gap:"6px", padding:"10px 18px", borderBottom:"1px solid var(--b1)", background: i % 2 === 0 ? "transparent" : "var(--surf2)", alignItems:"center" }}>
+                  <div key={r.id} style={{ display:"grid", gridTemplateColumns:"90px 1fr 120px 120px 95px 90px 100px", gap:"6px", padding:"10px 18px", borderBottom:"1px solid var(--b1)", background: i % 2 === 0 ? "transparent" : "var(--surf2)", alignItems:"center" }}>
                     <div style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>{formatDate(r.dt_retrabalho.substring(0,10))}</div>
                     <div>
                       <div style={{ fontSize:"12px", fontWeight:600, color:"var(--t1)" }}>{r.motivo}</div>

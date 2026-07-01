@@ -356,8 +356,8 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
                       <input className="fc" placeholder="Material" value={pedido.material}
                         style={{ margin: 0, fontSize: "12px", fontWeight: 600, padding: "3px 7px", flex: 1, minWidth: 0 }}
                         onChange={e => patchPedido(pedido.id, { material: e.target.value })} />
-                      <input className="fc" type="number" step="0.001" placeholder="Qtd (t)" value={pedido.quantidadeTon || ""}
-                        style={{ margin: 0, fontSize: "11px", padding: "3px 7px", width: "72px", textAlign: "right", fontFamily: "'DM Mono', monospace" }}
+                      <input className="fc" type="number" step="0.001" placeholder="Quantidade (t)" value={pedido.quantidadeTon || ""}
+                        style={{ margin: 0, fontSize: "11px", padding: "3px 7px", width: "110px", textAlign: "right", fontFamily: "'DM Mono', monospace" }}
                         onChange={e => patchPedido(pedido.id, { quantidadeTon: Number(e.target.value) })} />
                       <CurrencyInput value={pedido.valor}
                         style={{ margin: 0, fontSize: "12px", fontWeight: 700, padding: "3px 7px", width: "120px", textAlign: "right", fontFamily: "'DM Mono', monospace" }}
@@ -1500,7 +1500,7 @@ export default function InvestimentosPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px" }}>
                 <thead>
                   <tr style={{ background: "#8b5cf6" }}>
-                    {["#", "Material", "Qtd (t)", "Valor", "Movimentado", "Saldo"].map((h, i) => (
+                    {["#", "Material", "Quantidade (t)", "Valor", "Movimentado", "Saldo"].map((h, i) => (
                       <th key={h} style={{ padding: "5px 8px", textAlign: i >= 2 ? "right" : "left", color: "white", fontWeight: 700, fontSize: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</th>
                     ))}
                   </tr>

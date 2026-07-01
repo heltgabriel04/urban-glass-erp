@@ -147,7 +147,7 @@ export default function ClienteDetalhe() {
                   {cliente.consumidor_final ? "Sim" : "Não"}
                 </span>
               </div>
-              {cliente.obs_nfe && <Row label="Obs NF-e" value={cliente.obs_nfe} />}
+              {cliente.obs_nfe && <Row label="Observação NF-e" value={cliente.obs_nfe} />}
             </div>
 
             {/* Alerta fiscal */}

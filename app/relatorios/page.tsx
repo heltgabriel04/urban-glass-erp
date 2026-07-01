@@ -1551,7 +1551,7 @@ export default function RelatoriosPage() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
-                    {["Status","Qtd.","% Total","Valor Total","Ticket Médio"].map((h, i) => (
+                    {["Status","Quantidade","% Total","Valor Total","Ticket Médio"].map((h, i) => (
                       <th key={i} style={{ ...S.th, textAlign: i >= 1 ? "right" : "left" }}>{h}</th>
                     ))}
                   </tr>

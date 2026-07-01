@@ -477,7 +477,7 @@ export default function RetalhoPage() {
             </div>
 
             <div style={{ marginTop:"12px" }}>
-              <label style={labelStyle}>Obs / Cliente (deixe em branco se for vidro próprio)</label>
+              <label style={labelStyle}>Observação / Cliente (deixe em branco se for vidro próprio)</label>
               <input
                 style={{ ...inputStyle, borderColor: form.observacao ? "var(--warn)" : "var(--b2)" }}
                 placeholder="Nome do cliente dono do vidro, ex: Diogo"
@@ -556,7 +556,7 @@ export default function RetalhoPage() {
                       <th>Dimensões</th>
                       <th>m²</th>
                       <th>Box</th>
-                      <th>Obs / Cliente</th>
+                      <th>Observação / Cliente</th>
                       <th>Chapa Origem</th>
                       <th>Pedido Origem</th>
                       <th>Gerado em</th>

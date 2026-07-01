@@ -1080,7 +1080,7 @@ function OtimizadorContent() {
                     <span>PEÇA {i + 1}{p.pedidoId && p.pedidoId !== pedidoRef && <span style={{ marginLeft: "6px", fontSize: "9px", color: "var(--acc2)", opacity: 0.7 }}>({p.pedidoId})</span>}</span>
                     <button className="btn bw xs" onClick={() => remPeca(i)}>✕</button>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 60px", gap: "7px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 80px", gap: "7px" }}>
                     <div className="fg" style={{ margin: 0 }}><label className="fl" style={{ fontSize: "9px" }}>Produto</label>
                       <select className="fc" style={{ fontSize: "11px" }} value={p.prod} onChange={e => updPeca(i, "prod", e.target.value)}>
                         <option value="">Selecionar produto...</option>
@@ -1089,7 +1089,7 @@ function OtimizadorContent() {
                     </div>
                     <div className="fg" style={{ margin: 0 }}><label className="fl" style={{ fontSize: "9px" }}>Largura (mm)</label><input type="number" className="fc" style={{ fontSize: "12px" }} value={p.l || ""} placeholder="1200" onChange={e => updPeca(i, "l", Number(e.target.value))} /></div>
                     <div className="fg" style={{ margin: 0 }}><label className="fl" style={{ fontSize: "9px" }}>Altura (mm)</label><input type="number" className="fc" style={{ fontSize: "12px" }} value={p.a || ""} placeholder="800" onChange={e => updPeca(i, "a", Number(e.target.value))} /></div>
-                    <div className="fg" style={{ margin: 0 }}><label className="fl" style={{ fontSize: "9px" }}>Qtd</label><input type="number" className="fc" style={{ fontSize: "12px" }} value={p.qtd} min={1} onChange={e => updPeca(i, "qtd", Number(e.target.value))} /></div>
+                    <div className="fg" style={{ margin: 0 }}><label className="fl" style={{ fontSize: "9px" }}>Quantidade</label><input type="number" className="fc" style={{ fontSize: "12px" }} value={p.qtd} min={1} onChange={e => updPeca(i, "qtd", Number(e.target.value))} /></div>
                   </div>
                 </div>
               ))}

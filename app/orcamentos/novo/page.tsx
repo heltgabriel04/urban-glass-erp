@@ -659,16 +659,16 @@ function NovoOrcamentoPageInner() {
                 <div style={{ borderTop:"1px solid var(--b1)", marginTop:"14px", paddingTop:"14px" }}>
                   <div style={{ fontSize:"10px", fontWeight:700, letterSpacing:".06em", marginBottom:"10px", color: algumRuim ? "var(--err)" : "var(--ok)" }}>
                     {algumRuim ? "⚠ ESTOQUE INSUFICIENTE" : "✓ ESTOQUE OK"}
-                    {temComp && <span style={{ fontWeight:400, color:"var(--t3)", marginLeft:"6px" }}>considerando outros ORC. pendentes</span>}
+                    {temComp && <span style={{ fontWeight:400, color:"var(--t3)", marginLeft:"6px" }}>considerando outros orçamentos pendentes</span>}
                   </div>
                   {/* cabeçalho */}
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 52px 52px 52px", gap:"4px", marginBottom:"6px" }}>
-                    {["Produto","Precisa","ORC.","Real"].map(h => (
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 52px 70px 62px", gap:"4px", marginBottom:"6px" }}>
+                    {["Produto","Precisa","Orçamentos","Real"].map(h => (
                       <div key={h} style={{ fontSize:"8px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px", fontFamily:"'DM Mono',monospace", textAlign: h === "Produto" ? "left" : "right" }}>{h}</div>
                     ))}
                   </div>
                   {linhas.map(l => (
-                    <div key={l.nome} style={{ display:"grid", gridTemplateColumns:"1fr 52px 52px 52px", gap:"4px", alignItems:"center", marginBottom:"5px" }}>
+                    <div key={l.nome} style={{ display:"grid", gridTemplateColumns:"1fr 52px 70px 62px", gap:"4px", alignItems:"center", marginBottom:"5px" }}>
                       <span style={{ fontSize:"11px", color:"var(--t2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }} title={l.nome}>{l.nome}</span>
                       <span style={{ fontSize:"10px", fontFamily:"'DM Mono',monospace", color:"var(--t3)", textAlign:"right" }}>{formatM2(l.nec)}</span>
                       <span style={{ fontSize:"10px", fontFamily:"'DM Mono',monospace", color: l.comp > 0.001 ? "var(--warn)" : "var(--t3)", textAlign:"right" }}>
@@ -676,7 +676,7 @@ function NovoOrcamentoPageInner() {
                       </span>
                       <div style={{ textAlign:"right" }}>
                         {l.real === null
-                          ? <span style={{ fontSize:"10px", color:"var(--t3)" }}>s/dado</span>
+                          ? <span style={{ fontSize:"10px", color:"var(--t3)" }}>sem dado</span>
                           : <span style={{ fontSize:"10px", fontFamily:"'DM Mono',monospace", fontWeight:700, color: l.ok ? "var(--ok)" : "var(--err)" }}>
                               {formatM2(l.real)}{!l.ok ? <span style={{ fontSize:"8px" }}> ⚠</span> : <span style={{ fontSize:"8px" }}> ✓</span>}
                             </span>
@@ -695,7 +695,7 @@ function NovoOrcamentoPageInner() {
             Itens do Orçamento
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>
-                Enter avança · Enter em Qtd cria nova linha
+                Enter avança · Enter em Quantidade cria nova linha
               </span>
               <button tabIndex={-1} className="btn bg sm" onClick={() => setModalImportarPdf(true)}>⇪ Importar PDF</button>
               <button tabIndex={-1} className="btn bg sm" onClick={() => setModalImportar(true)}>⇪ Importar Planilha</button>
@@ -703,8 +703,8 @@ function NovoOrcamentoPageInner() {
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 70px 70px 50px 90px 90px 90px 36px", gap: "6px", padding: "6px 0", borderBottom: "1px solid var(--b1)", marginBottom: "8px" }}>
-            {["Produto","Larg.","Alt.","Qtd","R$/m²","Unit.(R$)","Total(R$)",""].map((h, idx) => (
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 90px 90px 90px 90px 110px 90px 36px", gap: "6px", padding: "6px 0", borderBottom: "1px solid var(--b1)", marginBottom: "8px" }}>
+            {["Produto","Largura","Altura","Quantidade","R$/m²","Unitário (R$)","Total (R$)",""].map((h, idx) => (
               <div key={idx} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>{h}</div>
             ))}
           </div>
@@ -728,7 +728,7 @@ function NovoOrcamentoPageInner() {
 
             return (
               <div key={i} style={{ marginBottom: "10px" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 70px 70px 50px 90px 90px 90px 36px", gap: "6px", alignItems: "center" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 90px 90px 90px 90px 110px 90px 36px", gap: "6px", alignItems: "center" }}>
                   <AutocompleteInput
                     options={produtoOptions}
                     value={item.produto_id}

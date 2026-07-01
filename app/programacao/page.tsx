@@ -129,7 +129,7 @@ const HATCH: Record<NonNullable<TipoDia>, { bg: string }> = {
 function LegendaCores() {
   const blocos = [
     { cor: "#3dffa0", label: "No prazo", borda: false },
-    { cor: "#f59e0b", label: "≤ 2 dias p/ vencer", borda: false },
+    { cor: "#f59e0b", label: "≤ 2 dias para vencer", borda: false },
     { cor: "#f43f5e", label: "Atrasado", borda: false },
     { cor: "#3dffa0", label: "Em execução", borda: true },
     { cor: "#4a4a6a", label: "Concluído", borda: false },
@@ -781,12 +781,12 @@ function ModalBloco({
                     <input
                       type="number" min={1} max={pecasTotal - pecasEntregues}
                       value={qtdRetirada} onChange={e => setQtdRetirada(e.target.value)}
-                      placeholder={`Qtd (máx ${pecasTotal - pecasEntregues})`}
+                      placeholder={`Quantidade (máx ${pecasTotal - pecasEntregues})`}
                       className="fc" style={{ flex: 1, fontSize: 12, padding: "5px 8px" }}
                     />
                     <input
                       value={obsRetirada} onChange={e => setObsRetirada(e.target.value)}
-                      placeholder="Obs (opcional)"
+                      placeholder="Observação (opcional)"
                       className="fc" style={{ flex: 2, fontSize: 12, padding: "5px 8px" }}
                     />
                   </div>

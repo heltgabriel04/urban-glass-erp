@@ -293,7 +293,7 @@ export default function InvestimentosApresentacao() {
                 {permuta.pedidos.length > 0 && (
                   <TableRO
                     cols={[
-                      { h: "#", align: "left" }, { h: "Material", align: "left" }, { h: "Qtd (t)", align: "right" },
+                      { h: "#", align: "left" }, { h: "Material", align: "left" }, { h: "Quantidade (t)", align: "right" },
                       { h: "Valor", align: "right" }, { h: "Movimentado", align: "right" }, { h: "Saldo", align: "right" },
                     ]}
                     rows={permuta.pedidos.map((p, i) => {

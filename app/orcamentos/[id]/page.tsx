@@ -309,7 +309,7 @@ export default function OrcamentoDetalhe() {
                   )}
                   {orc.obs_rejeicao && (
                     <div style={{ fontSize: "12px", color: "var(--t2)" }}>
-                      <span style={{ color: "var(--t3)" }}>Obs: </span>{orc.obs_rejeicao}
+                      <span style={{ color: "var(--t3)" }}>Observação: </span>{orc.obs_rejeicao}
                     </div>
                   )}
                 </div>
@@ -481,7 +481,7 @@ export default function OrcamentoDetalhe() {
                 <thead>
                   <tr>
                     <th>#</th><th>Produto</th><th>Dimensão</th>
-                    <th>m²</th><th>Qtd</th><th>R$/m²</th><th>Subtotal</th>
+                    <th>m²</th><th>Quantidade</th><th>R$/m²</th><th>Subtotal</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -617,7 +617,7 @@ export default function OrcamentoDetalhe() {
           <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "16px", fontSize: "11px" }}>
             <thead>
               <tr style={{ background: "#2d5fa6" }}>
-                {["#","Produto","Dimensão (mm)","Medida","Qtd","Preço/un.","Subtotal"].map((h, i) => (
+                {["#","Produto","Dimensão (mm)","Medida","Quantidade","Preço Unitário","Subtotal"].map((h, i) => (
                   <th key={i} style={{
                     padding: "8px", color: "white", fontWeight: 800, fontSize: "10px",
                     textAlign: i === 0 || i === 4 ? "center" : i >= 5 ? "right" : "left",

@@ -107,11 +107,11 @@ export default function QualidadeDashboardPage() {
           <div style={{ fontSize: 11, color: "var(--t3)", fontFamily: "'DM Mono', monospace", marginTop: 1 }}>
             {resumo.ncsAbertas > 0
               ? `${resumo.ncsAbertas} registros ativos`
-              : "sem pendencias abertas"}
+              : "sem pendências abertas"}
           </div>
         </div>
         <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
-          <Link href="/qualidade/nao-conformidades" className="btn bg sm" style={{ textDecoration: "none" }}>Nao Conformidades</Link>
+          <Link href="/qualidade/nao-conformidades" className="btn bg sm" style={{ textDecoration: "none" }}>Não Conformidades</Link>
           <Link href="/qualidade/quebras"           className="btn bg sm" style={{ textDecoration: "none" }}>Quebras</Link>
           <Link href="/qualidade/retrabalhos"       className="btn bg sm" style={{ textDecoration: "none" }}>Retrabalhos</Link>
         </div>
@@ -129,18 +129,18 @@ export default function QualidadeDashboardPage() {
                 {resumo.ncsAbertas}
               </div>
               <div className={`kpi-s ${resumo.ncsAbertas > 0 ? "wa" : ""}`}>
-                {resumo.ncsAbertas > 0 ? "requerem atencao" : "todos resolvidos"}
+                {resumo.ncsAbertas > 0 ? "requerem atenção" : "todos resolvidos"}
               </div>
               <div className="kpi-bar" style={{ background: resumo.ncsAbertas > 0 ? "var(--warn)" : "var(--ok)", width: resumo.ncsAbertas > 0 ? "60%" : "5%" }} />
             </div>
 
             <div className="kpi">
-              <div className="kpi-l">NCs Criticas</div>
+              <div className="kpi-l">NCs Críticas</div>
               <div className="kpi-v" style={{ color: resumo.ncsCriticas > 0 ? "var(--err)" : "var(--ok)" }}>
                 {resumo.ncsCriticas}
               </div>
               <div className={`kpi-s ${resumo.ncsCriticas > 0 ? "dn" : ""}`}>
-                {resumo.ncsCriticas > 0 ? "acao imediata" : "nenhuma critica"}
+                {resumo.ncsCriticas > 0 ? "ação imediata" : "nenhuma crítica"}
               </div>
               <div className="kpi-bar" style={{ background: resumo.ncsCriticas > 0 ? "var(--err)" : "var(--ok)", width: resumo.ncsCriticas > 0 ? "80%" : "5%" }} />
             </div>
@@ -183,10 +183,10 @@ export default function QualidadeDashboardPage() {
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--err)", flexShrink: 0, boxShadow: "0 0 8px var(--err)" }} />
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "var(--err)" }}>
-                    {resumo.ncsCriticas} nao conformidade{resumo.ncsCriticas > 1 ? "s" : ""} critica{resumo.ncsCriticas > 1 ? "s" : ""} em aberto
+                    {resumo.ncsCriticas} não conformidade{resumo.ncsCriticas > 1 ? "s" : ""} crítica{resumo.ncsCriticas > 1 ? "s" : ""} em aberto
                   </div>
                   <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 1 }}>
-                    requerem acao imediata para nao comprometer a entrega
+                    requerem ação imediata para não comprometer a entrega
                   </div>
                 </div>
               </div>

@@ -279,15 +279,15 @@ function NovaNFeInner() {
                       <div className="fg"><label className="fl">NCM</label><input className="fc" value={item.ncm} onChange={e => atualizarItem(i,"ncm",e.target.value)} maxLength={8} /></div>
                       <div className="fg"><label className="fl">CFOP</label><input className="fc" value={item.cfop} onChange={e => atualizarItem(i,"cfop",e.target.value)} maxLength={5} /></div>
                       <div className="fg"><label className="fl">Unidade</label><input className="fc" value={item.unidade} onChange={e => atualizarItem(i,"unidade",e.target.value)} maxLength={6} /></div>
-                      <div className="fg"><label className="fl">Qtd (m²)</label><input className="fc" type="number" value={item.quantidade} onChange={e => atualizarItem(i,"quantidade",Number(e.target.value))} /></div>
-                      <div className="fg"><label className="fl">Vl. Unit.</label><CurrencyInput value={item.valor_unitario} onChange={v => atualizarItem(i,"valor_unitario",v)} /></div>
-                      <div className="fg"><label className="fl">Vl. Bruto</label><CurrencyInput value={item.valor_bruto} onChange={v => atualizarItem(i,"valor_bruto",v)} /></div>
+                      <div className="fg"><label className="fl">Quantidade (m²)</label><input className="fc" type="number" value={item.quantidade} onChange={e => atualizarItem(i,"quantidade",Number(e.target.value))} /></div>
+                      <div className="fg"><label className="fl">Valor Unitário</label><CurrencyInput value={item.valor_unitario} onChange={v => atualizarItem(i,"valor_unitario",v)} /></div>
+                      <div className="fg"><label className="fl">Valor Bruto</label><CurrencyInput value={item.valor_bruto} onChange={v => atualizarItem(i,"valor_bruto",v)} /></div>
                       <div className="fg"><label className="fl">IPI %</label><input className="fc" type="number" min="0" max="100" step="0.5" value={item.ipi_pct} onChange={e => atualizarItem(i,"ipi_pct",Number(e.target.value))} /></div>
                       <div className="fg"><label className="fl">ICMS %</label><input className="fc" value={item.icms_pct} readOnly style={{ opacity:0.6 }} /></div>
-                      <div className="fg"><label className="fl">Vl. ICMS</label><input className="fc" value={formatBRL(item.valor_icms)} readOnly style={{ opacity:0.6 }} /></div>
-                      <div className="fg"><label className="fl">Vl. PIS</label><input className="fc" value={formatBRL(item.valor_pis)} readOnly style={{ opacity:0.6 }} /></div>
-                      <div className="fg"><label className="fl">Vl. COFINS</label><input className="fc" value={formatBRL(item.valor_cofins)} readOnly style={{ opacity:0.6 }} /></div>
-                      <div className="fg"><label className="fl">Vl. Total</label><input className="fc" value={formatBRL(item.valor_bruto + item.valor_ipi)} readOnly style={{ color:"var(--acc)", fontWeight:700 }} /></div>
+                      <div className="fg"><label className="fl">Valor ICMS</label><input className="fc" value={formatBRL(item.valor_icms)} readOnly style={{ opacity:0.6 }} /></div>
+                      <div className="fg"><label className="fl">Valor PIS</label><input className="fc" value={formatBRL(item.valor_pis)} readOnly style={{ opacity:0.6 }} /></div>
+                      <div className="fg"><label className="fl">Valor COFINS</label><input className="fc" value={formatBRL(item.valor_cofins)} readOnly style={{ opacity:0.6 }} /></div>
+                      <div className="fg"><label className="fl">Valor Total</label><input className="fc" value={formatBRL(item.valor_bruto + item.valor_ipi)} readOnly style={{ color:"var(--acc)", fontWeight:700 }} /></div>
                     </div>
                   </div>
                 ))}
@@ -315,7 +315,7 @@ function NovaNFeInner() {
               ))}
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"12px" }}>
-              {([["valor_desconto","Desconto (R$)"],["valor_frete","Valor Frete"],["valor_seguro","Valor Seguro"],["valor_outros","Outras Desp."]] as const).map(([k,l]) => (
+              {([["valor_desconto","Desconto (R$)"],["valor_frete","Valor Frete"],["valor_seguro","Valor Seguro"],["valor_outros","Outras Despesas"]] as const).map(([k,l]) => (
                 <div key={k} className="fg">
                   <label className="fl">{l}</label>
                   <CurrencyInput value={form[k]} onChange={v => setF(k, v)} />

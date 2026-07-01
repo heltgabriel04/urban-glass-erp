@@ -78,10 +78,10 @@ export default function ImportarRetalhosModal({ onImportar, onClose, importando 
                   <tr style={{ background: "var(--surf2)" }}>
                     <th style={{ padding: "6px 8px", textAlign: "left", color: "var(--t3)", fontWeight: 600 }}>Produto</th>
                     <th style={{ padding: "6px 8px", textAlign: "right", color: "var(--t3)", fontWeight: 600 }}>L × A</th>
-                    <th style={{ padding: "6px 8px", textAlign: "right", color: "var(--t3)", fontWeight: 600 }}>Esp.</th>
-                    <th style={{ padding: "6px 8px", textAlign: "center", color: "var(--t3)", fontWeight: 600 }}>Qtd</th>
+                    <th style={{ padding: "6px 8px", textAlign: "right", color: "var(--t3)", fontWeight: 600 }}>Espessura</th>
+                    <th style={{ padding: "6px 8px", textAlign: "center", color: "var(--t3)", fontWeight: 600 }}>Quantidade</th>
                     <th style={{ padding: "6px 8px", textAlign: "left", color: "var(--t3)", fontWeight: 600 }}>Box</th>
-                    <th style={{ padding: "6px 8px", textAlign: "left", color: "var(--t3)", fontWeight: 600 }}>Obs/Cliente</th>
+                    <th style={{ padding: "6px 8px", textAlign: "left", color: "var(--t3)", fontWeight: 600 }}>Observação / Cliente</th>
                   </tr>
                 </thead>
                 <tbody>

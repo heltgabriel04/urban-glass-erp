@@ -480,8 +480,8 @@ export default function EditarPedidoPage() {
   const toggleBase:   React.CSSProperties = { padding:"5px 14px", borderRadius:"6px", fontSize:"12px", fontWeight:600, cursor:"pointer", border:"1px solid var(--b2)", transition:"all 0.15s", fontFamily:"'DM Mono',monospace" };
   const toggleAtivo:  React.CSSProperties = { ...toggleBase, background:"var(--acc)", color:"#000", borderColor:"var(--acc)" };
   const toggleInativo:React.CSSProperties = { ...toggleBase, background:"transparent", color:"var(--t3)" };
-  const colsM2 = "2fr 70px 70px 50px 90px 90px 90px 36px 100px";
-  const colsMl = "2fr 90px 90px 50px 90px 90px 36px 100px";
+  const colsM2 = "2fr 90px 90px 90px 90px 110px 90px 36px 100px";
+  const colsMl = "2fr 100px 100px 90px 90px 90px 36px 100px";
 
   const clienteOpts = clientes.map(c => ({ id: c.id, label: c.nome, sub: c.cidade ?? undefined }));
   const produtoOpts = produtos.map(p => ({ id: p.id, label: p.nome, sub: formatBRL(p.valor) + "/m²" }));
@@ -636,14 +636,14 @@ export default function EditarPedidoPage() {
 
           {isMl && (
             <div style={{ marginBottom:"10px", padding:"8px 12px", background:"rgba(99,102,241,.1)", borderRadius:"6px", border:"1px solid rgba(99,102,241,.3)", fontSize:"12px", color:"#818cf8", fontFamily:"'DM Mono',monospace" }}>
-              Metro Linear · fórmula: (Larg_m × ☑ + Alt_m × ☑) × Qtd × R$/ml
+              Metro Linear · fórmula: (Largura_m × ☑ + Altura_m × ☑) × Quantidade × R$/ml
             </div>
           )}
 
           <div style={{ display:"grid", gridTemplateColumns: isMl ? colsMl : colsM2, gap:"6px", padding:"6px 0", borderBottom:"1px solid var(--b1)", marginBottom:"8px", alignItems:"center" }}>
             {(isMl
-              ? ["Produto","Larg. (mm)","Alt. (mm)","Qtd","R$/ml","Total(R$)",""]
-              : ["Produto","Larg.","Alt.","Qtd","R$/m²","Unit.(R$)","Total(R$)",""]
+              ? ["Produto","Largura (mm)","Altura (mm)","Quantidade","R$/ml","Total (R$)",""]
+              : ["Produto","Largura","Altura","Quantidade","R$/m²","Unitário (R$)","Total (R$)",""]
             ).map((h, i) => (
               <div key={i} style={{ fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px", fontFamily:"'DM Mono',monospace" }}>{h}</div>
             ))}

@@ -548,7 +548,7 @@ function SecaoCard({
               <input
                 value={item.obs}
                 onChange={(e) => setItem(item.id, "obs", e.target.value)}
-                placeholder="Obs..."
+                placeholder="Observação..."
                 disabled={disabled}
                 style={{ ...fc, padding: "11px 12px", height: 46 }}
               />

@@ -264,8 +264,8 @@ export default function RetiradasPedidoPage() {
                   </div>
                 ) : (
                 <div className="tw">
-                <div style={{ display: "grid", gridTemplateColumns: "32px 2.2fr 110px 90px 110px 2fr", gap: 10, padding: "10px 14px", background: "var(--surf2)", borderBottom: "1px solid var(--b1)" }}>
-                  {["", "Produto / Código", "Dimensão (mm)", "Pendente", "Qtd a retirar", "Obs. da peça"].map((h, i) => (
+                <div style={{ display: "grid", gridTemplateColumns: "32px 2.2fr 110px 90px 150px 2fr", gap: 10, padding: "10px 14px", background: "var(--surf2)", borderBottom: "1px solid var(--b1)" }}>
+                  {["", "Produto / Código", "Dimensão (mm)", "Pendente", "Quantidade a retirar", "Observação da peça"].map((h, i) => (
                     <div key={i} style={{ fontSize: 9.5, color: "var(--t3)", textTransform: "uppercase", letterSpacing: 1.2, fontFamily: "'DM Mono', monospace" }}>{h}</div>
                   ))}
                 </div>
@@ -276,7 +276,7 @@ export default function RetiradasPedidoPage() {
                     <div
                       key={s.item_pedido_id}
                       style={{
-                        display: "grid", gridTemplateColumns: "32px 2.2fr 110px 90px 110px 2fr", gap: 10,
+                        display: "grid", gridTemplateColumns: "32px 2.2fr 110px 90px 150px 2fr", gap: 10,
                         padding: "10px 14px", borderBottom: "1px solid var(--b1)", alignItems: "center",
                         opacity: disponivel ? 1 : 0.5,
                       }}
@@ -363,7 +363,7 @@ export default function RetiradasPedidoPage() {
                               <tr>
                                 <th>Produto</th>
                                 <th>Dimensão (mm)</th>
-                                <th>Qtd</th>
+                                <th>Quantidade</th>
                                 <th>Observação</th>
                               </tr>
                             </thead>
@@ -380,7 +380,7 @@ export default function RetiradasPedidoPage() {
                           </table>
                           {r.obs && (
                             <div style={{ padding: "10px 14px", fontSize: 12, color: "var(--t2)", borderTop: "1px solid var(--b1)" }}>
-                              <strong style={{ color: "var(--t1)" }}>Obs. da viagem:</strong> {r.obs}
+                              <strong style={{ color: "var(--t1)" }}>Observação da viagem:</strong> {r.obs}
                             </div>
                           )}
                         </div>
@@ -437,7 +437,7 @@ export default function RetiradasPedidoPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "16px", fontSize: "11px" }}>
               <thead>
                 <tr style={{ background: "#2d5fa6" }}>
-                  {["#", "Produto", "Dimensão (mm)", "Medida", "Qtd", "Observação"].map((h, i) => (
+                  {["#", "Produto", "Dimensão (mm)", "Medida", "Quantidade", "Observação"].map((h, i) => (
                     <th key={i} style={{ padding: "8px", color: "white", fontWeight: 700, fontSize: "9px", textAlign: i === 0 || i === 4 ? "center" : "left", letterSpacing: "0.5px" }}>{h}</th>
                   ))}
                 </tr>

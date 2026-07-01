@@ -242,7 +242,7 @@ export default function ComprasPage() {
                 <DateInput style={inputStyle} className="" value={form.dt_compra} onChange={v => setForm(f => ({ ...f, dt_compra: v }))} />
               </div>
               <div>
-                <label style={labelStyle}>Condição Pgto</label>
+                <label style={labelStyle}>Condição de Pagamento</label>
                 <input style={inputStyle} value={form.condicao_pgto} onChange={e => setForm(f => ({ ...f, condicao_pgto: e.target.value }))} placeholder="30/60/90" />
               </div>
             </div>
@@ -395,7 +395,7 @@ export default function ComprasPage() {
                               </tbody>
                             </table>
                           )}
-                          {c.obs && <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--t3)" }}>Obs: {c.obs}</div>}
+                          {c.obs && <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--t3)" }}>Observação: {c.obs}</div>}
                         </td>
                       </tr>
                     )}
