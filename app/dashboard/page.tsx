@@ -299,7 +299,7 @@ export default function DashboardPage() {
                     clique no mes para filtrar
                   </span>
                 </div>
-                <div style={{ height: 148, display: "flex", alignItems: "flex-end", gap: 5 }}>
+                <div style={{ height: 148, display: "flex", alignItems: "stretch", gap: 5 }}>
                   {barras.map((b, i) => {
                     const sel   = mesSel === b.mesNum;
                     const atual = b.mesNum === mesAtual;
