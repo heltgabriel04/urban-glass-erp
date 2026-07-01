@@ -120,6 +120,19 @@ export function calcularTempoEstimado(
   };
 }
 
+// Soma a duração de Corte item a item — cada item paga seu próprio setup,
+// que é como criarProgramacaoPedido() realmente grava os blocos no banco
+// (um insert por item). Usar calcularTempoEstimado(itens, config) direto
+// (setup cobrado uma única vez pro pedido inteiro) sub-estima a duração real
+// pra pedidos com mais de um item — usado no motor de recálculo pra a prévia
+// não divergir do que fica gravado depois de aplicar.
+export function duracaoTotalCorte(
+  itens: Pick<ItemPedido, 'm2' | 'quantidade' | 'lapidacao' | 'produto_nome'>[],
+  config: ConfigTempoProducao[],
+): number {
+  return itens.reduce((soma, item) => soma + calcularTempoEstimado([item], config).corte_min, 0);
+}
+
 // ─── PRIORIZAÇÃO (APS) ──────────────────────────────────────
 // Fase 1 do motor de agendamento: calcula um score de prioridade por pedido
 // pendente, combinando prazo de entrega + trabalho restante (folga real,
@@ -133,20 +146,20 @@ export interface PrioridadeInfo {
   emRisco: boolean;            // no prazo, mas com folga menor que 1 dia útil de produção
 }
 
-export function calcularPrioridadePedido(
-  pedido: { dt_retirada: string | null },
-  itens: Pick<ItemPedido, 'm2' | 'quantidade' | 'lapidacao' | 'produto_nome'>[],
-  config: ConfigTempoProducao[],
+// Núcleo do cálculo de prioridade — separado de calcularPrioridadePedido pra
+// poder ser reaproveitado direto com uma duração já conhecida (ex.: um bloco
+// já agendado no motor de recálculo, Fase 3), sem precisar forjar uma lista
+// de itens só pra chegar num número de minutos.
+export function scoreDePrioridade(
+  dtRetirada: string | null,
+  horasTrabalhoRestante: number,
   agora: Date = new Date(),
 ): PrioridadeInfo {
-  const tempos = calcularTempoEstimado(itens, config);
-  const horasTrabalhoRestante = tempos.total_min / 60;
-
-  if (!pedido.dt_retirada) {
+  if (!dtRetirada) {
     return { score: 0, folgaHoras: Infinity, diasParaPrazo: null, atrasado: false, emRisco: false };
   }
 
-  const prazo = new Date(pedido.dt_retirada);
+  const prazo = new Date(dtRetirada);
   const horasAtePrazo = (prazo.getTime() - agora.getTime()) / 3_600_000;
   const folgaHoras = horasAtePrazo - horasTrabalhoRestante;
   const atrasado = folgaHoras < 0;
@@ -160,6 +173,16 @@ export function calcularPrioridadePedido(
     : Math.max(0, 1_000 - folgaHoras);
 
   return { score, folgaHoras, diasParaPrazo: diffDays(prazo, agora), atrasado, emRisco };
+}
+
+export function calcularPrioridadePedido(
+  pedido: { dt_retirada: string | null },
+  itens: Pick<ItemPedido, 'm2' | 'quantidade' | 'lapidacao' | 'produto_nome'>[],
+  config: ConfigTempoProducao[],
+  agora: Date = new Date(),
+): PrioridadeInfo {
+  const tempos = calcularTempoEstimado(itens, config);
+  return scoreDePrioridade(pedido.dt_retirada, tempos.total_min / 60, agora);
 }
 
 // Produto de maior m² dentro do pedido — usado como "assinatura" para o bônus
@@ -606,6 +629,263 @@ export async function reagendar(
   });
 
   return true;
+}
+
+// ─── RECÁLCULO AUTOMÁTICO (APS · Fase 3) ────────────────────
+// Reflow de blocos de Corte ainda não travados/iniciados + fila de pedidos
+// pendentes, tudo replanejado do zero em ordem de prioridade — sempre como
+// uma PROPOSTA (gerarPropostaRecalculo, síncrona, sem tocar no banco) que o
+// usuário revisa antes de aplicar (aplicarPropostaRecalculo). Blocos com
+// status 'Em Execução'/'Concluído' e blocos travados (reposicionados
+// manualmente) nunca entram na lista de "móveis" — quem decide isso é quem
+// chama esta função (ver app/programacao/page.tsx), que os passa como
+// blocosFixos (obstáculos que o reflow precisa desviar).
+
+export interface BlocoMovivel {
+  progId: string;
+  pedidoId: string;
+  linhaId: number;
+  dtInicioPrevisto: string; // ISO
+  duracaoMin: number;
+  dtRetirada: string | null;
+}
+
+export interface BlocoFixo {
+  linhaId: number;
+  inicio: Date;
+  fim: Date;
+}
+
+export interface PedidoPendenteRecalculo {
+  pedidoId: string;
+  dtRetirada: string | null;
+  itens: Pick<ItemPedido, 'id' | 'm2' | 'quantidade' | 'lapidacao' | 'produto_nome'>[];
+}
+
+export interface MudancaProposta {
+  tipo: 'mover' | 'inserir';
+  pedidoId: string;
+  progId?: string;
+  linhaAntiga?: number;
+  inicioAntigo?: Date;
+  linhaNova: number;
+  inicioNovo: Date;
+  fimNovo: Date;
+  duracaoMin: number;
+  dtRetirada: string | null;
+  temLapidacao?: boolean; // 'inserir' cujos itens precisam de Lapidação — não agendada automaticamente aqui
+  itens?: Pick<ItemPedido, 'id' | 'm2' | 'quantidade' | 'lapidacao' | 'produto_nome'>[];
+}
+
+export interface PropostaRecalculo {
+  mudancas: MudancaProposta[];
+  resumo: {
+    atrasadosAntes: number;
+    atrasadosDepois: number;
+    blocosMovidos: number;
+    blocosNovos: number;
+    novosComLapidacaoPendente: number;
+  };
+}
+
+// Como alocarBloco, mas desviando de intervalos já ocupados na linha (blocos
+// fixos + blocos já posicionados nesta mesma rodada de recálculo) — sem
+// isso, o reflow poderia propor um horário que colide com algo imóvel.
+export function alocarBlocoEvitandoOcupados(
+  cursorInicial: Date,
+  duracaoMin: number,
+  linha: Pick<ProducaoLinha, 'inicio_dia' | 'fim_dia'>,
+  bloqueados: Set<string>,
+  ocupados: Array<{ inicio: Date; fim: Date }>,
+): { inicio: Date; fim: Date } {
+  let cursor = cursorInicial;
+  for (let tentativa = 0; tentativa < 200; tentativa++) {
+    const { inicio, fim } = alocarBloco(cursor, duracaoMin, linha, bloqueados);
+    const conflito = ocupados.find(o => inicio < o.fim && fim > o.inicio);
+    if (!conflito) return { inicio, fim };
+    cursor = conflito.fim;
+  }
+  // válvula de segurança — não deveria ser alcançada na prática (exigiria
+  // 200+ blocos ocupados fragmentados na mesma linha dentro do horizonte).
+  // Não há garantia de que o resultado abaixo não colide com algo em
+  // `ocupados`; loga pra não falhar em silêncio total caso aconteça.
+  console.warn('[APS] alocarBlocoEvitandoOcupados: excedeu 200 tentativas, resultado pode colidir com um bloco ocupado.');
+  return alocarBloco(cursor, duracaoMin, linha, bloqueados);
+}
+
+export function gerarPropostaRecalculo(
+  blocosMoviveis: BlocoMovivel[],
+  blocosFixos: BlocoFixo[],
+  pendentes: PedidoPendenteRecalculo[],
+  linhasCorte: ProducaoLinha[],
+  config: ConfigTempoProducao[],
+  bloqueadosPorLinha: Record<number, Set<string>>,
+  agora: Date = new Date(),
+): PropostaRecalculo {
+  type Tarefa = {
+    pedidoId: string;
+    dtRetirada: string | null;
+    duracaoMin: number;
+    score: number;
+    origem: BlocoMovivel | null; // null = pedido novo (ainda sem programação)
+    itensNovo?: Pick<ItemPedido, 'id' | 'm2' | 'quantidade' | 'lapidacao' | 'produto_nome'>[];
+    temLapidacao?: boolean;
+  };
+
+  const tarefas: Tarefa[] = [
+    ...blocosMoviveis.map((b): Tarefa => ({
+      pedidoId: b.pedidoId, dtRetirada: b.dtRetirada, duracaoMin: b.duracaoMin,
+      score: scoreDePrioridade(b.dtRetirada, b.duracaoMin / 60, agora).score,
+      origem: b,
+    })),
+    ...pendentes.map((p): Tarefa => {
+      // Soma item a item (mesma conta que criarProgramacaoPedido usa pra
+      // gravar de verdade) — não a estimativa combinada de um pedido só,
+      // que sub-estima o setup pra pedidos com vários itens.
+      const duracaoMin = duracaoTotalCorte(p.itens, config);
+      return {
+        pedidoId: p.pedidoId, dtRetirada: p.dtRetirada, duracaoMin,
+        score: scoreDePrioridade(p.dtRetirada, duracaoMin / 60, agora).score,
+        origem: null, itensNovo: p.itens,
+        temLapidacao: p.itens.some(i => i.lapidacao > 0),
+      };
+    }),
+  ].sort((a, b) => b.score - a.score);
+
+  const atrasadosAntes = tarefas.filter(t => {
+    if (!t.dtRetirada) return false;
+    const fimAtual = t.origem
+      ? new Date(new Date(t.origem.dtInicioPrevisto).getTime() + t.duracaoMin * 60_000)
+      : null;
+    if (!fimAtual) return scoreDePrioridade(t.dtRetirada, t.duracaoMin / 60, agora).atrasado;
+    return fimAtual > new Date(t.dtRetirada);
+  }).length;
+
+  const cursorPorLinha: Record<number, Date> = {};
+  const ocupadosPorLinha: Record<number, Array<{ inicio: Date; fim: Date }>> = {};
+  for (const l of linhasCorte) {
+    cursorPorLinha[l.id] = agora;
+    ocupadosPorLinha[l.id] = blocosFixos.filter(f => f.linhaId === l.id).map(f => ({ inicio: f.inicio, fim: f.fim }));
+  }
+
+  const pendentesOrdenados = [...tarefas];
+  const mudancasTodas: MudancaProposta[] = [];
+
+  while (pendentesOrdenados.length > 0) {
+    const linha = linhasCorte.reduce((best, l) =>
+      cursorPorLinha[l.id].getTime() < cursorPorLinha[best.id].getTime() ? l : best
+    );
+    const minutosLivres = minutosRestantesNoDia(cursorPorLinha[linha.id], linha);
+    const idx = proximaTarefaParaEncaixe(pendentesOrdenados, minutosLivres, t => t.duracaoMin);
+    const tarefa = pendentesOrdenados[idx];
+
+    const { inicio, fim } = alocarBlocoEvitandoOcupados(
+      cursorPorLinha[linha.id], tarefa.duracaoMin, linha,
+      bloqueadosPorLinha[linha.id] ?? new Set(),
+      ocupadosPorLinha[linha.id] ?? [],
+    );
+
+    if (tarefa.origem) {
+      mudancasTodas.push({
+        tipo: 'mover', pedidoId: tarefa.pedidoId, progId: tarefa.origem.progId,
+        linhaAntiga: tarefa.origem.linhaId, inicioAntigo: new Date(tarefa.origem.dtInicioPrevisto),
+        linhaNova: linha.id, inicioNovo: inicio, fimNovo: fim, duracaoMin: tarefa.duracaoMin,
+        dtRetirada: tarefa.dtRetirada,
+      });
+    } else {
+      mudancasTodas.push({
+        tipo: 'inserir', pedidoId: tarefa.pedidoId,
+        linhaNova: linha.id, inicioNovo: inicio, fimNovo: fim, duracaoMin: tarefa.duracaoMin,
+        dtRetirada: tarefa.dtRetirada, temLapidacao: tarefa.temLapidacao,
+        itens: tarefa.itensNovo,
+      });
+    }
+
+    ocupadosPorLinha[linha.id].push({ inicio, fim });
+    cursorPorLinha[linha.id] = fim;
+    pendentesOrdenados.splice(idx, 1);
+  }
+
+  const atrasadosDepois = mudancasTodas.filter(m => m.dtRetirada && m.fimNovo > new Date(m.dtRetirada)).length;
+
+  // Só reporta mudanças reais — ignora "mover" pro mesmo lugar/linha
+  const mudancas = mudancasTodas.filter(m =>
+    m.tipo === 'inserir' ||
+    m.linhaNova !== m.linhaAntiga ||
+    Math.abs(m.inicioNovo.getTime() - (m.inicioAntigo?.getTime() ?? 0)) > 60_000
+  );
+
+  return {
+    mudancas,
+    resumo: {
+      atrasadosAntes,
+      atrasadosDepois,
+      blocosMovidos: mudancas.filter(m => m.tipo === 'mover').length,
+      blocosNovos: mudancas.filter(m => m.tipo === 'inserir').length,
+      novosComLapidacaoPendente: mudancas.filter(m => m.tipo === 'inserir' && m.temLapidacao).length,
+    },
+  };
+}
+
+export async function aplicarPropostaRecalculo(
+  proposta: PropostaRecalculo,
+  config: ConfigTempoProducao[],
+  linhas: ProducaoLinha[],
+  bloqueadosPorLinha: Record<number, Set<string>> = {},
+): Promise<{ ok: boolean; erro?: string; ignorados?: number }> {
+  // A prévia foi calculada a partir de um snapshot (no clique em "Recalcular
+  // Agenda"); entre isso e o clique em "Aplicar" o usuário pode ter revisado
+  // por um tempo. Revalida o estado atual de cada bloco que seria movido —
+  // se o chão de fábrica já iniciou, ou alguém travou/reagendou manualmente
+  // nesse meio-tempo, esse bloco é pulado em vez de sobrescrito às cegas.
+  const progIdsMover = proposta.mudancas
+    .filter((m): m is MudancaProposta & { progId: string } => m.tipo === 'mover' && !!m.progId)
+    .map(m => m.progId);
+
+  const statusAtual = new Map<string, { status: string; travado: boolean }>();
+  if (progIdsMover.length > 0) {
+    const { data } = await supabase
+      .from('programacao_producao')
+      .select('id, status, travado')
+      .in('id', progIdsMover);
+    for (const row of (data ?? []) as Array<{ id: string; status: string; travado: boolean | null }>) {
+      statusAtual.set(row.id, { status: row.status, travado: !!row.travado });
+    }
+  }
+
+  let ignorados = 0;
+
+  for (const m of proposta.mudancas) {
+    if (m.tipo === 'mover' && m.progId) {
+      const atual = statusAtual.get(m.progId);
+      if (!atual || atual.status !== 'Agendado' || atual.travado) { ignorados++; continue; }
+      const ok = await reagendar(m.progId, m.inicioNovo, m.duracaoMin, m.linhaNova, 'Recálculo automático (APS)', false);
+      if (!ok) return { ok: false, erro: `Falha ao mover o bloco do pedido ${m.pedidoId}.` };
+    } else if (m.tipo === 'inserir' && m.itens) {
+      const result = await criarProgramacaoPedido(
+        m.pedidoId, m.itens, config, linhas, m.inicioNovo, m.linhaNova, undefined,
+        bloqueadosPorLinha[m.linhaNova] ?? new Set(),
+      );
+      if (!result.ok) return { ok: false, erro: `Falha ao agendar ${m.pedidoId}: ${result.erro ?? ''}` };
+    }
+  }
+
+  const usuario = await getUsuario();
+  await supabase.from('programacao_historico').insert({
+    pedido_id: null,
+    tipo_alteracao: 'recalculo_automatico',
+    dados_anteriores: { atrasados: proposta.resumo.atrasadosAntes } as unknown as Record<string, unknown>,
+    dados_novos: {
+      blocos_movidos: proposta.resumo.blocosMovidos - ignorados,
+      blocos_novos: proposta.resumo.blocosNovos,
+      atrasados: proposta.resumo.atrasadosDepois,
+      ignorados,
+    } as unknown as Record<string, unknown>,
+    motivo: `Recálculo automático da agenda — ${proposta.resumo.blocosMovidos} movido(s), ${proposta.resumo.blocosNovos} novo(s), atrasados ${proposta.resumo.atrasadosAntes} → ${proposta.resumo.atrasadosDepois}${ignorados > 0 ? `, ${ignorados} ignorado(s) por mudança de estado` : ''}`,
+    usuario,
+  });
+
+  return { ok: true, ignorados };
 }
 
 // Mapeamento: (etapa, novoStatusProg) → novo status do pedido

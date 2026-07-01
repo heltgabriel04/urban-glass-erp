@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   alocarBloco, construirDiasBloqueadosPorLinha, minutosRestantesNoDia,
   proximaTarefaParaEncaixe, calcularPrioridadePedido, produtoPrincipal,
+  alocarBlocoEvitandoOcupados, gerarPropostaRecalculo,
+  duracaoTotalCorte, calcularTempoEstimado,
 } from "@/services/programacao.service";
 import type { ProducaoLinha, ConfigTempoProducao } from "@/types";
 
@@ -149,5 +151,131 @@ describe("produtoPrincipal", () => {
       { produto_nome: "A", m2: 2 },
     ];
     expect(produtoPrincipal(itens)).toBe("B"); // B: 5 > A: 1+2=3
+  });
+});
+
+describe("alocarBlocoEvitandoOcupados", () => {
+  it("comporta-se como alocarBloco quando não há ocupados", () => {
+    const cursor = segundaAs(8, 0);
+    const { inicio, fim } = alocarBlocoEvitandoOcupados(cursor, 45, linha, new Set(), []);
+    expect(inicio.getTime()).toBe(cursor.getTime());
+    expect(fim.getTime() - inicio.getTime()).toBe(45 * 60_000);
+  });
+
+  it("desvia de um obstáculo ocupando o início do cursor", () => {
+    const cursor = segundaAs(8, 0);
+    const obstaculo = { inicio: segundaAs(8, 0), fim: segundaAs(10, 0) };
+    const { inicio } = alocarBlocoEvitandoOcupados(cursor, 30, linha, new Set(), [obstaculo]);
+    expect(inicio.getTime()).toBe(obstaculo.fim.getTime());
+  });
+});
+
+const linhaCorte: ProducaoLinha = {
+  id: 1, nome: "Linha 1 – Corte", tipo: "Corte",
+  inicio_dia: "08:00:00", fim_dia: "17:00:00",
+  capacidade_horas_dia: 9, cor: "#3dffa0", ativo: true, created_at: "",
+};
+
+describe("gerarPropostaRecalculo", () => {
+  it("sem blocos móveis, fixos ou pendentes, não propõe nada", () => {
+    const proposta = gerarPropostaRecalculo([], [], [], [linhaCorte], config, {}, segundaAs(8, 0));
+    expect(proposta.mudancas).toHaveLength(0);
+    expect(proposta.resumo.blocosMovidos).toBe(0);
+    expect(proposta.resumo.blocosNovos).toBe(0);
+  });
+
+  it("insere um pedido pendente a partir de agora quando a linha está livre", () => {
+    const agora = segundaAs(8, 0);
+    const pendentes = [{
+      pedidoId: "P-B", dtRetirada: new Date(agora.getTime() + 5 * 86_400_000).toISOString(),
+      itens: [{ id: 1, m2: 1, quantidade: 1, lapidacao: 0, produto_nome: "Comum" }],
+    }];
+    const proposta = gerarPropostaRecalculo([], [], pendentes, [linhaCorte], config, {}, agora);
+    expect(proposta.mudancas).toHaveLength(1);
+    expect(proposta.mudancas[0].tipo).toBe("inserir");
+    expect(proposta.mudancas[0].inicioNovo.getTime()).toBe(agora.getTime());
+    expect(proposta.resumo.blocosNovos).toBe(1);
+  });
+
+  it("prioriza um pendente urgente sobre um bloco existente de baixa prioridade, remanejando o antigo", () => {
+    const agora = segundaAs(8, 0);
+
+    const blocosMoviveis = [{
+      progId: "prog-A", pedidoId: "P-A", linhaId: 1,
+      dtInicioPrevisto: agora.toISOString(), duracaoMin: 60,
+      dtRetirada: new Date(agora.getTime() + 30 * 86_400_000).toISOString(), // prazo bem folgado
+    }];
+    const pendentes = [{
+      pedidoId: "P-B", dtRetirada: new Date(agora.getTime() + 2 * 3_600_000).toISOString(), // só 2h de prazo
+      itens: [{ id: 2, m2: 1, quantidade: 1, lapidacao: 0, produto_nome: "Comum" }], // ~13min de corte
+    }];
+
+    const proposta = gerarPropostaRecalculo(blocosMoviveis, [], pendentes, [linhaCorte], config, {}, agora);
+
+    expect(proposta.mudancas).toHaveLength(2);
+    const inserir = proposta.mudancas.find(m => m.tipo === "inserir")!;
+    const mover   = proposta.mudancas.find(m => m.tipo === "mover")!;
+
+    expect(inserir.pedidoId).toBe("P-B");
+    expect(inserir.inicioNovo.getTime()).toBe(agora.getTime()); // o mais urgente entra primeiro
+
+    expect(mover.pedidoId).toBe("P-A");
+    expect(mover.progId).toBe("prog-A");
+    expect(mover.inicioNovo.getTime()).toBe(inserir.fimNovo.getTime()); // empurrado pra depois do P-B
+
+    expect(proposta.resumo.blocosNovos).toBe(1);
+    expect(proposta.resumo.blocosMovidos).toBe(1);
+  });
+
+  it("respeita um bloco fixo (travado/em execução) — nunca sobrepõe", () => {
+    const agora = segundaAs(8, 0);
+    const blocosFixos = [{ linhaId: 1, inicio: agora, fim: new Date(agora.getTime() + 2 * 3_600_000) }];
+    const pendentes = [{
+      pedidoId: "P-C", dtRetirada: new Date(agora.getTime() + 5 * 86_400_000).toISOString(),
+      itens: [{ id: 3, m2: 1, quantidade: 1, lapidacao: 0, produto_nome: "Comum" }],
+    }];
+
+    const proposta = gerarPropostaRecalculo([], blocosFixos, pendentes, [linhaCorte], config, {}, agora);
+
+    expect(proposta.mudancas).toHaveLength(1);
+    expect(proposta.mudancas[0].inicioNovo.getTime()).toBe(blocosFixos[0].fim.getTime());
+  });
+
+  it("não reporta um bloco existente que já está no lugar ótimo", () => {
+    const agora = segundaAs(8, 0);
+    const blocosMoviveis = [{
+      progId: "prog-Z", pedidoId: "P-Z", linhaId: 1,
+      dtInicioPrevisto: agora.toISOString(), duracaoMin: 60,
+      dtRetirada: new Date(agora.getTime() + 5 * 86_400_000).toISOString(),
+    }];
+    const proposta = gerarPropostaRecalculo(blocosMoviveis, [], [], [linhaCorte], config, {}, agora);
+    expect(proposta.mudancas).toHaveLength(0);
+  });
+
+  it("usa a duração somada item a item (não a combinada) pra um pendente com vários itens — bate com o que criarProgramacaoPedido realmente grava", () => {
+    const agora = segundaAs(8, 0);
+    const itens = [
+      { id: 1, m2: 1, quantidade: 1, lapidacao: 0, produto_nome: "Comum" },
+      { id: 2, m2: 1, quantidade: 1, lapidacao: 0, produto_nome: "Comum" },
+    ];
+    const pendentes = [{
+      pedidoId: "P-D", dtRetirada: new Date(agora.getTime() + 5 * 86_400_000).toISOString(), itens,
+    }];
+    const proposta = gerarPropostaRecalculo([], [], pendentes, [linhaCorte], config, {}, agora);
+    const duracaoEsperada = duracaoTotalCorte(itens, config); // setup cobrado por item
+    const duracaoCombinadaIngenua = calcularTempoEstimado(itens, config).corte_min; // setup cobrado 1x só
+    expect(proposta.mudancas[0].duracaoMin).toBe(duracaoEsperada);
+    expect(duracaoEsperada).toBeGreaterThan(duracaoCombinadaIngenua);
+  });
+
+  it("sinaliza pedidos novos que precisam de Lapidação (não agendada automaticamente aqui)", () => {
+    const agora = segundaAs(8, 0);
+    const pendentes = [{
+      pedidoId: "P-L", dtRetirada: new Date(agora.getTime() + 5 * 86_400_000).toISOString(),
+      itens: [{ id: 1, m2: 1, quantidade: 1, lapidacao: 1, produto_nome: "Comum" }],
+    }];
+    const proposta = gerarPropostaRecalculo([], [], pendentes, [linhaCorte], config, {}, agora);
+    expect(proposta.mudancas[0].temLapidacao).toBe(true);
+    expect(proposta.resumo.novosComLapidacaoPendente).toBe(1);
   });
 });

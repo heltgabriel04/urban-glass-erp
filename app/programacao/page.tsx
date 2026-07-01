@@ -14,8 +14,10 @@ import {
   isPedidoSomenteChapas,
   calcularPrioridadePedido, produtoPrincipal,
   construirDiasBloqueadosPorLinha, minutosRestantesNoDia, proximaTarefaParaEncaixe,
+  gerarPropostaRecalculo, aplicarPropostaRecalculo,
   addDays, proximoDiaUtil, getMonday, diffDays, toISOLocal,
 } from "@/services/programacao.service";
+import type { BlocoMovivel, BlocoFixo, PedidoPendenteRecalculo, PropostaRecalculo } from "@/services/programacao.service";
 import type { RetiradaParcial, BloqueioLinha, DadosCalibracao } from "@/services/programacao.service";
 import type {
   ProducaoLinha, ConfigTempoProducao, ProgramacaoProducao, Pedido, TempoEstimado,
@@ -1265,17 +1267,15 @@ export default function ProgramacaoPage() {
 
   async function handleAgendarLote(dtInicio: Date, linhaCorteId: number) {
     const pedidosLote = semProg.filter(p => selecionados.has(p.id));
-    let dtAtual = new Date(dtInicio);
+    let cursor = new Date(dtInicio);
     let erros = 0;
 
     for (const p of pedidosLote) {
       const itens = (p.itens_pedido ?? []) as { id: number; m2: number; quantidade: number; lapidacao: number; produto_nome: string }[];
-      const tempos = calcularTempoEstimado(itens, config);
-      const result = await criarProgramacaoPedido(p.id, itens, config, linhas, dtAtual, linhaCorteId, undefined);
-      if (result.ok) {
-        // avança a data para o próximo pedido (1 dia após o fim estimado)
-        const diasNecessarios = Math.max(1, Math.ceil(tempos.corte_min / 480));
-        dtAtual = addDays(dtAtual, diasNecessarios + 1);
+      const result = await criarProgramacaoPedido(p.id, itens, config, linhas, cursor, linhaCorteId, undefined, calendario);
+      if (result.ok && result.fimCorte) {
+        // próximo pedido do lote encaixa logo depois deste (capacidade finita real, não mais "+1 dia")
+        cursor = result.fimCorte;
       } else {
         erros++;
       }
@@ -1320,6 +1320,112 @@ export default function ProgramacaoPage() {
 
   // ── Auto-agendamento ────────────────────────────────────────
   const [autoAgendando, setAutoAgendando] = useState(false);
+
+  // ── Recálculo automático (APS · Fase 3) ─────────────────────
+  const [gerandoProposta, setGerandoProposta] = useState(false);
+  const [aplicandoProposta, setAplicandoProposta] = useState(false);
+  const [proposta, setProposta] = useState<PropostaRecalculo | null>(null);
+
+  // Janela de segurança: blocos "Agendado" que começam dentro desse tempo a
+  // partir de agora não são reflowados — evita mexer em algo que o chão de
+  // fábrica já pode estar preparando.
+  const JANELA_SEGURANCA_MIN = 120;
+
+  async function handleGerarProposta() {
+    setGerandoProposta(true);
+    try {
+      const linhasCorte = linhas.filter(l => l.tipo === "Corte");
+      if (linhasCorte.length === 0) { showToast("Nenhuma linha de corte configurada."); return; }
+
+      const agora = new Date();
+      const limiteSeguranca = new Date(agora.getTime() + JANELA_SEGURANCA_MIN * 60_000);
+
+      // Busca programações num horizonte amplo: alguns dias pra trás (senão
+      // um bloco "Em Execução" que começou antes de "agora" fica de fora da
+      // busca — dt_inicio_previsto >= from — e vira invisível pro motor,
+      // que poderia então propor algo sobre a máquina que já está cortando)
+      // até 60 dias à frente. Não usa a janela visível do Gantt (que pode
+      // estar em modo "dia"/"semana"), senão o recálculo ignoraria blocos
+      // fora da tela e poderia colidir com eles.
+      const progsFuturas = await getProgramacao(addDays(agora, -3), addDays(agora, 60));
+      const idsLinhasCorte = new Set(linhasCorte.map(l => l.id));
+
+      // Corte que já tem uma Lapidação dependente agendada não pode ser
+      // movido sozinho sem reagendar a Lapidação em cascata (fora do escopo
+      // desta fase) — tratado como obstáculo fixo.
+      const idsComDependente = new Set(
+        progsFuturas.filter(p => p.predecessor_id && p.status !== "Cancelado").map(p => p.predecessor_id!)
+      );
+
+      const blocosMoviveis: BlocoMovivel[] = [];
+      const blocosFixos: BlocoFixo[] = [];
+
+      for (const p of progsFuturas) {
+        if (p.etapa !== "Corte" || !p.linha_id || !idsLinhasCorte.has(p.linha_id)) continue;
+        if (!p.dt_inicio_previsto || !p.dt_fim_previsto) continue;
+        if (p.status === "Cancelado") continue;
+
+        const movivelCandidato = p.status === "Agendado" && !p.travado &&
+          !idsComDependente.has(p.id) &&
+          new Date(p.dt_inicio_previsto) >= limiteSeguranca;
+
+        if (movivelCandidato) {
+          blocosMoviveis.push({
+            progId: p.id, pedidoId: p.pedido_id, linhaId: p.linha_id,
+            dtInicioPrevisto: p.dt_inicio_previsto,
+            duracaoMin: p.duracao_estimada_min ?? 60,
+            dtRetirada: p.pedidos?.dt_retirada ?? null,
+          });
+        } else {
+          // Em Execução, Concluído, travado, com Lapidação dependente, ou
+          // começando cedo demais pra mexer
+          blocosFixos.push({
+            linhaId: p.linha_id,
+            inicio: new Date(p.dt_inicio_previsto),
+            fim: new Date(p.dt_fim_previsto),
+          });
+        }
+      }
+
+      const pendentes: PedidoPendenteRecalculo[] = semProg.map(pedido => ({
+        pedidoId: pedido.id,
+        dtRetirada: pedido.dt_retirada,
+        itens: (pedido.itens_pedido ?? []) as PedidoPendenteRecalculo["itens"],
+      }));
+
+      const bloqueadosPorLinha = construirDiasBloqueadosPorLinha(linhasCorte, calendario, bloqueios);
+
+      const result = gerarPropostaRecalculo(
+        blocosMoviveis, blocosFixos, pendentes, linhasCorte, config, bloqueadosPorLinha, agora,
+      );
+
+      if (result.mudancas.length === 0) {
+        showToast("A agenda já está no melhor arranjo possível — nada a mudar.");
+        return;
+      }
+      setProposta(result);
+    } finally {
+      setGerandoProposta(false);
+    }
+  }
+
+  async function handleAplicarProposta() {
+    if (!proposta) return;
+    setAplicandoProposta(true);
+    const linhasCorte = linhas.filter(l => l.tipo === "Corte");
+    const bloqueadosPorLinha = construirDiasBloqueadosPorLinha(linhasCorte, calendario, bloqueios);
+    const result = await aplicarPropostaRecalculo(proposta, config, linhas, bloqueadosPorLinha);
+    setAplicandoProposta(false);
+    if (!result.ok) { showToast(result.erro ?? "Erro ao aplicar recálculo."); return; }
+    setProposta(null);
+    const ignorados = result.ignorados ?? 0;
+    showToast(
+      ignorados > 0
+        ? `✓ Agenda recalculada — ${proposta.resumo.blocosMovidos - ignorados} remanejado(s), ${proposta.resumo.blocosNovos} novo(s) · ${ignorados} ignorado(s) por mudança de estado`
+        : `✓ Agenda recalculada — ${proposta.resumo.blocosMovidos} remanejado(s), ${proposta.resumo.blocosNovos} novo(s)`
+    );
+    await load();
+  }
 
   async function handleAutoAgendar() {
     if (semProg.length === 0) { showToast("Não há pedidos para agendar."); return; }
@@ -1852,6 +1958,18 @@ export default function ProgramacaoPage() {
                   </div>
                 </div>
 
+                {/* Recálculo automático — reflow de blocos existentes + fila,
+                    sempre com pré-visualização antes de aplicar */}
+                <button
+                  className="btn bg"
+                  style={{ width: "100%", fontSize: 11, padding: "5px 0", marginBottom: 8, color: "var(--acc)", borderColor: "var(--acc)" }}
+                  onClick={handleGerarProposta}
+                  disabled={gerandoProposta}
+                  title="Recalcula a agenda inteira (Corte) em ordem de prioridade — nunca move blocos travados, em execução ou concluídos. Mostra uma prévia antes de aplicar."
+                >
+                  {gerandoProposta ? "Calculando…" : "🔄 Recalcular Agenda"}
+                </button>
+
                 {/* Busca */}
                 <input
                   value={busca}
@@ -2070,7 +2188,118 @@ export default function ProgramacaoPage() {
           onFechar={() => setModalBloqueio(undefined as any)}
           onSalvo={async () => { await load(); }} />
       )}
+
+      {proposta && (
+        <ModalRecalculo
+          proposta={proposta}
+          linhas={linhas}
+          aplicando={aplicandoProposta}
+          onFechar={() => setProposta(null)}
+          onAplicar={handleAplicarProposta}
+        />
+      )}
     </AppLayout>
+  );
+}
+
+// ─── MODAL DE RECÁLCULO (APS · Fase 3) ─────────────────────────
+
+function ModalRecalculo({
+  proposta, linhas, aplicando, onFechar, onAplicar,
+}: {
+  proposta: PropostaRecalculo;
+  linhas: ProducaoLinha[];
+  aplicando: boolean;
+  onFechar: () => void;
+  onAplicar: () => void;
+}) {
+  const nomeLinha = (id: number) => linhas.find(l => l.id === id)?.nome.split("–")[1]?.trim() ?? `#${id}`;
+  const fmtHora = (d: Date) => d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+  const melhorou = proposta.resumo.atrasadosDepois < proposta.resumo.atrasadosAntes;
+  const piorou   = proposta.resumo.atrasadosDepois > proposta.resumo.atrasadosAntes;
+
+  return (
+    <div className="mov open">
+      <div className="mod" style={{ width: 640, maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
+        <div className="mhd">
+          <span>Prévia do Recálculo Automático</span>
+          <button className="btn icon" onClick={onFechar}>✕</button>
+        </div>
+        <div className="mbd" style={{ display: "flex", flexDirection: "column", gap: 14, overflow: "hidden" }}>
+
+          {/* Resumo */}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 120, background: "var(--surf2)", borderRadius: 8, padding: "8px 12px" }}>
+              <div style={{ fontSize: 9, color: "var(--t3)", fontWeight: 700 }}>REMANEJADOS</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "var(--acc2)" }}>{proposta.resumo.blocosMovidos}</div>
+            </div>
+            <div style={{ flex: 1, minWidth: 120, background: "var(--surf2)", borderRadius: 8, padding: "8px 12px" }}>
+              <div style={{ fontSize: 9, color: "var(--t3)", fontWeight: 700 }}>NOVOS AGENDADOS</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "var(--acc)" }}>{proposta.resumo.blocosNovos}</div>
+            </div>
+            <div style={{ flex: 1, minWidth: 120, background: "var(--surf2)", borderRadius: 8, padding: "8px 12px" }}>
+              <div style={{ fontSize: 9, color: "var(--t3)", fontWeight: 700 }}>PEDIDOS ATRASADOS</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: melhorou ? "var(--ok)" : piorou ? "var(--err)" : "var(--t2)" }}>
+                {proposta.resumo.atrasadosAntes} → {proposta.resumo.atrasadosDepois}
+              </div>
+            </div>
+          </div>
+
+          {!melhorou && !piorou && (
+            <div style={{ fontSize: 11, color: "var(--t3)" }}>
+              Esse recálculo não reduz o número de pedidos atrasados — pode ainda valer a pena pra reequilibrar a carga entre linhas, mas revise as mudanças abaixo antes de aplicar.
+            </div>
+          )}
+
+          {proposta.resumo.novosComLapidacaoPendente > 0 && (
+            <div style={{ fontSize: 11, color: "var(--warn)", background: "rgba(245,158,11,.1)", borderRadius: 8, padding: "8px 10px" }}>
+              ⚠ {proposta.resumo.novosComLapidacaoPendente} pedido{proposta.resumo.novosComLapidacaoPendente > 1 ? "s" : ""} novo{proposta.resumo.novosComLapidacaoPendente > 1 ? "s" : ""} precisa{proposta.resumo.novosComLapidacaoPendente > 1 ? "m" : ""} de Lapidação — esse recálculo agenda só o Corte. Programe a Lapidação manualmente depois.
+            </div>
+          )}
+
+          {/* Lista de mudanças */}
+          <div style={{ overflowY: "auto", border: "1px solid var(--b2)", borderRadius: 8 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+              <thead>
+                <tr style={{ background: "var(--surf2)", position: "sticky", top: 0 }}>
+                  <th style={{ textAlign: "left", padding: "6px 10px", color: "var(--t3)" }}>Pedido</th>
+                  <th style={{ textAlign: "left", padding: "6px 10px", color: "var(--t3)" }}>Tipo</th>
+                  <th style={{ textAlign: "left", padding: "6px 10px", color: "var(--t3)" }}>De</th>
+                  <th style={{ textAlign: "left", padding: "6px 10px", color: "var(--t3)" }}>Para</th>
+                </tr>
+              </thead>
+              <tbody>
+                {proposta.mudancas.map((m, i) => (
+                  <tr key={i} style={{ borderTop: "1px solid var(--b1)" }}>
+                    <td style={{ padding: "6px 10px", fontWeight: 700, color: "var(--acc)" }}>{m.pedidoId}</td>
+                    <td style={{ padding: "6px 10px", color: m.tipo === "inserir" ? "var(--acc)" : "var(--acc2)" }}>
+                      {m.tipo === "inserir" ? "Novo" : "Remanejado"}
+                    </td>
+                    <td style={{ padding: "6px 10px", color: "var(--t3)" }}>
+                      {m.tipo === "mover" && m.inicioAntigo && m.linhaAntiga !== undefined
+                        ? `${nomeLinha(m.linhaAntiga)} · ${fmtHora(m.inicioAntigo)}`
+                        : "—"}
+                    </td>
+                    <td style={{ padding: "6px 10px", color: "var(--t1)", fontWeight: 600 }}>
+                      {nomeLinha(m.linhaNova)} · {fmtHora(m.inicioNovo)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Ações */}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button className="btn bg" onClick={onFechar} disabled={aplicando}>Descartar</button>
+            <button className="btn pri" onClick={onAplicar} disabled={aplicando}>
+              {aplicando ? "Aplicando…" : `Aplicar ${proposta.mudancas.length} mudança${proposta.mudancas.length > 1 ? "s" : ""}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
