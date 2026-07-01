@@ -8,6 +8,15 @@ import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { isChapaInteira } from "@/lib/chapas";
 import type { Pedido } from "@/types";
 import type { HistoricoOtimizador } from "@/services/otimizador.service";
+import corteCertoData from "@/data/etiquetas-corte-certo-p058-p059.json";
+
+// Ajuste único para os pedidos P-058/P-059 (obra São Lourenço): a impressão das etiquetas
+// segue a sequência real de corte do plano da Corte Certo (33 montagens = 33 chapas físicas),
+// não o plano salvo no otimizador do sistema. Dados extraídos e casados por dimensão a partir
+// do PDF do plano de corte + da Relação de Vidros do pedido. Ver conversa de 01/07/2026.
+const TOTAL_MONTAGENS_CORTE_CERTO = 33;
+interface PecaCorteCerto { ordem: number; montagem: number; tipo?: string; localizacao?: string; largura: number; altura: number; }
+const CORTE_CERTO_MAP = corteCertoData as Record<string, PecaCorteCerto[]>;
 
 interface PecaPlacada {
   x: number; y: number; l: number; a: number;
@@ -129,9 +138,73 @@ export default function EtiquetasPage() {
   const [totalChapas, setTotalChapas] = useState(0);
   const [modoChapa, setModoChapa]     = useState(false);
   const [modoVidroCliente, setModoVidroCliente] = useState(false);
+  const [modoCorteCerto, setModoCorteCerto] = useState(false);
+  const [chapasDisponiveis, setChapasDisponiveis] = useState<number[]>([]);
 
   useEffect(() => {
     async function load() {
+      const corteCertoLista = CORTE_CERTO_MAP[id];
+      if (corteCertoLista) {
+        const ped = await getPedidoById(id);
+        setPedido(ped);
+        setModoCorteCerto(true);
+
+        const hoje = new Date();
+        const dd = String(hoje.getDate()).padStart(2, "0");
+        const mm = String(hoje.getMonth() + 1).padStart(2, "0");
+        const aa = String(hoje.getFullYear()).slice(-2);
+        const lote = `${dd}${mm}${aa}-${id}`;
+
+        const codigoFila = new Map<string, { codigo: string; restante: number }[]>();
+        (ped?.itens_pedido ?? []).forEach((item) => {
+          if (!item.codigo_adicional) return;
+          const key = [item.largura, item.altura].sort((a, b) => a - b).join("x");
+          const fila = codigoFila.get(key) ?? [];
+          fila.push({ codigo: item.codigo_adicional, restante: item.quantidade });
+          codigoFila.set(key, fila);
+        });
+        function buscarCodigo(l: number, a: number): string | null {
+          const key = [l, a].sort((x, y) => x - y).join("x");
+          const fila = codigoFila.get(key);
+          if (!fila || fila.length === 0) return null;
+          const entry = fila[0];
+          entry.restante--;
+          if (entry.restante <= 0) fila.shift();
+          return entry.codigo;
+        }
+
+        const material = ped?.itens_pedido?.[0]?.produto_nome ?? "—";
+        const contagemPorMontagem = new Map<number, number>();
+        corteCertoLista.forEach(e => contagemPorMontagem.set(e.montagem, (contagemPorMontagem.get(e.montagem) ?? 0) + 1));
+        const posDentroMontagem = new Map<number, number>();
+
+        const ets: Etiqueta[] = corteCertoLista.map((e) => {
+          const pos = (posDentroMontagem.get(e.montagem) ?? 0) + 1;
+          posDentroMontagem.set(e.montagem, pos);
+          return {
+            pedidoId: id,
+            clienteNome: ped?.clientes?.nome ?? "—",
+            material,
+            largura: e.largura,
+            altura: e.altura,
+            chapaNum: e.montagem,
+            totalChapas: TOTAL_MONTAGENS_CORTE_CERTO,
+            pecaNum: pos,
+            totalPecasNaChapa: contagemPorMontagem.get(e.montagem) ?? 0,
+            totalPecasGeral: corteCertoLista.length,
+            loteCorte: lote,
+            qrData: `https://urbanglasserp.vercel.app/api/r/${ped?.qr_token}`,
+            codigoAdicional: buscarCodigo(e.largura, e.altura),
+          };
+        });
+
+        setEtiquetas(ets);
+        setTotalChapas(TOTAL_MONTAGENS_CORTE_CERTO);
+        setChapasDisponiveis([...contagemPorMontagem.keys()].sort((a, b) => a - b));
+        setLoading(false);
+        return;
+      }
+
       const [ped, otims] = await Promise.all([
         getPedidoById(id),
         getOtimizacoesPorPedido(id),
@@ -299,7 +372,7 @@ export default function EtiquetasPage() {
       </div>
     );
 
-  if (!pedido || (!otim && !modoChapa && !modoVidroCliente))
+  if (!pedido || (!otim && !modoChapa && !modoVidroCliente && !modoCorteCerto))
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", gap: "12px", fontFamily: "Arial" }}>
         <div style={{ color: "#c00", fontWeight: 700 }}>Nenhuma otimização encontrada para este pedido.</div>
@@ -501,9 +574,9 @@ export default function EtiquetasPage() {
               }
             >
               <option value="todas">{modoVidroCliente ? "Todos os itens" : "Todas as chapas"}</option>
-              {Array.from({ length: totalChapas }, (_, i) => (
-                <option key={i + 1} value={i + 1}>
-                  {modoVidroCliente ? `Item ${i + 1}` : `Chapa ${i + 1}`}
+              {(modoCorteCerto ? chapasDisponiveis : Array.from({ length: totalChapas }, (_, i) => i + 1)).map((n) => (
+                <option key={n} value={n}>
+                  {modoVidroCliente ? `Item ${n}` : `Chapa ${n}`}
                 </option>
               ))}
             </select>
@@ -518,7 +591,9 @@ export default function EtiquetasPage() {
       <div className="info-bar">
         <div>Pedido: <span>{id}</span></div>
         <div>Cliente: <span>{pedido.clientes?.nome ?? "—"}</span></div>
-        {otim ? (
+        {modoCorteCerto ? (
+          <div>Tipo: <span>Plano de corte externo (Corte Certo) — ordem real de produção</span></div>
+        ) : otim ? (
           <>
             <div>Otimização: <span>{new Date(otim.dt_otim).toLocaleDateString("pt-BR")}</span></div>
             <div>Aproveitamento: <span>{otim.aproveitamento}%</span></div>
