@@ -405,7 +405,7 @@ function SecaoCard({
               }}
             >
               {[
-                !allAnswered && `${pendingCount} item${pendingCount > 1 ? "ns" : ""} sem resposta`,
+                !allAnswered && `${pendingCount} ${pendingCount > 1 ? "itens" : "item"} sem resposta`,
                 !isSigned && "assinatura pendente",
               ]
                 .filter(Boolean)
@@ -710,7 +710,7 @@ export default function ChecklistPage() {
     const s = dados[key];
     const faltando = s.itens.filter((i) => i.valor === null).length;
     const issues: string[] = [];
-    if (faltando > 0) issues.push(`${faltando} item${faltando > 1 ? "ns" : ""} sem resposta`);
+    if (faltando > 0) issues.push(`${faltando} ${faltando > 1 ? "itens" : "item"} sem resposta`);
     if (!s.assinatura) issues.push("assinatura pendente");
     if (issues.length === 0) return [];
     return [{ label: SECAO_LABELS[key], issues }];

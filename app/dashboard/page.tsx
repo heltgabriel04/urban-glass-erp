@@ -259,7 +259,7 @@ export default function DashboardPage() {
                   {parciais.length > 0 && (
                     <a href="/contas-receber" style={{ textDecoration: "none" }}>
                       <span className="chip cy" style={{ cursor: "pointer" }}>
-                        {parciais.length} parcial{parciais.length > 1 ? "is" : ""} &middot; {formatBRL(parciais.reduce((a, f) => a + Number(f.a_receber), 0))}
+                        {parciais.length} {parciais.length > 1 ? "parciais" : "parcial"} &middot; {formatBRL(parciais.reduce((a, f) => a + Number(f.a_receber), 0))}
                       </span>
                     </a>
                   )}

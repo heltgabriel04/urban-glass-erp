@@ -1403,7 +1403,7 @@ export default function RelatoriosPage() {
                 const mesesAti  = meses.filter(m => m.faturado > 0);
                 const fatMed    = mesesAti.length > 0 ? mesesAti.reduce((a, m) => a + m.faturado, 0) / mesesAti.length : 0;
                 const insights = [
-                  fatTotal > 0 ? `Faturamento acumulado de ${formatBRL(fatTotal)} em ${mesesComDados.length} mes${mesesComDados.length !== 1 ? "es" : ""} ativos (média ${formatBRL(fatMed)}/mês). Melhor mês: ${melhorMes.mesCompleto} — ${formatBRL(melhorMes.faturado)}.` : null,
+                  fatTotal > 0 ? `Faturamento acumulado de ${formatBRL(fatTotal)} em ${mesesComDados.length} ${mesesComDados.length !== 1 ? "meses ativos" : "mês ativo"} (média ${formatBRL(fatMed)}/mês). Melhor mês: ${melhorMes.mesCompleto} — ${formatBRL(melhorMes.faturado)}.` : null,
                   fatTotal > 0 ? `Taxa de recebimento: ${taxaRec.toFixed(1)}% — ${taxaRec >= 90 ? "situação saudável (acima de 90%)." : taxaRec >= 70 ? "atenção: abaixo da meta de 90%. Reforçar cobrança." : "alerta crítico: recebimento comprometido."} Saldo a receber: ${formatBRL(aReceber)}.` : null,
                   devedores.length > 0 ? `${devedores.length} cliente${devedores.length > 1 ? "s" : ""} com valores em aberto (${inadRate.toFixed(0)}% da base ativa). Exposição total: ${formatBRL(totalDevedores)}.${inadimplentes.length > 0 ? ` ${inadimplentes.length} sem nenhum pagamento — prioridade de cobrança.` : ""}` : "Carteira saudável — nenhum cliente com valores em aberto no período.",
                   pedidos.length > 0 ? `Pipeline: ${pedAtivos.length} pedido${pedAtivos.length !== 1 ? "s" : ""} em produção${valAtivos > 0 ? ` (${formatBRL(valAtivos)} em valor)` : ""}. Ticket médio: ${formatBRL(ticketMedio)}. Volume processado: ${m2Total.toFixed(1)} m².` : null,
@@ -1825,7 +1825,7 @@ export default function RelatoriosPage() {
                   return p > 0 ? ((u - p) / p * 100) : null;
                 })() : null;
                 const insights = [
-                  fatTotal > 0 ? `Faturamento acumulado de ${formatBRL(fatTotal)} em ${mesesComDados.length} mes${mesesComDados.length !== 1 ? "es" : ""} ativos (média ${formatBRL(fatMed)}/mês).${crescMes !== null ? ` Tendência do último mês: ${crescMes >= 0 ? "↑ +" : "↓ "}${Math.abs(crescMes).toFixed(1)}%.` : ""}` : null,
+                  fatTotal > 0 ? `Faturamento acumulado de ${formatBRL(fatTotal)} em ${mesesComDados.length} ${mesesComDados.length !== 1 ? "meses ativos" : "mês ativo"} (média ${formatBRL(fatMed)}/mês).${crescMes !== null ? ` Tendência do último mês: ${crescMes >= 0 ? "↑ +" : "↓ "}${Math.abs(crescMes).toFixed(1)}%.` : ""}` : null,
                   fatTotal > 0 ? `Taxa de recebimento: ${taxaRec.toFixed(1)}%. Melhor mês: ${melhorMes.mesCompleto} (${formatBRL(melhorMes.faturado)}). Saldo a receber: ${formatBRL(aReceber)}.` : null,
                   top3Pct > 0 ? `Concentração de receita — top 3 clientes: ${top3Pct.toFixed(1)}% do faturamento.${top3Pct > 70 ? " Dependência elevada — revisar estratégia comercial." : top3Pct > 50 ? " Nível moderado; buscar diversificação de carteira." : " Carteira bem distribuída."}` : null,
                   top1Pct > 30 ? `Maior cliente individual (${clientesOrdenados[0]?.cliente_nome}): ${top1Pct.toFixed(1)}% da receita total — monitorar risco de concentração.` : null,

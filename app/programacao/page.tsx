@@ -1700,7 +1700,7 @@ export default function ProgramacaoPage() {
                               </div>
                               <div style={{ paddingLeft: 17, display: "flex", gap: 6, alignItems: "center" }}>
                                 <span style={{ fontSize: 10, color: "var(--t3)" }}>
-                                  {blocos.length} item{blocos.length !== 1 ? "ns" : ""}
+                                  {blocos.length} {blocos.length !== 1 ? "itens" : "item"}
                                 </span>
                                 {/* Mini barra de ocupação */}
                                 <div style={{ flex: 1, height: 3, background: "var(--b2)", borderRadius: 99, overflow: "hidden" }}>
