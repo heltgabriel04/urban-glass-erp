@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import {
   getLinhas, getConfigTempo, getProgramacao, getPedidosSemProgramacao,
@@ -12,6 +12,7 @@ import {
   registrarRetrabalho, getCalibracaoTempos,
   calcularTempoEstimado, formatarDuracao, getMetricasProducao,
   isPedidoSomenteChapas,
+  calcularPrioridadePedido, produtoPrincipal,
   addDays, addDiasUteis, proximoDiaUtil, getMonday, diffDays, toISOLocal,
 } from "@/services/programacao.service";
 import type { RetiradaParcial, BloqueioLinha, DadosCalibracao } from "@/services/programacao.service";
@@ -1324,7 +1325,7 @@ export default function ProgramacaoPage() {
 
     const confirmar = window.confirm(
       `Auto-agendar ${semProg.length} pedido${semProg.length > 1 ? "s" : ""}?\n\n` +
-      `Critério: prazo mais urgente primeiro + distribuição entre linhas.\n` +
+      `Critério: prioridade por folga real até o prazo (atrasados primeiro) + distribuição entre linhas.\n` +
       `Lapidação não é incluída automaticamente.`
     );
     if (!confirmar) return;
@@ -1349,11 +1350,14 @@ export default function ProgramacaoPage() {
       }
     }
 
-    // Ordena: prazo mais urgente primeiro; desempata por m² maior
+    // Ordena por score de prioridade (atraso > folga real até o prazo,
+    // considerando o tempo de produção que falta — não só a data em si);
+    // desempata por m² maior
+    const agora = new Date();
     const pedidosOrdenados = [...semProg].sort((a, b) => {
-      const pa = a.dt_retirada ? new Date(a.dt_retirada).getTime() : Infinity;
-      const pb = b.dt_retirada ? new Date(b.dt_retirada).getTime() : Infinity;
-      if (pa !== pb) return pa - pb;
+      const scoreA = calcularPrioridadePedido(a, (a.itens_pedido ?? []) as any[], config, agora).score;
+      const scoreB = calcularPrioridadePedido(b, (b.itens_pedido ?? []) as any[], config, agora).score;
+      if (scoreA !== scoreB) return scoreB - scoreA;
       return (b.m2_total ?? 0) - (a.m2_total ?? 0);
     });
 
@@ -1421,6 +1425,28 @@ export default function ProgramacaoPage() {
   });
 
   const pedidosLoteAtual = semProg.filter(p => selecionados.has(p.id));
+
+  // ── Fila priorizada (APS · Fase 1) ──────────────────────────
+  // Ordena por score de prioridade (atraso > folga real até o prazo) e
+  // sinaliza pedidos agrupáveis (mesmo produto principal na fila), sem
+  // alterar como o agendamento em si é feito — só a ordem de exibição/sugestão.
+  const filaPriorizada = useMemo(() => {
+    const agora = new Date();
+    const base = semProgFiltrada.map(p => {
+      const itens = (p.itens_pedido ?? []) as any[];
+      return {
+        pedido: p,
+        prioridade: calcularPrioridadePedido(p, itens, config, agora),
+        produto: produtoPrincipal(itens),
+      };
+    });
+    const contagemGrupo = new Map<string, number>();
+    for (const b of base) if (b.produto) contagemGrupo.set(b.produto, (contagemGrupo.get(b.produto) ?? 0) + 1);
+
+    return base
+      .map(b => ({ ...b, grupoSimilar: b.produto ? (contagemGrupo.get(b.produto) ?? 1) - 1 : 0 }))
+      .sort((a, b) => b.prioridade.score - a.prioridade.score);
+  }, [semProgFiltrada, config]);
 
   // Posição da linha "agora" no Gantt
   const agora = new Date();
@@ -1857,26 +1883,31 @@ export default function ProgramacaoPage() {
                   <div style={{ textAlign: "center", color: "var(--t3)", fontSize: 12, padding: "32px 12px" }}>
                     {busca ? "Nenhum resultado para esta busca." : "✓ Todos os pedidos estão programados"}
                   </div>
-                ) : semProgFiltrada.map(p => {
+                ) : filaPriorizada.map(({ pedido: p, prioridade, grupoSimilar }, idx) => {
                   const statusCol  = COR_STATUS[p.status] ?? "var(--t3)";
                   const itens      = p.itens_pedido ?? [];
                   const pecas      = (itens as any[]).reduce((s: number, i: any) => s + i.quantidade, 0);
                   const prazoStr   = p.dt_retirada ? new Date(p.dt_retirada).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "—";
-                  const diasFaltam = p.dt_retirada ? diffDays(new Date(p.dt_retirada), new Date()) : null;
-                  const urgente    = diasFaltam !== null && diasFaltam <= 3;
+                  const { atrasado, emRisco, folgaHoras } = prioridade;
                   const sel        = selecionados.has(p.id);
                   const isChapa    = isPedidoSomenteChapas(p);
+                  const folgaStr   = atrasado
+                    ? `atrasado ${formatarDuracao(Math.round(Math.abs(folgaHoras) * 60))}`
+                    : Number.isFinite(folgaHoras) ? `folga ${formatarDuracao(Math.round(folgaHoras * 60))}` : null;
 
                   return (
                     <div key={p.id} style={{
                       background: sel ? "rgba(61,255,160,.08)" : "var(--surf2)",
-                      border: `1px solid ${urgente ? "var(--err)" : isChapa ? "#a78bfa" : sel ? "var(--acc)" : "var(--b2)"}`,
+                      border: `1px solid ${atrasado ? "var(--err)" : emRisco ? "var(--warn)" : isChapa ? "#a78bfa" : sel ? "var(--acc)" : "var(--b2)"}`,
                       borderRadius: 10, padding: "10px 10px", marginBottom: 6, cursor: "pointer",
                     }}
                       onClick={() => toggleSelecionado(p.id)}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 9, fontWeight: 800, color: "var(--t3)", width: 14, textAlign: "right", flexShrink: 0 }} title="Posição na fila de prioridade">
+                            #{idx + 1}
+                          </span>
                           <div style={{
                             width: 14, height: 14, borderRadius: 4, border: `2px solid ${sel ? "var(--acc)" : "var(--b2)"}`,
                             background: sel ? "var(--acc)" : "transparent", flexShrink: 0,
@@ -1892,9 +1923,19 @@ export default function ProgramacaoPage() {
                               ▣ Chapa
                             </span>
                           )}
-                          {urgente && (
+                          {grupoSimilar > 0 && (
+                            <span title="Outros pedidos na fila com o mesmo produto principal — podem ser agrupados para reduzir setup" style={{ fontSize: 10, color: "var(--t2)", fontWeight: 700, background: "var(--b1)", padding: "1px 6px", borderRadius: 10 }}>
+                              ≈ agrupável ({grupoSimilar})
+                            </span>
+                          )}
+                          {atrasado && (
                             <span style={{ fontSize: 10, color: "var(--err)", fontWeight: 700, background: "rgba(244,63,94,.12)", padding: "1px 6px", borderRadius: 10 }}>
-                              URGENTE
+                              ATRASADO
+                            </span>
+                          )}
+                          {!atrasado && emRisco && (
+                            <span style={{ fontSize: 10, color: "var(--warn)", fontWeight: 700, background: "rgba(245,158,11,.12)", padding: "1px 6px", borderRadius: 10 }}>
+                              EM RISCO
                             </span>
                           )}
                         </div>
@@ -1907,7 +1948,13 @@ export default function ProgramacaoPage() {
                         <span>·</span>
                         <span>{pecas}pç</span>
                         <span>·</span>
-                        <span style={{ color: urgente ? "var(--err)" : "var(--t3)" }}>↗{prazoStr}</span>
+                        <span style={{ color: atrasado ? "var(--err)" : emRisco ? "var(--warn)" : "var(--t3)" }}>↗{prazoStr}</span>
+                        {folgaStr && (
+                          <>
+                            <span>·</span>
+                            <span style={{ color: atrasado ? "var(--err)" : "var(--t3)" }}>{folgaStr}</span>
+                          </>
+                        )}
                       </div>
                       <div style={{ fontSize: 10, color: statusCol, marginBottom: 7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {p.status}

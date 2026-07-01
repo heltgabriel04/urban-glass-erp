@@ -120,6 +120,57 @@ export function calcularTempoEstimado(
   };
 }
 
+// ─── PRIORIZAÇÃO (APS) ──────────────────────────────────────
+// Fase 1 do motor de agendamento: calcula um score de prioridade por pedido
+// pendente, combinando prazo de entrega + trabalho restante (folga real,
+// não só "dias até o prazo") — ver proposta do módulo de Programação.
+
+export interface PrioridadeInfo {
+  score: number;
+  folgaHoras: number;          // horas de folga até o prazo, descontado o trabalho restante. Negativo = já atrasado.
+  diasParaPrazo: number | null;
+  atrasado: boolean;
+  emRisco: boolean;            // no prazo, mas com folga menor que 1 dia útil de produção
+}
+
+export function calcularPrioridadePedido(
+  pedido: { dt_retirada: string | null },
+  itens: Pick<ItemPedido, 'm2' | 'quantidade' | 'lapidacao' | 'produto_nome'>[],
+  config: ConfigTempoProducao[],
+  agora: Date = new Date(),
+): PrioridadeInfo {
+  const tempos = calcularTempoEstimado(itens, config);
+  const horasTrabalhoRestante = tempos.total_min / 60;
+
+  if (!pedido.dt_retirada) {
+    return { score: 0, folgaHoras: Infinity, diasParaPrazo: null, atrasado: false, emRisco: false };
+  }
+
+  const prazo = new Date(pedido.dt_retirada);
+  const horasAtePrazo = (prazo.getTime() - agora.getTime()) / 3_600_000;
+  const folgaHoras = horasAtePrazo - horasTrabalhoRestante;
+  const atrasado = folgaHoras < 0;
+  const emRisco = !atrasado && folgaHoras < 8; // menos de 1 dia útil de produção sobrando
+
+  // Atrasados sempre ficam acima de qualquer pedido no prazo; entre eles, o
+  // mais atrasado (folga mais negativa) vem primeiro. No prazo, quanto menor
+  // a folga, maior o score.
+  const score = atrasado
+    ? 10_000 + Math.abs(folgaHoras)
+    : Math.max(0, 1_000 - folgaHoras);
+
+  return { score, folgaHoras, diasParaPrazo: diffDays(prazo, agora), atrasado, emRisco };
+}
+
+// Produto de maior m² dentro do pedido — usado como "assinatura" para o bônus
+// de agrupamento (pedidos do mesmo produto na fila reduzem troca de setup).
+export function produtoPrincipal(itens: Pick<ItemPedido, 'produto_nome' | 'm2'>[]): string {
+  if (itens.length === 0) return '';
+  const porProduto = new Map<string, number>();
+  for (const i of itens) porProduto.set(i.produto_nome, (porProduto.get(i.produto_nome) ?? 0) + i.m2);
+  return [...porProduto.entries()].sort((a, b) => b[1] - a[1])[0][0];
+}
+
 export function formatarDuracao(min: number): string {
   if (min <= 0) return '—';
   if (min < 60) return `${min}min`;
