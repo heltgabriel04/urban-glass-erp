@@ -7,3 +7,8 @@ ALTER TABLE programacao_producao
 
 CREATE INDEX IF NOT EXISTS idx_prog_item_id     ON programacao_producao(item_pedido_id) WHERE item_pedido_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_prog_predecessor  ON programacao_producao(predecessor_id)  WHERE predecessor_id IS NOT NULL;
+
+-- Verificação — deve retornar as duas colunas
+SELECT column_name, data_type
+FROM information_schema.columns
+WHERE table_name = 'programacao_producao' AND column_name IN ('item_pedido_id', 'predecessor_id');
