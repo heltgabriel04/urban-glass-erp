@@ -327,6 +327,9 @@ export async function deletarPedido(pedidoId: string): Promise<{ ok: boolean; er
   await supabase.from('quebras').delete().eq('pedido_id', pedidoId);
   await supabase.from('nao_conformidades').delete().eq('pedido_id', pedidoId);
   await supabase.from('retalhos_uso').delete().eq('pedido_id', pedidoId);
+  // retalhos (sobras físicas em estoque) não são apagados — apenas desvinculados,
+  // pois continuam sendo inventário real disponível mesmo após o pedido ser excluído.
+  await supabase.from('retalhos').update({ pedido_origem: null } as never).eq('pedido_origem', pedidoId);
   await deletarRetiradasPorPedido(pedidoId);
   await supabase.from('itens_pedido').delete().eq('pedido_id', pedidoId);
   await supabase.from('historico_otimizador').delete().eq('pedido_id', pedidoId);
