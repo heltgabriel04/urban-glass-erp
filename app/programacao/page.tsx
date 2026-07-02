@@ -117,6 +117,29 @@ function calcBlocoWidth(dur: number, zoom: string): number {
   return Math.max(cw * 0.85, dias * cw - 4);
 }
 
+// Divide os blocos de uma linha em "raias" quando há sobreposição de
+// horário (ex.: dois pedidos do mesmo cliente cortados juntos) — sem isso
+// os blocos ficam empilhados exatamente um em cima do outro e viram
+// ilegíveis. Guloso: ordena por início, aloca na primeira raia livre.
+function atribuirRaias(blocos: ProgramacaoProducao[]): { raia: Map<string, number>; total: number } {
+  const ordenados = [...blocos].sort((a, b) => {
+    const ta = a.dt_inicio_previsto ? new Date(a.dt_inicio_previsto).getTime() : 0;
+    const tb = b.dt_inicio_previsto ? new Date(b.dt_inicio_previsto).getTime() : 0;
+    return ta - tb;
+  });
+  const fimPorRaia: number[] = [];
+  const raia = new Map<string, number>();
+  for (const b of ordenados) {
+    const inicio = b.dt_inicio_previsto ? new Date(b.dt_inicio_previsto).getTime() : 0;
+    const fim    = b.dt_fim_previsto    ? new Date(b.dt_fim_previsto).getTime()    : inicio;
+    let idx = fimPorRaia.findIndex(f => f <= inicio);
+    if (idx === -1) { idx = fimPorRaia.length; fimPorRaia.push(fim); }
+    else fimPorRaia[idx] = fim;
+    raia.set(b.id, idx);
+  }
+  return { raia, total: Math.max(1, fimPorRaia.length) };
+}
+
 type TipoDia = 'fim_semana' | 'feriado' | 'bloqueio_global' | 'bloqueio_linha' | null;
 function getDiaTipo(date: Date, linhaId: number, calendario: Set<string>, bloqueios: BloqueioLinha[]): TipoDia {
   const dow = date.getDay();
@@ -178,11 +201,12 @@ function LegendaCores() {
 // ─── BLOCO DRAGGABLE + REDIMENSIONÁVEL ───────────────────────
 
 function BlocoProducao({
-  prog, zoom, visibleStart, onClick, onResizeFim,
+  prog, zoom, visibleStart, onClick, onResizeFim, laneIndex = 0, laneCount = 1,
 }: {
   prog: ProgramacaoProducao; zoom: string; visibleStart: Date;
   onClick: (p: ProgramacaoProducao) => void;
   onResizeFim: (id: string, novaDur: number) => void;
+  laneIndex?: number; laneCount?: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: prog.id, data: { prog },
@@ -197,6 +221,15 @@ function BlocoProducao({
   const width = calcBlocoWidth(displayDur, zoom);
   const borda = bordaBloco(prog);
   const bg    = corBloco(prog);
+
+  // Quando dois ou mais blocos da mesma linha se sobrepõem no tempo (ex.:
+  // pedidos do mesmo cliente cortados juntos), cada um ocupa sua própria
+  // raia dentro da altura da linha em vez de ficar empilhado por cima do
+  // outro.
+  const laneH   = (ROW_H - 16) / laneCount;
+  const top     = 6 + laneIndex * laneH;
+  const height  = laneCount > 1 ? laneH - 3 : laneH;
+  const compacto = height < 50;
 
   // Snap em minutos conforme zoom
   const snapMin = zoom === "dia" ? 15 : zoom === "semana" ? 30 : 60;
@@ -244,7 +277,7 @@ function BlocoProducao({
       ref={setNodeRef}
       title={titleInfo}
       style={{
-        position: "absolute", left, top: 6, width, height: ROW_H - 16,
+        position: "absolute", left, top, width, height,
         background: bg, border: `1.5px solid ${borda}`, borderRadius: 8,
         padding: "5px 9px 5px 9px",
         cursor: isDragging ? "grabbing" : "grab",
@@ -285,7 +318,7 @@ function BlocoProducao({
             {prog.pedidos?.clientes?.nome ?? "—"}
           </div>
         )}
-        {width > 80 && (
+        {width > 80 && !compacto && (
           <div style={{ fontSize: 9, color: previewDur ? "var(--acc)" : "var(--t3)", marginTop: 1, fontWeight: previewDur ? 700 : 400 }}>
             {formatarDuracao(displayDur)} · {prog.etapa}
           </div>
@@ -1969,6 +2002,7 @@ export default function ProgramacaoPage() {
                       })()}
                       {linhasFiltradas.map(linha => {
                         const blocos = progFiltradas.filter(p => p.linha_id === linha.id);
+                        const { raia: raiaPorBloco, total: totalRaias } = atribuirRaias(blocos);
                         const minTotal = blocos.reduce((s, p) => s + (p.duracao_estimada_min ?? 0), 0);
                         const horasCap = linha.capacidade_horas_dia * Math.max(1, dias.length);
                         const pctCap   = Math.min(100, Math.round((minTotal / (horasCap * 60)) * 100));
@@ -2044,6 +2078,8 @@ export default function ProgramacaoPage() {
                                   visibleStart={zoom === "dia" ? dataBase : dias[0]}
                                   onClick={setModalBloco}
                                   onResizeFim={handleResizeFim}
+                                  laneIndex={raiaPorBloco.get(prog.id) ?? 0}
+                                  laneCount={totalRaias}
                                 />
                               ))}
                             </LinhaDroppable>
