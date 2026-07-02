@@ -5,7 +5,7 @@ import {
   alocarBlocoEvitandoOcupados, gerarPropostaRecalculo,
   duracaoTotalCorte, calcularTempoEstimado,
   duracaoComSetupAdaptativo, refinarComTrocasAdjacentes, decidirCalibracoes,
-  statusProgramacaoAlvo, selecionarGargalo, calcularLeadTime,
+  statusProgramacaoAlvo, selecionarGargalo, calcularLeadTime, agruparPorPedido,
 } from "@/services/programacao.service";
 import type { MudancaProposta, DadosCalibracao } from "@/services/programacao.service";
 import type { ProducaoLinha, ConfigTempoProducao } from "@/types";
@@ -514,5 +514,47 @@ describe("calcularLeadTime", () => {
 
   it("bloco sem datas previstas é ignorado; se nenhum tiver, retorna null", () => {
     expect(calcularLeadTime([{ dt_inicio_previsto: null, dt_fim_previsto: null }])).toEqual({ inicio: null, fim: null, minutos: null });
+  });
+});
+
+describe("agruparPorPedido", () => {
+  it("pedido único: 1 grupo com todos os blocos daquele pedido", () => {
+    const grupos = agruparPorPedido([
+      { pedido_id: "P-001", dt_inicio_previsto: segundaAs(8, 0).toISOString(), pedidos: { clientes: { nome: "Cliente A" }, dt_retirada: null } },
+      { pedido_id: "P-001", dt_inicio_previsto: segundaAs(9, 0).toISOString(), pedidos: { clientes: { nome: "Cliente A" }, dt_retirada: null } },
+    ]);
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0].chave).toBe("P-001");
+    expect(grupos[0].blocos).toHaveLength(2);
+    expect(grupos[0].label).toContain("Cliente A");
+    expect(grupos[0].label).toContain("P-001");
+  });
+
+  it("múltiplos pedidos: um grupo por pedido_id, ordenados pelo início mais cedo", () => {
+    const grupos = agruparPorPedido([
+      { pedido_id: "P-002", dt_inicio_previsto: segundaAs(10, 0).toISOString(), pedidos: { clientes: { nome: "Cliente B" }, dt_retirada: null } },
+      { pedido_id: "P-001", dt_inicio_previsto: segundaAs(8, 0).toISOString(),  pedidos: { clientes: { nome: "Cliente A" }, dt_retirada: null } },
+    ]);
+    expect(grupos.map(g => g.chave)).toEqual(["P-001", "P-002"]); // P-001 começa mais cedo
+  });
+
+  it("pedido com 2+ itens concorrentes (blocos sobrepostos no tempo) fica no mesmo grupo", () => {
+    const grupos = agruparPorPedido([
+      { pedido_id: "P-003", dt_inicio_previsto: segundaAs(8, 0).toISOString(), pedidos: { clientes: { nome: "Cliente C" }, dt_retirada: null } },
+      { pedido_id: "P-003", dt_inicio_previsto: segundaAs(8, 0).toISOString(), pedidos: { clientes: { nome: "Cliente C" }, dt_retirada: null } },
+    ]);
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0].blocos).toHaveLength(2);
+  });
+
+  it("lista vazia retorna nenhum grupo", () => {
+    expect(agruparPorPedido([])).toEqual([]);
+  });
+
+  it("sem cliente/prazo, o label ainda inclui o pedido_id", () => {
+    const grupos = agruparPorPedido([
+      { pedido_id: "P-004", dt_inicio_previsto: segundaAs(8, 0).toISOString(), pedidos: null },
+    ]);
+    expect(grupos[0].label).toContain("P-004");
   });
 });

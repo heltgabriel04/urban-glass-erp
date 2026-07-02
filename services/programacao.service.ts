@@ -171,6 +171,51 @@ export function calcularLeadTime(
   return { inicio, fim, minutos: Math.round((fim.getTime() - inicio.getTime()) / 60000) };
 }
 
+export interface GrupoRaia<T> {
+  chave: string;
+  label: string;
+  blocos: T[];
+}
+
+type BlocoAgrupavel = Pick<ProgramacaoProducao, 'pedido_id' | 'dt_inicio_previsto'> & {
+  pedidos?: { clientes?: { nome: string } | null; dt_retirada?: string | null } | null;
+};
+
+// Agrupa blocos por pedido em vez de por linha — visão "Por Pedido" (fluxo
+// estilo Planet Together): cada grupo vira uma raia visual só daquele
+// pedido, mostrando sua cadeia completa (Corte→Lapidação→Separação→
+// Finalizado) numa única linha do Gantt, em vez de espalhada pelas linhas
+// de produção. Genérico sobre T pra aceitar tanto ProgramacaoProducao
+// completo (uso real — preserva os campos que BlocoProducao precisa pra
+// renderizar) quanto fixtures mínimas nos testes.
+export function agruparPorPedido<T extends BlocoAgrupavel>(progs: T[]): Array<GrupoRaia<T>> {
+  const porPedido = new Map<string, T[]>();
+  for (const p of progs) {
+    const lista = porPedido.get(p.pedido_id) ?? [];
+    lista.push(p);
+    porPedido.set(p.pedido_id, lista);
+  }
+
+  const grupos = [...porPedido.entries()].map(([pedidoId, blocos]) => {
+    const primeiro = blocos[0];
+    const cliente  = primeiro.pedidos?.clientes?.nome ?? "—";
+    const prazo    = primeiro.pedidos?.dt_retirada
+      ? new Date(primeiro.pedidos.dt_retirada).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+      : "—";
+    return { chave: pedidoId, label: `${cliente} · ${pedidoId} · ${prazo}`, blocos };
+  });
+
+  // Ordena pelo início mais cedo entre os blocos do pedido — leitura
+  // cronológica de cima pra baixo, mesma lógica implícita do modo "Por Linha".
+  grupos.sort((a, b) => {
+    const ta = Math.min(...a.blocos.map(x => x.dt_inicio_previsto ? new Date(x.dt_inicio_previsto).getTime() : Infinity));
+    const tb = Math.min(...b.blocos.map(x => x.dt_inicio_previsto ? new Date(x.dt_inicio_previsto).getTime() : Infinity));
+    return ta - tb;
+  });
+
+  return grupos;
+}
+
 // ─── PRIORIZAÇÃO (APS) ──────────────────────────────────────
 // Fase 1 do motor de agendamento: calcula um score de prioridade por pedido
 // pendente, combinando prazo de entrega + trabalho restante (folga real,
