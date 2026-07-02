@@ -5,6 +5,7 @@ import {
   alocarBlocoEvitandoOcupados, gerarPropostaRecalculo,
   duracaoTotalCorte, calcularTempoEstimado,
   duracaoComSetupAdaptativo, refinarComTrocasAdjacentes, decidirCalibracoes,
+  statusProgramacaoAlvo,
 } from "@/services/programacao.service";
 import type { MudancaProposta, DadosCalibracao } from "@/services/programacao.service";
 import type { ProducaoLinha, ConfigTempoProducao } from "@/types";
@@ -424,5 +425,32 @@ describe("refinarComTrocasAdjacentes — não troca pares com desconto de setup 
     const trocas = refinarComTrocasAdjacentes(mudancas, [linhaCorte]);
     expect(trocas).toBe(0);
     expect(mudancas.find(m => m.pedidoId === "P-B")!.inicioNovo.getTime()).toBe(fimA.getTime()); // não moveu
+  });
+});
+
+describe("statusProgramacaoAlvo", () => {
+  it("etapas ainda não alcançadas ficam Agendado", () => {
+    expect(statusProgramacaoAlvo("Em Produção – Corte", "Lapidação")).toBe("Agendado");
+    expect(statusProgramacaoAlvo("Em Produção – Corte", "Retirada de Chapa")).toBe("Agendado");
+  });
+
+  it("marca a etapa corrente como Em Execução e as anteriores como Concluído", () => {
+    expect(statusProgramacaoAlvo("Em Produção – Corte", "Corte")).toBe("Em Execução");
+    expect(statusProgramacaoAlvo("Em Produção – Lapidação", "Corte")).toBe("Concluído");
+    expect(statusProgramacaoAlvo("Em Produção – Lapidação", "Lapidação")).toBe("Em Execução");
+  });
+
+  it("Separação e Finalizado/Entregue refletem no bloco de Retirada de Chapa", () => {
+    expect(statusProgramacaoAlvo("Separação",  "Retirada de Chapa")).toBe("Em Execução");
+    expect(statusProgramacaoAlvo("Finalizado", "Retirada de Chapa")).toBe("Concluído");
+    expect(statusProgramacaoAlvo("Entregue",   "Retirada de Chapa")).toBe("Concluído");
+  });
+
+  it("retornar null para status Cancelado (não reconcilia)", () => {
+    expect(statusProgramacaoAlvo("Cancelado", "Corte")).toBeNull();
+  });
+
+  it("retornar null para uma etapa desconhecida", () => {
+    expect(statusProgramacaoAlvo("Em Produção – Corte", "Furação")).toBeNull();
   });
 });

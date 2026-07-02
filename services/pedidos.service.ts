@@ -5,6 +5,7 @@ import { isChapaInteira } from '@/lib/chapas';
 import { registrarMovimentacao, reverterMovimentacao } from './estoqueMovimentacoes.service';
 import { registrarMovimentoCliente, deletarMovimentacoesPorPedido } from './materialCliente.service';
 import { deletarRetiradasPorPedido } from './retiradas.service';
+import { reconciliarProgramacaoComPedido } from './programacao.service';
 
 export async function getPedidos(filtroStatus?: StatusPedido) {
   let query = supabase
@@ -256,11 +257,14 @@ export async function avancarStatusPedido(id: string, statusAtual: StatusPedido)
   const novoHistorico = [...historico, { status: novoStatus, desde: new Date().toISOString() }];
 
   const res = await updatePedido(id, { status: novoStatus, status_history: novoHistorico as any });
-  if (res) registrarLog({
-    acao: "avançou", tabela: "pedidos", registro_id: id,
-    descricao: `Avançou status do pedido ${id}: ${statusAtual} → ${novoStatus}`,
-    campos_alterados: { status: { de: statusAtual, para: novoStatus } },
-  });
+  if (res) {
+    registrarLog({
+      acao: "avançou", tabela: "pedidos", registro_id: id,
+      descricao: `Avançou status do pedido ${id}: ${statusAtual} → ${novoStatus}`,
+      campos_alterados: { status: { de: statusAtual, para: novoStatus } },
+    });
+    await reconciliarProgramacaoComPedido(id, novoStatus);
+  }
 
   if (res && statusAtual === 'Aguardando otimização' && novoStatus === 'Em Produção – Corte') {
     const { data: itensVC } = await supabase
@@ -299,11 +303,14 @@ export async function retrocederStatusPedido(id: string, statusAtual: StatusPedi
   const novoHistorico = historico.slice(0, -1);
 
   const res = await updatePedido(id, { status: novoStatus, status_history: novoHistorico as any });
-  if (res) registrarLog({
-    acao: "retrocedeu", tabela: "pedidos", registro_id: id,
-    descricao: `Retrocedeu status do pedido ${id}: ${statusAtual} → ${novoStatus}`,
-    campos_alterados: { status: { de: statusAtual, para: novoStatus } },
-  });
+  if (res) {
+    registrarLog({
+      acao: "retrocedeu", tabela: "pedidos", registro_id: id,
+      descricao: `Retrocedeu status do pedido ${id}: ${statusAtual} → ${novoStatus}`,
+      campos_alterados: { status: { de: statusAtual, para: novoStatus } },
+    });
+    await reconciliarProgramacaoComPedido(id, novoStatus);
+  }
   return res;
 }
 

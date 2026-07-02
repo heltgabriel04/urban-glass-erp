@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase/client';
 import type {
   ProducaoLinha, ConfigTempoProducao, ProgramacaoProducao,
-  ProgramacaoInsert, TempoEstimado, ItemPedido, Pedido, StatusPedido,
+  ProgramacaoInsert, TempoEstimado, ItemPedido, Pedido, StatusPedido, StatusProgramacao,
 } from '@/types';
 
 // ─── UTILITÁRIOS DE DATA ────────────────────────────────────
@@ -1003,6 +1003,60 @@ function mapearStatusPedido(
     if (etapa === 'Separação')          return 'Finalizado';
   }
   return null;
+}
+
+// Mapeamento reverso: status do pedido → status alvo de cada etapa de
+// programação. Usado quando o usuário avança/retrocede o pedido pela tela
+// de Pedidos, pra refletir automaticamente na Programação (sem retrabalho
+// de marcar os blocos manualmente também). Etapas não citadas pra um dado
+// status do pedido ainda não foram alcançadas → 'Agendado'.
+const ETAPAS_POR_STATUS_PEDIDO: Record<StatusPedido, Record<string, StatusProgramacao>> = {
+  'Aguardando otimização':   { Corte: 'Agendado',    Lapidação: 'Agendado',    'Retirada de Chapa': 'Agendado' },
+  'Em Produção – Corte':     { Corte: 'Em Execução', Lapidação: 'Agendado',    'Retirada de Chapa': 'Agendado' },
+  'Qualidade (Corte)':       { Corte: 'Concluído',   Lapidação: 'Agendado',    'Retirada de Chapa': 'Agendado' },
+  'Em Produção – Lapidação': { Corte: 'Concluído',   Lapidação: 'Em Execução', 'Retirada de Chapa': 'Agendado' },
+  'Qualidade (Lapidação)':   { Corte: 'Concluído',   Lapidação: 'Concluído',   'Retirada de Chapa': 'Agendado' },
+  'Separação':               { Corte: 'Concluído',   Lapidação: 'Concluído',   'Retirada de Chapa': 'Em Execução' },
+  'Finalizado':              { Corte: 'Concluído',   Lapidação: 'Concluído',   'Retirada de Chapa': 'Concluído' },
+  'Entregue':                { Corte: 'Concluído',   Lapidação: 'Concluído',   'Retirada de Chapa': 'Concluído' },
+  'Cancelado':                {},
+};
+
+export function statusProgramacaoAlvo(
+  statusPedido: StatusPedido,
+  etapa: string,
+): StatusProgramacao | null {
+  return ETAPAS_POR_STATUS_PEDIDO[statusPedido]?.[etapa] ?? null;
+}
+
+// Reconcilia os blocos de programação de um pedido com o status que ele
+// acabou de assumir (avancarStatusPedido/retrocederStatusPedido). Só grava
+// o que muda, nunca mexe em blocos Cancelado, e nunca apaga dt_inicio_real/
+// dt_fim_real já preenchidos (preserva o histórico real de produção mesmo
+// que o pedido seja retrocedido por engano).
+export async function reconciliarProgramacaoComPedido(
+  pedidoId: string,
+  novoStatusPedido: StatusPedido,
+): Promise<void> {
+  const { data: blocos } = await supabase
+    .from('programacao_producao')
+    .select('id, etapa, status, dt_inicio_real, dt_fim_real')
+    .eq('pedido_id', pedidoId)
+    .neq('status', 'Cancelado');
+
+  for (const bloco of (blocos ?? []) as Pick<ProgramacaoProducao, 'id' | 'etapa' | 'status' | 'dt_inicio_real' | 'dt_fim_real'>[]) {
+    const alvo = statusProgramacaoAlvo(novoStatusPedido, bloco.etapa);
+    if (!alvo || alvo === bloco.status) continue;
+
+    const updates: Partial<ProgramacaoProducao> = { status: alvo };
+    if (alvo === 'Em Execução' && !bloco.dt_inicio_real) updates.dt_inicio_real = toISOLocal(new Date());
+    if (alvo === 'Concluído') {
+      if (!bloco.dt_inicio_real) updates.dt_inicio_real = toISOLocal(new Date());
+      if (!bloco.dt_fim_real)    updates.dt_fim_real    = toISOLocal(new Date());
+    }
+
+    await supabase.from('programacao_producao').update(updates).eq('id', bloco.id);
+  }
 }
 
 export async function atualizarStatusProgramacao(

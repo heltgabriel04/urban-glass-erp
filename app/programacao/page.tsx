@@ -57,6 +57,19 @@ function formatDate(d: Date, short = false): string {
 }
 function formatHour(h: number): string { return `${String(h).padStart(2, "0")}:00`; }
 
+// Tempo de espera entre o fim de um bloco e o início do seu sucessor
+// (ex.: Corte → Lapidação). Diferente de formatarDuracao porque a folga
+// mínima entre etapas costuma passar de 24h e precisa aparecer em dias.
+function formatarGap(min: number): string {
+  if (min < 60) return `${Math.max(0, min)}min`;
+  if (min < 1440) {
+    const h = Math.floor(min / 60), m = min % 60;
+    return m > 0 ? `${h}h${m}min` : `${h}h`;
+  }
+  const d = Math.floor(min / 1440), h = Math.floor((min % 1440) / 60);
+  return h > 0 ? `${d}d ${h}h` : `${d}d`;
+}
+
 function corBloco(prog: ProgramacaoProducao): string {
   if (prog.status === "Concluído")   return "#1e1e2e";
   if (prog.status === "Em Execução") return "#0f2a1a";
@@ -631,9 +644,9 @@ function ModalAgendamentoLote({
 // ─── MODAL DETALHE DO BLOCO ───────────────────────────────────
 
 function ModalBloco({
-  prog, linhas, onFechar, onIniciar, onConcluir, onDeletar, onRetirada, onRetrabalho,
+  prog, linhas, predecessor, onFechar, onIniciar, onConcluir, onDeletar, onRetirada, onRetrabalho,
 }: {
-  prog: ProgramacaoProducao; linhas: ProducaoLinha[];
+  prog: ProgramacaoProducao; linhas: ProducaoLinha[]; predecessor: ProgramacaoProducao | null;
   onFechar: () => void; onIniciar: () => void;
   onConcluir: () => void; onDeletar: () => void;
   onRetirada: () => void; onRetrabalho: () => void;
@@ -642,6 +655,9 @@ function ModalBloco({
   const prazo      = prog.pedidos?.dt_retirada ? new Date(prog.pedidos.dt_retirada).toLocaleDateString("pt-BR") : "—";
   const inicio     = prog.dt_inicio_previsto   ? new Date(prog.dt_inicio_previsto).toLocaleDateString("pt-BR") : "—";
   const fim        = prog.dt_fim_previsto       ? new Date(prog.dt_fim_previsto).toLocaleDateString("pt-BR")   : "—";
+  const gapMin = predecessor?.dt_fim_previsto && prog.dt_inicio_previsto
+    ? Math.round((new Date(prog.dt_inicio_previsto).getTime() - new Date(predecessor.dt_fim_previsto).getTime()) / 60000)
+    : null;
 
   // Retiradas parciais
   const [retiradas,     setRetiradas]     = useState<RetiradaParcial[]>([]);
@@ -733,6 +749,12 @@ function ModalBloco({
             <StatBloco label="Fim Previsto"    value={fim} />
             <StatBloco label="Prazo Entrega"   value={prazo} col={borda} />
             <StatBloco label="Duração Est."    value={formatarDuracao(prog.duracao_estimada_min ?? 0)} />
+            {predecessor && (
+              <StatBloco
+                label={`Espera após ${predecessor.etapa}`}
+                value={gapMin !== null && gapMin > 0 ? formatarGap(gapMin) : "—"}
+              />
+            )}
           </div>
 
           {/* Tempos reais */}
@@ -1899,16 +1921,30 @@ export default function ProgramacaoPage() {
                               const y2 = currRowIdx * ROW_H + ROW_H / 2;
                               const cx1 = x1 + Math.min(40, (x2 - x1) * 0.4);
                               const cx2 = x2 - Math.min(40, (x2 - x1) * 0.4);
+                              const gapMin = pred.dt_fim_previsto && prog.dt_inicio_previsto
+                                ? Math.round((new Date(prog.dt_inicio_previsto).getTime() - new Date(pred.dt_fim_previsto).getTime()) / 60000)
+                                : null;
+                              const midX = (x1 + x2) / 2;
+                              const midY = (y1 + y2) / 2;
                               return (
-                                <path
-                                  key={`dep-${prog.id}`}
-                                  d={`M ${x1} ${y1} C ${cx1} ${y1} ${cx2} ${y2} ${x2} ${y2}`}
-                                  fill="none"
-                                  stroke="rgba(167,139,250,0.55)"
-                                  strokeWidth={1.5}
-                                  strokeDasharray="5 3"
-                                  markerEnd="url(#arr)"
-                                />
+                                <g key={`dep-${prog.id}`}>
+                                  <path
+                                    d={`M ${x1} ${y1} C ${cx1} ${y1} ${cx2} ${y2} ${x2} ${y2}`}
+                                    fill="none"
+                                    stroke="rgba(167,139,250,0.55)"
+                                    strokeWidth={1.5}
+                                    strokeDasharray="5 3"
+                                    markerEnd="url(#arr)"
+                                  />
+                                  {gapMin !== null && gapMin > 0 && (
+                                    <>
+                                      <rect x={midX - 22} y={midY - 8} width={44} height={14} rx={7} fill="var(--surf)" opacity={0.92} />
+                                      <text x={midX} y={midY + 2} textAnchor="middle" fontSize={9} fontWeight={700} fill="rgba(167,139,250,0.95)">
+                                        {formatarGap(gapMin)}
+                                      </text>
+                                    </>
+                                  )}
+                                </g>
                               );
                             })}
                           </svg>
@@ -2281,6 +2317,7 @@ export default function ProgramacaoPage() {
       )}
       {modalBloco && (
         <ModalBloco prog={modalBloco} linhas={linhas}
+          predecessor={programacoes.find(p => p.id === modalBloco.predecessor_id) ?? null}
           onFechar={() => setModalBloco(null)}
           onIniciar={handleIniciar} onConcluir={handleConcluir} onDeletar={handleDeletar}
           onRetirada={load}
