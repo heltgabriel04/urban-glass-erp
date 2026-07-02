@@ -789,6 +789,7 @@ export interface ProgramacaoProducao {
   status: StatusProgramacao;
   responsavel: string | null;
   obs: string | null;
+  desconto_setup_min: number | null; // min. de setup economizados por repetir o produto do bloco anterior na mesma linha (motor de recálculo automático)
   travado?: boolean; // reposicionado manualmente (drag/resize) — motor de agendamento automático não deve mover
   created_at: string;
   updated_at: string;
@@ -813,7 +814,7 @@ export interface ProgramacaoProducao {
   } | null;
 }
 
-export type ProgramacaoInsert = Pick<
+export type ProgramacaoInsert = Partial<Pick<ProgramacaoProducao, 'desconto_setup_min'>> & Pick<
   ProgramacaoProducao,
   'pedido_id' | 'linha_id' | 'etapa' | 'sequencia' |
   'dt_inicio_previsto' | 'dt_fim_previsto' | 'duracao_estimada_min' | 'responsavel' | 'obs' |

@@ -539,6 +539,7 @@ export async function criarProgramacaoPedido(
   linhaLapId?: number,
   diasBloqueados: Set<string> = new Set(),
   dtRetirada: Date | null = null,
+  descontoSetupMin?: number,
 ): Promise<{ ok: boolean; erro?: string; fimCorte?: Date }> {
   const linhaCorte = linhas.find(l => l.id === linhaCorteId);
   const linhaLap   = linhaLapId ? linhas.find(l => l.id === linhaLapId) : undefined;
@@ -558,7 +559,14 @@ export async function criarProgramacaoPedido(
     const tempos = calcularTempoEstimado([item], config);
     const corteId = crypto.randomUUID();
 
-    const { inicio: inicioCorte, fim: fimCorte } = alocarBloco(cursorCorte, tempos.corte_min, linhaCorte, diasBloqueados);
+    // O desconto de setup por repetição de produto (duracaoComSetupAdaptativo)
+    // é um desconto por PEDIDO (uma troca de configuração de máquina a menos),
+    // não por peça — aplica só no primeiro item do lote pra não descontar
+    // várias vezes o mesmo desconto.
+    const descontoItem = i === 0 ? Math.max(0, descontoSetupMin ?? 0) : 0;
+    const corteMin = Math.max(1, tempos.corte_min - descontoItem);
+
+    const { inicio: inicioCorte, fim: fimCorte } = alocarBloco(cursorCorte, corteMin, linhaCorte, diasBloqueados);
 
     registros.push({
       id: corteId,
@@ -570,7 +578,8 @@ export async function criarProgramacaoPedido(
       sequencia: i * 2,
       dt_inicio_previsto: toISOLocal(inicioCorte),
       dt_fim_previsto: toISOLocal(fimCorte),
-      duracao_estimada_min: tempos.corte_min,
+      duracao_estimada_min: corteMin,
+      desconto_setup_min: descontoItem,
       responsavel: null,
       obs: null,
     });
@@ -994,9 +1003,15 @@ export async function aplicarPropostaRecalculo(
       const ok = await reagendar(m.progId, m.inicioNovo, m.duracaoMin, m.linhaNova, 'Recálculo automático (APS)', false);
       if (!ok) return { ok: false, erro: `Falha ao mover o bloco do pedido ${m.pedidoId}.` };
     } else if (m.tipo === 'inserir' && m.itens) {
+      // m.duracaoMin já reflete o desconto de setup adaptativo (ver
+      // descontoAplicado); criarProgramacaoPedido recalcula do zero por
+      // item, então o delta precisa ser passado explicitamente pra não se
+      // perder na gravação.
+      const duracaoBase = duracaoTotalCorte(m.itens, config);
+      const descontoSetupMin = m.descontoAplicado ? Math.max(0, duracaoBase - m.duracaoMin) : undefined;
       const result = await criarProgramacaoPedido(
         m.pedidoId, m.itens, config, linhas, m.inicioNovo, m.linhaNova, undefined,
-        bloqueadosPorLinha[m.linhaNova] ?? new Set(),
+        bloqueadosPorLinha[m.linhaNova] ?? new Set(), undefined, descontoSetupMin,
       );
       if (!result.ok) return { ok: false, erro: `Falha ao agendar ${m.pedidoId}: ${result.erro ?? ''}` };
     }
