@@ -35,7 +35,10 @@ import Link from "next/link";
 
 // ─── CONSTANTES ───────────────────────────────────────────────
 
-const COL_W: Record<string, number> = { dia: 100, semana: 144, mes: 52 };
+// "hora" reaproveita a mesma janela de um dia que "dia" já mostra (grade
+// de 8h–17h) — só com colunas bem mais largas pra maior precisão ao
+// arrastar; navega-se por scroll horizontal, que o container já suporta.
+const COL_W: Record<string, number> = { hora: 280, dia: 100, semana: 144, mes: 52 };
 const ROW_H   = 104;
 const LABEL_W = 188;
 
@@ -95,7 +98,7 @@ function bordaBloco(prog: ProgramacaoProducao): string {
 }
 
 function diasVisiveis(zoom: string, base: Date): Date[] {
-  if (zoom === "dia") return [new Date(base)];
+  if (zoom === "dia" || zoom === "hora") return [new Date(base)];
   if (zoom === "semana") return Array.from({ length: 7 }, (_, i) => addDays(base, i));
   const firstDay = new Date(base.getFullYear(), base.getMonth(), 1);
   const lastDay  = new Date(base.getFullYear(), base.getMonth() + 1, 0);
@@ -106,13 +109,13 @@ function horasVisiveis() { return Array.from({ length: 9 }, (_, i) => i + 8); }
 function blocoLeft(prog: ProgramacaoProducao, zoom: string, visibleStart: Date): number {
   if (!prog.dt_inicio_previsto) return 0;
   const inicio = new Date(prog.dt_inicio_previsto);
-  if (zoom === "dia") return Math.max(0, (inicio.getHours() - 8)) * COL_W[zoom];
+  if (zoom === "dia" || zoom === "hora") return Math.max(0, (inicio.getHours() - 8)) * COL_W[zoom];
   return Math.max(0, diffDays(inicio, visibleStart)) * COL_W[zoom];
 }
 
 function calcBlocoWidth(dur: number, zoom: string): number {
   const cw = COL_W[zoom];
-  if (zoom === "dia") return Math.max(cw * 0.9, (dur / 60) * cw);
+  if (zoom === "dia" || zoom === "hora") return Math.max(cw * 0.9, (dur / 60) * cw);
   const dias = Math.max(0.5, dur / 480);
   return Math.max(cw * 0.85, dias * cw - 4);
 }
@@ -232,10 +235,10 @@ function BlocoProducao({
   const compacto = height < 50;
 
   // Snap em minutos conforme zoom
-  const snapMin = zoom === "dia" ? 15 : zoom === "semana" ? 30 : 60;
+  const snapMin = zoom === "hora" ? 5 : zoom === "dia" ? 15 : zoom === "semana" ? 30 : 60;
   // Minutos por pixel conforme zoom
-  const minsPorPx = zoom === "dia"
-    ? 60 / COL_W.dia
+  const minsPorPx = (zoom === "dia" || zoom === "hora")
+    ? 60 / COL_W[zoom]
     : 480 / COL_W[zoom];
 
   function handleResizeDown(e: React.PointerEvent) {
@@ -1175,7 +1178,7 @@ function AbaExpedicao({ pedidos }: { pedidos: Pedido[] }) {
 
 export default function ProgramacaoPage() {
   const [aba,          setAba]          = useState<"gantt" | "dashboard" | "expedicao">("gantt");
-  const [zoom,         setZoom]         = useState<"dia" | "semana" | "mes">("semana");
+  const [zoom,         setZoom]         = useState<"hora" | "dia" | "semana" | "mes">("semana");
   const [dataBase,     setDataBase]     = useState<Date>(() => getMonday(new Date()));
   const [linhas,       setLinhas]       = useState<ProducaoLinha[]>([]);
   const [config,       setConfig]       = useState<ConfigTempoProducao[]>([]);
@@ -1211,14 +1214,19 @@ export default function ProgramacaoPage() {
   const dias   = diasVisiveis(zoom, dataBase);
   const horas  = horasVisiveis();
   const colW   = COL_W[zoom];
-  const totalWidth = zoom === "dia" ? horas.length * colW : dias.length * colW;
+  // "hora" mostra a mesma janela de um dia que "dia" (grade 8h–17h) — só
+  // com colunas mais largas. Sempre que "dia" muda o comportamento
+  // (janela de um dia só, em vez de vários dias/semanas/meses), "hora"
+  // acompanha.
+  const zoomHoraria = zoom === "dia" || zoom === "hora";
+  const totalWidth = zoomHoraria ? horas.length * colW : dias.length * colW;
 
   async function load() {
     setLoading(true);
     setErroLoad("");
     try {
-      const from2 = zoom === "dia" ? dataBase : dias[0];
-      const to2   = addDays(zoom === "dia" ? dataBase : dias[dias.length - 1], 1);
+      const from2 = zoomHoraria ? dataBase : dias[0];
+      const to2   = addDays(zoomHoraria ? dataBase : dias[dias.length - 1], 1);
       const [lin, cfg, sem, exp, cal, blq] = await Promise.all([
         getLinhas(), getConfigTempo(), getPedidosSemProgramacao(), getPedidosExpedicao(),
         getCalendario(), getBloqueiosLinha(from2, addDays(to2, 30)),
@@ -1226,8 +1234,8 @@ export default function ProgramacaoPage() {
       setCalendario(cal);
       setBloqueios(blq);
       setLinhas(lin); setConfig(cfg); setSemProg(sem); setExpedicao(exp);
-      const from = zoom === "dia" ? dataBase : dias[0];
-      const to   = addDays(zoom === "dia" ? dataBase : dias[dias.length - 1], 1);
+      const from = zoomHoraria ? dataBase : dias[0];
+      const to   = addDays(zoomHoraria ? dataBase : dias[dias.length - 1], 1);
       const progs = await getProgramacao(from, to);
       setProg(progs);
     } catch (e: any) {
@@ -1290,14 +1298,14 @@ export default function ProgramacaoPage() {
   }
 
   function navAnterior() {
-    if (zoom === "dia")    setDataBase(d => addDays(d, -1));
-    if (zoom === "semana") setDataBase(d => addDays(d, -7));
-    if (zoom === "mes")    setDataBase(d => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+    if (zoomHoraria)        setDataBase(d => addDays(d, -1));
+    if (zoom === "semana")  setDataBase(d => addDays(d, -7));
+    if (zoom === "mes")     setDataBase(d => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   }
   function navProximo() {
-    if (zoom === "dia")    setDataBase(d => addDays(d, 1));
-    if (zoom === "semana") setDataBase(d => addDays(d, 7));
-    if (zoom === "mes")    setDataBase(d => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+    if (zoomHoraria)        setDataBase(d => addDays(d, 1));
+    if (zoom === "semana")  setDataBase(d => addDays(d, 7));
+    if (zoom === "mes")     setDataBase(d => new Date(d.getFullYear(), d.getMonth() + 1, 1));
   }
   function irHoje() {
     if (zoom === "semana")    setDataBase(getMonday(new Date()));
@@ -1305,7 +1313,7 @@ export default function ProgramacaoPage() {
     else                      setDataBase(new Date());
   }
 
-  // Ctrl+scroll troca o zoom (dia ↔ semana ↔ mês), estilo Figma/Google Maps.
+  // Ctrl+scroll troca o zoom (hora ↔ dia ↔ semana ↔ mês), estilo Figma/Google Maps.
   // Precisa ser um listener NATIVO (addEventListener com passive:false): o
   // onWheel do React é registrado como passivo por baixo dos panos, então
   // e.preventDefault() dentro de um onWheel do JSX não bloqueia o zoom
@@ -1316,7 +1324,7 @@ export default function ProgramacaoPage() {
   useEffect(() => {
     const el = ganttScrollRef.current;
     if (!el) return;
-    const ZOOM_ORDER: Array<"dia" | "semana" | "mes"> = ["dia", "semana", "mes"];
+    const ZOOM_ORDER: Array<"hora" | "dia" | "semana" | "mes"> = ["hora", "dia", "semana", "mes"];
     function onWheel(e: WheelEvent) {
       if (!e.ctrlKey) return;
       e.preventDefault();
@@ -1334,7 +1342,7 @@ export default function ProgramacaoPage() {
   }, [loading]);
 
   function tituloPeriodo() {
-    if (zoom === "dia") return dataBase.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+    if (zoomHoraria) return dataBase.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
     if (zoom === "semana") {
       const fim = addDays(dataBase, 6);
       return `${dataBase.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} – ${fim.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}`;
@@ -1348,8 +1356,8 @@ export default function ProgramacaoPage() {
     const prog = programacoes.find(p => p.id === active.id);
     if (!prog?.dt_inicio_previsto) return;
 
-    const daysShifted  = zoom === "dia" ? 0 : Math.round(delta.x / colW);
-    const hoursShifted = zoom === "dia" ? Math.round(delta.x / colW) : 0;
+    const daysShifted  = zoomHoraria ? 0 : Math.round(delta.x / colW);
+    const hoursShifted = zoomHoraria ? Math.round(delta.x / colW) : 0;
     const novaLinhaId  = over?.id && Number(over.id) !== prog.linha_id ? Number(over.id) : undefined;
 
     if (daysShifted === 0 && hoursShifted === 0 && !novaLinhaId) return;
@@ -1728,7 +1736,7 @@ export default function ProgramacaoPage() {
   // Posição da linha "agora" no Gantt
   const agora = new Date();
   const agoraLeft = (() => {
-    if (zoom === "dia") {
+    if (zoomHoraria) {
       const h = agora.getHours() - 8 + agora.getMinutes() / 60;
       return h >= 0 && h <= 9 ? h * colW : null;
     }
@@ -1861,7 +1869,7 @@ export default function ProgramacaoPage() {
               }}>
                 {/* Zoom */}
                 <div style={{ display: "flex", border: "1px solid var(--b2)", borderRadius: 8, overflow: "hidden" }}>
-                  {(["dia", "semana", "mes"] as const).map(z => (
+                  {(["hora", "dia", "semana", "mes"] as const).map(z => (
                     <button key={z} onClick={() => setZoom(z)} style={{
                       padding: "5px 13px", border: "none", fontSize: 11, fontWeight: 700, cursor: "pointer",
                       background: zoom === z ? "var(--acc)" : "transparent",
@@ -1919,8 +1927,8 @@ export default function ProgramacaoPage() {
                           LINHA
                         </div>
                         <div style={{ display: "flex", position: "relative" }}>
-                          {(zoom === "dia" ? horas : dias).map((slot, i) => {
-                            const isHoje = zoom !== "dia" && new Date(slot as Date).toDateString() === agora.toDateString();
+                          {(zoomHoraria ? horas : dias).map((slot, i) => {
+                            const isHoje = !zoomHoraria && new Date(slot as Date).toDateString() === agora.toDateString();
                             return (
                               <div key={i} style={{
                                 width: colW, flexShrink: 0,
@@ -1931,7 +1939,7 @@ export default function ProgramacaoPage() {
                                 textAlign: "center", borderRight: "1px solid var(--b1)",
                                 background: isHoje ? "rgba(61,255,160,0.07)" : "transparent",
                               }}>
-                                {zoom === "dia" ? formatHour(slot as number) : formatDate(slot as Date, zoom === "mes")}
+                                {zoomHoraria ? formatHour(slot as number) : formatDate(slot as Date, zoom === "mes")}
                               </div>
                             );
                           })}
@@ -1957,7 +1965,7 @@ export default function ProgramacaoPage() {
                       <div style={{ position: "relative" }}>
                       {/* SVG de setas de dependência (Corte → Lapidação por item) */}
                       {(() => {
-                        const visStart = zoom === "dia" ? dataBase : dias[0];
+                        const visStart = zoomHoraria ? dataBase : dias[0];
                         const setas = progFiltradas.filter(p => p.predecessor_id);
                         if (setas.length === 0) return null;
                         return (
@@ -2061,9 +2069,9 @@ export default function ProgramacaoPage() {
                             {/* Área droppable */}
                             <LinhaDroppable id={linha.id}>
                               {/* Grade */}
-                              {(zoom === "dia" ? horas : dias).map((_, i) => {
-                                const isHoje = zoom !== "dia" && dias[i] && new Date(dias[i]).toDateString() === agora.toDateString();
-                                const tipo   = zoom !== "dia" && dias[i]
+                              {(zoomHoraria ? horas : dias).map((_, i) => {
+                                const isHoje = !zoomHoraria && dias[i] && new Date(dias[i]).toDateString() === agora.toDateString();
+                                const tipo   = !zoomHoraria && dias[i]
                                   ? getDiaTipo(new Date(dias[i]), linha.id, calendario, bloqueios)
                                   : null;
                                 const hachura = tipo ? HATCH[tipo].bg : null;
@@ -2089,7 +2097,7 @@ export default function ProgramacaoPage() {
                               {blocos.map(prog => (
                                 <BlocoProducao
                                   key={prog.id} prog={prog} zoom={zoom}
-                                  visibleStart={zoom === "dia" ? dataBase : dias[0]}
+                                  visibleStart={zoomHoraria ? dataBase : dias[0]}
                                   onClick={setModalBloco}
                                   onResizeFim={handleResizeFim}
                                   laneIndex={raiaPorBloco.get(prog.id) ?? 0}
