@@ -43,13 +43,13 @@ const ROW_H   = 104;
 const LABEL_W = 188;
 
 const COR_STATUS: Record<string, string> = {
-  "Aguardando otimização":   "#f59e0b",
-  "Em Produção – Corte":     "#3dffa0",
-  "Qualidade (Corte)":       "#00c8ff",
-  "Em Produção – Lapidação": "#3dffa0",
-  "Qualidade (Lapidação)":   "#00c8ff",
-  "Separação":               "#a78bfa",
-  "Finalizado":              "#10b981",
+  "Aguardando otimização":   "var(--warn)",
+  "Em Produção – Corte":     "var(--acc)",
+  "Qualidade (Corte)":       "var(--acc2)",
+  "Em Produção – Lapidação": "var(--acc)",
+  "Qualidade (Lapidação)":   "var(--acc2)",
+  "Separação":               "var(--acc4)",
+  "Finalizado":              "var(--ok)",
 };
 
 // ─── UTILITÁRIOS ──────────────────────────────────────────────
@@ -74,27 +74,27 @@ function formatarGap(min: number): string {
 }
 
 function corBloco(prog: ProgramacaoProducao): string {
-  if (prog.status === "Concluído")   return "#1e1e2e";
-  if (prog.status === "Em Execução") return "#0f2a1a";
+  if (prog.status === "Concluído")   return "var(--surf4)";
+  if (prog.status === "Em Execução") return "color-mix(in srgb, var(--acc) 14%, var(--surf))";
   const prazo = prog.pedidos?.dt_retirada ? new Date(prog.pedidos.dt_retirada) : null;
   const fim   = prog.dt_fim_previsto      ? new Date(prog.dt_fim_previsto)      : null;
-  if (!prazo || !fim) return "#0d1b30";
+  if (!prazo || !fim) return "color-mix(in srgb, var(--acc2) 10%, var(--surf))";
   const diff = diffDays(prazo, fim);
-  if (diff < 0)  return "#2d0f18";
-  if (diff <= 2) return "#2d1f08";
-  return "#081e14";
+  if (diff < 0)  return "color-mix(in srgb, var(--err) 14%, var(--surf))";
+  if (diff <= 2) return "color-mix(in srgb, var(--warn) 14%, var(--surf))";
+  return "color-mix(in srgb, var(--acc) 8%, var(--surf))";
 }
 
 function bordaBloco(prog: ProgramacaoProducao): string {
-  if (prog.status === "Concluído")   return "#4a4a6a";
-  if (prog.status === "Em Execução") return "#3dffa0";
+  if (prog.status === "Concluído")   return "var(--t3)";
+  if (prog.status === "Em Execução") return "var(--acc)";
   const prazo = prog.pedidos?.dt_retirada ? new Date(prog.pedidos.dt_retirada) : null;
   const fim   = prog.dt_fim_previsto      ? new Date(prog.dt_fim_previsto)      : null;
-  if (!prazo || !fim) return "#00c8ff";
+  if (!prazo || !fim) return "var(--acc2)";
   const diff = diffDays(prazo, fim);
-  if (diff < 0)  return "#f43f5e";
-  if (diff <= 2) return "#f59e0b";
-  return "#3dffa0";
+  if (diff < 0)  return "var(--err)";
+  if (diff <= 2) return "var(--warn)";
+  return "var(--acc)";
 }
 
 function diasVisiveis(zoom: string, base: Date): Date[] {
@@ -171,11 +171,11 @@ const HATCH: Record<NonNullable<TipoDia>, { bg: string }> = {
 
 function LegendaCores() {
   const blocos = [
-    { cor: "#3dffa0", label: "No prazo", borda: false },
-    { cor: "#f59e0b", label: "≤ 2 dias para vencer", borda: false },
-    { cor: "#f43f5e", label: "Atrasado", borda: false },
-    { cor: "#3dffa0", label: "Em execução", borda: true },
-    { cor: "#4a4a6a", label: "Concluído", borda: false },
+    { cor: "var(--acc)",  label: "No prazo", borda: false },
+    { cor: "var(--warn)", label: "≤ 2 dias para vencer", borda: false },
+    { cor: "var(--err)",  label: "Atrasado", borda: false },
+    { cor: "var(--acc)",  label: "Em execução", borda: true },
+    { cor: "var(--t3)",   label: "Concluído", borda: false },
   ];
   const hatches = [
     { bg: "rgba(244,63,94,.5)",   pat: HATCH.feriado.bg,        label: "Feriado" },
@@ -342,8 +342,9 @@ function BlocoProducao({
       >
         <div style={{
           width: 3, height: 18, borderRadius: 2,
-          background: previewDur ? borda : `${borda}55`,
-          transition: "background 0.1s",
+          background: borda,
+          opacity: previewDur ? 1 : 0.33,
+          transition: "background 0.1s, opacity 0.1s",
           flexShrink: 0,
         }} />
       </div>
