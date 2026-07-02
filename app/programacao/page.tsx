@@ -37,7 +37,7 @@ import Link from "next/link";
 import {
   Link2, Lock, Flag, AlertTriangle, Clock,
   LayoutGrid, BarChart3, Truck, Calendar, Flame, RefreshCw,
-  PlayCircle, CheckCircle2, Star,
+  PlayCircle, CheckCircle2, Star, Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -466,6 +466,11 @@ function BlocoProducao({
         {width > 80 && !compacto && (
           <div style={{ fontSize: 9, color: previewDur ? "var(--acc)" : "var(--t3)", marginTop: 1, fontWeight: previewDur ? 700 : 400 }}>
             {formatarDuracao(displayDur)} · {prog.etapa}
+          </div>
+        )}
+        {width > 80 && !compacto && !!prog.desconto_setup_min && prog.desconto_setup_min > 0 && (
+          <div title="Setup economizado — mesmo produto que o bloco anterior na mesma linha" style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: 9, color: "var(--acc)", marginTop: 1 }}>
+            <Zap size={9} /> Setup -{formatarDuracao(prog.desconto_setup_min)}
           </div>
         )}
       </div>
@@ -933,6 +938,9 @@ function ModalBloco({
             <StatBloco label="Duração Est."    value={formatarDuracao(prog.duracao_estimada_min ?? 0)} />
             <StatBloco label="Responsável"     value={prog.responsavel ?? "—"} />
             <StatBloco label="Lead Time do Pedido" value={leadTime.minutos !== null ? formatarDuracao(leadTime.minutos) : "—"} />
+            {!!prog.desconto_setup_min && prog.desconto_setup_min > 0 && (
+              <StatBloco label="Setup Economizado" value={formatarDuracao(prog.desconto_setup_min)} col="var(--acc)" />
+            )}
             {predecessor && (
               <StatBloco
                 label={`Espera após ${predecessor.etapa}`}
