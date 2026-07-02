@@ -5,7 +5,7 @@ import {
   alocarBlocoEvitandoOcupados, gerarPropostaRecalculo,
   duracaoTotalCorte, calcularTempoEstimado,
   duracaoComSetupAdaptativo, refinarComTrocasAdjacentes, decidirCalibracoes,
-  statusProgramacaoAlvo,
+  statusProgramacaoAlvo, selecionarGargalo,
 } from "@/services/programacao.service";
 import type { MudancaProposta, DadosCalibracao } from "@/services/programacao.service";
 import type { ProducaoLinha, ConfigTempoProducao } from "@/types";
@@ -455,5 +455,29 @@ describe("statusProgramacaoAlvo", () => {
 
   it("retornar null para uma etapa desconhecida", () => {
     expect(statusProgramacaoAlvo("Em Produção – Corte", "Furação")).toBeNull();
+  });
+});
+
+describe("selecionarGargalo", () => {
+  it("retorna null quando nenhuma linha passa de 90%", () => {
+    expect(selecionarGargalo([{ nome: "Corte", pct: 80 }, { nome: "Lapidação", pct: 45 }])).toBeNull();
+  });
+
+  it("retorna a linha sobrecarregada quando só uma passa de 90%", () => {
+    expect(selecionarGargalo([{ nome: "Corte", pct: 95 }, { nome: "Lapidação", pct: 45 }]))
+      .toEqual({ nome: "Corte", pct: 95 });
+  });
+
+  it("retorna a mais sobrecarregada quando várias linhas passam de 90%", () => {
+    const resultado = selecionarGargalo([
+      { nome: "Corte", pct: 92 },
+      { nome: "Lapidação", pct: 98 },
+      { nome: "Separação", pct: 91 },
+    ]);
+    expect(resultado).toEqual({ nome: "Lapidação", pct: 98 });
+  });
+
+  it("lista vazia retorna null", () => {
+    expect(selecionarGargalo([])).toBeNull();
   });
 });

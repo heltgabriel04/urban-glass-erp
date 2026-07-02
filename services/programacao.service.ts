@@ -1502,10 +1502,22 @@ export interface MetricasProducao {
   vencemHoje: number;
   vencemSemana: number;
   histReprogramacoes: number;
+  horasAtrasadas: number;
+  gargaloAtual: { nome: string; pct: number } | null;
+}
+
+// Extraído pra função pura testável sem mock de Supabase — pega a linha
+// mais sobrecarregada (>90% de capacidade) do período, se houver.
+export function selecionarGargalo(
+  capacidadePorLinha: Array<{ nome: string; pct: number }>
+): { nome: string; pct: number } | null {
+  const sobrecarregadas = capacidadePorLinha.filter(l => l.pct > 90).sort((a, b) => b.pct - a.pct);
+  return sobrecarregadas[0] ? { nome: sobrecarregadas[0].nome, pct: sobrecarregadas[0].pct } : null;
 }
 
 export async function getMetricasProducao(from: Date, to: Date): Promise<MetricasProducao> {
   const progs = await getProgramacao(from, to);
+  const agora = new Date();
   const hoje  = new Date(); hoje.setHours(23, 59, 59, 0);
   const semana = addDays(hoje, 7);
 
@@ -1513,6 +1525,7 @@ export async function getMetricasProducao(from: Date, to: Date): Promise<Metrica
   let m2Prog = 0, m2Conc = 0, pecas = 0;
   let somaCorte = 0, qtdCorte = 0, somaLap = 0, qtdLap = 0;
   let vencemHoje = 0, vencemSemana = 0;
+  let horasAtrasadas = 0;
 
   for (const p of progs) {
     const prazo = p.pedidos?.dt_retirada ? new Date(p.pedidos.dt_retirada) : null;
@@ -1524,7 +1537,10 @@ export async function getMetricasProducao(from: Date, to: Date): Promise<Metrica
 
     if (prazo && fim) {
       const diff = diffDays(prazo, fim);
-      if (diff < 0) atrasados++;
+      if (diff < 0) {
+        atrasados++;
+        if (p.status !== 'Concluído') horasAtrasadas += Math.max(0, (agora.getTime() - fim.getTime()) / 3_600_000);
+      }
       else if (diff <= 2) emRisco++;
       else noTempo++;
       if (prazo <= hoje)  vencemHoje++;
@@ -1558,6 +1574,8 @@ export async function getMetricasProducao(from: Date, to: Date): Promise<Metrica
     };
   });
 
+  const gargaloAtual = selecionarGargalo(capacidadePorLinha);
+
   return {
     totalProgramados: progs.length,
     emExecucao: progs.filter(p => p.status === 'Em Execução').length,
@@ -1573,5 +1591,7 @@ export async function getMetricasProducao(from: Date, to: Date): Promise<Metrica
     vencemHoje,
     vencemSemana,
     histReprogramacoes: histReprog ?? 0,
+    horasAtrasadas: Math.round(horasAtrasadas * 10) / 10,
+    gargaloAtual,
   };
 }

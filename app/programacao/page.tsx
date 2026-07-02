@@ -2694,6 +2694,7 @@ function DashboardConteudo({ metricas }: { metricas: Awaited<ReturnType<typeof g
     { label: "Atrasados",        value: metricas.atrasados,        unit: "pedidos",  col: "var(--err)"  },
     { label: "Em Risco",         value: metricas.emRisco,          unit: "≤ 2 dias", col: "var(--warn)" },
     { label: "M² Programado",    value: metricas.m2Programado,     unit: "m²",       col: "var(--acc4)" },
+    { label: "Horas Atrasadas",  value: metricas.horasAtrasadas,   unit: "horas",    col: "var(--err)"  },
   ];
 
   const dadosStatus = [
@@ -2715,12 +2716,12 @@ function DashboardConteudo({ metricas }: { metricas: Awaited<ReturnType<typeof g
 
       {/* Alertas */}
       {(metricas.atrasados > 0 || metricas.vencemHoje > 0 || metricas.vencemSemana > 0 ||
-        metricas.capacidadePorLinha.some(l => l.pct > 90) || metricas.histReprogramacoes > 5) && (
+        metricas.gargaloAtual || metricas.histReprogramacoes > 5) && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {metricas.atrasados > 0     && <Alerta cor="var(--err)"  icon={AlertTriangle} texto={`${metricas.atrasados} pedido${metricas.atrasados>1?"s":""} atrasado${metricas.atrasados>1?"s":""}`} />}
           {metricas.vencemHoje > 0    && <Alerta cor="var(--warn)" icon={Clock} texto={`${metricas.vencemHoje} pedido${metricas.vencemHoje>1?"s":""} vence hoje`} />}
           {metricas.vencemSemana > 0  && <Alerta cor="var(--acc5)" icon={Calendar} texto={`${metricas.vencemSemana} vencem esta semana`} />}
-          {metricas.capacidadePorLinha.some(l => l.pct > 90) && <Alerta cor="var(--err)" icon={Flame} texto="Linha sobrecarregada (> 90%)" />}
+          {metricas.gargaloAtual && <Alerta cor="var(--err)" icon={Flame} texto={`Gargalo atual: ${metricas.gargaloAtual.nome} (${metricas.gargaloAtual.pct}%)`} />}
           {metricas.histReprogramacoes > 5 && <Alerta cor="var(--acc4)" icon={RefreshCw} texto={`${metricas.histReprogramacoes} reprogramações no período`} />}
         </div>
       )}
