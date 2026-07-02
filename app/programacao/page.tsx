@@ -17,6 +17,7 @@ import {
   construirDiasBloqueadosPorLinha, minutosRestantesNoDia, proximaTarefaParaEncaixe,
   gerarPropostaRecalculo, aplicarPropostaRecalculo,
   addDays, proximoDiaUtil, getMonday, diffDays, toISOLocal,
+  calcularLeadTime,
 } from "@/services/programacao.service";
 import type { BlocoMovivel, BlocoFixo, PedidoPendenteRecalculo, PropostaRecalculo } from "@/services/programacao.service";
 import type { RetiradaParcial, BloqueioLinha, DadosCalibracao } from "@/services/programacao.service";
@@ -823,9 +824,10 @@ function ModalAgendamentoLote({
 // ─── MODAL DETALHE DO BLOCO ───────────────────────────────────
 
 function ModalBloco({
-  prog, linhas, predecessor, onFechar, onIniciar, onConcluir, onDeletar, onRetirada, onRetrabalho,
+  prog, linhas, predecessor, blocosDoPedido, onFechar, onIniciar, onConcluir, onDeletar, onRetirada, onRetrabalho,
 }: {
   prog: ProgramacaoProducao; linhas: ProducaoLinha[]; predecessor: ProgramacaoProducao | null;
+  blocosDoPedido: ProgramacaoProducao[];
   onFechar: () => void; onIniciar: () => void;
   onConcluir: () => void; onDeletar: () => void;
   onRetirada: () => void; onRetrabalho: () => void;
@@ -837,6 +839,7 @@ function ModalBloco({
   const gapMin = predecessor?.dt_fim_previsto && prog.dt_inicio_previsto
     ? Math.round((new Date(prog.dt_inicio_previsto).getTime() - new Date(predecessor.dt_fim_previsto).getTime()) / 60000)
     : null;
+  const leadTime = calcularLeadTime(blocosDoPedido);
 
   // Retiradas parciais
   const [retiradas,     setRetiradas]     = useState<RetiradaParcial[]>([]);
@@ -929,6 +932,7 @@ function ModalBloco({
             <StatBloco label="Prazo Entrega"   value={prazo} col={borda} />
             <StatBloco label="Duração Est."    value={formatarDuracao(prog.duracao_estimada_min ?? 0)} />
             <StatBloco label="Responsável"     value={prog.responsavel ?? "—"} />
+            <StatBloco label="Lead Time do Pedido" value={leadTime.minutos !== null ? formatarDuracao(leadTime.minutos) : "—"} />
             {predecessor && (
               <StatBloco
                 label={`Espera após ${predecessor.etapa}`}
@@ -2549,6 +2553,7 @@ export default function ProgramacaoPage() {
       {modalBloco && (
         <ModalBloco prog={modalBloco} linhas={linhas}
           predecessor={programacoes.find(p => p.id === modalBloco.predecessor_id) ?? null}
+          blocosDoPedido={programacoes.filter(p => p.pedido_id === modalBloco.pedido_id)}
           onFechar={() => setModalBloco(null)}
           onIniciar={handleIniciar} onConcluir={handleConcluir} onDeletar={handleDeletar}
           onRetirada={load}
