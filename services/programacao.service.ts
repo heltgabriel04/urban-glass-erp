@@ -1525,6 +1525,7 @@ export interface MetricasProducao {
   histReprogramacoes: number;
   horasAtrasadas: number;
   gargaloAtual: { nome: string; pct: number } | null;
+  leadTimeMedioMin: number | null;
 }
 
 // Extraído pra função pura testável sem mock de Supabase — pega a linha
@@ -1597,6 +1598,22 @@ export async function getMetricasProducao(from: Date, to: Date): Promise<Metrica
 
   const gargaloAtual = selecionarGargalo(capacidadePorLinha);
 
+  // Lead time médio — só entre pedidos com 2+ etapas agendadas no período
+  // (lead time de uma etapa isolada não diz muito sobre o fluxo completo).
+  const blocosPorPedido = new Map<string, ProgramacaoProducao[]>();
+  for (const p of progs) {
+    const lista = blocosPorPedido.get(p.pedido_id) ?? [];
+    lista.push(p);
+    blocosPorPedido.set(p.pedido_id, lista);
+  }
+  const leadTimes = [...blocosPorPedido.values()]
+    .filter(blocos => blocos.length >= 2)
+    .map(blocos => calcularLeadTime(blocos).minutos)
+    .filter((min): min is number => min !== null);
+  const leadTimeMedioMin = leadTimes.length > 0
+    ? Math.round(leadTimes.reduce((s, m) => s + m, 0) / leadTimes.length)
+    : null;
+
   return {
     totalProgramados: progs.length,
     emExecucao: progs.filter(p => p.status === 'Em Execução').length,
@@ -1614,5 +1631,6 @@ export async function getMetricasProducao(from: Date, to: Date): Promise<Metrica
     histReprogramacoes: histReprog ?? 0,
     horasAtrasadas: Math.round(horasAtrasadas * 10) / 10,
     gargaloAtual,
+    leadTimeMedioMin,
   };
 }
