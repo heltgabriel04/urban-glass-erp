@@ -594,13 +594,16 @@ export async function criarProgramacaoPedido(
     }))
   );
 
-  // Bloco final de retirada/expedição (Separação → Finalizado), ancorado na
-  // data de retirada do pedido — mesma etapa/linha virtual usada pra chapa
-  // inteira. Falha aqui não desfaz o Corte/Lapidação já agendados: só loga.
+  // Blocos finais de Separação → Finalizado: Separação começa assim que a
+  // última peça termina Corte/Lapidação (não mais ancorada em dt_retirada
+  // como antes); Finalizado vai daí até dt_retirada, representando o tempo
+  // de espera pelo cliente. Falha aqui não desfaz o Corte/Lapidação já
+  // agendados: só loga.
   if (dtRetirada) {
     const pecasTotal = itens.reduce((s, i) => s + i.quantidade, 0);
-    const resRetirada = await criarBlocoRetirada(pedidoId, pecasTotal, linhas, dtRetirada, diasBloqueados, itens.length * 2);
-    if (!resRetirada.ok) console.warn('criarProgramacaoPedido: bloco de retirada não criado:', resRetirada.erro);
+    const dtFimProducao = new Date(Math.max(cursorCorte.getTime(), cursorLap.getTime()));
+    const res = await criarBlocosSeparacaoEFinalizado(pedidoId, pecasTotal, linhas, dtFimProducao, dtRetirada, diasBloqueados, itens.length * 2);
+    if (!res.ok) console.warn('criarProgramacaoPedido: bloco de Separação/Finalizado não criado:', res.erro);
   }
 
   return { ok: true, fimCorte: cursorCorte };
@@ -1002,15 +1005,16 @@ function mapearStatusPedido(
   novoStatus: ProgramacaoProducao['status'],
 ): StatusPedido | null {
   if (novoStatus === 'Em Execução') {
-    if (etapa === 'Corte')              return 'Em Produção – Corte';
-    if (etapa === 'Lapidação')          return 'Em Produção – Lapidação';
-    if (etapa === 'Retirada de Chapa')  return 'Separação';
+    if (etapa === 'Corte')       return 'Em Produção – Corte';
+    if (etapa === 'Lapidação')   return 'Em Produção – Lapidação';
+    if (etapa === 'Separação')   return 'Separação';
+    if (etapa === 'Finalizado')  return 'Finalizado';
   }
   if (novoStatus === 'Concluído') {
-    if (etapa === 'Corte')              return 'Qualidade (Corte)';
-    if (etapa === 'Lapidação')          return 'Qualidade (Lapidação)';
-    if (etapa === 'Retirada de Chapa')  return 'Finalizado';
-    if (etapa === 'Separação')          return 'Finalizado';
+    if (etapa === 'Corte')       return 'Qualidade (Corte)';
+    if (etapa === 'Lapidação')   return 'Qualidade (Lapidação)';
+    if (etapa === 'Separação')   return 'Finalizado';
+    if (etapa === 'Finalizado')  return 'Entregue';
   }
   return null;
 }
@@ -1021,14 +1025,14 @@ function mapearStatusPedido(
 // de marcar os blocos manualmente também). Etapas não citadas pra um dado
 // status do pedido ainda não foram alcançadas → 'Agendado'.
 const ETAPAS_POR_STATUS_PEDIDO: Record<StatusPedido, Record<string, StatusProgramacao>> = {
-  'Aguardando otimização':   { Corte: 'Agendado',    Lapidação: 'Agendado',    'Retirada de Chapa': 'Agendado' },
-  'Em Produção – Corte':     { Corte: 'Em Execução', Lapidação: 'Agendado',    'Retirada de Chapa': 'Agendado' },
-  'Qualidade (Corte)':       { Corte: 'Concluído',   Lapidação: 'Agendado',    'Retirada de Chapa': 'Agendado' },
-  'Em Produção – Lapidação': { Corte: 'Concluído',   Lapidação: 'Em Execução', 'Retirada de Chapa': 'Agendado' },
-  'Qualidade (Lapidação)':   { Corte: 'Concluído',   Lapidação: 'Concluído',   'Retirada de Chapa': 'Agendado' },
-  'Separação':               { Corte: 'Concluído',   Lapidação: 'Concluído',   'Retirada de Chapa': 'Em Execução' },
-  'Finalizado':              { Corte: 'Concluído',   Lapidação: 'Concluído',   'Retirada de Chapa': 'Concluído' },
-  'Entregue':                { Corte: 'Concluído',   Lapidação: 'Concluído',   'Retirada de Chapa': 'Concluído' },
+  'Aguardando otimização':   { Corte: 'Agendado',    Lapidação: 'Agendado',    Separação: 'Agendado',    Finalizado: 'Agendado' },
+  'Em Produção – Corte':     { Corte: 'Em Execução', Lapidação: 'Agendado',    Separação: 'Agendado',    Finalizado: 'Agendado' },
+  'Qualidade (Corte)':       { Corte: 'Concluído',   Lapidação: 'Agendado',    Separação: 'Agendado',    Finalizado: 'Agendado' },
+  'Em Produção – Lapidação': { Corte: 'Concluído',   Lapidação: 'Em Execução', Separação: 'Agendado',    Finalizado: 'Agendado' },
+  'Qualidade (Lapidação)':   { Corte: 'Concluído',   Lapidação: 'Concluído',   Separação: 'Agendado',    Finalizado: 'Agendado' },
+  'Separação':               { Corte: 'Concluído',   Lapidação: 'Concluído',   Separação: 'Em Execução', Finalizado: 'Agendado' },
+  'Finalizado':              { Corte: 'Concluído',   Lapidação: 'Concluído',   Separação: 'Concluído',   Finalizado: 'Em Execução' },
+  'Entregue':                { Corte: 'Concluído',   Lapidação: 'Concluído',   Separação: 'Concluído',   Finalizado: 'Concluído' },
   'Cancelado':                {},
 };
 
@@ -1113,39 +1117,98 @@ export async function deletarProgramacao(progId: string): Promise<boolean> {
 
 // ─── CHAPA INTEIRA — AGENDAMENTO ────────────────────────────
 
-// Insere o bloco de retirada/expedição (etapa 'Retirada de Chapa', linha
-// virtual 'Separação') ancorado em dt_retirada — usado tanto pra pedidos de
-// chapa inteira (agendarChapaInteira) quanto, agora, pro bloco final de
-// qualquer pedido com Corte/Lapidação (criarProgramacaoPedido), já que
-// mapearStatusPedido traduz essa etapa pra 'Separação'/'Finalizado'.
-async function criarBlocoRetirada(
+// Insere o bloco de Separação (preparo/embalagem), etapa 'Separação' na
+// linha virtual de mesmo nome — ancorado em `dtAncora`, que varia por
+// chamador: pra chapa inteira (agendarChapaInteira, sem etapas de produção
+// anteriores) é a própria dt_retirada; pra pedidos normais
+// (criarProgramacaoPedido) é o fim real da última peça em Corte/Lapidação.
+async function criarBlocoSeparacao(
   pedidoId: string,
   pecasTotal: number,
   linhas: ProducaoLinha[],
-  dtRetirada: Date,
+  dtAncora: Date,
   diasBloqueados: Set<string>,
   sequencia: number,
-): Promise<{ ok: boolean; erro?: string }> {
+): Promise<{ ok: boolean; erro?: string; id?: string; dtFim?: Date }> {
   const linhaSep = linhas.find(l => l.tipo === 'Separação');
   if (!linhaSep) return { ok: false, erro: 'Linha de Separação não encontrada. Execute o script SQL.' };
 
-  const dtInicio = proximoDiaUtil(dtRetirada, diasBloqueados);
+  const dtInicio = proximoDiaUtil(dtAncora, diasBloqueados);
   const duracao  = Math.max(30, pecasTotal * 5);
   const dtFim    = new Date(dtInicio.getTime() + duracao * 60000);
+  const id       = crypto.randomUUID();
 
   const { error } = await supabase.from('programacao_producao').insert({
+    id,
     pedido_id: pedidoId,
     linha_id: linhaSep.id,
-    etapa: 'Retirada de Chapa',
+    predecessor_id: null,
+    etapa: 'Separação',
     sequencia,
     dt_inicio_previsto: toISOLocal(dtInicio),
     dt_fim_previsto: toISOLocal(dtFim),
     duracao_estimada_min: duracao,
     responsavel: null,
     obs: null,
-  });
+  } as never);
 
-  if (error) { console.error('criarBlocoRetirada:', error); return { ok: false, erro: error.message }; }
+  if (error) { console.error('criarBlocoSeparacao:', error); return { ok: false, erro: error.message }; }
+  return { ok: true, id, dtFim };
+}
+
+// Insere o bloco de Finalizado (espera pelo cliente), encadeado após o
+// bloco de Separação via predecessor_id — vai do fim da Separação até
+// dt_retirada (ou um mínimo curto depois da Separação, se dt_retirada já
+// tiver passado ou for anterior).
+async function criarBlocoFinalizado(
+  pedidoId: string,
+  linhas: ProducaoLinha[],
+  predecessorId: string,
+  dtInicio: Date,
+  dtRetirada: Date,
+  sequencia: number,
+): Promise<{ ok: boolean; erro?: string }> {
+  const linhaFin = linhas.find(l => l.tipo === 'Finalizado');
+  if (!linhaFin) return { ok: false, erro: 'Linha de Finalizado não encontrada. Execute o script SQL.' };
+
+  const duracaoMinima = 30;
+  const dtFim = new Date(Math.max(dtInicio.getTime() + duracaoMinima * 60000, dtRetirada.getTime()));
+  const duracao = Math.round((dtFim.getTime() - dtInicio.getTime()) / 60000);
+
+  const { error } = await supabase.from('programacao_producao').insert({
+    pedido_id: pedidoId,
+    linha_id: linhaFin.id,
+    predecessor_id: predecessorId,
+    etapa: 'Finalizado',
+    sequencia,
+    dt_inicio_previsto: toISOLocal(dtInicio),
+    dt_fim_previsto: toISOLocal(dtFim),
+    duracao_estimada_min: duracao,
+    responsavel: null,
+    obs: null,
+  } as never);
+
+  if (error) { console.error('criarBlocoFinalizado:', error); return { ok: false, erro: error.message }; }
+  return { ok: true };
+}
+
+// Cria os 2 blocos finais (Separação → Finalizado) encadeados. Falha em
+// qualquer um deles não desfaz o Corte/Lapidação já agendados: só loga.
+async function criarBlocosSeparacaoEFinalizado(
+  pedidoId: string,
+  pecasTotal: number,
+  linhas: ProducaoLinha[],
+  dtAncoraSeparacao: Date,
+  dtRetirada: Date,
+  diasBloqueados: Set<string>,
+  sequenciaBase: number,
+): Promise<{ ok: boolean; erro?: string }> {
+  const resSep = await criarBlocoSeparacao(pedidoId, pecasTotal, linhas, dtAncoraSeparacao, diasBloqueados, sequenciaBase);
+  if (!resSep.ok || !resSep.id || !resSep.dtFim) return resSep;
+
+  const resFin = await criarBlocoFinalizado(pedidoId, linhas, resSep.id, resSep.dtFim, dtRetirada, sequenciaBase + 1);
+  if (!resFin.ok) return resFin;
+
   return { ok: true };
 }
 
@@ -1156,7 +1219,7 @@ export async function agendarChapaInteira(
   dtRetirada: Date,
   diasBloqueados: Set<string> = new Set(),
 ): Promise<{ ok: boolean; erro?: string }> {
-  return criarBlocoRetirada(pedidoId, pecasTotal, linhas, dtRetirada, diasBloqueados, 0);
+  return criarBlocosSeparacaoEFinalizado(pedidoId, pecasTotal, linhas, dtRetirada, dtRetirada, diasBloqueados, 0);
 }
 
 // ─── RETIRADAS PARCIAIS ──────────────────────────────────────

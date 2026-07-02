@@ -431,7 +431,8 @@ describe("refinarComTrocasAdjacentes — não troca pares com desconto de setup 
 describe("statusProgramacaoAlvo", () => {
   it("etapas ainda não alcançadas ficam Agendado", () => {
     expect(statusProgramacaoAlvo("Em Produção – Corte", "Lapidação")).toBe("Agendado");
-    expect(statusProgramacaoAlvo("Em Produção – Corte", "Retirada de Chapa")).toBe("Agendado");
+    expect(statusProgramacaoAlvo("Em Produção – Corte", "Separação")).toBe("Agendado");
+    expect(statusProgramacaoAlvo("Em Produção – Corte", "Finalizado")).toBe("Agendado");
   });
 
   it("marca a etapa corrente como Em Execução e as anteriores como Concluído", () => {
@@ -440,10 +441,12 @@ describe("statusProgramacaoAlvo", () => {
     expect(statusProgramacaoAlvo("Em Produção – Lapidação", "Lapidação")).toBe("Em Execução");
   });
 
-  it("Separação e Finalizado/Entregue refletem no bloco de Retirada de Chapa", () => {
-    expect(statusProgramacaoAlvo("Separação",  "Retirada de Chapa")).toBe("Em Execução");
-    expect(statusProgramacaoAlvo("Finalizado", "Retirada de Chapa")).toBe("Concluído");
-    expect(statusProgramacaoAlvo("Entregue",   "Retirada de Chapa")).toBe("Concluído");
+  it("Separação e Finalizado são blocos independentes, cada um com seu próprio status", () => {
+    expect(statusProgramacaoAlvo("Separação",  "Separação")).toBe("Em Execução");
+    expect(statusProgramacaoAlvo("Separação",  "Finalizado")).toBe("Agendado");
+    expect(statusProgramacaoAlvo("Finalizado", "Separação")).toBe("Concluído");
+    expect(statusProgramacaoAlvo("Finalizado", "Finalizado")).toBe("Em Execução");
+    expect(statusProgramacaoAlvo("Entregue",   "Finalizado")).toBe("Concluído");
   });
 
   it("retornar null para status Cancelado (não reconcilia)", () => {
