@@ -47,6 +47,17 @@ const COL_W: Record<string, number> = { hora: 280, dia: 100, semana: 144, mes: 5
 const ROW_H   = 104;
 const LABEL_W = 188;
 
+// Rede de segurança pro raro caso de producao_linhas vir nulo (linha_id
+// órfão) — na prática, desde a fase 6 cada linha já é 1:1 com uma etapa,
+// então prog.producao_linhas?.cor é a fonte real da cor por etapa.
+const ETAPA_COR_FALLBACK: Record<string, string> = {
+  "Corte":              "var(--acc2)",
+  "Lapidação":          "var(--acc4)",
+  "Separação":          "var(--acc5)",
+  "Finalizado":         "var(--ok)",
+  "Retirada de Chapa":  "var(--acc5)",
+};
+
 const COR_STATUS: Record<string, string> = {
   "Aguardando otimização":   "var(--warn)",
   "Em Produção – Corte":     "var(--acc)",
@@ -174,7 +185,11 @@ const HATCH: Record<NonNullable<TipoDia>, { bg: string }> = {
 
 // ─── LEGENDA DE CORES ─────────────────────────────────────────
 
-function LegendaCores() {
+function LegendaGrupo({ label }: { label: string }) {
+  return <span style={{ fontSize: 9, color: "var(--t4)", fontWeight: 700, letterSpacing: "0.4px" }}>{label}</span>;
+}
+
+function LegendaCores({ linhas }: { linhas: ProducaoLinha[] }) {
   const blocos = [
     { cor: "var(--acc)",  label: "No prazo", borda: false },
     { cor: "var(--warn)", label: "≤ 2 dias para vencer", borda: false },
@@ -189,6 +204,7 @@ function LegendaCores() {
   ];
   return (
     <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+      <LegendaGrupo label="URGÊNCIA" />
       {blocos.map((it, i) => (
         <div key={i} style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <div style={{ width: 10, height: 10, borderRadius: 3, background: it.borda ? "rgba(61,255,160,.2)" : it.cor, border: `2px solid ${it.cor}` }} />
@@ -196,6 +212,15 @@ function LegendaCores() {
         </div>
       ))}
       <div style={{ width: 1, height: 10, background: "var(--b2)" }} />
+      <LegendaGrupo label="ETAPA" />
+      {linhas.filter(l => l.ativo).map(l => (
+        <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <div style={{ width: 10, height: 10, borderRadius: 3, background: l.cor }} />
+          <span style={{ fontSize: 10, color: "var(--t3)" }}>{l.nome}</span>
+        </div>
+      ))}
+      <div style={{ width: 1, height: 10, background: "var(--b2)" }} />
+      <LegendaGrupo label="CALENDÁRIO" />
       {hatches.map((h, i) => (
         <div key={i} style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <div style={{ width: 10, height: 10, borderRadius: 2, background: h.pat, border: `1px solid ${h.bg}` }} />
@@ -229,6 +254,7 @@ function BlocoProducao({
   const width = calcBlocoWidth(displayDur, zoom);
   const borda = bordaBloco(prog);
   const bg    = corBloco(prog);
+  const etapaCor = prog.producao_linhas?.cor ?? ETAPA_COR_FALLBACK[prog.etapa] ?? "var(--t3)";
 
   // Quando dois ou mais blocos da mesma linha se sobrepõem no tempo (ex.:
   // pedidos do mesmo cliente cortados juntos), cada um ocupa sua própria
@@ -287,7 +313,7 @@ function BlocoProducao({
       style={{
         position: "absolute", left, top, width, height,
         background: bg, border: `1.5px solid ${borda}`, borderRadius: 8,
-        padding: "5px 9px 5px 9px",
+        padding: "5px 9px 5px 11px",
         cursor: isDragging ? "grabbing" : "grab",
         userSelect: "none", zIndex: isDragging ? 50 : 2,
         opacity: isDragging ? 0.7 : 1,
@@ -300,6 +326,9 @@ function BlocoProducao({
       {...listeners}
       onClick={(e) => { e.stopPropagation(); onClick(prog); }}
     >
+      {/* Barra lateral — cor da etapa (Corte/Lapidação/Separação/Finalizado) */}
+      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: etapaCor, borderRadius: "6px 0 0 6px" }} />
+
       {/* Conteúdo do bloco */}
       <div style={{ paddingRight: 10, overflow: "hidden" }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: borda, lineHeight: 1.2, marginBottom: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -1919,7 +1948,7 @@ export default function ProgramacaoPage() {
 
               {/* Legenda */}
               <div style={{ padding: "6px 14px", borderBottom: "1px solid var(--b1)", background: "var(--surf2)", flexShrink: 0 }}>
-                <LegendaCores />
+                <LegendaCores linhas={linhas} />
               </div>
 
               {/* Gantt */}
