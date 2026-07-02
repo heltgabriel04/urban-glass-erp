@@ -2158,18 +2158,25 @@ export default function ProgramacaoPage() {
                         </div>
                       ) : (
                       <div style={{ position: "relative" }}>
-                      {/* SVG de setas de dependência (Corte → Lapidação por item) —
-                          por enquanto só em modo "Por Linha"; modo "Por Pedido" ganha
-                          setas próprias numa fase seguinte (geometria de raia diferente). */}
-                      {modoVisao === "linha" && (() => {
+                      {/* SVG de setas de dependência (Corte → Lapidação por item). A
+                          resolução da raia (linha ou pedido, conforme o modo de visão)
+                          é a única diferença — a geometria da curva não muda: em modo
+                          Por Pedido, predRowIdx === currRowIdx sempre (mesma etapa
+                          pertence ao mesmo pedido), a Bézier já lida com y1 === y2
+                          virando uma reta. */}
+                      {(() => {
                         const visStart = zoomHoraria ? dataBase : dias[0];
                         const setas = progFiltradas.filter(p => p.predecessor_id);
                         if (setas.length === 0) return null;
+                        const rowIndexOf = modoVisao === "linha"
+                          ? (p: ProgramacaoProducao) => linhasFiltradas.findIndex(l => l.id === p.linha_id)
+                          : (p: ProgramacaoProducao) => gruposPorPedido.findIndex(g => g.chave === p.pedido_id);
+                        const totalRaiasVisuais = modoVisao === "linha" ? linhasFiltradas.length : gruposPorPedido.length;
                         return (
                           <svg
                             style={{
                               position: "absolute", top: 0, left: LABEL_W,
-                              width: totalWidth, height: linhasFiltradas.length * ROW_H,
+                              width: totalWidth, height: totalRaiasVisuais * ROW_H,
                               pointerEvents: "none", zIndex: 4, overflow: "visible",
                             }}
                           >
@@ -2181,8 +2188,8 @@ export default function ProgramacaoPage() {
                             {setas.map(prog => {
                               const pred = programacoes.find(p => p.id === prog.predecessor_id);
                               if (!pred) return null;
-                              const predRowIdx = linhasFiltradas.findIndex(l => l.id === pred.linha_id);
-                              const currRowIdx = linhasFiltradas.findIndex(l => l.id === prog.linha_id);
+                              const predRowIdx = rowIndexOf(pred);
+                              const currRowIdx = rowIndexOf(prog);
                               if (predRowIdx < 0 || currRowIdx < 0) return null;
                               const x1 = blocoLeft(pred, zoom, visStart) + calcBlocoWidth(pred.duracao_estimada_min ?? 60, zoom);
                               const y1 = predRowIdx * ROW_H + ROW_H / 2;
