@@ -315,12 +315,16 @@ function BlocoTooltipContent({ prog }: { prog: ProgramacaoProducao }) {
 
 function BlocoProducao({
   prog, zoom, visibleStart, onClick, onResizeFim, laneIndex = 0, laneCount = 1, arrastavel = true,
+  temCadeia = false, destacado = false, onToggleDestaque,
 }: {
   prog: ProgramacaoProducao; zoom: string; visibleStart: Date;
   onClick: (p: ProgramacaoProducao) => void;
   onResizeFim: (id: string, novaDur: number) => void;
   laneIndex?: number; laneCount?: number;
   arrastavel?: boolean; // false na visão "Por Pedido" — não faz sentido arrastar um bloco pra "raia" de outro pedido
+  temCadeia?: boolean; // tem predecessor ou é predecessor de outro bloco — mostra o botão de destaque
+  destacado?: boolean; // pedido atualmente com as setas de dependência acesas
+  onToggleDestaque?: (pedidoId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: prog.id, data: { prog }, disabled: !arrastavel,
@@ -406,7 +410,9 @@ function BlocoProducao({
       title={titleInfo}
       style={{
         position: "absolute", left, top, width, height,
-        background: bg, border: `1.5px solid ${borda}`, borderRadius: 8,
+        background: bg, border: `${destacado ? 2.5 : 1.5}px solid ${destacado ? "var(--acc4)" : borda}`,
+        borderRadius: 8,
+        boxShadow: destacado ? "0 0 0 2px rgba(167,139,250,0.35)" : undefined,
         padding: "5px 9px 5px 11px",
         cursor: !arrastavel ? "pointer" : isDragging ? "grabbing" : "grab",
         userSelect: "none", zIndex: isDragging ? 50 : 2,
@@ -428,7 +434,20 @@ function BlocoProducao({
         <div style={{ fontSize: 11, fontWeight: 700, color: borda, lineHeight: 1.2, marginBottom: 1, display: "flex", alignItems: "center", gap: 3, overflow: "hidden" }}>
           <StatusIcon size={10} style={{ flexShrink: 0 }} />
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{prog.pedido_id}</span>
-          {prog.predecessor_id && <Link2 size={9} style={{ flexShrink: 0, opacity: 0.7 }} />}
+          {temCadeia && onToggleDestaque && (
+            <button
+              onPointerDown={e => e.stopPropagation()}
+              onClick={e => { e.stopPropagation(); onToggleDestaque(prog.pedido_id); }}
+              title={destacado ? "Ocultar conexões deste pedido" : "Mostrar conexões deste pedido (etapa anterior/seguinte)"}
+              style={{
+                display: "inline-flex", flexShrink: 0, background: "none", border: "none",
+                padding: 0, margin: 0, cursor: "pointer",
+                color: destacado ? "var(--acc4)" : "inherit", opacity: destacado ? 1 : 0.6,
+              }}
+            >
+              <Link2 size={9} />
+            </button>
+          )}
           {prog.travado && (
             <span title="Reposicionado manualmente — o auto-agendamento não move este bloco" style={{ display: "inline-flex", flexShrink: 0, opacity: 0.7 }}>
               <Lock size={9} />
@@ -1346,6 +1365,13 @@ export default function ProgramacaoPage() {
   const [aba,          setAba]          = useState<"gantt" | "dashboard" | "expedicao">("gantt");
   const [zoom,         setZoom]         = useState<"hora" | "dia" | "semana" | "mes">("semana");
   const [modoVisao,    setModoVisao]    = useState<"linha" | "pedido">("linha");
+  // Setas de dependência ficam escondidas por padrão (muitos pedidos
+  // misturados nas mesmas linhas viram poluição visual se todas ficarem
+  // acesas) — só aparecem pro pedido clicado, via o botão de link no card.
+  const [pedidoDestacado, setPedidoDestacado] = useState<string | null>(null);
+  function toggleDestaque(pedidoId: string) {
+    setPedidoDestacado(atual => atual === pedidoId ? null : pedidoId);
+  }
   const [dataBase,     setDataBase]     = useState<Date>(() => getMonday(new Date()));
   const [linhas,       setLinhas]       = useState<ProducaoLinha[]>([]);
   const [config,       setConfig]       = useState<ConfigTempoProducao[]>([]);
@@ -2165,15 +2191,17 @@ export default function ProgramacaoPage() {
                         </div>
                       ) : (
                       <div style={{ position: "relative" }}>
-                      {/* SVG de setas de dependência (Corte → Lapidação por item). A
-                          resolução da raia (linha ou pedido, conforme o modo de visão)
-                          é a única diferença — a geometria da curva não muda: em modo
-                          Por Pedido, predRowIdx === currRowIdx sempre (mesma etapa
-                          pertence ao mesmo pedido), a Bézier já lida com y1 === y2
-                          virando uma reta. */}
-                      {(() => {
+                      {/* SVG de setas de dependência (Corte → Lapidação por item). Fica
+                          escondida por padrão — só desenha as setas do pedido destacado
+                          (botão de link no card), pra não poluir a tela quando há muitos
+                          pedidos misturados nas mesmas linhas. A resolução da raia (linha
+                          ou pedido, conforme o modo de visão) é a única diferença de
+                          geometria — em modo Por Pedido, predRowIdx === currRowIdx sempre
+                          (mesma etapa pertence ao mesmo pedido), a Bézier já lida com
+                          y1 === y2 virando uma reta. */}
+                      {pedidoDestacado && (() => {
                         const visStart = zoomHoraria ? dataBase : dias[0];
-                        const setas = progFiltradas.filter(p => p.predecessor_id);
+                        const setas = progFiltradas.filter(p => p.predecessor_id && p.pedido_id === pedidoDestacado);
                         if (setas.length === 0) return null;
                         const rowIndexOf = modoVisao === "linha"
                           ? (p: ProgramacaoProducao) => linhasFiltradas.findIndex(l => l.id === p.linha_id)
@@ -2313,6 +2341,9 @@ export default function ProgramacaoPage() {
                                   onResizeFim={handleResizeFim}
                                   laneIndex={raiaPorBloco.get(prog.id) ?? 0}
                                   laneCount={totalRaias}
+                                  temCadeia={!!prog.predecessor_id || programacoes.some(p => p.predecessor_id === prog.id)}
+                                  destacado={prog.pedido_id === pedidoDestacado}
+                                  onToggleDestaque={toggleDestaque}
                                 />
                               ))}
                             </LinhaDroppable>
@@ -2380,6 +2411,9 @@ export default function ProgramacaoPage() {
                                   laneIndex={raiaPorBloco.get(prog.id) ?? 0}
                                   laneCount={totalRaias}
                                   arrastavel={false}
+                                  temCadeia={!!prog.predecessor_id || programacoes.some(p => p.predecessor_id === prog.id)}
+                                  destacado={prog.pedido_id === pedidoDestacado}
+                                  onToggleDestaque={toggleDestaque}
                                 />
                               ))}
                             </div>
