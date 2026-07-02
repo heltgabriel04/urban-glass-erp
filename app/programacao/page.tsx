@@ -31,6 +31,7 @@ import {
 import {
   DndContext, useDraggable, useDroppable,
   DragEndEvent, DragStartEvent,
+  PointerSensor, useSensor, useSensors,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
@@ -1487,6 +1488,11 @@ export default function ProgramacaoPage() {
   // com passive:false consegue isso de verdade.
   const ganttScrollRef = useRef<HTMLDivElement>(null);
   const wheelAccum = useRef(0);
+  // Sem activationConstraint, o sensor padrão do dnd-kit trata qualquer
+  // tremor de mouse durante o clique como início de arrasto e cancela o
+  // clique nativo — exigia clicar várias vezes pra conseguir abrir um
+  // bloco. 8px de distância mínima resolve sem prejudicar o drag real.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   useEffect(() => {
     const el = ganttScrollRef.current;
     if (!el) return;
@@ -2109,6 +2115,7 @@ export default function ProgramacaoPage() {
               ) : (
                 <div ref={ganttScrollRef} style={{ flex: 1, overflow: "auto" }}>
                   <DndContext
+                    sensors={sensors}
                     onDragStart={(e: DragStartEvent) => setDragId(String(e.active.id))}
                     onDragEnd={handleDragEnd}
                   >
