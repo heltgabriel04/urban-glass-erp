@@ -5,7 +5,7 @@ import {
   alocarBlocoEvitandoOcupados, gerarPropostaRecalculo,
   duracaoTotalCorte, calcularTempoEstimado,
   duracaoComSetupAdaptativo, refinarComTrocasAdjacentes, decidirCalibracoes,
-  statusProgramacaoAlvo, selecionarGargalo,
+  statusProgramacaoAlvo, selecionarGargalo, calcularLeadTime,
 } from "@/services/programacao.service";
 import type { MudancaProposta, DadosCalibracao } from "@/services/programacao.service";
 import type { ProducaoLinha, ConfigTempoProducao } from "@/types";
@@ -479,5 +479,40 @@ describe("selecionarGargalo", () => {
 
   it("lista vazia retorna null", () => {
     expect(selecionarGargalo([])).toBeNull();
+  });
+});
+
+describe("calcularLeadTime", () => {
+  it("pedido de uma etapa só: lead time = duração daquela etapa", () => {
+    const resultado = calcularLeadTime([
+      { dt_inicio_previsto: segundaAs(8, 0).toISOString(), dt_fim_previsto: segundaAs(9, 0).toISOString() },
+    ]);
+    expect(resultado.minutos).toBe(60);
+  });
+
+  it("cadeia completa Corte→Lapidação→Separação→Finalizado: usa o início mais cedo e o fim mais tarde", () => {
+    const resultado = calcularLeadTime([
+      { dt_inicio_previsto: segundaAs(8, 0).toISOString(),  dt_fim_previsto: segundaAs(9, 0).toISOString() },  // Corte
+      { dt_inicio_previsto: segundaAs(9, 0).toISOString(),  dt_fim_previsto: segundaAs(10, 30).toISOString() }, // Lapidação
+      { dt_inicio_previsto: segundaAs(11, 0).toISOString(), dt_fim_previsto: segundaAs(11, 30).toISOString() }, // Separação
+      { dt_inicio_previsto: segundaAs(13, 0).toISOString(), dt_fim_previsto: segundaAs(13, 30).toISOString() }, // Finalizado
+    ]);
+    expect(resultado.minutos).toBe(5 * 60 + 30); // 8:00 → 13:30
+  });
+
+  it("blocos fora de ordem cronológica no array — ainda acha o início e fim corretos", () => {
+    const resultado = calcularLeadTime([
+      { dt_inicio_previsto: segundaAs(13, 0).toISOString(), dt_fim_previsto: segundaAs(13, 30).toISOString() },
+      { dt_inicio_previsto: segundaAs(8, 0).toISOString(),  dt_fim_previsto: segundaAs(9, 0).toISOString() },
+    ]);
+    expect(resultado.minutos).toBe(5 * 60 + 30);
+  });
+
+  it("lista vazia retorna minutos null", () => {
+    expect(calcularLeadTime([])).toEqual({ inicio: null, fim: null, minutos: null });
+  });
+
+  it("bloco sem datas previstas é ignorado; se nenhum tiver, retorna null", () => {
+    expect(calcularLeadTime([{ dt_inicio_previsto: null, dt_fim_previsto: null }])).toEqual({ inicio: null, fim: null, minutos: null });
   });
 });

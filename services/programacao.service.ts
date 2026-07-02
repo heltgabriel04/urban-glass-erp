@@ -150,6 +150,27 @@ export function duracaoComSetupAdaptativo(
   return Math.max(1, duracaoBase - desconto);
 }
 
+export interface LeadTimeInfo {
+  inicio: Date | null;
+  fim: Date | null;
+  minutos: number | null;
+}
+
+// Lead time total do pedido: da primeira etapa agendada (normalmente Corte)
+// até a última (Finalizado, ou o que estiver mais adiante na cadeia) — pura,
+// recebe os blocos já carregados do pedido, sem nova query.
+export function calcularLeadTime(
+  blocosDoPedido: Pick<ProgramacaoProducao, 'dt_inicio_previsto' | 'dt_fim_previsto'>[],
+): LeadTimeInfo {
+  const inicios = blocosDoPedido.map(b => b.dt_inicio_previsto).filter((d): d is string => !!d).map(d => new Date(d));
+  const fins    = blocosDoPedido.map(b => b.dt_fim_previsto).filter((d): d is string => !!d).map(d => new Date(d));
+  if (inicios.length === 0 || fins.length === 0) return { inicio: null, fim: null, minutos: null };
+
+  const inicio = new Date(Math.min(...inicios.map(d => d.getTime())));
+  const fim    = new Date(Math.max(...fins.map(d => d.getTime())));
+  return { inicio, fim, minutos: Math.round((fim.getTime() - inicio.getTime()) / 60000) };
+}
+
 // ─── PRIORIZAÇÃO (APS) ──────────────────────────────────────
 // Fase 1 do motor de agendamento: calcula um score de prioridade por pedido
 // pendente, combinando prazo de entrega + trabalho restante (folga real,
