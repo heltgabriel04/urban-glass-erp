@@ -35,6 +35,7 @@ import Link from "next/link";
 import {
   Link2, Lock, Flag, AlertTriangle, Clock,
   LayoutGrid, BarChart3, Truck, Calendar, Flame, RefreshCw,
+  PlayCircle, CheckCircle2, Star,
   type LucideIcon,
 } from "lucide-react";
 
@@ -111,6 +112,21 @@ function bordaBloco(prog: ProgramacaoProducao): string {
   if (diff < 0)  return "var(--err)";
   if (diff <= 2) return "var(--warn)";
   return "var(--acc)";
+}
+
+// Ícone de estado do bloco — mesma lógica de urgência de corBloco/bordaBloco,
+// só que resolvida pra um ícone em vez de cor (linha 1 do card).
+function iconeBloco(prog: ProgramacaoProducao): LucideIcon {
+  if (prog.status === "Concluído")   return CheckCircle2;
+  if (prog.status === "Em Execução") return PlayCircle;
+  const prazo = prog.pedidos?.dt_retirada ? new Date(prog.pedidos.dt_retirada) : null;
+  const fim   = prog.dt_fim_previsto      ? new Date(prog.dt_fim_previsto)      : null;
+  if (prazo && fim) {
+    const diff = diffDays(prazo, fim);
+    if (diff < 0)  return AlertTriangle;
+    if (diff <= 2) return Star; // agendado, ainda não atrasado, mas prioridade alta
+  }
+  return Clock;
 }
 
 function diasVisiveis(zoom: string, base: Date): Date[] {
@@ -254,7 +270,19 @@ function BlocoProducao({
   const width = calcBlocoWidth(displayDur, zoom);
   const borda = bordaBloco(prog);
   const bg    = corBloco(prog);
-  const etapaCor = prog.producao_linhas?.cor ?? ETAPA_COR_FALLBACK[prog.etapa] ?? "var(--t3)";
+  const etapaCor  = prog.producao_linhas?.cor ?? ETAPA_COR_FALLBACK[prog.etapa] ?? "var(--t3)";
+  const StatusIcon = iconeBloco(prog);
+
+  // Indicadores rápidos — % concluído (time-based, distinto do % de peças
+  // retiradas mostrado no ModalBloco) e tempo restante/horas atrasadas.
+  const inicioMs = prog.dt_inicio_previsto ? new Date(prog.dt_inicio_previsto).getTime() : null;
+  const fimMs    = prog.dt_fim_previsto    ? new Date(prog.dt_fim_previsto).getTime()    : null;
+  const agoraMs  = Date.now();
+  const pctConcluido = (prog.status === "Em Execução" && inicioMs && fimMs && fimMs > inicioMs)
+    ? Math.min(100, Math.max(0, Math.round(((agoraMs - inicioMs) / (fimMs - inicioMs)) * 100)))
+    : null;
+  const minutosRestantes = (fimMs && prog.status !== "Concluído") ? Math.round((fimMs - agoraMs) / 60000) : null;
+  const emAtraso = minutosRestantes !== null && minutosRestantes < 0;
 
   // Quando dois ou mais blocos da mesma linha se sobrepõem no tempo (ex.:
   // pedidos do mesmo cliente cortados juntos), cada um ocupa sua própria
@@ -331,11 +359,12 @@ function BlocoProducao({
 
       {/* Conteúdo do bloco */}
       <div style={{ paddingRight: 10, overflow: "hidden" }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: borda, lineHeight: 1.2, marginBottom: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {prog.pedido_id}
-          {prog.predecessor_id && <Link2 size={9} style={{ marginLeft: 4, opacity: 0.7, verticalAlign: -1 }} />}
+        <div style={{ fontSize: 11, fontWeight: 700, color: borda, lineHeight: 1.2, marginBottom: 1, display: "flex", alignItems: "center", gap: 3, overflow: "hidden" }}>
+          <StatusIcon size={10} style={{ flexShrink: 0 }} />
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{prog.pedido_id}</span>
+          {prog.predecessor_id && <Link2 size={9} style={{ flexShrink: 0, opacity: 0.7 }} />}
           {prog.travado && (
-            <span title="Reposicionado manualmente — o auto-agendamento não move este bloco" style={{ display: "inline-flex", marginLeft: 4, opacity: 0.7, verticalAlign: -1 }}>
+            <span title="Reposicionado manualmente — o auto-agendamento não move este bloco" style={{ display: "inline-flex", flexShrink: 0, opacity: 0.7 }}>
               <Lock size={9} />
             </span>
           )}
@@ -345,6 +374,11 @@ function BlocoProducao({
             {item.produto_nome}
           </div>
         )}
+        {width > 56 && pctConcluido !== null && (
+          <div title={`${pctConcluido}% concluído`} style={{ height: 3, background: "var(--b2)", borderRadius: 99, overflow: "hidden", marginBottom: 2 }}>
+            <div style={{ width: `${pctConcluido}%`, height: "100%", background: "var(--acc)", borderRadius: 99 }} />
+          </div>
+        )}
         {width > 80 && item && (
           <div style={{ fontSize: 9, color: "var(--t2)", display: "flex", gap: 3, overflow: "hidden" }}>
             <span>{item.largura}×{item.altura}</span>
@@ -352,6 +386,12 @@ function BlocoProducao({
             <span>{item.m2.toFixed(2)}m²</span>
             <span>·</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}><Flag size={9} />{prazo}</span>
+            {minutosRestantes !== null && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 2, marginLeft: "auto", flexShrink: 0, color: emAtraso ? "var(--err)" : "var(--t2)", fontWeight: emAtraso ? 700 : 400 }}>
+                {emAtraso ? <AlertTriangle size={9} /> : <Clock size={9} />}
+                {formatarDuracao(Math.abs(minutosRestantes))}
+              </span>
+            )}
           </div>
         )}
         {width > 80 && !item && (
