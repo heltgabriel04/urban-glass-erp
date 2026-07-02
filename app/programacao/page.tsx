@@ -1305,22 +1305,33 @@ export default function ProgramacaoPage() {
     else                      setDataBase(new Date());
   }
 
-  // Ctrl+scroll troca o zoom (dia ↔ semana ↔ mês), estilo Figma/Google Maps —
-  // acumula o delta pra não pular 2 níveis num scroll de trackpad só.
-  const ZOOM_ORDER: Array<"dia" | "semana" | "mes"> = ["dia", "semana", "mes"];
+  // Ctrl+scroll troca o zoom (dia ↔ semana ↔ mês), estilo Figma/Google Maps.
+  // Precisa ser um listener NATIVO (addEventListener com passive:false): o
+  // onWheel do React é registrado como passivo por baixo dos panos, então
+  // e.preventDefault() dentro de um onWheel do JSX não bloqueia o zoom
+  // nativo do navegador (Ctrl+scroll da página) — só um listener manual
+  // com passive:false consegue isso de verdade.
+  const ganttScrollRef = useRef<HTMLDivElement>(null);
   const wheelAccum = useRef(0);
-  function handleWheelZoom(e: React.WheelEvent) {
-    if (!e.ctrlKey) return;
-    e.preventDefault();
-    wheelAccum.current += e.deltaY;
-    if (Math.abs(wheelAccum.current) < 50) return;
-    const dir = wheelAccum.current > 0 ? 1 : -1;
-    wheelAccum.current = 0;
-    setZoom(z => {
-      const idx = ZOOM_ORDER.indexOf(z);
-      return ZOOM_ORDER[Math.min(ZOOM_ORDER.length - 1, Math.max(0, idx + dir))];
-    });
-  }
+  useEffect(() => {
+    const el = ganttScrollRef.current;
+    if (!el) return;
+    const ZOOM_ORDER: Array<"dia" | "semana" | "mes"> = ["dia", "semana", "mes"];
+    function onWheel(e: WheelEvent) {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      wheelAccum.current += e.deltaY;
+      if (Math.abs(wheelAccum.current) < 50) return;
+      const dir = wheelAccum.current > 0 ? 1 : -1;
+      wheelAccum.current = 0;
+      setZoom(z => {
+        const idx = ZOOM_ORDER.indexOf(z);
+        return ZOOM_ORDER[Math.min(ZOOM_ORDER.length - 1, Math.max(0, idx + dir))];
+      });
+    }
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [loading]);
 
   function tituloPeriodo() {
     if (zoom === "dia") return dataBase.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
@@ -1895,7 +1906,7 @@ export default function ProgramacaoPage() {
                   Carregando…
                 </div>
               ) : (
-                <div style={{ flex: 1, overflow: "auto" }} onWheel={handleWheelZoom}>
+                <div ref={ganttScrollRef} style={{ flex: 1, overflow: "auto" }}>
                   <DndContext
                     onDragStart={(e: DragStartEvent) => setDragId(String(e.active.id))}
                     onDragEnd={handleDragEnd}
