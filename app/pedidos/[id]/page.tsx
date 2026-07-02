@@ -792,7 +792,7 @@ export default function PedidoDetalhe() {
           {temItens && !todosVidroCliente && !todosChapa && (
             <a href={"/otimizador?pedido=" + pedido.id} className="btn bg sm">◈ Otimizar Corte</a>
           )}
-          {(temOtimizacao || todosChapa) && (
+          {temItens && (
             <a href={"/pedidos/" + pedido.id + "/etiquetas"} className="btn bg sm" style={{ textDecoration:"none" }}>🏷 Etiquetas</a>
           )}
           {temItens && (

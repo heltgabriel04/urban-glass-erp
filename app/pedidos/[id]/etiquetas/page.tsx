@@ -375,10 +375,16 @@ export default function EtiquetasPage() {
   if (!pedido || (!otim && !modoChapa && !modoVidroCliente && !modoCorteCerto))
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", gap: "12px", fontFamily: "Arial" }}>
-        <div style={{ color: "#c00", fontWeight: 700 }}>Nenhuma otimização encontrada para este pedido.</div>
-        <button onClick={() => router.back()} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid #ccc", cursor: "pointer" }}>
-          ← Voltar
-        </button>
+        <div style={{ color: "#c00", fontWeight: 700 }}>Este pedido ainda não tem um plano de corte gerado.</div>
+        <div style={{ color: "#666", fontSize: "13px" }}>Rode o Otimizador de Corte pra saber quantas chapas/peças imprimir.</div>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button onClick={() => router.back()} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid #ccc", cursor: "pointer" }}>
+            ← Voltar
+          </button>
+          <button onClick={() => router.push(`/otimizador?pedido=${id}`)} style={{ padding: "8px 16px", borderRadius: "6px", border: "none", background: "#3dffa0", fontWeight: 700, cursor: "pointer" }}>
+            ◈ Ir para o Otimizador
+          </button>
+        </div>
       </div>
     );
 
