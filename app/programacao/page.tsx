@@ -32,6 +32,11 @@ import {
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
+import {
+  Link2, Lock, Flag, AlertTriangle, Clock,
+  LayoutGrid, BarChart3, Truck, Calendar, Flame, RefreshCw,
+  type LucideIcon,
+} from "lucide-react";
 
 // ─── CONSTANTES ───────────────────────────────────────────────
 
@@ -299,8 +304,12 @@ function BlocoProducao({
       <div style={{ paddingRight: 10, overflow: "hidden" }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: borda, lineHeight: 1.2, marginBottom: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {prog.pedido_id}
-          {prog.predecessor_id && <span style={{ marginLeft: 4, fontSize: 9, opacity: 0.7 }}>⛓</span>}
-          {prog.travado && <span title="Reposicionado manualmente — o auto-agendamento não move este bloco" style={{ marginLeft: 4, fontSize: 9, opacity: 0.7 }}>🔒</span>}
+          {prog.predecessor_id && <Link2 size={9} style={{ marginLeft: 4, opacity: 0.7, verticalAlign: -1 }} />}
+          {prog.travado && (
+            <span title="Reposicionado manualmente — o auto-agendamento não move este bloco" style={{ display: "inline-flex", marginLeft: 4, opacity: 0.7, verticalAlign: -1 }}>
+              <Lock size={9} />
+            </span>
+          )}
         </div>
         {width > 56 && item && (
           <div style={{ fontSize: 9, color: "var(--t1)", marginBottom: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -313,7 +322,7 @@ function BlocoProducao({
             <span>·</span>
             <span>{item.m2.toFixed(2)}m²</span>
             <span>·</span>
-            <span>↗{prazo}</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}><Flag size={9} />{prazo}</span>
           </div>
         )}
         {width > 80 && !item && (
@@ -1779,7 +1788,9 @@ export default function ProgramacaoPage() {
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {(["gantt", "dashboard", "expedicao"] as const).map(t => {
-              const labels = { gantt: "◧ Gantt", dashboard: "◭ Dashboard", expedicao: "↗ Expedição" };
+              const labels: Record<typeof t, string> = { gantt: "Gantt", dashboard: "Dashboard", expedicao: "Expedição" };
+              const tabIcons: Record<typeof t, LucideIcon> = { gantt: LayoutGrid, dashboard: BarChart3, expedicao: Truck };
+              const TabIcon = tabIcons[t];
               const badge  = t === "dashboard" && nAtrasados > 0 ? nAtrasados : null;
               return (
                 <button key={t} onClick={() => setAba(t)} style={{
@@ -1789,7 +1800,9 @@ export default function ProgramacaoPage() {
                   color: aba === t ? "var(--acc)" : "var(--t2)",
                   fontWeight: 700, fontSize: 12, cursor: "pointer",
                   position: "relative",
+                  display: "flex", alignItems: "center", gap: 6,
                 }}>
+                  <TabIcon size={13} strokeWidth={2.5} />
                   {labels[t]}
                   {badge && (
                     <span style={{
@@ -2048,8 +2061,8 @@ export default function ProgramacaoPage() {
                                 <button
                                   title="Gerenciar bloqueios desta linha"
                                   onClick={() => setModalBloqueio({ id: linha.id, nome: linha.nome })}
-                                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t3)", fontSize: 12, padding: "1px 3px", lineHeight: 1, flexShrink: 0 }}>
-                                  🔒
+                                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t3)", padding: "1px 3px", lineHeight: 1, flexShrink: 0, display: "flex" }}>
+                                  <Lock size={12} />
                                 </button>
                               </div>
                               <div style={{ paddingLeft: 17, display: "flex", gap: 6, alignItems: "center" }}>
@@ -2562,11 +2575,11 @@ function DashboardConteudo({ metricas }: { metricas: Awaited<ReturnType<typeof g
       {(metricas.atrasados > 0 || metricas.vencemHoje > 0 || metricas.vencemSemana > 0 ||
         metricas.capacidadePorLinha.some(l => l.pct > 90) || metricas.histReprogramacoes > 5) && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {metricas.atrasados > 0     && <Alerta cor="var(--err)"  icon="⚠"  texto={`${metricas.atrasados} pedido${metricas.atrasados>1?"s":""} atrasado${metricas.atrasados>1?"s":""}`} />}
-          {metricas.vencemHoje > 0    && <Alerta cor="var(--warn)" icon="⏰" texto={`${metricas.vencemHoje} pedido${metricas.vencemHoje>1?"s":""} vence hoje`} />}
-          {metricas.vencemSemana > 0  && <Alerta cor="var(--acc5)" icon="📅" texto={`${metricas.vencemSemana} vencem esta semana`} />}
-          {metricas.capacidadePorLinha.some(l => l.pct > 90) && <Alerta cor="var(--err)" icon="🔴" texto="Linha sobrecarregada (> 90%)" />}
-          {metricas.histReprogramacoes > 5 && <Alerta cor="var(--acc4)" icon="↻" texto={`${metricas.histReprogramacoes} reprogramações no período`} />}
+          {metricas.atrasados > 0     && <Alerta cor="var(--err)"  icon={AlertTriangle} texto={`${metricas.atrasados} pedido${metricas.atrasados>1?"s":""} atrasado${metricas.atrasados>1?"s":""}`} />}
+          {metricas.vencemHoje > 0    && <Alerta cor="var(--warn)" icon={Clock} texto={`${metricas.vencemHoje} pedido${metricas.vencemHoje>1?"s":""} vence hoje`} />}
+          {metricas.vencemSemana > 0  && <Alerta cor="var(--acc5)" icon={Calendar} texto={`${metricas.vencemSemana} vencem esta semana`} />}
+          {metricas.capacidadePorLinha.some(l => l.pct > 90) && <Alerta cor="var(--err)" icon={Flame} texto="Linha sobrecarregada (> 90%)" />}
+          {metricas.histReprogramacoes > 5 && <Alerta cor="var(--acc4)" icon={RefreshCw} texto={`${metricas.histReprogramacoes} reprogramações no período`} />}
         </div>
       )}
 
@@ -2628,10 +2641,10 @@ function DashboardConteudo({ metricas }: { metricas: Awaited<ReturnType<typeof g
   );
 }
 
-function Alerta({ cor, icon, texto }: { cor: string; icon: string; texto: string }) {
+function Alerta({ cor, icon: Icon, texto }: { cor: string; icon: LucideIcon; texto: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", background: "var(--surf2)", border: `1px solid ${cor}`, borderRadius: 8, fontSize: 12, color: cor, fontWeight: 600 }}>
-      <span>{icon}</span><span>{texto}</span>
+      <Icon size={14} /><span>{texto}</span>
     </div>
   );
 }
