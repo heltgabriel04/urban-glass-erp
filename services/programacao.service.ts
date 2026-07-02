@@ -517,6 +517,7 @@ export async function criarProgramacaoPedido(
   linhaCorteId: number,
   linhaLapId?: number,
   diasBloqueados: Set<string> = new Set(),
+  dtRetirada: Date | null = null,
 ): Promise<{ ok: boolean; erro?: string; fimCorte?: Date }> {
   const linhaCorte = linhas.find(l => l.id === linhaCorteId);
   const linhaLap   = linhaLapId ? linhas.find(l => l.id === linhaLapId) : undefined;
@@ -592,6 +593,15 @@ export async function criarProgramacaoPedido(
       usuario,
     }))
   );
+
+  // Bloco final de retirada/expedição (Separação → Finalizado), ancorado na
+  // data de retirada do pedido — mesma etapa/linha virtual usada pra chapa
+  // inteira. Falha aqui não desfaz o Corte/Lapidação já agendados: só loga.
+  if (dtRetirada) {
+    const pecasTotal = itens.reduce((s, i) => s + i.quantidade, 0);
+    const resRetirada = await criarBlocoRetirada(pedidoId, pecasTotal, linhas, dtRetirada, diasBloqueados, itens.length * 2);
+    if (!resRetirada.ok) console.warn('criarProgramacaoPedido: bloco de retirada não criado:', resRetirada.erro);
+  }
 
   return { ok: true, fimCorte: cursorCorte };
 }
@@ -1103,12 +1113,18 @@ export async function deletarProgramacao(progId: string): Promise<boolean> {
 
 // ─── CHAPA INTEIRA — AGENDAMENTO ────────────────────────────
 
-export async function agendarChapaInteira(
+// Insere o bloco de retirada/expedição (etapa 'Retirada de Chapa', linha
+// virtual 'Separação') ancorado em dt_retirada — usado tanto pra pedidos de
+// chapa inteira (agendarChapaInteira) quanto, agora, pro bloco final de
+// qualquer pedido com Corte/Lapidação (criarProgramacaoPedido), já que
+// mapearStatusPedido traduz essa etapa pra 'Separação'/'Finalizado'.
+async function criarBlocoRetirada(
   pedidoId: string,
   pecasTotal: number,
   linhas: ProducaoLinha[],
   dtRetirada: Date,
-  diasBloqueados: Set<string> = new Set(),
+  diasBloqueados: Set<string>,
+  sequencia: number,
 ): Promise<{ ok: boolean; erro?: string }> {
   const linhaSep = linhas.find(l => l.tipo === 'Separação');
   if (!linhaSep) return { ok: false, erro: 'Linha de Separação não encontrada. Execute o script SQL.' };
@@ -1121,7 +1137,7 @@ export async function agendarChapaInteira(
     pedido_id: pedidoId,
     linha_id: linhaSep.id,
     etapa: 'Retirada de Chapa',
-    sequencia: 0,
+    sequencia,
     dt_inicio_previsto: toISOLocal(dtInicio),
     dt_fim_previsto: toISOLocal(dtFim),
     duracao_estimada_min: duracao,
@@ -1129,8 +1145,18 @@ export async function agendarChapaInteira(
     obs: null,
   });
 
-  if (error) { console.error('agendarChapaInteira:', error); return { ok: false, erro: error.message }; }
+  if (error) { console.error('criarBlocoRetirada:', error); return { ok: false, erro: error.message }; }
   return { ok: true };
+}
+
+export async function agendarChapaInteira(
+  pedidoId: string,
+  pecasTotal: number,
+  linhas: ProducaoLinha[],
+  dtRetirada: Date,
+  diasBloqueados: Set<string> = new Set(),
+): Promise<{ ok: boolean; erro?: string }> {
+  return criarBlocoRetirada(pedidoId, pecasTotal, linhas, dtRetirada, diasBloqueados, 0);
 }
 
 // ─── RETIRADAS PARCIAIS ──────────────────────────────────────

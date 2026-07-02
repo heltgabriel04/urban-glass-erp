@@ -1363,7 +1363,8 @@ export default function ProgramacaoPage() {
     // linhaCorteId === -1 sinaliza chapa inteira (sem corte)
     const result = linhaCorteId === -1
       ? await agendarChapaInteira(modalAgendar.id, pecasTotal, linhas, dtInicio, calendario)
-      : await criarProgramacaoPedido(modalAgendar.id, itens, config, linhas, dtInicio, linhaCorteId, linhaLapId, calendario);
+      : await criarProgramacaoPedido(modalAgendar.id, itens, config, linhas, dtInicio, linhaCorteId, linhaLapId, calendario,
+          modalAgendar.dt_retirada ? new Date(modalAgendar.dt_retirada) : null);
 
     if (!result.ok) {
       alert(result.erro ?? "Erro ao agendar.");
@@ -1381,7 +1382,8 @@ export default function ProgramacaoPage() {
 
     for (const p of pedidosLote) {
       const itens = (p.itens_pedido ?? []) as { id: number; m2: number; quantidade: number; lapidacao: number; produto_nome: string }[];
-      const result = await criarProgramacaoPedido(p.id, itens, config, linhas, cursor, linhaCorteId, undefined, calendario);
+      const result = await criarProgramacaoPedido(p.id, itens, config, linhas, cursor, linhaCorteId, undefined, calendario,
+        p.dt_retirada ? new Date(p.dt_retirada) : null);
       if (result.ok && result.fimCorte) {
         // próximo pedido do lote encaixa logo depois deste (capacidade finita real, não mais "+1 dia")
         cursor = result.fimCorte;
@@ -1642,6 +1644,7 @@ export default function ProgramacaoPage() {
       const result = await criarProgramacaoPedido(
         pedido.id, itens, config, linhas, cursorPorLinha[linha.id], linha.id, undefined,
         bloqueadosPorLinha[linha.id] ?? calendario,
+        pedido.dt_retirada ? new Date(pedido.dt_retirada) : null,
       );
 
       if (result.ok && result.fimCorte) {
