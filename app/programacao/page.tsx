@@ -17,7 +17,7 @@ import {
   construirDiasBloqueadosPorLinha, minutosRestantesNoDia, proximaTarefaParaEncaixe,
   gerarPropostaRecalculo, aplicarPropostaRecalculo,
   addDays, proximoDiaUtil, getMonday, diffDays, toISOLocal,
-  calcularLeadTime,
+  calcularLeadTime, agruparPorPedido,
 } from "@/services/programacao.service";
 import type { BlocoMovivel, BlocoFixo, PedidoPendenteRecalculo, PropostaRecalculo } from "@/services/programacao.service";
 import type { RetiradaParcial, BloqueioLinha, DadosCalibracao } from "@/services/programacao.service";
@@ -37,7 +37,7 @@ import Link from "next/link";
 import {
   Link2, Lock, Flag, AlertTriangle, Clock,
   LayoutGrid, BarChart3, Truck, Calendar, Flame, RefreshCw,
-  PlayCircle, CheckCircle2, Star, Zap,
+  PlayCircle, CheckCircle2, Star, Zap, Rows3, GitBranch,
   type LucideIcon,
 } from "lucide-react";
 
@@ -313,15 +313,16 @@ function BlocoTooltipContent({ prog }: { prog: ProgramacaoProducao }) {
 // ─── BLOCO DRAGGABLE + REDIMENSIONÁVEL ───────────────────────
 
 function BlocoProducao({
-  prog, zoom, visibleStart, onClick, onResizeFim, laneIndex = 0, laneCount = 1,
+  prog, zoom, visibleStart, onClick, onResizeFim, laneIndex = 0, laneCount = 1, arrastavel = true,
 }: {
   prog: ProgramacaoProducao; zoom: string; visibleStart: Date;
   onClick: (p: ProgramacaoProducao) => void;
   onResizeFim: (id: string, novaDur: number) => void;
   laneIndex?: number; laneCount?: number;
+  arrastavel?: boolean; // false na visão "Por Pedido" — não faz sentido arrastar um bloco pra "raia" de outro pedido
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: prog.id, data: { prog },
+    id: prog.id, data: { prog }, disabled: !arrastavel,
   });
 
   // Preview local de duração durante o resize
@@ -406,7 +407,7 @@ function BlocoProducao({
         position: "absolute", left, top, width, height,
         background: bg, border: `1.5px solid ${borda}`, borderRadius: 8,
         padding: "5px 9px 5px 11px",
-        cursor: isDragging ? "grabbing" : "grab",
+        cursor: !arrastavel ? "pointer" : isDragging ? "grabbing" : "grab",
         userSelect: "none", zIndex: isDragging ? 50 : 2,
         opacity: isDragging ? 0.7 : 1,
         transform: CSS.Translate.toString(transform),
@@ -1343,6 +1344,7 @@ function AbaExpedicao({ pedidos }: { pedidos: Pedido[] }) {
 export default function ProgramacaoPage() {
   const [aba,          setAba]          = useState<"gantt" | "dashboard" | "expedicao">("gantt");
   const [zoom,         setZoom]         = useState<"hora" | "dia" | "semana" | "mes">("semana");
+  const [modoVisao,    setModoVisao]    = useState<"linha" | "pedido">("linha");
   const [dataBase,     setDataBase]     = useState<Date>(() => getMonday(new Date()));
   const [linhas,       setLinhas]       = useState<ProducaoLinha[]>([]);
   const [config,       setConfig]       = useState<ConfigTempoProducao[]>([]);
@@ -1866,6 +1868,10 @@ export default function ProgramacaoPage() {
     (!filtroLinha  || p.linha_id === filtroLinha) &&
     (!filtroStatus || p.status   === filtroStatus)
   );
+  // Visão "Por Pedido" (fluxo, estilo Planet Together) — cada pedido vira
+  // sua própria raia, mostrando a cadeia completa numa única linha em vez
+  // de espalhada pelas linhas de produção.
+  const gruposPorPedido = modoVisao === "pedido" ? agruparPorPedido(progFiltradas) : [];
   const semProgFiltrada = semProg.filter(p => {
     if (!busca) return true;
     const b = busca.toLowerCase();
@@ -2048,6 +2054,23 @@ export default function ProgramacaoPage() {
                   ))}
                 </div>
 
+                {/* Modo de visão — Por Linha (padrão) / Por Pedido (fluxo, estilo Planet Together) */}
+                <div style={{ display: "flex", border: "1px solid var(--b2)", borderRadius: 8, overflow: "hidden" }}>
+                  {([
+                    { modo: "linha" as const,  label: "Por Linha",  Icon: Rows3 },
+                    { modo: "pedido" as const, label: "Por Pedido", Icon: GitBranch },
+                  ]).map(({ modo, label, Icon }) => (
+                    <button key={modo} onClick={() => setModoVisao(modo)} title={label} style={{
+                      padding: "5px 11px", border: "none", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: 5,
+                      background: modoVisao === modo ? "var(--acc)" : "transparent",
+                      color: modoVisao === modo ? "#090b10" : "var(--t2)",
+                    }}>
+                      <Icon size={12} /> {label}
+                    </button>
+                  ))}
+                </div>
+
                 <button onClick={navAnterior} className="btn bg xs">◀</button>
                 <button onClick={irHoje}      className="btn bg xs">Hoje</button>
                 <button onClick={navProximo}  className="btn bg xs">▶</button>
@@ -2058,11 +2081,13 @@ export default function ProgramacaoPage() {
 
                 {/* Filtros */}
                 <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                  <select className="fc" style={{ padding: "4px 8px", fontSize: 11, width: 150 }}
-                    value={filtroLinha ?? ""} onChange={e => setFiltroLinha(e.target.value ? Number(e.target.value) : null)}>
-                    <option value="">Todas as linhas</option>
-                    {linhas.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
-                  </select>
+                  {modoVisao === "linha" && (
+                    <select className="fc" style={{ padding: "4px 8px", fontSize: 11, width: 150 }}
+                      value={filtroLinha ?? ""} onChange={e => setFiltroLinha(e.target.value ? Number(e.target.value) : null)}>
+                      <option value="">Todas as linhas</option>
+                      {linhas.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
+                    </select>
+                  )}
                   <select className="fc" style={{ padding: "4px 8px", fontSize: 11, width: 140 }}
                     value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}>
                     <option value="">Todos os status</option>
@@ -2122,17 +2147,21 @@ export default function ProgramacaoPage() {
                         </div>
                       </div>
 
-                      {/* Linhas de produção */}
-                      {linhasFiltradas.length === 0 ? (
+                      {/* Linhas de produção (ou raias por pedido, em modo "Por Pedido") */}
+                      {(modoVisao === "linha" ? linhasFiltradas.length === 0 : gruposPorPedido.length === 0) ? (
                         <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--t3)", fontSize: 13 }}>
-                          {linhas.length === 0
-                            ? "Nenhuma linha encontrada. Execute sql/fix-programacao-rls.sql no Supabase."
-                            : "Nenhuma linha no filtro selecionado."}
+                          {modoVisao === "pedido"
+                            ? "Nenhum pedido programado no período."
+                            : linhas.length === 0
+                              ? "Nenhuma linha encontrada. Execute sql/fix-programacao-rls.sql no Supabase."
+                              : "Nenhuma linha no filtro selecionado."}
                         </div>
                       ) : (
                       <div style={{ position: "relative" }}>
-                      {/* SVG de setas de dependência (Corte → Lapidação por item) */}
-                      {(() => {
+                      {/* SVG de setas de dependência (Corte → Lapidação por item) —
+                          por enquanto só em modo "Por Linha"; modo "Por Pedido" ganha
+                          setas próprias numa fase seguinte (geometria de raia diferente). */}
+                      {modoVisao === "linha" && (() => {
                         const visStart = zoomHoraria ? dataBase : dias[0];
                         const setas = progFiltradas.filter(p => p.predecessor_id);
                         if (setas.length === 0) return null;
@@ -2190,7 +2219,7 @@ export default function ProgramacaoPage() {
                           </svg>
                         );
                       })()}
-                      {linhasFiltradas.map(linha => {
+                      {modoVisao === "linha" && linhasFiltradas.map(linha => {
                         const blocos = progFiltradas.filter(p => p.linha_id === linha.id);
                         const { raia: raiaPorBloco, total: totalRaias } = atribuirRaias(blocos);
                         const minTotal = blocos.reduce((s, p) => s + (p.duracao_estimada_min ?? 0), 0);
@@ -2276,10 +2305,78 @@ export default function ProgramacaoPage() {
                           </div>
                         );
                       })}
+                      {modoVisao === "pedido" && gruposPorPedido.map(grupo => {
+                        const blocos = grupo.blocos;
+                        const { raia: raiaPorBloco, total: totalRaias } = atribuirRaias(blocos);
+                        const blocoRef = blocos.reduce((a, b) =>
+                          new Date(b.dt_fim_previsto ?? 0) > new Date(a.dt_fim_previsto ?? 0) ? b : a
+                        );
+                        const corRef = bordaBloco(blocoRef);
+                        return (
+                          <div key={grupo.chave} style={{ display: "flex", borderBottom: "1px solid var(--b1)", minHeight: ROW_H }}>
+
+                            {/* Label sticky */}
+                            <div style={{
+                              width: LABEL_W, flexShrink: 0, padding: "12px 14px",
+                              display: "flex", flexDirection: "column", justifyContent: "center", gap: 3,
+                              borderRight: "1px solid var(--b2)",
+                              position: "sticky", left: 0, background: "var(--surf)", zIndex: 5,
+                            }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <div style={{ width: 9, height: 9, borderRadius: "50%", background: corRef, flexShrink: 0 }} />
+                                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                                  {grupo.label}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: 10, color: "var(--t3)", paddingLeft: 15 }}>
+                                {blocos.length} {blocos.length !== 1 ? "etapas" : "etapa"}
+                              </div>
+                            </div>
+
+                            {/* Área não-droppable — não faz sentido "soltar" um bloco na raia de outro pedido */}
+                            <div style={{ flex: 1, position: "relative", minHeight: ROW_H }}>
+                              {/* Grade */}
+                              {(zoomHoraria ? horas : dias).map((_, i) => {
+                                const isHoje = !zoomHoraria && dias[i] && new Date(dias[i]).toDateString() === agora.toDateString();
+                                return (
+                                  <div key={i} style={{
+                                    position: "absolute", left: i * colW, top: 0, width: colW, height: "100%",
+                                    borderRight: "1px solid var(--b1)",
+                                    background: isHoje ? "rgba(61,255,160,0.04)" : "transparent",
+                                  }} />
+                                );
+                              })}
+
+                              {/* Linha de agora (vertical) */}
+                              {agoraLeft !== null && (
+                                <div style={{
+                                  position: "absolute", left: agoraLeft, top: 0, bottom: 0,
+                                  width: 2, background: "var(--acc)", zIndex: 3, opacity: 0.4,
+                                  pointerEvents: "none",
+                                }} />
+                              )}
+
+                              {/* Blocos — não arrastáveis nesta visão (raia é o pedido, não uma linha de produção) */}
+                              {blocos.map(prog => (
+                                <BlocoProducao
+                                  key={prog.id} prog={prog} zoom={zoom}
+                                  visibleStart={zoomHoraria ? dataBase : dias[0]}
+                                  onClick={setModalBloco}
+                                  onResizeFim={handleResizeFim}
+                                  laneIndex={raiaPorBloco.get(prog.id) ?? 0}
+                                  laneCount={totalRaias}
+                                  arrastavel={false}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
                       </div>
                       )}
 
-                      {/* Barra de capacidade geral */}
+                      {/* Barra de capacidade geral — ocupação por linha não se aplica na visão Por Pedido */}
+                      {modoVisao === "linha" && (
                       <div style={{ display: "flex", borderTop: "2px solid var(--b2)", background: "var(--surf2)" }}>
                         <div style={{ width: LABEL_W, flexShrink: 0, padding: "9px 14px", fontSize: 10, color: "var(--t3)", fontWeight: 700, borderRight: "1px solid var(--b2)", position: "sticky", left: 0, background: "var(--surf2)", zIndex: 5 }}>
                           OCUPAÇÃO
@@ -2304,6 +2401,7 @@ export default function ProgramacaoPage() {
                           })}
                         </div>
                       </div>
+                      )}
 
                     </div>
                   </DndContext>
