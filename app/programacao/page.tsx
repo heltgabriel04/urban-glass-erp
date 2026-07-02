@@ -1272,6 +1272,23 @@ export default function ProgramacaoPage() {
     else                      setDataBase(new Date());
   }
 
+  // Ctrl+scroll troca o zoom (dia ↔ semana ↔ mês), estilo Figma/Google Maps —
+  // acumula o delta pra não pular 2 níveis num scroll de trackpad só.
+  const ZOOM_ORDER: Array<"dia" | "semana" | "mes"> = ["dia", "semana", "mes"];
+  const wheelAccum = useRef(0);
+  function handleWheelZoom(e: React.WheelEvent) {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    wheelAccum.current += e.deltaY;
+    if (Math.abs(wheelAccum.current) < 50) return;
+    const dir = wheelAccum.current > 0 ? 1 : -1;
+    wheelAccum.current = 0;
+    setZoom(z => {
+      const idx = ZOOM_ORDER.indexOf(z);
+      return ZOOM_ORDER[Math.min(ZOOM_ORDER.length - 1, Math.max(0, idx + dir))];
+    });
+  }
+
   function tituloPeriodo() {
     if (zoom === "dia") return dataBase.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
     if (zoom === "semana") {
@@ -1842,7 +1859,7 @@ export default function ProgramacaoPage() {
                   Carregando…
                 </div>
               ) : (
-                <div style={{ flex: 1, overflow: "auto" }}>
+                <div style={{ flex: 1, overflow: "auto" }} onWheel={handleWheelZoom}>
                   <DndContext
                     onDragStart={(e: DragStartEvent) => setDragId(String(e.active.id))}
                     onDragEnd={handleDragEnd}
