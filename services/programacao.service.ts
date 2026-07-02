@@ -1541,6 +1541,7 @@ export interface MetricasProducao {
   horasAtrasadas: number;
   gargaloAtual: { nome: string; pct: number } | null;
   leadTimeMedioMin: number | null;
+  setupEconomizadoMin: number;
 }
 
 // Extraído pra função pura testável sem mock de Supabase — pega a linha
@@ -1563,12 +1564,14 @@ export async function getMetricasProducao(from: Date, to: Date): Promise<Metrica
   let somaCorte = 0, qtdCorte = 0, somaLap = 0, qtdLap = 0;
   let vencemHoje = 0, vencemSemana = 0;
   let horasAtrasadas = 0;
+  let setupEconomizadoMin = 0;
 
   for (const p of progs) {
     const prazo = p.pedidos?.dt_retirada ? new Date(p.pedidos.dt_retirada) : null;
     const fim   = p.dt_fim_previsto      ? new Date(p.dt_fim_previsto)     : null;
     m2Prog += p.pedidos?.m2_total ?? 0;
     pecas  += (p.pedidos?.itens_pedido ?? []).reduce((s, i) => s + i.quantidade, 0);
+    setupEconomizadoMin += p.desconto_setup_min ?? 0;
 
     if (p.status === 'Concluído') m2Conc += p.pedidos?.m2_total ?? 0;
 
@@ -1647,5 +1650,6 @@ export async function getMetricasProducao(from: Date, to: Date): Promise<Metrica
     horasAtrasadas: Math.round(horasAtrasadas * 10) / 10,
     gargaloAtual,
     leadTimeMedioMin,
+    setupEconomizadoMin,
   };
 }

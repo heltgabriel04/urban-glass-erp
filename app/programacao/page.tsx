@@ -2793,6 +2793,7 @@ function DashboardConteudo({ metricas }: { metricas: Awaited<ReturnType<typeof g
         <MetricaRow label="Tempo médio lapidação"  value={formatarDuracao(metricas.tempoMedioLapidacao)} />
         <MetricaRow label="Reprogramações"         value={String(metricas.histReprogramacoes)} />
         <MetricaRow label="Lead time médio"        value={metricas.leadTimeMedioMin !== null ? formatarDuracao(metricas.leadTimeMedioMin) : "—"} />
+        <MetricaRow label="Setup economizado"      value={metricas.setupEconomizadoMin > 0 ? formatarDuracao(metricas.setupEconomizadoMin) : "—"} />
       </div>
     </div>
   );
