@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from "react";
 import AppLayout from "@/components/layout/AppLayout";
+import HoverCard from "@/components/ui/HoverCard";
 import {
   getLinhas, getConfigTempo, getProgramacao, getPedidosSemProgramacao,
   getPedidosExpedicao, getCalendario,
@@ -247,6 +248,67 @@ function LegendaCores({ linhas }: { linhas: ProducaoLinha[] }) {
   );
 }
 
+// ─── TOOLTIP DO BLOCO (HOVER) ─────────────────────────────────
+
+function LinhaTooltip({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
+      <span style={{ color: "var(--t3)", fontSize: 10, flexShrink: 0 }}>{label}</span>
+      <span style={{ color: "var(--t1)", fontSize: 11, fontWeight: 600, textAlign: "right" }}>{value}</span>
+    </div>
+  );
+}
+
+function BlocoTooltipContent({ prog }: { prog: ProgramacaoProducao }) {
+  const item    = prog.item_pedido ?? null;
+  const cliente = prog.pedidos?.clientes?.nome ?? "—";
+  const prazo   = prog.pedidos?.dt_retirada
+    ? new Date(prog.pedidos.dt_retirada).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
+    : "—";
+
+  const inicioMs = prog.dt_inicio_previsto ? new Date(prog.dt_inicio_previsto).getTime() : null;
+  const fimMs    = prog.dt_fim_previsto    ? new Date(prog.dt_fim_previsto).getTime()    : null;
+  const agoraMs  = Date.now();
+  const pctConcluido = (prog.status === "Em Execução" && inicioMs && fimMs && fimMs > inicioMs)
+    ? Math.min(100, Math.max(0, Math.round(((agoraMs - inicioMs) / (fimMs - inicioMs)) * 100)))
+    : null;
+  const minutosRestantes = (fimMs && prog.status !== "Concluído") ? Math.round((fimMs - agoraMs) / 60000) : null;
+  const emAtraso = minutosRestantes !== null && minutosRestantes < 0;
+
+  return (
+    <div>
+      <div style={{ fontSize: 12, fontWeight: 800, color: "var(--t1)", marginBottom: 6 }}>
+        {prog.pedido_id} · {prog.etapa}
+      </div>
+      <LinhaTooltip label="Cliente" value={cliente} />
+      {item && <LinhaTooltip label="Medidas" value={`${item.largura}×${item.altura}mm · ${item.m2.toFixed(2)}m²`} />}
+      {item && <LinhaTooltip label="Quantidade" value={item.quantidade} />}
+      <LinhaTooltip label="Linha" value={prog.producao_linhas?.nome ?? "—"} />
+      <LinhaTooltip label="Prazo de entrega" value={prazo} />
+      <LinhaTooltip label="Responsável" value={prog.responsavel ?? "—"} />
+      {pctConcluido !== null && <LinhaTooltip label="% concluído" value={`${pctConcluido}%`} />}
+      {minutosRestantes !== null && (
+        <LinhaTooltip
+          label={emAtraso ? "Horas atrasadas" : "Tempo restante"}
+          value={formatarDuracao(Math.abs(minutosRestantes))}
+        />
+      )}
+      {prog.obs && (
+        <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid var(--b2)" }}>
+          <div style={{ color: "var(--t3)", fontSize: 10, marginBottom: 2 }}>Obs. da etapa</div>
+          <div style={{ color: "var(--t2)", fontSize: 10.5 }}>{prog.obs}</div>
+        </div>
+      )}
+      {prog.pedidos?.obs && (
+        <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid var(--b2)" }}>
+          <div style={{ color: "var(--t3)", fontSize: 10, marginBottom: 2 }}>Obs. do pedido</div>
+          <div style={{ color: "var(--t2)", fontSize: 10.5 }}>{prog.pedidos.obs}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── BLOCO DRAGGABLE + REDIMENSIONÁVEL ───────────────────────
 
 function BlocoProducao({
@@ -335,6 +397,7 @@ function BlocoProducao({
     : `${prog.pedido_id} · ${prog.pedidos?.clientes?.nome ?? ""} · ${prog.etapa}`;
 
   return (
+    <HoverCard content={<BlocoTooltipContent prog={prog} />}>
     <div
       ref={setNodeRef}
       title={titleInfo}
@@ -427,6 +490,7 @@ function BlocoProducao({
         }} />
       </div>
     </div>
+    </HoverCard>
   );
 }
 
@@ -864,6 +928,7 @@ function ModalBloco({
             <StatBloco label="Fim Previsto"    value={fim} />
             <StatBloco label="Prazo Entrega"   value={prazo} col={borda} />
             <StatBloco label="Duração Est."    value={formatarDuracao(prog.duracao_estimada_min ?? 0)} />
+            <StatBloco label="Responsável"     value={prog.responsavel ?? "—"} />
             {predecessor && (
               <StatBloco
                 label={`Espera após ${predecessor.etapa}`}
@@ -880,8 +945,16 @@ function ModalBloco({
             </div>
           )}
 
+          {prog.obs && (
+            <div style={{ fontSize: 12, color: "var(--t2)", background: "var(--surf2)", padding: "8px 12px", borderRadius: 8, lineHeight: 1.5 }}>
+              <span style={{ color: "var(--t3)", fontSize: 10, display: "block", marginBottom: 2 }}>Obs. da etapa</span>
+              {prog.obs}
+            </div>
+          )}
+
           {prog.pedidos?.obs && (
             <div style={{ fontSize: 12, color: "var(--t2)", background: "var(--surf2)", padding: "8px 12px", borderRadius: 8, lineHeight: 1.5 }}>
+              <span style={{ color: "var(--t3)", fontSize: 10, display: "block", marginBottom: 2 }}>Obs. do pedido</span>
               {prog.pedidos.obs}
             </div>
           )}
