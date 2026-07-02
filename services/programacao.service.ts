@@ -1124,11 +1124,22 @@ export function statusProgramacaoAlvo(
   return ETAPAS_POR_STATUS_PEDIDO[statusPedido]?.[etapa] ?? null;
 }
 
+const ORDEM_STATUS_PROGRAMACAO: Record<StatusProgramacao, number> = {
+  Agendado: 0, 'Em Execução': 1, Concluído: 2, Cancelado: -1,
+};
+
 // Reconcilia os blocos de programação de um pedido com o status que ele
 // acabou de assumir (avancarStatusPedido/retrocederStatusPedido). Só grava
-// o que muda, nunca mexe em blocos Cancelado, e nunca apaga dt_inicio_real/
-// dt_fim_real já preenchidos (preserva o histórico real de produção mesmo
-// que o pedido seja retrocedido por engano).
+// o que muda e nunca mexe em blocos Cancelado.
+//
+// Ao AVANÇAR, só preenche dt_inicio_real/dt_fim_real se ainda estiverem
+// vazios (não pisa num horário real já registrado).
+//
+// Ao RETROCEDER (voltar um status por engano ou pra corrigir), o
+// cronômetro real da etapa é reiniciado — sem isso, um avanço errado
+// seguido de "voltar" deixava dt_inicio_real/dt_fim_real presos no momento
+// do engano, contaminando pra sempre a calibração de tempos (Fase 4) sem
+// nenhuma forma de corrigir pela tela.
 export async function reconciliarProgramacaoComPedido(
   pedidoId: string,
   novoStatusPedido: StatusPedido,
@@ -1144,10 +1155,17 @@ export async function reconciliarProgramacaoComPedido(
     if (!alvo || alvo === bloco.status) continue;
 
     const updates: Partial<ProgramacaoProducao> = { status: alvo };
-    if (alvo === 'Em Execução' && !bloco.dt_inicio_real) updates.dt_inicio_real = toISOLocal(new Date());
-    if (alvo === 'Concluído') {
-      if (!bloco.dt_inicio_real) updates.dt_inicio_real = toISOLocal(new Date());
-      if (!bloco.dt_fim_real)    updates.dt_fim_real    = toISOLocal(new Date());
+    const retrocedendo = ORDEM_STATUS_PROGRAMACAO[alvo] < ORDEM_STATUS_PROGRAMACAO[bloco.status];
+
+    if (retrocedendo) {
+      if (alvo === 'Agendado')    { updates.dt_inicio_real = null; updates.dt_fim_real = null; }
+      if (alvo === 'Em Execução') { updates.dt_inicio_real = toISOLocal(new Date()); updates.dt_fim_real = null; }
+    } else {
+      if (alvo === 'Em Execução' && !bloco.dt_inicio_real) updates.dt_inicio_real = toISOLocal(new Date());
+      if (alvo === 'Concluído') {
+        if (!bloco.dt_inicio_real) updates.dt_inicio_real = toISOLocal(new Date());
+        if (!bloco.dt_fim_real)    updates.dt_fim_real    = toISOLocal(new Date());
+      }
     }
 
     await supabase.from('programacao_producao').update(updates).eq('id', bloco.id);
