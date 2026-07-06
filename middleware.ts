@@ -96,7 +96,8 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Todas as páginas (login + RBAC enforçados), exceto estáticos, /auth e /api.
+  // Todas as páginas (login + RBAC enforçados), exceto estáticos, PWA (manifest/ícones/
+  // service worker/offline, que precisam ser acessíveis sem sessão), /auth e /api.
   // As rotas /api são protegidas individualmente nos próprios handlers.
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|auth).*)"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|manifest.json|icon-192.png|icon-512.png|sw.js|offline.html|auth).*)"],
 };
