@@ -79,9 +79,17 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          # --ignore-garbage tolera espaço/quebra de linha que o copia-e-cola
-          # do secret possa ter introduzido (o artifact original é uma linha só).
-          echo "$KEYSTORE_B64" | base64 -d -i > app/upload-keystore.jks
+          # Tamanho é seguro de logar (não expõe conteúdo). Um keystore .jks
+          # típico vira uns 3-6 mil caracteres em base64 — se aparecer bem
+          # menor que isso, o valor colado no secret está incompleto/errado.
+          echo "Tamanho do secret ANDROID_KEYSTORE_BASE64: ${#KEYSTORE_B64} caracteres"
+
+          # Escreve num arquivo em vez de "echo | base64 -d" (evita qualquer
+          # peculiaridade do echo/shell) e usa --ignore-garbage pra tolerar
+          # espaço/quebra de linha que o copia-e-cola possa ter introduzido.
+          printf '%s' "$KEYSTORE_B64" > raw-keystore.b64
+          base64 -d -i raw-keystore.b64 > app/upload-keystore.jks
+          rm raw-keystore.b64
           test -s app/upload-keystore.jks || { echo "Keystore decodificado ficou vazio — confira o secret ANDROID_KEYSTORE_BASE64"; exit 1; }
           ./gradlew assembleRelease \
             -PbuildVersionCode=${{ github.run_number }} \
