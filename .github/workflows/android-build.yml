@@ -42,6 +42,20 @@ jobs:
       - name: Torna o gradlew executável
         run: chmod +x android/gradlew
 
+      # "secrets" não pode ser usado direto em "if:" (restrição do GitHub Actions)
+      # — passa primeiro por env: (onde secrets é permitido) e expõe um output,
+      # que aí sim pode ser lido pelos "if:" dos steps de build abaixo.
+      - name: Verifica se o keystore de assinatura já está configurado
+        id: check_keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "has_keystore=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_keystore=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # Enquanto os secrets de assinatura (ANDROID_KEYSTORE_BASE64 e cia, gerados
       # pelo workflow "generate-keystore") ainda não existem, builda um APK de
       # debug (assinado automaticamente pelo Gradle) só pra já ter algo instalável.
@@ -49,7 +63,7 @@ jobs:
       # obrigatório pro Android App Links funcionar (o fingerprint tem que bater
       # com public/.well-known/assetlinks.json).
       - name: Build debug (sem keystore configurado ainda)
-        if: ${{ !secrets.ANDROID_KEYSTORE_BASE64 }}
+        if: steps.check_keystore.outputs.has_keystore == 'false'
         working-directory: android
         run: |
           ./gradlew assembleDebug \
@@ -57,7 +71,7 @@ jobs:
             -PbuildVersionName=1.0.${{ github.run_number }}
 
       - name: Build release assinado
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        if: steps.check_keystore.outputs.has_keystore == 'true'
         working-directory: android
         env:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
