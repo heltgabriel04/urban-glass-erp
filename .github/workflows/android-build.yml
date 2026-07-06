@@ -1,0 +1,85 @@
+name: Build Android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - "capacitor.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/android-build.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Sincronizar projeto Android (Capacitor)
+        run: npx cap sync android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Instalar pacotes do Android SDK
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Torna o gradlew executável
+        run: chmod +x android/gradlew
+
+      # Enquanto os secrets de assinatura (ANDROID_KEYSTORE_BASE64 e cia, gerados
+      # pelo workflow "generate-keystore") ainda não existem, builda um APK de
+      # debug (assinado automaticamente pelo Gradle) só pra já ter algo instalável.
+      # Depois de cadastrar os secrets, builda release assinado de verdade —
+      # obrigatório pro Android App Links funcionar (o fingerprint tem que bater
+      # com public/.well-known/assetlinks.json).
+      - name: Build debug (sem keystore configurado ainda)
+        if: ${{ !secrets.ANDROID_KEYSTORE_BASE64 }}
+        working-directory: android
+        run: |
+          ./gradlew assembleDebug \
+            -PbuildVersionCode=${{ github.run_number }} \
+            -PbuildVersionName=1.0.${{ github.run_number }}
+
+      - name: Build release assinado
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        working-directory: android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > app/upload-keystore.jks
+          ./gradlew assembleRelease \
+            -PbuildVersionCode=${{ github.run_number }} \
+            -PbuildVersionName=1.0.${{ github.run_number }} \
+            -Pandroid.injected.signing.store.file=app/upload-keystore.jks \
+            -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
+          rm app/upload-keystore.jks
+
+      - name: Upload do APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: urban-glass-erp-apk
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 30
