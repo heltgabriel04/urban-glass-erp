@@ -74,11 +74,15 @@ jobs:
         if: steps.check_keystore.outputs.has_keystore == 'true'
         working-directory: android
         env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > app/upload-keystore.jks
+          # --ignore-garbage tolera espaço/quebra de linha que o copia-e-cola
+          # do secret possa ter introduzido (o artifact original é uma linha só).
+          echo "$KEYSTORE_B64" | base64 -d -i > app/upload-keystore.jks
+          test -s app/upload-keystore.jks || { echo "Keystore decodificado ficou vazio — confira o secret ANDROID_KEYSTORE_BASE64"; exit 1; }
           ./gradlew assembleRelease \
             -PbuildVersionCode=${{ github.run_number }} \
             -PbuildVersionName=1.0.${{ github.run_number }} \
