@@ -22,6 +22,22 @@ export function formatPercent(value: number | null | undefined, decimals = 2): s
   return Number(value || 0).toFixed(decimals) + '%';
 }
 
+/**
+ * Área real da peça (largura × altura × quantidade), sem o arredondamento pra
+ * múltiplo de 50mm que o campo `item.m2` carrega (regra de cobrança — cada
+ * dimensão sobe pro próximo múltiplo de 50mm, então uma peça de 900×950mm é
+ * cobrada como se fosse 1000×1000mm = 1m²). Pra exibir a medida real da peça
+ * (romaneio, listas) use esta função em vez de `item.m2` direto.
+ * Em modo ML (vidro do cliente / produto por metro linear) `item.m2` já é o
+ * valor exato sem arredondamento, então é reaproveitado.
+ */
+export function medidaReal(
+  item: { largura: number; altura: number; quantidade: number; m2: number },
+  isML: boolean
+): number {
+  return isML ? item.m2 : (item.largura * item.altura * item.quantidade) / 1e6;
+}
+
 /** 23/05/2026 — parseia YYYY-MM-DD sem converter para UTC para evitar bug de fuso */
 export function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—';

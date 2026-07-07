@@ -9,7 +9,7 @@ import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, updateNaoConformidade } from "@/services/qualidade.service";
 import { getRetiradasPorPedido, calcularSaldoItens, createRetirada } from "@/services/retiradas.service";
 import { getObservacoesPorPedido, createObservacao, deletarObservacao } from "@/services/observacoes.service";
-import { formatBRL, formatDate, formatDuracao } from "@/lib/formatters";
+import { formatBRL, formatDate, formatDuracao, medidaReal } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
@@ -1357,7 +1357,7 @@ export default function PedidoDetalhe() {
                   <tbody>
                     {pedido.itens_pedido!.map((item, i) => {
                       const isML = (item as any).produtos?.unidade === "ml" || (item as any).vidro_cliente === true;
-                      const medida = Number(item.m2).toFixed(3);
+                      const medida = medidaReal(item, isML).toFixed(3);
                       const unidade = isML ? "ml" : "m²";
                       return (
                       <tr key={item.id}>
@@ -1819,7 +1819,10 @@ export default function PedidoDetalhe() {
                 <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Retirada prevista</span><strong>{formatDate(pedido.dt_retirada)}</strong></div>
                 <div style={{ display:"flex", justifyContent:"space-between" }}>
                   <span style={{ color:"#333" }}>{(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml total" : "m² total"}</span>
-                  <strong>{Number(pedido.m2_total).toFixed(2)} {(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml" : "m²"}</strong>
+                  <strong>
+                    {(pedido.itens_pedido ?? []).reduce((s, item: any) => s + medidaReal(item, item.produtos?.unidade === "ml" || item.vidro_cliente === true), 0).toFixed(2)}
+                    {" "}{(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml" : "m²"}
+                  </strong>
                 </div>
               </div>
             </div>
@@ -1840,7 +1843,7 @@ export default function PedidoDetalhe() {
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"center", color:"#000", fontSize:"10px", fontWeight:700 }}>{i + 1}</td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontWeight:700, color:"#000" }}>{item.produto_nome}</td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontFamily:"monospace", fontSize:"10px", fontWeight:700, color:"#000" }}>{item.largura} × {item.altura}</td>
-                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontFamily:"monospace", fontSize:"10px", fontWeight:700, color:"#000" }}>{Number(item.m2).toFixed(3)} {isML ? "ml" : "m²"}</td>
+                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontFamily:"monospace", fontSize:"10px", fontWeight:700, color:"#000" }}>{medidaReal(item, isML).toFixed(3)} {isML ? "ml" : "m²"}</td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"center", fontWeight:700, color:"#000" }}>{item.quantidade}</td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"right", fontFamily:"monospace", fontSize:"10px", fontWeight:700, color:"#000" }}>{formatBRL(item.valor_m2)}</td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"right", fontFamily:"monospace", fontWeight:700, color:"#2d5fa6" }}>{formatBRL(item.subtotal)}</td>

@@ -1,5 +1,5 @@
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
-import { formatDate, formatM2 } from "@/lib/formatters";
+import { formatDate, formatM2, medidaReal } from "@/lib/formatters";
 import type { Pedido } from "@/types";
 
 const AZUL = "#2d5fa6";
@@ -94,7 +94,11 @@ export function RomaneioDocument({ pedido }: { pedido: Pedido }) {
             </View>
             <View style={styles.condLinha}>
               <Text style={styles.condLabel}>{isML ? "ml total" : "m² total"}</Text>
-              <Text style={styles.condValor}>{isML ? `${Number(pedido.m2_total).toFixed(2)} ml` : formatM2(pedido.m2_total)}</Text>
+              <Text style={styles.condValor}>
+                {isML
+                  ? `${itens.reduce((s, item) => s + medidaReal(item, true), 0).toFixed(2)} ml`
+                  : formatM2(itens.reduce((s, item) => s + medidaReal(item, item.produtos?.unidade === "ml" || item.vidro_cliente === true), 0))}
+              </Text>
             </View>
           </View>
         </View>
@@ -115,7 +119,7 @@ export function RomaneioDocument({ pedido }: { pedido: Pedido }) {
                 <Text style={[styles.td, styles.colNum]}>{i + 1}</Text>
                 <Text style={[styles.td, styles.colProd]}>{item.produto_nome}</Text>
                 <Text style={[styles.td, styles.colDim]}>{item.largura} × {item.altura}</Text>
-                <Text style={[styles.td, styles.colMedida]}>{Number(item.m2).toFixed(3)} {itemML ? "ml" : "m²"}</Text>
+                <Text style={[styles.td, styles.colMedida]}>{medidaReal(item, itemML).toFixed(3)} {itemML ? "ml" : "m²"}</Text>
                 <Text style={[styles.td, styles.colQtd]}>{item.quantidade}</Text>
                 <Text style={[styles.td, styles.colCodigo]}>{item.codigo_adicional || "—"}</Text>
               </View>
