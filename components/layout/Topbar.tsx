@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "./ThemeProvider";
 
-export default function Topbar() {
+interface Props {
+  onMenuClick?: () => void;
+}
+
+export default function Topbar({ onMenuClick }: Props) {
   const [hora, setHora] = useState("");
   const { theme, toggle } = useTheme();
 
@@ -28,7 +32,7 @@ export default function Topbar() {
   });
 
   return (
-    <div className="no-print" style={{
+    <div className="no-print topbar" style={{
       padding: "10px 26px",
       borderBottom: "1px solid var(--b1)",
       background: "var(--surf)",
@@ -38,6 +42,32 @@ export default function Topbar() {
       gap: "8px",
       flexShrink: 0,
     }}>
+      <style>{`
+        .topbar-hamburger {
+          display: none;
+          align-items: center; justify-content: center;
+          width: 30px; height: 30px;
+          border-radius: 6px;
+          border: 1px solid var(--b1);
+          background: var(--surf2);
+          color: var(--t2);
+          cursor: pointer;
+          font-size: 15px; line-height: 1;
+          margin-right: auto;
+          flex-shrink: 0;
+        }
+        @media (max-width: 860px) {
+          .topbar-hamburger { display: inline-flex; }
+        }
+      `}</style>
+      <button
+        className="topbar-hamburger"
+        onClick={onMenuClick}
+        title="Abrir menu"
+        aria-label="Abrir menu"
+      >
+        ☰
+      </button>
       <div className="clk">{data} · {hora}</div>
       <button
         onClick={toggle}

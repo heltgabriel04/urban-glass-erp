@@ -113,7 +113,7 @@ export default function OrcamentosPage() {
       <div className="con">
 
         {/* CARDS */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:"12px", marginBottom:"20px" }}>
+        <div className="stat-grid" style={{ marginBottom:"20px" }}>
           {[
             { label:"Total",       value: String(orcamentos.length), color:"var(--t1)",   sub:"orçamentos" },
             { label:"Valor Total", value: formatBRL(totalValor),     color:"var(--acc)",  sub:"soma geral" },
@@ -131,7 +131,7 @@ export default function OrcamentosPage() {
         </div>
 
         {/* FILTROS */}
-        <div style={{ display:"flex", gap:"6px", marginBottom:"14px" }}>
+        <div style={{ display:"flex", flexWrap:"wrap", gap:"6px", marginBottom:"14px" }}>
           {FILTROS.map(f => (
             <button
               key={f}

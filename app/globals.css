@@ -484,7 +484,11 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
 .met-v { font-size: 16px; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--t1); line-height: 1; }
 
 /* ─── TABLES ─────────────────────────────────────────────── */
-.tw { border-radius: var(--r2); border: 1px solid var(--b1); overflow: hidden; }
+/* overflow-x:auto (em vez de hidden) deixa a tabela rolar dentro do
+   próprio container em telas estreitas, ao invés do scroll vazar pra
+   página inteira; overflow-y continua hidden só pra manter o corte
+   das bordas arredondadas. */
+.tw { border-radius: var(--r2); border: 1px solid var(--b1); overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
 
 table { width: 100%; border-collapse: collapse; }
 
@@ -825,4 +829,28 @@ textarea.fc { resize: vertical; min-height: 64px; }
 [data-theme="light"] tbody td { border-bottom-color: var(--b2); }
 [data-theme="light"] tbody tr:nth-child(even) td { background: rgba(0,0,0,.03); }
 [data-theme="light"] tbody tr:hover td { background: rgba(13,150,104,.08) !important; }
+
+/* ─── RESPONSIVO (celular) ───────────────────────────────────
+   .sb (sidebar) e .topbar-hamburger têm suas regras de mobile
+   junto ao próprio componente (Sidebar.tsx / Topbar.tsx); aqui
+   ficam os ajustes do conteúdo em si, que valem pras ~40 telas
+   que usam .tb/.con/.tw. */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .con { padding: 14px; }
+
+  .tb {
+    flex-wrap: wrap;
+    padding: 12px 14px;
+  }
+  .tb-title { flex: 1 1 auto; }
+  .tb-search { width: 100%; order: 3; flex: 1 1 100%; }
+
+  table { min-width: 560px; }
+}
 [data-theme="light"] .sr { border-bottom-color: var(--b2); }

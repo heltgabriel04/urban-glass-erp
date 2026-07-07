@@ -120,7 +120,12 @@ function LogoIcon() {
   );
 }
 
-export default function Sidebar() {
+interface Props {
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
+}
+
+export default function Sidebar({ mobileOpen = false, onCloseMobile }: Props) {
   const pathname  = usePathname();
   const router    = useRouter();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -265,12 +270,52 @@ export default function Sidebar() {
           opacity: 0; transition: opacity 0.12s; overflow: hidden; white-space: nowrap;
         }
         .sb:hover .sb-ft-ver { opacity: 1; }
+
+        /* ─── Modo gaveta (celular / tela estreita) ──────────────
+           Abaixo do breakpoint, a sidebar não fica mais fixa no
+           fluxo (economiza espaço horizontal) — vira um painel que
+           desliza por cima do conteúdo, aberto/fechado via estado
+           (hambúrguer no Topbar). Toque não tem ":hover", então o
+           modo ícone-só não faz sentido aqui: quando aberta, mostra
+           sempre os rótulos completos. */
+        .sb-backdrop { display: none; }
+        @media (max-width: 860px) {
+          .sb {
+            position: fixed;
+            top: 0; left: 0; height: 100vh;
+            width: 250px; min-width: 250px;
+            transform: translateX(-100%);
+            transition: transform 0.22s ease;
+            box-shadow: none;
+            z-index: 100;
+          }
+          .sb.sb-open {
+            transform: translateX(0);
+            box-shadow: 4px 0 24px rgba(0,0,0,.5);
+          }
+          .sb .sb-logo-text,
+          .sb .ns,
+          .sb .ni-label,
+          .sb .sb-ft-ver { opacity: 1; }
+          .sb .ni-active-dot { display: none; }
+          .sb .ni[data-tip]::after { content: none; }
+
+          .sb-backdrop.show {
+            display: block;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.5);
+            z-index: 90;
+          }
+        }
       `}</style>
 
-      <aside className="sb">
+      <div className={`sb-backdrop${mobileOpen ? " show" : ""}`} onClick={onCloseMobile} />
+
+      <aside className={`sb${mobileOpen ? " sb-open" : ""}`}>
 
         {/* Logo */}
-        <Link href="/dashboard" className="sb-logo-wrap">
+        <Link href="/dashboard" className="sb-logo-wrap" onClick={onCloseMobile}>
           <div style={{ flexShrink: 0 }}><LogoIcon /></div>
           <div className="sb-logo-text">
             <div className="sb-logo-name">UrbanGlass</div>
@@ -309,6 +354,7 @@ export default function Sidebar() {
                         href={item.href}
                         data-tip={item.label}
                         className={`ni${ativo ? " active" : ""}`}
+                        onClick={onCloseMobile}
                       >
                         <Icon d={item.icon} size={15} />
                         <span className="ni-label">{item.label}</span>
