@@ -154,6 +154,7 @@ export default function PedidoDetalhe() {
   const [abrirRomaneio,     setAbrirRomaneio]     = useState(false);
   const [abrirNfe,          setAbrirNfe]          = useState(false);
   const [abrirBoleto,       setAbrirBoleto]       = useState(false);
+  const [abrirObs,          setAbrirObs]          = useState(false);
 
   // Qualidade
   const [ncs, setNcs]               = useState<NaoConformidade[]>([]);
@@ -1338,59 +1339,6 @@ export default function PedidoDetalhe() {
             </div>
           </div>
 
-          {/* Observações */}
-          <div className="card" style={{ padding:"20px 24px" }}>
-            <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, marginBottom:"16px", letterSpacing:".06em" }}>
-              OBSERVAÇÕES{observacoes.length > 0 ? ` (${observacoes.length})` : ""}
-            </div>
-
-            <div style={{ display:"flex", gap:"8px", marginBottom:"16px", alignItems:"flex-end" }}>
-              <textarea
-                className="fc"
-                value={novaObs}
-                onChange={e => setNovaObs(e.target.value)}
-                placeholder="Registrar um acontecimento do pedido (ex.: entregador quebrou 4 vidros ontem)..."
-                rows={2}
-                style={{ flex:1, resize:"vertical" }}
-              />
-              <button
-                className="btn bp sm"
-                onClick={handleAdicionarObservacao}
-                disabled={salvandoObs || !novaObs.trim()}
-                style={{ whiteSpace:"nowrap" }}
-              >
-                + Adicionar
-              </button>
-            </div>
-
-            {observacoes.length === 0 ? (
-              <div style={{ padding:"14px 16px", background:"var(--surf2)", borderRadius:"8px", border:"1px dashed var(--b2)", textAlign:"center", fontSize:"12px", color:"var(--t3)" }}>
-                Nenhuma observação registrada ainda.
-              </div>
-            ) : (
-              <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
-                {observacoes.map(o => (
-                  <div key={o.id} style={{ background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px", border:"1px solid var(--b2)" }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"8px" }}>
-                      <div style={{ fontSize:"13px", color:"var(--t1)", whiteSpace:"pre-wrap", flex:1 }}>{o.texto}</div>
-                      <button
-                        title="Excluir observação"
-                        onClick={() => handleExcluirObservacao(o.id)}
-                        style={{ background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", fontSize:"11px", cursor:"pointer", padding:"3px 7px", flexShrink:0, transition:"all 0.15s" }}
-                        onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="rgba(244,63,94,.15)"; b.style.borderColor="var(--err)"; b.style.color="var(--err)"; }}
-                        onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="transparent"; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
-                      >🗑</button>
-                    </div>
-                    <div style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", marginTop:"6px" }}>
-                      {new Date(o.created_at).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit" })}
-                      {o.usuario_email ? ` · ${o.usuario_email}` : ""}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* Itens */}
           <div className="card" style={{ padding:"20px 24px" }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px" }}>
@@ -1431,113 +1379,171 @@ export default function PedidoDetalhe() {
             )}
           </div>
 
-          {/* Romaneio(s) Assinado(s) */}
+          {/* Romaneio / NF-e / Boleto / Observações — um card só, compacto */}
           <div className="card" style={{ overflow: "hidden" }}>
-            <button onClick={() => setAbrirRomaneio(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", background: "none", border: "none", cursor: "pointer", color: "var(--t1)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <span style={{ fontSize: "14px" }}>📎</span>
-                <span style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>ROMANEIO(S) ASSINADO(S)</span>
+            {/* Romaneio(s) Assinado(s) */}
+            <button onClick={() => setAbrirRomaneio(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px", background: "none", border: "none", cursor: "pointer", color: "var(--t1)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "12px" }}>📎</span>
+                <span style={{ fontSize: "10.5px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>ROMANEIO(S) ASSINADO(S)</span>
                 {(pedido.romaneio_assinado_urls?.length ?? 0) > 0 && (
-                  <span style={{ fontSize: "11px", background: "rgba(16,185,129,.15)", color: "var(--ok)", borderRadius: "10px", padding: "1px 8px", fontWeight: 700 }}>{pedido.romaneio_assinado_urls!.length}</span>
+                  <span style={{ fontSize: "10px", background: "rgba(16,185,129,.15)", color: "var(--ok)", borderRadius: "10px", padding: "1px 7px", fontWeight: 700 }}>{pedido.romaneio_assinado_urls!.length}</span>
                 )}
               </div>
-              <span style={{ fontSize: "12px", color: "var(--t3)", transform: abrirRomaneio ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}>▾</span>
+              <span style={{ fontSize: "11px", color: "var(--t3)", transform: abrirRomaneio ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}>▾</span>
             </button>
             {abrirRomaneio && (
-              <div style={{ padding: "0 24px 20px" }}>
+              <div style={{ padding: "0 18px 14px" }}>
                 {(pedido.romaneio_assinado_urls?.length ?? 0) > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "10px" }}>
                     {pedido.romaneio_assinado_urls!.map((url, i) => (
-                      <div key={url} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", background: "rgba(16,185,129,.08)", borderRadius: "8px", border: "1px solid rgba(16,185,129,.2)" }}>
-                        <span style={{ fontSize: "16px" }}>📄</span>
-                        <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--ok)", fontWeight: 600, fontSize: "13px", textDecoration: "underline" }}>Romaneio assinado {i + 1}</a>
+                      <div key={url} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px", background: "rgba(16,185,129,.08)", borderRadius: "7px", border: "1px solid rgba(16,185,129,.2)" }}>
+                        <span style={{ fontSize: "14px" }}>📄</span>
+                        <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--ok)", fontWeight: 600, fontSize: "12px", textDecoration: "underline" }}>Romaneio assinado {i + 1}</a>
                         <button className="btn bw sm" onClick={() => handleRemoverRomaneioAssinado(url)} disabled={uploadandoRomaneio}>Remover</button>
                       </div>
                     ))}
                   </div>
                 )}
-                <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px", padding: "20px", border: "2px dashed var(--b2)", borderRadius: "8px", cursor: uploadandoRomaneio ? "default" : "pointer", background: "var(--surf2)" }}
+                <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "4px", padding: "12px", border: "2px dashed var(--b2)", borderRadius: "7px", cursor: uploadandoRomaneio ? "default" : "pointer", background: "var(--surf2)" }}
                   onDragOver={e => e.preventDefault()}
                   onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoRomaneio) handleUploadRomaneioAssinado(fs); }}>
-                  <span style={{ fontSize: "20px" }}>📎</span>
-                  <span style={{ fontSize: "12px", color: "var(--t3)", textAlign: "center" }}>{uploadandoRomaneio ? "Enviando..." : "Arraste ou clique para anexar romaneio(s) assinado(s) — dá pra anexar mais de um"}</span>
+                  <span style={{ fontSize: "16px" }}>📎</span>
+                  <span style={{ fontSize: "11px", color: "var(--t3)", textAlign: "center" }}>{uploadandoRomaneio ? "Enviando..." : "Arraste ou clique para anexar romaneio(s) assinado(s) — dá pra anexar mais de um"}</span>
                   <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple style={{ display: "none" }} disabled={uploadandoRomaneio}
                     onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadRomaneioAssinado(fs); e.target.value = ""; }} />
                 </label>
               </div>
             )}
-          </div>
 
-          {/* NF-e */}
-          <div className="card" style={{ overflow: "hidden" }}>
-            <button onClick={() => setAbrirNfe(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", background: "none", border: "none", cursor: "pointer", color: "var(--t1)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <span style={{ fontSize: "14px" }}>🧾</span>
-                <span style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>NF-e</span>
+            {/* NF-e */}
+            <button onClick={() => setAbrirNfe(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px", background: "none", border: "none", borderTop: "1px solid var(--b1)", cursor: "pointer", color: "var(--t1)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "12px" }}>🧾</span>
+                <span style={{ fontSize: "10.5px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>NF-e</span>
                 {(pedido.nfe_urls?.length ?? 0) > 0 && (
-                  <span style={{ fontSize: "11px", background: "rgba(99,102,241,.15)", color: "var(--acc)", borderRadius: "10px", padding: "1px 8px", fontWeight: 700 }}>{pedido.nfe_urls!.length}</span>
+                  <span style={{ fontSize: "10px", background: "rgba(99,102,241,.15)", color: "var(--acc)", borderRadius: "10px", padding: "1px 7px", fontWeight: 700 }}>{pedido.nfe_urls!.length}</span>
                 )}
               </div>
-              <span style={{ fontSize: "12px", color: "var(--t3)", transform: abrirNfe ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}>▾</span>
+              <span style={{ fontSize: "11px", color: "var(--t3)", transform: abrirNfe ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}>▾</span>
             </button>
             {abrirNfe && (
-              <div style={{ padding: "0 24px 20px" }}>
+              <div style={{ padding: "0 18px 14px" }}>
                 {(pedido.nfe_urls?.length ?? 0) > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "10px" }}>
                     {pedido.nfe_urls!.map((url, i) => (
-                      <div key={url} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", background: "rgba(99,102,241,.08)", borderRadius: "8px", border: "1px solid rgba(99,102,241,.2)" }}>
-                        <span style={{ fontSize: "16px" }}>🧾</span>
-                        <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--acc)", fontWeight: 600, fontSize: "13px", textDecoration: "underline" }}>NF-e {i + 1}</a>
+                      <div key={url} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px", background: "rgba(99,102,241,.08)", borderRadius: "7px", border: "1px solid rgba(99,102,241,.2)" }}>
+                        <span style={{ fontSize: "14px" }}>🧾</span>
+                        <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--acc)", fontWeight: 600, fontSize: "12px", textDecoration: "underline" }}>NF-e {i + 1}</a>
                         <button className="btn bw sm" onClick={() => handleRemoverNfe(url)} disabled={uploadandoNfe}>Remover</button>
                       </div>
                     ))}
                   </div>
                 )}
-                <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px", padding: "20px", border: "2px dashed var(--b2)", borderRadius: "8px", cursor: uploadandoNfe ? "default" : "pointer", background: "var(--surf2)" }}
+                <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "4px", padding: "12px", border: "2px dashed var(--b2)", borderRadius: "7px", cursor: uploadandoNfe ? "default" : "pointer", background: "var(--surf2)" }}
                   onDragOver={e => e.preventDefault()}
                   onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoNfe) handleUploadNfe(fs); }}>
-                  <span style={{ fontSize: "20px" }}>🧾</span>
-                  <span style={{ fontSize: "12px", color: "var(--t3)" }}>{uploadandoNfe ? "Enviando..." : "Arraste ou clique para anexar NF-e (PDF ou XML)"}</span>
+                  <span style={{ fontSize: "16px" }}>🧾</span>
+                  <span style={{ fontSize: "11px", color: "var(--t3)" }}>{uploadandoNfe ? "Enviando..." : "Arraste ou clique para anexar NF-e (PDF ou XML)"}</span>
                   <input type="file" accept=".pdf,.xml,.jpg,.jpeg,.png" multiple style={{ display: "none" }} disabled={uploadandoNfe}
                     onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadNfe(fs); e.target.value = ""; }} />
                 </label>
               </div>
             )}
-          </div>
 
-          {/* Boleto */}
-          <div className="card" style={{ overflow: "hidden" }}>
-            <button onClick={() => setAbrirBoleto(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", background: "none", border: "none", cursor: "pointer", color: "var(--t1)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <span style={{ fontSize: "14px" }}>🏦</span>
-                <span style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>BOLETO</span>
+            {/* Boleto */}
+            <button onClick={() => setAbrirBoleto(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px", background: "none", border: "none", borderTop: "1px solid var(--b1)", cursor: "pointer", color: "var(--t1)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "12px" }}>🏦</span>
+                <span style={{ fontSize: "10.5px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>BOLETO</span>
                 {(pedido.boleto_urls?.length ?? 0) > 0 && (
-                  <span style={{ fontSize: "11px", background: "rgba(245,158,11,.18)", color: "var(--warn)", borderRadius: "10px", padding: "1px 8px", fontWeight: 700 }}>{pedido.boleto_urls!.length}</span>
+                  <span style={{ fontSize: "10px", background: "rgba(245,158,11,.18)", color: "var(--warn)", borderRadius: "10px", padding: "1px 7px", fontWeight: 700 }}>{pedido.boleto_urls!.length}</span>
                 )}
               </div>
-              <span style={{ fontSize: "12px", color: "var(--t3)", transform: abrirBoleto ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}>▾</span>
+              <span style={{ fontSize: "11px", color: "var(--t3)", transform: abrirBoleto ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}>▾</span>
             </button>
             {abrirBoleto && (
-              <div style={{ padding: "0 24px 20px" }}>
+              <div style={{ padding: "0 18px 14px" }}>
                 {(pedido.boleto_urls?.length ?? 0) > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "10px" }}>
                     {pedido.boleto_urls!.map((url, i) => (
-                      <div key={url} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", background: "rgba(245,158,11,.08)", borderRadius: "8px", border: "1px solid rgba(245,158,11,.25)" }}>
-                        <span style={{ fontSize: "16px" }}>🏦</span>
-                        <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--warn)", fontWeight: 600, fontSize: "13px", textDecoration: "underline" }}>Boleto {i + 1}</a>
+                      <div key={url} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px", background: "rgba(245,158,11,.08)", borderRadius: "7px", border: "1px solid rgba(245,158,11,.25)" }}>
+                        <span style={{ fontSize: "14px" }}>🏦</span>
+                        <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--warn)", fontWeight: 600, fontSize: "12px", textDecoration: "underline" }}>Boleto {i + 1}</a>
                         <button className="btn bw sm" onClick={() => handleRemoverBoleto(url)} disabled={uploadandoBoleto}>Remover</button>
                       </div>
                     ))}
                   </div>
                 )}
-                <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px", padding: "20px", border: "2px dashed var(--b2)", borderRadius: "8px", cursor: uploadandoBoleto ? "default" : "pointer", background: "var(--surf2)" }}
+                <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "4px", padding: "12px", border: "2px dashed var(--b2)", borderRadius: "7px", cursor: uploadandoBoleto ? "default" : "pointer", background: "var(--surf2)" }}
                   onDragOver={e => e.preventDefault()}
                   onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoBoleto) handleUploadBoleto(fs); }}>
-                  <span style={{ fontSize: "20px" }}>🏦</span>
-                  <span style={{ fontSize: "12px", color: "var(--t3)" }}>{uploadandoBoleto ? "Enviando..." : "Arraste ou clique para anexar boleto (PDF ou imagem)"}</span>
+                  <span style={{ fontSize: "16px" }}>🏦</span>
+                  <span style={{ fontSize: "11px", color: "var(--t3)" }}>{uploadandoBoleto ? "Enviando..." : "Arraste ou clique para anexar boleto (PDF ou imagem)"}</span>
                   <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple style={{ display: "none" }} disabled={uploadandoBoleto}
                     onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadBoleto(fs); e.target.value = ""; }} />
                 </label>
+              </div>
+            )}
+
+            {/* Observações */}
+            <button onClick={() => setAbrirObs(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px", background: "none", border: "none", borderTop: "1px solid var(--b1)", cursor: "pointer", color: "var(--t1)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "12px" }}>📝</span>
+                <span style={{ fontSize: "10.5px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>OBSERVAÇÕES</span>
+                {observacoes.length > 0 && (
+                  <span style={{ fontSize: "10px", background: "rgba(122,132,158,.18)", color: "var(--t2)", borderRadius: "10px", padding: "1px 7px", fontWeight: 700 }}>{observacoes.length}</span>
+                )}
+              </div>
+              <span style={{ fontSize: "11px", color: "var(--t3)", transform: abrirObs ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}>▾</span>
+            </button>
+            {abrirObs && (
+              <div style={{ padding: "0 18px 14px" }}>
+                <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
+                  <textarea
+                    className="fc"
+                    value={novaObs}
+                    onChange={e => setNovaObs(e.target.value)}
+                    placeholder="Registrar um acontecimento do pedido (ex.: entregador quebrou 4 vidros ontem)..."
+                    rows={2}
+                    style={{ flex: 1, resize: "vertical", fontSize: "12px" }}
+                  />
+                  <button
+                    className="btn bp sm"
+                    onClick={handleAdicionarObservacao}
+                    disabled={salvandoObs || !novaObs.trim()}
+                    style={{ whiteSpace: "nowrap", alignSelf: "flex-end" }}
+                  >
+                    + Adicionar
+                  </button>
+                </div>
+
+                {observacoes.length === 0 ? (
+                  <div style={{ padding: "10px 12px", background: "var(--surf2)", borderRadius: "7px", border: "1px dashed var(--b2)", textAlign: "center", fontSize: "11px", color: "var(--t3)" }}>
+                    Nenhuma observação registrada ainda.
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    {observacoes.map(o => (
+                      <div key={o.id} style={{ background: "var(--surf2)", borderRadius: "7px", padding: "8px 12px", border: "1px solid var(--b2)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                          <div style={{ fontSize: "12px", color: "var(--t1)", whiteSpace: "pre-wrap", flex: 1 }}>{o.texto}</div>
+                          <button
+                            title="Excluir observação"
+                            onClick={() => handleExcluirObservacao(o.id)}
+                            style={{ background: "transparent", border: "1px solid var(--b2)", borderRadius: "5px", color: "var(--t3)", fontSize: "10px", cursor: "pointer", padding: "2px 6px", flexShrink: 0, transition: "all 0.15s" }}
+                            onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
+                            onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
+                          >🗑</button>
+                        </div>
+                        <div style={{ fontSize: "9.5px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", marginTop: "5px" }}>
+                          {new Date(o.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                          {o.usuario_email ? ` · ${o.usuario_email}` : ""}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
