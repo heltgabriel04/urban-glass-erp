@@ -650,7 +650,7 @@ function NovoPedidoPageInner() {
               <button style={!isMl ? toggleAtivo : toggleInativo} onClick={() => handleModoPedido("m2")}>m²</button>
               <button style={isMl ? { ...toggleAtivo, background: "#6366f1", borderColor: "#6366f1" } : toggleInativo} onClick={() => handleModoPedido("ml")}>ml</button>
             </div>
-            <button className="btn bg xs" onClick={() => setModalImportar(true)}>⇪ Importar Planilha</button>
+            <button className="btn bg xs" onClick={() => setModalImportar(true)}>⇪ Importar Medidas</button>
             <button className="btn bp xs" onClick={addItem}>+ Item</button>
           </div>
 

@@ -27,16 +27,28 @@ export default function ImportarMedidasModal({ produtos, onImportar, onClose }: 
     setNomeArquivo(file.name);
     setLendo(true);
     try {
-      const lidos = await lerPlanilhaMedidas(file);
+      const isPdf = file.name.toLowerCase().endsWith(".pdf");
+      const lidos = isPdf ? await lerRelacaoVidrosPdf(file) : await lerPlanilhaMedidas(file);
       if (lidos.length === 0) {
-        setErro("Nenhuma medida válida encontrada. Confirme que a planilha tem colunas de largura e altura (em mm).");
+        setErro(isPdf
+          ? "Nenhuma medida encontrada nesse PDF. Confirme que é uma Relação de Vidros no formato Item/Código/Largura/Altura/Quantidade."
+          : "Nenhuma medida válida encontrada. Confirme que a planilha tem colunas de largura e altura (em mm).");
       } else {
         setItens(lidos);
       }
     } catch {
-      setErro("Não foi possível ler o arquivo. Confirme que é uma planilha .xlsx, .xls ou .csv válida.");
+      setErro("Não foi possível ler o arquivo. Confirme que é uma planilha .xlsx/.xls/.csv ou um PDF de Relação de Vidros válido.");
     }
     setLendo(false);
+  }
+
+  async function lerRelacaoVidrosPdf(file: File): Promise<MedidaImportada[]> {
+    const form = new FormData();
+    form.append("file", file);
+    const resp = await fetch("/api/pedidos/importar-medidas-pdf", { method: "POST", body: form });
+    if (!resp.ok) throw new Error("falha ao importar pdf");
+    const data = await resp.json();
+    return data.medidas as MedidaImportada[];
   }
 
   const totalQtd = itens?.reduce((a, i) => a + i.quantidade, 0) ?? 0;
@@ -46,20 +58,21 @@ export default function ImportarMedidasModal({ produtos, onImportar, onClose }: 
     <div className="mov open" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="mod" style={{ width: "440px" }}>
         <div className="mhd">
-          <div className="mtit">Importar Planilha de Medidas</div>
+          <div className="mtit">Importar Medidas</div>
           <button className="mcl" onClick={onClose}>✕</button>
         </div>
 
         <div className="fg" style={{ marginBottom: "12px" }}>
-          <label className="fl">Arquivo (.xlsx, .xls ou .csv)</label>
+          <label className="fl">Arquivo (.xlsx, .xls, .csv ou .pdf)</label>
           <input
             className="fc"
             type="file"
-            accept=".xlsx,.xls,.csv"
+            accept=".xlsx,.xls,.csv,.pdf"
             onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
           />
           <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "6px" }}>
-            Colunas esperadas: <strong>Largura</strong> e <strong>Altura</strong> (mm) e, opcionalmente, <strong>Quantidade</strong> (padrão 1 quando vazia) e <strong>Código</strong> (vai pra etiqueta de cada peça).
+            Planilha — colunas esperadas: <strong>Largura</strong> e <strong>Altura</strong> (mm) e, opcionalmente, <strong>Quantidade</strong> (padrão 1 quando vazia) e <strong>Código</strong> (vai pra etiqueta de cada peça).
+            <br />PDF — aceita o formato "Relação de Vidros" (Item · Código · Largura · Altura · Quantidade · Tipo de vidro).
           </div>
         </div>
 

@@ -697,8 +697,8 @@ function NovoOrcamentoPageInner() {
               <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>
                 Enter avança · Enter em Quantidade cria nova linha
               </span>
-              <button tabIndex={-1} className="btn bg sm" onClick={() => setModalImportarPdf(true)}>⇪ Importar PDF</button>
-              <button tabIndex={-1} className="btn bg sm" onClick={() => setModalImportar(true)}>⇪ Importar Planilha</button>
+              <button tabIndex={-1} className="btn bg sm" onClick={() => setModalImportarPdf(true)} title="Reimporta um orçamento/pedido que este sistema já exportou como PDF">⇪ Reimportar PDF do Sistema</button>
+              <button tabIndex={-1} className="btn bg sm" onClick={() => setModalImportar(true)} title="Planilha ou PDF de medidas de terceiros (ex.: Relação de Vidros de arquiteto/fornecedor)">⇪ Importar Medidas</button>
               <button tabIndex={-1} className="btn bp sm" onClick={addItem}>+ Item</button>
             </div>
           </div>
