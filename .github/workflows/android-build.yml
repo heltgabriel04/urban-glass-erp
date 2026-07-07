@@ -76,7 +76,6 @@ jobs:
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           # Tamanho é seguro de logar (não expõe conteúdo). Um keystore .jks
@@ -93,22 +92,18 @@ jobs:
           rm raw-keystore.b64
           test -s "$KEYSTORE_PATH" || { echo "Keystore decodificado ficou vazio — confira o secret ANDROID_KEYSTORE_BASE64"; exit 1; }
 
-          # Tamanho é seguro de logar. Se ANDROID_KEYSTORE_PASSWORD e
-          # ANDROID_KEY_PASSWORD tiverem o mesmo tamanho pode ser coincidência,
-          # mas se o conteúdo for idêntico é sinal de ter colado a senha errada
-          # num dos dois secrets (são gerados aleatórios e diferentes).
           echo "Tamanho do secret ANDROID_KEYSTORE_PASSWORD: ${#KEYSTORE_PASSWORD} caracteres"
-          echo "Tamanho do secret ANDROID_KEY_PASSWORD: ${#KEY_PASSWORD} caracteres"
           echo "Tamanho do secret ANDROID_KEY_ALIAS: ${#KEY_ALIAS} caracteres"
-          if [ "$KEYSTORE_PASSWORD" = "$KEY_PASSWORD" ]; then
-            echo "::warning::ANDROID_KEYSTORE_PASSWORD e ANDROID_KEY_PASSWORD estão idênticos — confira se não colou o mesmo valor nos dois secrets por engano"
-          fi
 
-          # Valida a chave antes do build completo (falha em segundos em vez de
-          # só descobrir senha/alias errado depois de ~1m30 de gradle).
+          # Keystore PKCS12 (padrão do keytool desde o Java 9, mesmo salvando
+          # como .jks) não suporta senha de chave diferente da senha do store —
+          # o keytool ignora silenciosamente o -keypass na geração e usa a senha
+          # do store pra criptografar a chave também ("Different store and key
+          # passwords not supported for PKCS12 KeyStores"). Por isso aqui usamos
+          # KEYSTORE_PASSWORD pros dois; ANDROID_KEY_PASSWORD não é usado.
           keytool -list -alias "$KEY_ALIAS" -keystore "$KEYSTORE_PATH" \
-            -storepass "$KEYSTORE_PASSWORD" -keypass "$KEY_PASSWORD" > /dev/null \
-            || { echo "::error::Não foi possível ler a chave '$KEY_ALIAS' do keystore com as senhas fornecidas — confira ANDROID_KEY_PASSWORD, ANDROID_KEYSTORE_PASSWORD e ANDROID_KEY_ALIAS em keystore-info.txt"; exit 1; }
+            -storepass "$KEYSTORE_PASSWORD" > /dev/null \
+            || { echo "::error::Não foi possível ler a chave '$KEY_ALIAS' do keystore com ANDROID_KEYSTORE_PASSWORD — confira a senha e o alias em keystore-info.txt"; exit 1; }
 
           # android.injected.signing.store.file com caminho relativo é resolvido
           # de forma inconsistente pelo Gradle Daemon (às vezes contra o módulo,
@@ -120,7 +115,7 @@ jobs:
             -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
             -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
             -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
-            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
+            -Pandroid.injected.signing.key.password="$KEYSTORE_PASSWORD"
           rm "$KEYSTORE_PATH"
 
       - name: Upload do APK
