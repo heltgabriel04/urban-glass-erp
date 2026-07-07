@@ -91,10 +91,13 @@ jobs:
           base64 -d -i raw-keystore.b64 > app/upload-keystore.jks
           rm raw-keystore.b64
           test -s app/upload-keystore.jks || { echo "Keystore decodificado ficou vazio — confira o secret ANDROID_KEYSTORE_BASE64"; exit 1; }
+          # android.injected.signing.store.file é resolvido pelo AGP relativo
+          # ao diretório do módulo (android/app), não de onde o gradlew roda
+          # (android/) — por isso é só "upload-keystore.jks", sem prefixo "app/".
           ./gradlew assembleRelease \
             -PbuildVersionCode=${{ github.run_number }} \
             -PbuildVersionName=1.0.${{ github.run_number }} \
-            -Pandroid.injected.signing.store.file=app/upload-keystore.jks \
+            -Pandroid.injected.signing.store.file=upload-keystore.jks \
             -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
             -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
             -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
