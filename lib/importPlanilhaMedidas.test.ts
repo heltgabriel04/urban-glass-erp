@@ -38,4 +38,27 @@ describe("parseLinhasMedidas", () => {
   it("planilha vazia devolve lista vazia", () => {
     expect(parseLinhasMedidas([])).toEqual([]);
   });
+
+  it("lê a coluna Código (com acento) e leva pro campo codigo de cada peça", () => {
+    const rows = [
+      ["LARGURA", "ALTURA", "QUANTIDADE", "CÓDIGO", "R$/M²", "TOTAL"],
+      [978, 1451, 4, "FD-MX01", "", ""],
+      [978, 1451, 2, "FD-MX01_1", "", ""],
+      [1043, 507, 1, "FD-QF01", "", ""],
+    ];
+    expect(parseLinhasMedidas(rows)).toEqual([
+      { largura: 978, altura: 1451, quantidade: 4, codigo: "FD-MX01" },
+      { largura: 978, altura: 1451, quantidade: 2, codigo: "FD-MX01_1" },
+      { largura: 1043, altura: 507, quantidade: 1, codigo: "FD-QF01" },
+    ]);
+  });
+
+  it("linha sem código no meio de uma planilha com coluna Código vira codigo undefined", () => {
+    const rows = [
+      ["LARGURA", "ALTURA", "CÓDIGO"],
+      [900, 950, ""],
+    ];
+    const [item] = parseLinhasMedidas(rows);
+    expect(item.codigo).toBeUndefined();
+  });
 });

@@ -31,6 +31,7 @@ interface ItemForm {
   vidro_cliente: boolean;
   preco_base: number;
   margem_prod: number;
+  codigo_adicional: string;
 }
 
 interface ParcelaForm {
@@ -48,6 +49,7 @@ const ITEM_VAZIO: ItemForm = {
   ml_larg: true, ml_alt: true,
   vidro_cliente: false,
   preco_base: 0, margem_prod: 0,
+  codigo_adicional: "",
 };
 
 const CHAPAS_DIMS = [
@@ -288,6 +290,7 @@ function NovoPedidoPageInner() {
       valor_m2: valor,
       preco_base: valor,
       margem_prod: margem,
+      codigo_adicional: m.codigo ?? "",
     }));
     setItens(prev => {
       const base = prev.length === 1 && prev[0].largura === 0 && prev[0].altura === 0 && prev[0].produto_id === null ? [] : prev;
@@ -438,6 +441,7 @@ function NovoPedidoPageInner() {
         quantidade: i.quantidade,
         subtotal: calcSubtotal(i),
         vidro_cliente: i.vidro_cliente,
+        codigo_adicional: i.codigo_adicional || null,
       }));
 
       const result = await createPedido(pedido, itensInsert);
@@ -751,6 +755,17 @@ function NovoPedidoPageInner() {
                       </div>
                     )}
                     {avisoMarjem}
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px", paddingLeft: "2px" }}>
+                      <span style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>Código</span>
+                      <input
+                        className="fc"
+                        type="text"
+                        value={item.codigo_adicional}
+                        onChange={e => updItem(i, "codigo_adicional", e.target.value)}
+                        placeholder="—"
+                        style={{ width: "120px", fontSize: "11px", padding: "2px 6px", height: "22px", fontFamily: "'DM Mono',monospace" }}
+                      />
+                    </div>
                   </div>
                 ) : (
                   <div>
@@ -779,6 +794,17 @@ function NovoPedidoPageInner() {
                       </div>
                     )}
                     {avisoMarjem}
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px", paddingLeft: "2px" }}>
+                      <span style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>Código</span>
+                      <input
+                        className="fc"
+                        type="text"
+                        value={item.codigo_adicional}
+                        onChange={e => updItem(i, "codigo_adicional", e.target.value)}
+                        placeholder="—"
+                        style={{ width: "120px", fontSize: "11px", padding: "2px 6px", height: "22px", fontFamily: "'DM Mono',monospace" }}
+                      />
+                    </div>
                   </div>
                 )}
               </div>

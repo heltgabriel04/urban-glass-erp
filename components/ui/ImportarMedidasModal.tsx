@@ -40,6 +40,7 @@ export default function ImportarMedidasModal({ produtos, onImportar, onClose }: 
   }
 
   const totalQtd = itens?.reduce((a, i) => a + i.quantidade, 0) ?? 0;
+  const totalComCodigo = itens?.filter(i => i.codigo).length ?? 0;
 
   return (
     <div className="mov open" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -58,7 +59,7 @@ export default function ImportarMedidasModal({ produtos, onImportar, onClose }: 
             onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
           />
           <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "6px" }}>
-            Colunas esperadas: <strong>Largura</strong> e <strong>Altura</strong> (mm) e, opcionalmente, <strong>Quantidade</strong> (padrão 1 quando vazia).
+            Colunas esperadas: <strong>Largura</strong> e <strong>Altura</strong> (mm) e, opcionalmente, <strong>Quantidade</strong> (padrão 1 quando vazia) e <strong>Código</strong> (vai pra etiqueta de cada peça).
           </div>
         </div>
 
@@ -70,6 +71,7 @@ export default function ImportarMedidasModal({ produtos, onImportar, onClose }: 
           <>
             <div className="al al-i" style={{ marginBottom: "12px" }}>
               {itens.length} medida(s) encontrada(s) em {nomeArquivo} · {totalQtd} peça(s) no total
+              {totalComCodigo > 0 && ` · ${totalComCodigo} com código`}
             </div>
 
             <div className="fg" style={{ marginBottom: "16px" }}>
