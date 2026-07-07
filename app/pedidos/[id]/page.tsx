@@ -1431,7 +1431,7 @@ export default function PedidoDetalhe() {
                 {(pedido.itens_pedido?.length ?? 0) > 0 && (
                   <div style={{ marginBottom: "12px" }}>
                     <div style={{ fontSize: "9.5px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase", marginBottom: "6px" }}>
-                      Dados para emissão (metragem cobrada)
+                      Dados para emissão (1 linha por produto — como sai na nota)
                     </div>
                     <div className="tw">
                       <table>
@@ -1439,17 +1439,23 @@ export default function PedidoDetalhe() {
                           <tr><th>Produto</th><th>Metragem</th><th>Valor unit.</th><th>Valor total</th></tr>
                         </thead>
                         <tbody>
-                          {pedido.itens_pedido!.map(item => {
-                            const isML = (item as any).produtos?.unidade === "ml" || (item as any).vidro_cliente === true;
-                            return (
-                              <tr key={item.id}>
-                                <td>{item.produto_nome}</td>
-                                <td className="mono">{Number(item.m2).toFixed(3)} {isML ? "ml" : "m²"}</td>
-                                <td className="mono">{formatBRL(item.valor_m2)}</td>
-                                <td className="mono" style={{ color: "var(--acc)", fontWeight: 600 }}>{formatBRL(item.subtotal)}</td>
-                              </tr>
-                            );
-                          })}
+                          {Object.values(
+                            pedido.itens_pedido!.reduce((acc, item) => {
+                              const isML = (item as any).produtos?.unidade === "ml" || (item as any).vidro_cliente === true;
+                              const key = item.produto_nome + (isML ? ":ml" : ":m2");
+                              const g = acc[key] ?? (acc[key] = { nome: item.produto_nome, isML, metragem: 0, subtotal: 0 });
+                              g.metragem += Number(item.m2);
+                              g.subtotal += Number(item.subtotal);
+                              return acc;
+                            }, {} as Record<string, { nome: string; isML: boolean; metragem: number; subtotal: number }>)
+                          ).map(g => (
+                            <tr key={g.nome + g.isML}>
+                              <td>{g.nome}</td>
+                              <td className="mono">{g.metragem.toFixed(3)} {g.isML ? "ml" : "m²"}</td>
+                              <td className="mono">{formatBRL(g.metragem > 0 ? g.subtotal / g.metragem : 0)}</td>
+                              <td className="mono" style={{ color: "var(--acc)", fontWeight: 600 }}>{formatBRL(g.subtotal)}</td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>
