@@ -816,7 +816,6 @@ export default function PedidoDetalhe() {
           </div>
           <span className={CHIP[pedido.status] ?? "chip cgr"}>{pedido.status}</span>
           <button className="btn bg sm" onClick={() => router.push(`/pedidos/${id}/editar`)}>✏ Editar</button>
-          <button className="btn bg sm" onClick={() => router.push(`/pedidos/novo?duplicarDe=${id}`)}>⧉ Duplicar</button>
           {temItens && !todosVidroCliente && !todosChapa && (
             <a href={"/otimizador?pedido=" + pedido.id} className="btn bg sm">◈ Otimizar Corte</a>
           )}
