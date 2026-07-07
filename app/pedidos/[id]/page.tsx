@@ -1428,6 +1428,33 @@ export default function PedidoDetalhe() {
             </button>
             {abrirNfe && (
               <div style={{ padding: "0 18px 14px" }}>
+                {(pedido.itens_pedido?.length ?? 0) > 0 && (
+                  <div style={{ marginBottom: "12px" }}>
+                    <div style={{ fontSize: "9.5px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase", marginBottom: "6px" }}>
+                      Dados para emissão (metragem cobrada)
+                    </div>
+                    <div className="tw">
+                      <table>
+                        <thead>
+                          <tr><th>Produto</th><th>Metragem</th><th>Valor unit.</th><th>Valor total</th></tr>
+                        </thead>
+                        <tbody>
+                          {pedido.itens_pedido!.map(item => {
+                            const isML = (item as any).produtos?.unidade === "ml" || (item as any).vidro_cliente === true;
+                            return (
+                              <tr key={item.id}>
+                                <td>{item.produto_nome}</td>
+                                <td className="mono">{Number(item.m2).toFixed(3)} {isML ? "ml" : "m²"}</td>
+                                <td className="mono">{formatBRL(item.valor_m2)}</td>
+                                <td className="mono" style={{ color: "var(--acc)", fontWeight: 600 }}>{formatBRL(item.subtotal)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
                 {(pedido.nfe_urls?.length ?? 0) > 0 && (
                   <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "10px" }}>
                     {pedido.nfe_urls!.map((url, i) => (
