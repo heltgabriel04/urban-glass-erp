@@ -605,6 +605,334 @@ function stripFFDH(
   return sheets;
 }
 
+// ── HFF: empacotamento por NÍVEIS com agrupamento (estilo Corte Certo) ────────
+// A estratégia que faz o Corte Certo brilhar em pedidos de esquadria (onde
+// quase toda peça compartilha uma dimensão, ex.: 454×L): agrupar peças de
+// altura idêntica em faixas horizontais ("níveis") e depois resolver um
+// bin-packing 1D das alturas das faixas dentro das chapas. Ex. real da obra
+// São Lourenço: faixa de 1231mm com 7 peças de 458 em pé + duas faixas de
+// 458 deitadas = 96% de aproveitamento na chapa.
+// Fase A: constrói níveis com best-fit por altura (peças ordenadas por altura
+//         desc → peças idênticas caem juntas no mesmo nível).
+// Fase B: distribui os níveis pelas chapas (BFD 1D por altura).
+// 100% guilhotina em 2 estágios por construção.
+
+interface NivelHFF { hPeca: number; fill: number; items: Array<{ idx: number; w: number; h: number; rot: boolean }>; }
+
+type PecaIn = Array<{ l: number; a: number; prod: string; pedidoId?: string }>;
+
+// Fase A: constrói níveis com best-fit por altura (menor desperdício de altura;
+// empate → menor sobra de largura). "novaAltura" define a orientação preferida
+// ao abrir nível novo: "max" = peça em pé, "min" = deitada.
+function hffBuildLevels(
+  W: number, H: number, pecas: PecaIn, kerf: number,
+  ordem: number[], novaAltura: "min" | "max"
+): NivelHFF[] {
+  const niveis: NivelHFF[] = [];
+
+  for (const idx of ordem) {
+    const p = pecas[idx];
+    const oris = [
+      { w: p.l, h: p.a, rot: false },
+      { w: p.a, h: p.l, rot: true },
+    ].filter(o => o.w <= W && o.h <= H);
+    if (oris.length === 0) continue; // peça maior que a chapa
+
+    let best: { nv: NivelHFF; ori: typeof oris[0]; waste: number; sobra: number } | null = null;
+    for (const nv of niveis) {
+      for (const ori of oris) {
+        if (ori.h > nv.hPeca) continue;
+        if (nv.fill + ori.w + kerf > W + kerf) continue; // incremento inclui kerf
+        const waste = nv.hPeca - ori.h;
+        const sobra = W - nv.fill - ori.w;
+        if (!best || waste < best.waste || (waste === best.waste && sobra < best.sobra)) {
+          best = { nv, ori, waste, sobra };
+        }
+      }
+    }
+
+    if (best) {
+      best.nv.items.push({ idx, w: best.ori.w, h: best.ori.h, rot: best.ori.rot });
+      best.nv.fill += best.ori.w + kerf;
+      continue;
+    }
+
+    const pref = novaAltura === "min"
+      ? [...oris].sort((a, b) => a.h - b.h)
+      : [...oris].sort((a, b) => b.h - a.h);
+    const ori = pref[0];
+    niveis.push({ hPeca: ori.h, fill: ori.w + kerf, items: [{ idx, w: ori.w, h: ori.h, rot: ori.rot }] });
+  }
+
+  return niveis;
+}
+
+// Fase B: bin-packing 1D das alturas dos níveis (BFD desc) + geometria final.
+function hffPackLevels(W: number, H: number, pecas: PecaIn, kerf: number, niveis: NivelHFF[]): SheetState[] {
+  const ordenados = [...niveis].sort((a, b) => b.hPeca - a.hPeca);
+  const bins: Array<{ usado: number; nvs: NivelHFF[] }> = [];
+  for (const nv of ordenados) {
+    const hNivel = nv.hPeca + kerf;
+    let melhorBin: { usado: number; nvs: NivelHFF[] } | null = null;
+    for (const bin of bins) {
+      if (bin.usado + hNivel <= H + kerf &&
+          (!melhorBin || bin.usado > melhorBin.usado)) melhorBin = bin; // best-fit: bin mais cheio que ainda comporta
+    }
+    if (melhorBin) { melhorBin.nvs.push(nv); melhorBin.usado += hNivel; }
+    else bins.push({ usado: hNivel, nvs: [nv] });
+  }
+
+  // Geometria: níveis empilhados de baixo pra cima, peças da esquerda pra direita
+  return bins.map(bin => {
+    const placed: PecaPlacada[] = [];
+    const freeRects: MRect[] = [];
+    let y = 0;
+    for (const nv of bin.nvs) {
+      let x = 0;
+      for (const it of nv.items) {
+        const p = pecas[it.idx];
+        placed.push({ x, y, l: it.w, a: it.h, idx: it.idx, prod: p.prod, rot: it.rot, pedidoId: p.pedidoId });
+        x += it.w + kerf;
+      }
+      if (W - nv.fill > 0) freeRects.push({ x: nv.fill, y, l: W - nv.fill, a: nv.hPeca });
+      y += nv.hPeca + kerf;
+    }
+    if (H - y > 0) freeRects.push({ x: 0, y, l: W, a: H - y });
+    return { placed, freeRects };
+  });
+}
+
+function hffRun(
+  W: number, H: number, pecas: PecaIn, kerf: number,
+  ordem: number[], novaAltura: "min" | "max"
+): SheetState[] {
+  return hffPackLevels(W, H, pecas, kerf, hffBuildLevels(W, H, pecas, kerf, ordem, novaAltura));
+}
+
+// ── Construção gulosa da melhor chapa por vez (cutting-stock clássico) ─────────
+// Em vez de decidir a orientação globalmente, monta UMA chapa de cada vez
+// enumerando combinações de alturas de faixa (candidatas = comprimentos reais
+// das peças restantes) e escolhendo a chapa com maior área aproveitada.
+// Reproduz os padrões finos do Corte Certo: faixa em pé de ~1230 + 2 deitadas
+// de 458, faixa de ~1400 + faixa em pé de curtas, etc.
+
+function hffGreedyBestSheet(
+  W: number, H: number, pecas: PecaIn, kerf: number,
+  forcarMaisAlta = false, // 1ª faixa da chapa = altura da peça mais comprida restante
+  lambdaCurtas = 0,       // penalidade por consumir peças curtas (complementos escassos)
+  rnd: (() => number) | null = null, // GRASP: perturbação aleatória controlada da escolha gulosa
+  umaLongaPorFaixaBaixa = false, // faixas deitadas: no máx. 1 peça comprida (força padrão L+M+M)
+  tolNivel = 1, // homogeneidade de faixa em pé: peça só entra se desperdiçar ≤ tol×h de altura (1 = livre)
+  alvoFill = 1 // fill alvo por chapa (1 = maximizar); <1 espalha complementos entre as chapas
+): SheetState[] {
+  const restante = new Set<number>(pecas.map((_, i) => i).filter(i => {
+    const p = pecas[i];
+    return (p.l <= W && p.a <= H) || (p.a <= W && p.l <= H);
+  }));
+  const sheets: SheetState[] = [];
+  const K_ALTURAS = 6; // candidatos de altura testados por posição de faixa
+  const LIMIAR_CURTA = (H - kerf) / 2; // peças mais curtas que isso pareiam 2-a-2 → são o complemento escasso
+
+  // Preenche uma faixa de altura h com peças do conjunto (greedy: menor
+  // desperdício de altura primeiro, depois mais largas). Retorna itens e área.
+  function preencherFaixa(h: number, disponiveis: Set<number>): { items: NivelHFF["items"]; area: number } {
+    type Cand = { idx: number; w: number; hh: number; rot: boolean };
+    // Homogeneidade (estilo Corte Certo): em faixa em pé (alta), peça só entra
+    // se a folga de altura for pequena — impede que uma curta entre "em pé"
+    // desperdiçando meio nível e furando o orçamento de complementos das rows.
+    const ehFaixaAlta = h >= LIMIAR_CURTA / 2;
+    const hMin = ehFaixaAlta ? h * (1 - tolNivel) : 0;
+    const cands: Cand[] = [];
+    for (const idx of disponiveis) {
+      const p = pecas[idx];
+      let melhor: Cand | null = null;
+      for (const ori of [{ w: p.l, hh: p.a, rot: false }, { w: p.a, hh: p.l, rot: true }]) {
+        if (ori.hh > h || ori.w > W) continue;
+        if (ori.hh < hMin) continue;
+        if (!melhor || ori.hh > melhor.hh) melhor = { idx, ...ori }; // menor desperdício de altura
+      }
+      if (melhor) cands.push(melhor);
+    }
+    cands.sort((a, b) => b.hh - a.hh || b.w - a.w);
+    // GRASP: troca vizinhos com 30% de chance — explora preenchimentos
+    // alternativos da faixa sem destruir a estrutura gulosa.
+    if (rnd) {
+      for (let i = 0; i < cands.length - 1; i++) {
+        if (rnd() < 0.3) { const t = cands[i]; cands[i] = cands[i + 1]; cands[i + 1] = t; }
+      }
+    }
+    const items: NivelHFF["items"] = [];
+    const usados = new Set<number>();
+    // Racionamento: em faixas deitadas (baixas), permite no máx. 1 peça comprida —
+    // preserva os complementos médios pro padrão L+M+M que fecha a largura.
+    const faixaBaixa = h < LIMIAR_CURTA / 2;
+    let longasNaFaixa = 0;
+    let fill = 0, area = 0;
+    for (const c of cands) {
+      if (fill + c.w + kerf > W + kerf) continue;
+      const ehLonga = c.w >= LIMIAR_CURTA;
+      if (umaLongaPorFaixaBaixa && faixaBaixa && ehLonga && longasNaFaixa >= 1) continue;
+      items.push({ idx: c.idx, w: c.w, h: c.hh, rot: c.rot });
+      usados.add(c.idx);
+      if (ehLonga) longasNaFaixa++;
+      fill += c.w + kerf;
+      area += c.w * c.hh;
+    }
+
+    // Melhoria por trocas "1 sai, 2 entram": o guloso por largura enche a faixa
+    // com peças compridas e desperdiça a sobra (ex.: 1231+1231 = 2462 de 3300);
+    // trocar UMA comprida por DUAS médias fecha a largura (1231+1031+1031 = 3293).
+    // É a diferença entre ~84% e ~93% de fill nas faixas deitadas.
+    const fora = cands.filter(c => !usados.has(c.idx)).slice(0, 60);
+    let melhorou = true;
+    let rodadas = 0;
+    while (melhorou && rodadas++ < 4) {
+      melhorou = false;
+      for (let oi = 0; oi < items.length && !melhorou; oi++) {
+        const out = items[oi];
+        const folga = W + kerf - fill + (out.w + kerf);
+        for (let i = 0; i < fora.length && !melhorou; i++) {
+          const c1 = fora[i];
+          if (usados.has(c1.idx) || c1.w + kerf > folga) continue;
+          for (let j = i + 1; j < fora.length && !melhorou; j++) {
+            const c2 = fora[j];
+            if (usados.has(c2.idx)) continue;
+            if (c1.w + kerf + c2.w + kerf > folga) continue;
+            const ganho = (c1.w * c1.hh + c2.w * c2.hh) - out.w * out.h;
+            if (ganho <= 0) continue;
+            // executa a troca
+            usados.delete(out.idx);
+            usados.add(c1.idx); usados.add(c2.idx);
+            fill = fill - (out.w + kerf) + (c1.w + kerf) + (c2.w + kerf);
+            area += ganho;
+            items.splice(oi, 1,
+              { idx: c1.idx, w: c1.w, h: c1.hh, rot: c1.rot },
+              { idx: c2.idx, w: c2.w, h: c2.hh, rot: c2.rot });
+            melhorou = true;
+          }
+        }
+      }
+      // passada extra: entra mais alguma peça na folga que sobrou?
+      for (const c of fora) {
+        if (usados.has(c.idx)) continue;
+        if (fill + c.w + kerf > W + kerf) continue;
+        items.push({ idx: c.idx, w: c.w, h: c.hh, rot: c.rot });
+        usados.add(c.idx);
+        fill += c.w + kerf;
+        area += c.w * c.hh;
+        melhorou = true;
+      }
+    }
+
+    return { items, area };
+  }
+
+  // Área penalizada: desconta lambdaCurtas × área das peças curtas usadas, pra
+  // não torrar os complementos escassos nas primeiras chapas.
+  function scoreItens(items: NivelHFF["items"]): number {
+    let s = 0;
+    for (const it of items) {
+      const p = pecas[it.idx];
+      const areaPeca = it.w * it.h;
+      const curta = Math.max(p.l, p.a) < LIMIAR_CURTA;
+      s += curta ? areaPeca * (1 - lambdaCurtas) : areaPeca;
+    }
+    return s;
+  }
+
+  // Melhor pilha de faixas pra um orçamento de altura (busca em profundidade
+  // limitada a K alturas candidatas por posição).
+  function melhorPilha(hDisp: number, disponiveis: Set<number>, primeira: boolean): { niveis: NivelHFF[]; area: number; score: number } {
+    if (disponiveis.size === 0 || hDisp <= 0) return { niveis: [], area: 0, score: 0 };
+
+    // alturas candidatas: comprimentos/larguras distintos das peças que cabem
+    const alturas = new Set<number>();
+    for (const idx of disponiveis) {
+      const p = pecas[idx];
+      if (p.a <= hDisp && p.l <= W) alturas.add(p.a);
+      if (p.l <= hDisp && p.a <= W) alturas.add(p.l);
+    }
+    const ordenadas = [...alturas].sort((a, b) => b - a);
+    const candidatas = (primeira && forcarMaisAlta && ordenadas.length > 0)
+      ? [ordenadas[0]]
+      : ordenadas.slice(0, K_ALTURAS);
+
+    // Na primeira faixa (escolha da chapa inteira), o alvoFill < 1 troca o
+    // critério: em vez do maior score, o mais PRÓXIMO do alvo — evita chapas
+    // de 96% no começo que deixam um rabo de 82% no final.
+    const alvoArea = W * H * alvoFill;
+    const usarAlvo = primeira && alvoFill < 1;
+
+    let melhor: { niveis: NivelHFF[]; area: number; score: number } = { niveis: [], area: 0, score: 0 };
+    let melhorDist = Infinity;
+    for (const h of candidatas) {
+      const faixa = preencherFaixa(h, disponiveis);
+      if (faixa.items.length === 0) continue;
+      const usados = new Set(disponiveis);
+      faixa.items.forEach(it => usados.delete(it.idx));
+      const resto = melhorPilha(hDisp - h - kerf, usados, false);
+      const total = faixa.area + resto.area;
+      const score = scoreItens(faixa.items) + resto.score;
+      const dist = Math.abs(alvoArea - total);
+      const ganhou = usarAlvo ? dist < melhorDist : score > melhor.score;
+      if (ganhou) {
+        const fill = faixa.items.reduce((s, it) => s + it.w + kerf, 0);
+        melhor = {
+          niveis: [{ hPeca: h, fill, items: faixa.items }, ...resto.niveis],
+          area: total,
+          score,
+        };
+        melhorDist = dist;
+      }
+    }
+    return melhor;
+  }
+
+  while (restante.size > 0) {
+    const { niveis } = melhorPilha(H, restante, true);
+    if (niveis.length === 0) break; // nenhuma peça restante cabe (não deve ocorrer)
+    // geometria da chapa comitada
+    const placed: PecaPlacada[] = [];
+    const freeRects: MRect[] = [];
+    let y = 0;
+    for (const nv of niveis) {
+      let x = 0;
+      for (const it of nv.items) {
+        const p = pecas[it.idx];
+        placed.push({ x, y, l: it.w, a: it.h, idx: it.idx, prod: p.prod, rot: it.rot, pedidoId: p.pedidoId });
+        x += it.w + kerf;
+        restante.delete(it.idx);
+      }
+      if (W - nv.fill > 0) freeRects.push({ x: nv.fill, y, l: W - nv.fill, a: nv.hPeca });
+      y += nv.hPeca + kerf;
+    }
+    if (H - y > 0) freeRects.push({ x: 0, y, l: W, a: H - y });
+    sheets.push({ placed, freeRects });
+  }
+
+  return sheets;
+}
+
+// Varredura mista: uma fração das peças (as mais compridas) fica EM PÉ e o
+// resto DEITA. É o padrão campeão do Corte Certo pra perfis de esquadria:
+// ex. 1 faixa em pé de ~1300mm + 2 faixas deitadas de 458mm = 2227 dos 2250mm
+// da chapa. A fração ideal depende da distribuição de comprimentos, então
+// testamos várias e o avaliar() fica com a melhor.
+function hffMistoRun(
+  W: number, H: number, pecas: PecaIn, kerf: number, fracEmPe: number
+): SheetState[] {
+  const desc = pecas.map((_, i) => i).sort((a, b) =>
+    Math.max(pecas[b].l, pecas[b].a) - Math.max(pecas[a].l, pecas[a].a));
+  const nEmPe = Math.round(desc.length * fracEmPe);
+  const emPe = desc.slice(0, nEmPe);
+  const deitadas = desc.slice(nEmPe);
+  const niveis = [
+    ...hffBuildLevels(W, H, pecas, kerf, emPe, "max"),
+    ...hffBuildLevels(W, H, pecas, kerf, deitadas, "min"),
+  ];
+  return hffPackLevels(W, H, pecas, kerf, niveis);
+}
+
 export function empacotarTodas(
   W: number, H: number,
   pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
@@ -676,10 +1004,12 @@ export function empacotarTodas(
     return early.map(sheet => ({ W, H, prod: sheet.placed[0]?.prod ?? '', placed: sheet.placed, free: mrFreeRects(sheet.freeRects) }));
   }
 
-  // ── Fase 2: random restarts (LCG, 60% do tempo) ──────────────────────────────
+  // ── Fase 2: random restarts (LCG, 40% do tempo) ──────────────────────────────
+  // (fase 5/GRASP fica com ~30% do orçamento no final — em perfis de esquadria
+  // é ela que decide, as fases 2-3 raramente ganham nesses casos)
   const tStart = Date.now();
   const tTotal = Math.max(0, timeLimitMs - 80);
-  const deadlineRestarts = tStart + Math.floor(tTotal * 0.60);
+  const deadlineRestarts = tStart + Math.floor(tTotal * 0.40);
 
   // Seed determinística (função só das dimensões e nº de peças): rodar duas
   // vezes o mesmo pedido produz o mesmo plano — essencial pra conferência.
@@ -703,10 +1033,10 @@ export function empacotarTodas(
   }
   if (process.env.OTIM_DEBUG) console.log(`[fase2] iter=${nIter} melhorN=${melhorN} aprov=${(melhorAprov*100).toFixed(2)}%`);
 
-  // ── Fase 3: Defragmentação + kEliminate (40% do tempo) ──────────────────────
+  // ── Fase 3: Defragmentação + kEliminate (25% do tempo) ──────────────────────
   // Pipline: reoptimize cada chapa → mergeSheets → kEliminate (grupos 2-3)
   if (melhorN > 1 && melhorSheets !== null) {
-    const deadlineK = tStart + tTotal;
+    const deadlineK = tStart + Math.floor(tTotal * 0.65);
 
     // Passo A: reotimiza cada chapa individualmente para maximizar rect livre
     const best0: SheetState[] = melhorSheets;
@@ -783,6 +1113,100 @@ export function empacotarTodas(
       const kStrip = kEliminate(W, H, bestStripSheets, kerf, deadlineStrip);
       avaliar(kStrip);
       if (process.env.OTIM_DEBUG) console.log(`[fase4-strip-kelim] n=${kStrip.length} melhorN=${melhorN}`);
+    }
+  }
+
+  // ── Fase 5: HFF por níveis com agrupamento (estilo Corte Certo) ───────────────
+  // Decisivo em pedidos de esquadria onde quase toda peça compartilha uma
+  // dimensão: agrupa alturas idênticas na mesma faixa e resolve o encaixe das
+  // faixas nas chapas como bin-packing 1D. É onde o Corte Certo ganhava de nós.
+  {
+    // Ordenação por dimensões exatas (lexicográfica) põe peças IDÊNTICAS lado a
+    // lado — faixas inteiras da mesma peça, como o Corte Certo monta.
+    const porDimExata = [...base].sort((a, b) => {
+      const hA = Math.max(pecas[a].l, pecas[a].a), hB = Math.max(pecas[b].l, pecas[b].a);
+      if (hB !== hA) return hB - hA;
+      return Math.min(pecas[b].l, pecas[b].a) - Math.min(pecas[a].l, pecas[a].a);
+    });
+    const ordsHff: number[][] = [
+      porDimExata,
+      [...base].sort((a, b) => Math.max(pecas[b].l, pecas[b].a) - Math.max(pecas[a].l, pecas[a].a)),
+      [...base].sort((a, b) => Math.min(pecas[b].l, pecas[b].a) - Math.min(pecas[a].l, pecas[a].a)),
+      [...base].sort((a, b) => (pecas[b].l * pecas[b].a) - (pecas[a].l * pecas[a].a)),
+    ];
+
+    let bestHff: SheetState[] | null = null;
+    let bestHffN = Infinity;
+    let bestHffAprov = -1;
+
+    function considerar(r: SheetState[]) {
+      if (r.length === 0) return;
+      avaliar(r);
+      const merged = mergeSheets(W, H, r, kerf);
+      avaliar(merged);
+      const usedArea = merged.reduce((s, sh) => s + sh.placed.reduce((a, p) => a + p.l * p.a, 0), 0);
+      const aprov = usedArea / (merged.length * W * H);
+      if (merged.length < bestHffN || (merged.length === bestHffN && aprov > bestHffAprov)) {
+        bestHffN = merged.length; bestHffAprov = aprov; bestHff = merged;
+      }
+    }
+
+    for (const ordem of ordsHff) {
+      for (const politica of ["max", "min"] as const) {
+        considerar(hffRun(W, H, pecas, kerf, ordem, politica));
+      }
+    }
+
+    // Varredura da fração em pé/deitada (padrão misto do Corte Certo)
+    for (const frac of [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]) {
+      considerar(hffMistoRun(W, H, pecas, kerf, frac));
+    }
+
+    // Construção gulosa da melhor chapa por vez (pareamento fino de faixas):
+    // variantes livre/mais-alta-primeiro × penalidade por gastar peças curtas
+    // × racionamento de compridas nas faixas deitadas
+    for (const forcar of [false, true]) {
+      for (const lambda of [0, 0.12, 0.25, 0.5]) {
+        for (const umaLonga of [false, true]) {
+          for (const tol of [1, 0.10, 0.05]) {
+            considerar(hffGreedyBestSheet(W, H, pecas, kerf, forcar, lambda, null, umaLonga, tol));
+          }
+        }
+      }
+    }
+    // Alvo de fill por chapa (espalha complementos em vez de maximizar cedo)
+    for (const alvo of [0.955, 0.94, 0.925]) {
+      for (const tol of [1, 0.10]) {
+        considerar(hffGreedyBestSheet(W, H, pecas, kerf, false, 0, null, false, tol, alvo));
+      }
+    }
+
+    // GRASP: multi-start do guloso com perturbação aleatória (seed própria,
+    // determinística) — é o que fecha a última chapa em perfis de esquadria.
+    const deadlineGrasp = tStart + Math.floor(tTotal * 0.95);
+    let seedG = (0x51ed270b ^ (W * 17) ^ H ^ Math.imul(pecas.length, 0x9e3779b9)) >>> 0;
+    function lcgG() {
+      seedG = Math.imul(seedG ^ (seedG >>> 16), 0x45d9f3b);
+      seedG = Math.imul(seedG ^ (seedG >>> 16), 0x45d9f3b);
+      return ((seedG ^ (seedG >>> 16)) >>> 0) / 0x100000000;
+    }
+    let nGrasp = 0;
+    while (Date.now() < deadlineGrasp && melhorN > 1) {
+      const forcar = lcgG() < 0.5;
+      const lambda = [0, 0.12, 0.25, 0.5][Math.floor(lcgG() * 4)];
+      const umaLonga = lcgG() < 0.5;
+      const tol = [1, 0.10, 0.05][Math.floor(lcgG() * 3)];
+      const alvo = [1, 0.955, 0.94, 0.925][Math.floor(lcgG() * 4)];
+      considerar(hffGreedyBestSheet(W, H, pecas, kerf, forcar, lambda, lcgG, umaLonga, tol, alvo));
+      nGrasp++;
+    }
+    if (process.env.OTIM_DEBUG) console.log(`[fase5-hff] grasp=${nGrasp} melhorN=${melhorN} aprov=${(melhorAprov*100).toFixed(2)}%`);
+
+    if (bestHff !== null && (bestHff as SheetState[]).length > 1) {
+      const deadlineHff = Date.now() + 500;
+      const kHff = kEliminate(W, H, bestHff, kerf, deadlineHff);
+      avaliar(kHff);
+      if (process.env.OTIM_DEBUG) console.log(`[fase5-hff-kelim] n=${kHff.length} melhorN=${melhorN}`);
     }
   }
 
