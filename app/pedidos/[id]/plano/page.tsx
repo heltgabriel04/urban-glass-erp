@@ -9,7 +9,8 @@ import type { HistoricoOtimizador } from "@/services/otimizador.service";
 
 interface PecaPlacada { x: number; y: number; l: number; a: number; idx: number; prod: string; rot: boolean; pedidoId?: string; }
 interface EspacoLivre { x: number; y: number; l: number; a: number; }
-interface ChapaData { W: number; H: number; prod: string; placed: PecaPlacada[]; free: EspacoLivre[]; }
+interface CorteLinha { seq: number; dir: "V" | "H"; pos: number; ini: number; fim: number; }
+interface ChapaData { W: number; H: number; prod: string; placed: PecaPlacada[]; free: EspacoLivre[]; cortes?: CorteLinha[] | null; }
 
 // Paleta de cores modernas para as peças
 const FILL_COLORS = [
@@ -131,6 +132,29 @@ function ChapaSVG({ chapa, bord, escala = 1 }: { chapa: ChapaData; bord: number;
             {p.rot && pw > 20 && ph > 14 && (
               <text x={px + pw - 4} y={py + 9} fontSize={7} fill={stroke} fontFamily="Arial" textAnchor="end" opacity={0.7}>↻</text>
             )}
+          </g>
+        );
+      })}
+
+      {/* Riscos de corte numerados (sequência de execução na mesa) */}
+      {(chapa.cortes ?? []).map(c => {
+        const isV = c.dir === "V";
+        const x1 = isV ? (c.pos + bord) * sx : (c.ini + bord) * sx;
+        const x2 = isV ? (c.pos + bord) * sx : (c.fim + bord) * sx;
+        const y1 = isV ? (c.ini + bord) * sy : (c.pos + bord) * sy;
+        const y2 = isV ? (c.fim + bord) * sy : (c.pos + bord) * sy;
+        // etiqueta do nº do risco no início do segmento
+        const lx = isV ? x1 : x1 + 2;
+        const ly = isV ? y1 + 8 : y1;
+        return (
+          <g key={"corte" + c.seq}>
+            <line x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke="#dc2626" strokeWidth={1.1} strokeDasharray="6 3" opacity={0.85} />
+            <circle cx={lx} cy={ly} r={6.5} fill="#dc2626" opacity={0.92} />
+            <text x={lx} y={ly + 2.5} fontSize={7.5} fill="white" fontFamily="Arial"
+              fontWeight="900" textAnchor="middle">
+              {c.seq}
+            </text>
           </g>
         );
       })}
@@ -428,6 +452,26 @@ export default function PlanoCorte() {
                     <ChapaSVG chapa={c} bord={bord} escala={escala} />
                   </div>
                 </div>
+
+                {/* Roteiro de cortes (sequência de execução na mesa) */}
+                {(c.cortes ?? []).length > 0 && (
+                  <div className="card">
+                    <div className="card-title" style={{ color: "#dc2626" }}>✂ Sequência de cortes ({c.cortes!.length} riscos)</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", padding: "4px 0" }}>
+                      {c.cortes!.map(ct => (
+                        <div key={ct.seq} style={{ display: "flex", alignItems: "center", gap: "5px", background: "#1f2937", border: "1px solid #374151", borderRadius: "5px", padding: "3px 8px" }}>
+                          <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "#dc2626", color: "white", fontSize: "9px", fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{ct.seq}</span>
+                          <span style={{ fontSize: "10.5px", fontFamily: "monospace", color: "#e2e8f0" }}>
+                            {ct.dir === "V" ? "vertical" : "horizontal"} em {ct.dir === "V" ? "X" : "Y"}={ct.pos}mm
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: "8px", fontSize: "10px", color: "#6b7280" }}>
+                      Riscos de ponta a ponta do painel, na ordem de execução — risque, destaque e siga o próximo número.
+                    </div>
+                  </div>
+                )}
 
                 {/* Lista de peças + retalhos */}
                 <div style={{ display: "grid", gridTemplateColumns: cRetalhos.length > 0 ? "1fr 1fr" : "1fr", gap: "14px" }}>

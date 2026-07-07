@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { empacotar, empacotarTodas, calcAproveitamento, type PecaPlacada } from "@/lib/otimizador";
+import { empacotar, empacotarTodas, calcAproveitamento, derivarCortes, ehGuilhotinavel, type PecaPlacada } from "@/lib/otimizador";
 
 const prod = "X"; // produto sem chapa padrão → usa fallback nos testes
 
@@ -75,6 +75,45 @@ describe("empacotarTodas (multi-chapa)", () => {
         });
       });
     }
+  });
+
+  it("todo layout gerado é guilhotinável e tem sequência de cortes derivável", () => {
+    let seed = 424242;
+    function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+    const W = 3300, H = 2250;
+    for (let trial = 0; trial < 20; trial++) {
+      const n = 5 + Math.floor(rnd() * 35);
+      const pecas = Array.from({ length: n }, () => ({
+        l: 200 + Math.floor(rnd() * 1800),
+        a: 200 + Math.floor(rnd() * 1800),
+        prod,
+      }));
+      const kerf = trial % 2 === 0 ? 4 : 0;
+      const chapas = empacotarTodas(W, H, pecas, kerf, 200);
+      chapas.forEach(chapa => {
+        expect(ehGuilhotinavel(chapa.placed, W, H)).toBe(true);
+        const seq = derivarCortes(chapa.placed, W, H);
+        expect(seq).not.toBeNull();
+        // toda peça aparece exatamente uma vez na ordem de extração
+        expect([...seq!.ordemExtracao].sort((a, b) => a - b))
+          .toEqual(chapa.placed.map((_, i) => i));
+        // riscos numerados sequencialmente a partir de 1
+        seq!.cortes.forEach((c, i) => expect(c.seq).toBe(i + 1));
+      });
+    }
+  });
+
+  it("é determinístico: duas execuções idênticas produzem o mesmo plano", () => {
+    // Orçamento 0 limita às fases determinísticas (as fases com restart usam
+    // orçamento de tempo de relógio, que pode divergir na margem entre execuções).
+    const pecas = Array.from({ length: 25 }, (_, i) => ({
+      l: 300 + (i * 137) % 1500,
+      a: 250 + (i * 89) % 1200,
+      prod,
+    }));
+    const r1 = empacotarTodas(3300, 2250, pecas, 4, 0);
+    const r2 = empacotarTodas(3300, 2250, pecas, 4, 0);
+    expect(JSON.stringify(r1)).toBe(JSON.stringify(r2));
   });
 });
 

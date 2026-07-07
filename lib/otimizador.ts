@@ -6,46 +6,27 @@ import { CHAPAS_PADRAO, PRODUTO_CHAPA } from "@/lib/chapas";
 export interface Peca { l: number; a: number; qtd: number; prod: string; pedidoId?: string; }
 export interface PecaPlacada { x: number; y: number; l: number; a: number; idx: number; prod: string; rot: boolean; pedidoId?: string; }
 export interface EspacoLivre { x: number; y: number; l: number; a: number; }
-export interface ResultadoChapa { placed: PecaPlacada[]; free: EspacoLivre[]; W: number; H: number; prod: string; retalhoId?: string; }
+/** Um risco de corte guilhotina: "V" = vertical (linha em x=pos), "H" = horizontal (em y=pos).
+ *  O segmento vai de `ini` a `fim` no eixo perpendicular. `seq` é a ordem de execução na mesa. */
+export interface CorteLinha { seq: number; dir: "V" | "H"; pos: number; ini: number; fim: number; }
+export interface ResultadoChapa { placed: PecaPlacada[]; free: EspacoLivre[]; W: number; H: number; prod: string; retalhoId?: string; cortes?: CorteLinha[]; }
 export interface RetalhoGerado extends EspacoLivre { chapaIdx: number; prod: string; m2: number; }
 
-// ── Primitivas MAXRECTS ────────────────────────────────────────────────────────
+// ── Primitivas de posicionamento GUILHOTINA ────────────────────────────────────
+// Vidro só corta em guilhotina: cada risco atravessa o painel de ponta a ponta.
+// Os retângulos livres aqui são DISJUNTOS e formam as folhas de uma árvore de
+// divisões — colocar uma peça num retângulo e dividir a sobra em dois com um
+// risco reto garante, por construção, que todo layout gerado é cortável numa
+// mesa de corte real (diferente do MAXRECTS usado antes, que produzia mosaicos
+// impossíveis de riscar de ponta a ponta).
 
 interface MRect { x: number; y: number; l: number; a: number; }
 
-function mrOverlap(r1: MRect, r2: MRect): boolean {
-  return r1.x < r2.x + r2.l && r1.x + r1.l > r2.x &&
-         r1.y < r2.y + r2.a && r1.y + r1.a > r2.y;
-}
-
-function mrSplit(fr: MRect, used: MRect): MRect[] {
-  if (!mrOverlap(fr, used)) return [fr];
-  const out: MRect[] = [];
-  if (used.x > fr.x)                 out.push({ x: fr.x,          y: fr.y, l: used.x - fr.x,                   a: fr.a });
-  if (used.x + used.l < fr.x + fr.l) out.push({ x: used.x + used.l, y: fr.y, l: fr.x + fr.l - used.x - used.l, a: fr.a });
-  if (used.y > fr.y)                 out.push({ x: fr.x, y: fr.y,           l: fr.l, a: used.y - fr.y });
-  if (used.y + used.a < fr.y + fr.a) out.push({ x: fr.x, y: used.y + used.a, l: fr.l, a: fr.y + fr.a - used.y - used.a });
-  return out;
-}
-
-function mrContains(outer: MRect, inner: MRect): boolean {
-  return outer.x <= inner.x && outer.y <= inner.y &&
-         outer.x + outer.l >= inner.x + inner.l && outer.y + outer.a >= inner.y + inner.a;
-}
-
-function mrPrune(rects: MRect[]): MRect[] {
-  return rects.filter((r1, i) => !rects.some((r2, j) => i !== j && mrContains(r2, r1)));
-}
-
 function mrFreeRects(freeRects: MRect[]): EspacoLivre[] {
-  const candidates = freeRects
+  return freeRects
     .filter(fr => fr.l >= 200 && fr.a >= 200)
-    .sort((a, b) => (b.l * b.a) - (a.l * a.a));
-  const selected: MRect[] = [];
-  for (const fr of candidates) {
-    if (!selected.some(s => mrOverlap(s, fr))) selected.push(fr);
-  }
-  return selected.map(fr => ({ x: fr.x, y: fr.y, l: fr.l, a: fr.a }));
+    .sort((a, b) => (b.l * b.a) - (a.l * a.a))
+    .map(fr => ({ x: fr.x, y: fr.y, l: fr.l, a: fr.a }));
 }
 
 // Coloca uma peça num conjunto de retângulos livres (BSSF), retorna score e posição.
@@ -65,19 +46,32 @@ function mrBestFit(
   return best;
 }
 
-// Coloca uma peça e atualiza os retângulos livres da chapa.
-function mrPlace(freeRects: MRect[], fr: MRect, pl: number, pa: number, kerf: number, W: number, H: number): MRect[] {
-  const usedRect: MRect = {
-    x: fr.x, y: fr.y,
-    l: Math.min(pl + kerf, W - fr.x),
-    a: Math.min(pa + kerf, H - fr.y),
-  };
-  const next: MRect[] = [];
-  for (const r of freeRects) {
-    if (mrOverlap(r, usedRect)) next.push(...mrSplit(r, usedRect));
-    else next.push(r);
-  }
-  return mrPrune(next);
+// Coloca uma peça no canto inferior-esquerdo do retângulo livre e divide a
+// sobra em L em DOIS retângulos disjuntos com um único risco reto (guilhotina).
+// Das duas divisões possíveis, escolhe a que preserva o maior retângulo livre
+// contíguo — sobras grandes e "inteiras" viram retalhos aproveitáveis.
+// W e H (dimensões da chapa) não são mais necessários: o kerf é limitado ao
+// próprio retângulo livre.
+function mrPlace(freeRects: MRect[], fr: MRect, pl: number, pa: number, kerf: number, _W: number, _H: number): MRect[] {
+  const ul = Math.min(pl + kerf, fr.l); // dimensões ocupadas (peça + risco)
+  const ua = Math.min(pa + kerf, fr.a);
+
+  // Opção A — risco horizontal em y=fr.y+ua: sobra direita baixa + topo inteiro
+  const rightA: MRect = { x: fr.x + ul, y: fr.y,      l: fr.l - ul, a: ua };
+  const topA:   MRect = { x: fr.x,      y: fr.y + ua, l: fr.l,      a: fr.a - ua };
+  // Opção B — risco vertical em x=fr.x+ul: sobra direita inteira + topo estreito
+  const rightB: MRect = { x: fr.x + ul, y: fr.y,      l: fr.l - ul, a: fr.a };
+  const topB:   MRect = { x: fr.x,      y: fr.y + ua, l: ul,        a: fr.a - ua };
+
+  const area = (r: MRect) => r.l * r.a;
+  const maxA = Math.max(area(rightA), area(topA));
+  const maxB = Math.max(area(rightB), area(topB));
+  const [r1, r2] = maxA >= maxB ? [rightA, topA] : [rightB, topB];
+
+  const next = freeRects.filter(r => r !== fr);
+  if (r1.l > 0 && r1.a > 0) next.push(r1);
+  if (r2.l > 0 && r2.a > 0) next.push(r2);
+  return next;
 }
 
 // ── MAXRECTS single-sheet (usada para retalhos de estoque e cálculo de aproveitamento) ──
@@ -687,7 +681,9 @@ export function empacotarTodas(
   const tTotal = Math.max(0, timeLimitMs - 80);
   const deadlineRestarts = tStart + Math.floor(tTotal * 0.60);
 
-  let seed = (0x9e3779b9 ^ (W * 31) ^ H ^ (Date.now() & 0xffff)) >>> 0;
+  // Seed determinística (função só das dimensões e nº de peças): rodar duas
+  // vezes o mesmo pedido produz o mesmo plano — essencial pra conferência.
+  let seed = (0x9e3779b9 ^ (W * 31) ^ H ^ Math.imul(pecas.length, 2654435761)) >>> 0;
   function lcg() {
     seed = Math.imul(seed ^ (seed >>> 16), 0x45d9f3b);
     seed = Math.imul(seed ^ (seed >>> 16), 0x45d9f3b);
@@ -797,6 +793,94 @@ export function empacotarTodas(
     placed: sheet.placed,
     free: mrFreeRects(sheet.freeRects),
   }));
+}
+
+// ── Sequência de cortes (árvore guilhotina derivada do layout final) ──────────
+// Reconstrói recursivamente os riscos de ponta a ponta que produzem o layout:
+// em cada painel, procura uma linha (vertical ou horizontal) que o atravesse
+// inteiro sem passar por dentro de nenhuma peça; risca, divide em dois painéis
+// e repete. A numeração (seq) segue a ordem natural de execução na mesa:
+// risca, destaca a primeira metade, corta ela toda, volta pra segunda.
+// Também devolve a ordem em que as peças ficam soltas (ordemExtracao) — é a
+// ordem correta de impressão das etiquetas.
+// Retorna null se o layout não for guilhotinável (não deve acontecer com os
+// layouts gerados aqui — usado como validação nos testes).
+
+export function derivarCortes(
+  placed: PecaPlacada[], W: number, H: number
+): { cortes: CorteLinha[]; ordemExtracao: number[] } | null {
+  const EPS = 0.5; // mm — coordenadas de entrada são inteiras
+  const cortes: CorteLinha[] = [];
+  const ordemExtracao: number[] = [];
+  let seq = 0;
+
+  function rec(px: number, py: number, pw: number, ph: number, idxs: number[]): boolean {
+    if (idxs.length === 0) return true;
+
+    if (idxs.length === 1) {
+      // Painel com uma peça só: riscos de acabamento pra soltá-la da sobra.
+      const i = idxs[0];
+      const p = placed[i];
+      if (p.x - px > EPS)              cortes.push({ seq: ++seq, dir: "V", pos: p.x,       ini: py,  fim: py + ph });
+      if (px + pw - (p.x + p.l) > EPS) cortes.push({ seq: ++seq, dir: "V", pos: p.x + p.l, ini: py,  fim: py + ph });
+      if (p.y - py > EPS)              cortes.push({ seq: ++seq, dir: "H", pos: p.y,       ini: p.x, fim: p.x + p.l });
+      if (py + ph - (p.y + p.a) > EPS) cortes.push({ seq: ++seq, dir: "H", pos: p.y + p.a, ini: p.x, fim: p.x + p.l });
+      ordemExtracao.push(i);
+      return true;
+    }
+
+    // Candidatos a risco: bordas de peças estritamente dentro do painel.
+    const xsSet = new Set<number>();
+    const ysSet = new Set<number>();
+    for (const i of idxs) {
+      const p = placed[i];
+      if (p.x > px + EPS && p.x < px + pw - EPS)                 xsSet.add(p.x);
+      if (p.x + p.l > px + EPS && p.x + p.l < px + pw - EPS)     xsSet.add(p.x + p.l);
+      if (p.y > py + EPS && p.y < py + ph - EPS)                 ysSet.add(p.y);
+      if (p.y + p.a > py + EPS && p.y + p.a < py + ph - EPS)     ysSet.add(p.y + p.a);
+    }
+
+    let best: { dir: "V" | "H"; pos: number; balance: number; lado1: number[]; lado2: number[] } | null = null;
+
+    function tentar(dir: "V" | "H", pos: number) {
+      const lado1: number[] = []; // esquerda / baixo
+      const lado2: number[] = []; // direita / cima
+      for (const i of idxs) {
+        const p = placed[i];
+        const lo = dir === "V" ? p.x : p.y;
+        const hi = dir === "V" ? p.x + p.l : p.y + p.a;
+        if (hi <= pos + EPS) lado1.push(i);
+        else if (lo >= pos - EPS) lado2.push(i);
+        else return; // o risco atravessaria o interior desta peça — inválido
+      }
+      // Preferimos o risco mais "equilibrado" (peças dos dois lados); riscos com
+      // tudo de um lado só ainda são válidos (aparam sobra) mas rendem menos.
+      const balance = Math.min(lado1.length, lado2.length);
+      if (!best || balance > best.balance) best = { dir, pos, balance, lado1, lado2 };
+    }
+
+    // Ordena os candidatos pra escolha ser determinística.
+    [...xsSet].sort((a, b) => a - b).forEach(x => tentar("V", x));
+    [...ysSet].sort((a, b) => a - b).forEach(y => tentar("H", y));
+
+    if (!best) return false; // não existe risco de ponta a ponta → não guilhotinável
+    const b: { dir: "V" | "H"; pos: number; balance: number; lado1: number[]; lado2: number[] } = best;
+
+    if (b.dir === "V") {
+      cortes.push({ seq: ++seq, dir: "V", pos: b.pos, ini: py, fim: py + ph });
+      return rec(px, py, b.pos - px, ph, b.lado1) && rec(b.pos, py, px + pw - b.pos, ph, b.lado2);
+    } else {
+      cortes.push({ seq: ++seq, dir: "H", pos: b.pos, ini: px, fim: px + pw });
+      return rec(px, py, pw, b.pos - py, b.lado1) && rec(px, b.pos, pw, py + ph - b.pos, b.lado2);
+    }
+  }
+
+  return rec(0, 0, W, H, placed.map((_, i) => i)) ? { cortes, ordemExtracao } : null;
+}
+
+/** Validação: o layout pode ser executado só com riscos de ponta a ponta? */
+export function ehGuilhotinavel(placed: PecaPlacada[], W: number, H: number): boolean {
+  return derivarCortes(placed, W, H) !== null;
 }
 
 // ── calcAproveitamento (usa FFD global para estimativa precisa) ────────────────

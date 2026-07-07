@@ -13,7 +13,7 @@ import { registrarMovimentacao, reverterMovimentacao } from "@/services/estoqueM
 import type { Produto, Retalho } from "@/types";
 import { CHAPAS_PADRAO, PRODUTO_CHAPA, isChapaInteira } from "@/lib/chapas";
 import {
-  empacotar, empacotarTodas, calcAproveitamento,
+  empacotar, empacotarTodas, calcAproveitamento, derivarCortes,
   type Peca, type ResultadoChapa, type RetalhoGerado,
 } from "@/lib/otimizador";
 
@@ -63,7 +63,7 @@ function OtimizadorContent() {
   const [pecas, setPecas]                 = useState<Peca[]>([{ l: 0, a: 0, qtd: 1, prod: "" }]);
   const [chapaW, setChapaW]               = useState(cwParam ? Number(cwParam) : 3300);
   const [chapaH, setChapaH]               = useState(chParam ? Number(chParam) : 2250);
-  const [kerf, setKerf]                   = useState(0);
+  const [kerf, setKerf]                   = useState(4); // folga do diamante — 4mm é o padrão da mesa
   const [bord, setBord]                   = useState(0);
   const [resultado, setResultado]         = useState<ResultadoChapa[] | null>(null);
   const [chapaIdx, setChapaIdx]           = useState(0);
@@ -357,7 +357,16 @@ function OtimizadorContent() {
       const CH = chapa ? chapa.h : chapaH;
       const W = CW - bord * 2;
       const H = CH - bord * 2;
-      // Retalhos de estoque: aloca peças nos retalhos primeiro (MAXRECTS single-sheet)
+      // Reordena as peças da chapa pela sequência real de extração no corte —
+      // assim o nº da peça na tela, no plano impresso e nas etiquetas segue a
+      // ordem em que ela fica solta na mesa. Também anexa os riscos numerados.
+      function comCortes(placed: ResultadoChapa["placed"], pw: number, ph: number) {
+        const seq = derivarCortes(placed, pw, ph);
+        if (!seq) return { placed, cortes: undefined }; // não deve acontecer (motor é guilhotina por construção)
+        return { placed: seq.ordemExtracao.map(i => placed[i]), cortes: seq.cortes };
+      }
+
+      // Retalhos de estoque: aloca peças nos retalhos primeiro (empacotamento single-sheet)
       let rem = [...grupo];
       if (useRetalhos) {
         const retDoProd = retalhosDisponiveis.filter(r => r.produto_nome === prodNome);
@@ -365,7 +374,8 @@ function OtimizadorContent() {
           if (rem.length === 0) break;
           const { placed, usados, free } = empacotar(ret.largura, ret.altura, rem, kerf);
           if (placed.length === 0) continue;
-          results.push({ W: ret.largura, H: ret.altura, prod: prodNome, placed, free, retalhoId: ret.id });
+          const ord = comCortes(placed, ret.largura, ret.altura);
+          results.push({ W: ret.largura, H: ret.altura, prod: prodNome, placed: ord.placed, free, retalhoId: ret.id, cortes: ord.cortes });
           rem = rem.filter((_, i) => !usados.has(i));
           retUsados.push(ret.id);
         }
@@ -374,9 +384,10 @@ function OtimizadorContent() {
       // FFD global: distribui TODAS as peças restantes pelas chapas de uma vez
       // (Best-Fit Decreasing multi-chapa, random restarts até tmLimitMs, fica com a melhor)
       if (rem.length > 0) {
-        empacotarTodas(W, H, rem, kerf, tmLimitMs).forEach(c =>
-          results.push({ W: CW, H: CH, prod: prodNome, placed: c.placed, free: c.free })
-        );
+        empacotarTodas(W, H, rem, kerf, tmLimitMs).forEach(c => {
+          const ord = comCortes(c.placed, W, H);
+          results.push({ W: CW, H: CH, prod: prodNome, placed: ord.placed, free: c.free, cortes: ord.cortes });
+        });
       }
     });
 
@@ -511,6 +522,17 @@ function OtimizadorContent() {
         s += `<rect x="${fx}" y="${fy}" width="${fw}" height="${fh}" fill="rgba(8,145,178,0.07)" stroke="#0891b2" stroke-width="0.8" stroke-dasharray="5,4"/>`;
         if (fw > 28 && fh > 14)
           s += `<text x="${fx + fw / 2}" y="${fy + fh / 2 + 4}" font-size="8" font-family="monospace" fill="#0070a0" text-anchor="middle">↺ ${f.l}×${f.a}</text>`;
+      });
+
+      // Riscos de corte numerados (sequência de execução na mesa)
+      (r.cortes ?? []).forEach(ct => {
+        const isV = ct.dir === "V";
+        const x1 = bp + (isV ? ct.pos : ct.ini) * sc, x2 = bp + (isV ? ct.pos : ct.fim) * sc;
+        const y1 = bp + (isV ? ct.ini : ct.pos) * sc, y2 = bp + (isV ? ct.fim : ct.pos) * sc;
+        const lx = isV ? x1 : x1 + 2, ly = isV ? y1 + 7 : y1;
+        s += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#dc2626" stroke-width="1" stroke-dasharray="6,3" opacity="0.85"/>`;
+        s += `<circle cx="${lx}" cy="${ly}" r="6" fill="#dc2626" opacity="0.92"/>`;
+        s += `<text x="${lx}" y="${ly + 2.5}" font-size="7" font-family="Arial,sans-serif" font-weight="900" fill="white" text-anchor="middle">${ct.seq}</text>`;
       });
 
       // Dimension arrows
@@ -747,11 +769,13 @@ function OtimizadorContent() {
     if (!pedidoRef) return;
     if (!confirm("Apagar completamente a otimização deste pedido?")) return;
     setZerando(true);
-    await supabase.from("otimizacoes").delete().eq("pedido_id", pedidoRef);
+    // O plano é salvo em historico_otimizador (o delete apontava pra tabela
+    // "otimizacoes", que não existe/não é usada — o plano nunca era apagado).
+    await supabase.from("historico_otimizador").delete().eq("pedido_id", pedidoRef);
     await reverterMovimentacao("otimizacao", pedidoRef);
     await updatePedido(pedidoRef, { status: "Aguardando otimização" });
     for (const pid of pedidosSelecionados) {
-      await supabase.from("otimizacoes").delete().eq("pedido_id", pid);
+      await supabase.from("historico_otimizador").delete().eq("pedido_id", pid);
       await reverterMovimentacao("otimizacao", pid);
       await updatePedido(pid, { status: "Aguardando otimização" });
     }
@@ -765,7 +789,7 @@ function OtimizadorContent() {
     setSalvando(true);
     const hoje = new Date().toISOString().split("T")[0];
     const todosPedidos = [pedidoRef, ...Array.from(pedidosSelecionados)];
-    const chapasJson = resultado.map(r => ({ W: r.W, H: r.H, prod: r.prod, placed: r.placed, free: r.free, retalhoId: r.retalhoId ?? null }));
+    const chapasJson = resultado.map(r => ({ W: r.W, H: r.H, prod: r.prod, placed: r.placed, free: r.free, retalhoId: r.retalhoId ?? null, cortes: r.cortes ?? null }));
     for (const pid of todosPedidos) {
       const pecasDoPedido = pid === pedidoRef
         ? pecas.filter(p => !p.pedidoId || p.pedidoId === pedidoRef)
