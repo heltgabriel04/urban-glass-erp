@@ -335,6 +335,17 @@ export interface RetiradaPedidoItem {
 
 export type RetiradaPedidoItemInsert = Omit<RetiradaPedidoItem, 'id' | 'created_at' | 'itens_pedido'>;
 
+// ─── OBSERVAÇÃO DO PEDIDO (anotação livre, datada) ────────────
+export interface PedidoObservacao {
+  id: string;
+  pedido_id: string;
+  usuario_email: string | null;
+  texto: string;
+  created_at: string;
+}
+
+export type PedidoObservacaoInsert = Omit<PedidoObservacao, 'id' | 'created_at'>;
+
 export type StatusSaldoRetirada = 'Pendente' | 'Parcial' | 'Retirado';
 
 export interface SaldoItemRetirada {
@@ -872,6 +883,7 @@ export type Database = {
       retrabalhos:             { Row: Retrabalho;         Insert: RetrabalhoInsert;      Update: RetrabalhoUpdate      };
       retiradas_pedido:        { Row: RetiradaPedido;     Insert: RetiradaPedidoInsert     };
       retiradas_pedido_itens:  { Row: RetiradaPedidoItem; Insert: RetiradaPedidoItemInsert };
+      pedido_observacoes:      { Row: PedidoObservacao;   Insert: PedidoObservacaoInsert   };
     };
     Views: {
       financeiro_clientes:              { Row: FinanceiroCliente         };

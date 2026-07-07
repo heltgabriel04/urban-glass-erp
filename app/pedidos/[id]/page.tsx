@@ -8,11 +8,12 @@ import { getLancamentosPorPedido, deletarLancamento, createLancamento, updateLan
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, updateNaoConformidade } from "@/services/qualidade.service";
 import { getRetiradasPorPedido, calcularSaldoItens, createRetirada } from "@/services/retiradas.service";
+import { getObservacoesPorPedido, createObservacao, deletarObservacao } from "@/services/observacoes.service";
 import { formatBRL, formatDate, formatDuracao } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
-import type { Pedido, Lancamento, Vendedor, NaoConformidade, NaoConformidadeInsert, TipoNC, GravidadeNC, StatusNaoConformidade, RetiradaPedido } from "@/types";
+import type { Pedido, Lancamento, Vendedor, NaoConformidade, NaoConformidadeInsert, TipoNC, GravidadeNC, StatusNaoConformidade, RetiradaPedido, PedidoObservacao } from "@/types";
 import type { HistoricoOtimizador } from "@/services/otimizador.service";
 import { supabase } from "@/lib/supabase/client";
 
@@ -139,6 +140,9 @@ export default function PedidoDetalhe() {
   const [lancamentos, setLancamentos]   = useState<Lancamento[]>([]);
   const [otimizacoes, setOtimizacoes]   = useState<HistoricoOtimizador[]>([]);
   const [retiradas, setRetiradas]       = useState<RetiradaPedido[]>([]);
+  const [observacoes, setObservacoes]   = useState<PedidoObservacao[]>([]);
+  const [novaObs, setNovaObs]           = useState("");
+  const [salvandoObs, setSalvandoObs]   = useState(false);
   const [clientes, setClientes]         = useState<{ id: number; nome: string }[]>([]);
   const [vendedores, setVendedores]     = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
   const [creditoCliente, setCreditoCliente] = useState(0);
@@ -205,7 +209,7 @@ export default function PedidoDetalhe() {
 
   async function load() {
     setLoading(true);
-    const [data, lancs, otims, clis, vends, ncsData, rets] = await Promise.all([
+    const [data, lancs, otims, clis, vends, ncsData, rets, obsData] = await Promise.all([
       getPedidoById(id),
       getLancamentosPorPedido(id),
       getOtimizacoesPorPedido(id),
@@ -213,6 +217,7 @@ export default function PedidoDetalhe() {
       supabase.from("vendedores").select("id, nome, comissao_pct").eq("ativo", true).order("nome").then(r => r.data ?? []),
       getNaoConformidadesPorPedido(id),
       getRetiradasPorPedido(id),
+      getObservacoesPorPedido(id),
     ]);
     setPedido(data);
     setLancamentos(lancs);
@@ -221,6 +226,7 @@ export default function PedidoDetalhe() {
     setVendedores(vends as Pick<Vendedor, "id" | "nome" | "comissao_pct">[]);
     setNcs(ncsData);
     setRetiradas(rets);
+    setObservacoes(obsData);
     if (data?.cliente_id) {
       const cred = await getCreditoCliente(data.cliente_id);
       setCreditoCliente(cred);
@@ -607,6 +613,27 @@ export default function PedidoDetalhe() {
       toast("Erro ao registrar NC", "err");
     }
     setSalvando(false);
+  }
+
+  async function handleAdicionarObservacao() {
+    const texto = novaObs.trim();
+    if (!texto) return;
+    setSalvandoObs(true);
+    const nova = await createObservacao(id, texto);
+    setSalvandoObs(false);
+    if (nova) {
+      setObservacoes(prev => [nova, ...prev]);
+      setNovaObs("");
+    } else {
+      toast("Erro ao adicionar observação", "err");
+    }
+  }
+
+  async function handleExcluirObservacao(obsId: string) {
+    if (!confirm("Excluir esta observação?")) return;
+    const ok = await deletarObservacao(obsId, id);
+    if (ok) setObservacoes(prev => prev.filter(o => o.id !== obsId));
+    else toast("Erro ao excluir observação", "err");
   }
 
   async function handleRetTudo() {
@@ -1309,6 +1336,59 @@ export default function PedidoDetalhe() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Observações */}
+          <div className="card" style={{ padding:"20px 24px" }}>
+            <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, marginBottom:"16px", letterSpacing:".06em" }}>
+              OBSERVAÇÕES{observacoes.length > 0 ? ` (${observacoes.length})` : ""}
+            </div>
+
+            <div style={{ display:"flex", gap:"8px", marginBottom:"16px", alignItems:"flex-end" }}>
+              <textarea
+                className="fc"
+                value={novaObs}
+                onChange={e => setNovaObs(e.target.value)}
+                placeholder="Registrar um acontecimento do pedido (ex.: entregador quebrou 4 vidros ontem)..."
+                rows={2}
+                style={{ flex:1, resize:"vertical" }}
+              />
+              <button
+                className="btn bp sm"
+                onClick={handleAdicionarObservacao}
+                disabled={salvandoObs || !novaObs.trim()}
+                style={{ whiteSpace:"nowrap" }}
+              >
+                + Adicionar
+              </button>
+            </div>
+
+            {observacoes.length === 0 ? (
+              <div style={{ padding:"14px 16px", background:"var(--surf2)", borderRadius:"8px", border:"1px dashed var(--b2)", textAlign:"center", fontSize:"12px", color:"var(--t3)" }}>
+                Nenhuma observação registrada ainda.
+              </div>
+            ) : (
+              <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
+                {observacoes.map(o => (
+                  <div key={o.id} style={{ background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px", border:"1px solid var(--b2)" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"8px" }}>
+                      <div style={{ fontSize:"13px", color:"var(--t1)", whiteSpace:"pre-wrap", flex:1 }}>{o.texto}</div>
+                      <button
+                        title="Excluir observação"
+                        onClick={() => handleExcluirObservacao(o.id)}
+                        style={{ background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", fontSize:"11px", cursor:"pointer", padding:"3px 7px", flexShrink:0, transition:"all 0.15s" }}
+                        onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="rgba(244,63,94,.15)"; b.style.borderColor="var(--err)"; b.style.color="var(--err)"; }}
+                        onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="transparent"; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
+                      >🗑</button>
+                    </div>
+                    <div style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", marginTop:"6px" }}>
+                      {new Date(o.created_at).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit" })}
+                      {o.usuario_email ? ` · ${o.usuario_email}` : ""}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Itens */}
