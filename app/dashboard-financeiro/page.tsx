@@ -1,0 +1,177 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell, ResponsiveContainer,
+} from "recharts";
+import AppLayout from "@/components/layout/AppLayout";
+import { formatBRL } from "@/lib/formatters";
+import { getFaturamentoMensal } from "@/services/financeiro.service";
+import { getDRE, type DRE } from "@/services/dre.service";
+import {
+  getSaldoCaixaTotal, getAbertoPorTipo, getDespesasPorMes, getProjecaoCaixa,
+  type MesValor, type ProjecaoHorizonte,
+} from "@/services/dashboardFinanceiro.service";
+
+const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+const CORES_CATEGORIA = ["var(--acc)", "var(--acc2)", "var(--acc3)", "var(--acc4)"];
+
+const TOOLTIP_STYLE = {
+  background: "var(--surf3)", border: "1px solid var(--b2)",
+  borderRadius: 8, fontSize: 12, color: "var(--t1)",
+};
+
+interface Dados {
+  saldoCaixa: number;
+  aReceber: number;
+  aPagar: number;
+  dre: DRE;
+  receitaDespesa: { label: string; receita: number; despesa: number }[];
+  despesasCategoria: { categoria: string; valor: number; cor: string }[];
+  projecao: ProjecaoHorizonte[];
+}
+
+export default function DashboardFinanceiroPage() {
+  const [dados, setDados] = useState<Dados | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => { load(); }, []);
+
+  async function load() {
+    setLoading(true);
+    const hoje = new Date();
+    const anoAtual = hoje.getFullYear();
+    const mesAtual = hoje.getMonth() + 1;
+
+    const [fatAtual, fatAnterior, saldoCaixa, aReceber, aPagar, dre, despesasPorMes, projecao] = await Promise.all([
+      getFaturamentoMensal(anoAtual),
+      getFaturamentoMensal(anoAtual - 1),
+      getSaldoCaixaTotal(),
+      getAbertoPorTipo("Entrada"),
+      getAbertoPorTipo("Saída"),
+      getDRE(anoAtual, mesAtual),
+      getDespesasPorMes(6),
+      getProjecaoCaixa(),
+    ]);
+
+    const fatMap = new Map<string, number>();
+    [...fatAtual, ...fatAnterior].forEach(f => fatMap.set(`${f.ano}-${f.mes}`, Number(f.faturado)));
+
+    const receitaDespesa = despesasPorMes.map((d: MesValor) => ({
+      label: `${MESES_ABREV[d.mes - 1]}/${String(d.ano).slice(2)}`,
+      receita: fatMap.get(`${d.ano}-${d.mes}`) ?? 0,
+      despesa: d.valor,
+    }));
+
+    const top4 = dre.despesas.slice(0, 4);
+    const outros = dre.despesas.slice(4).reduce((a, d) => a + d.valor, 0);
+    const despesasCategoria = [
+      ...top4.map((d, i) => ({ categoria: d.categoria, valor: d.valor, cor: CORES_CATEGORIA[i] })),
+      ...(outros > 0 ? [{ categoria: "Outros", valor: outros, cor: "var(--t3)" }] : []),
+    ];
+
+    setDados({ saldoCaixa, aReceber, aPagar, dre, receitaDespesa, despesasCategoria, projecao });
+    setLoading(false);
+  }
+
+  return (
+    <AppLayout>
+      <div className="tb">
+        <div className="tb-title">Visão Geral · Financeiro</div>
+      </div>
+
+      <div className="con">
+        {loading || !dados ? <div className="loading">Carregando...</div> : (
+          <>
+            {/* KPIs */}
+            <div className="g4" style={{ marginBottom: 16 }}>
+              <div className="kpi">
+                <div className="kpi-l">Saldo em Caixa</div>
+                <div className="kpi-v" style={{ color: dados.saldoCaixa >= 0 ? "var(--ok)" : "var(--err)" }}>
+                  {formatBRL(dados.saldoCaixa)}
+                </div>
+                <div className="kpi-s">Contas bancárias ativas</div>
+              </div>
+              <div className="kpi">
+                <div className="kpi-l">A Receber</div>
+                <div className="kpi-v" style={{ color: "var(--acc2)" }}>{formatBRL(dados.aReceber)}</div>
+                <div className="kpi-s">Títulos em aberto</div>
+              </div>
+              <div className="kpi">
+                <div className="kpi-l">A Pagar</div>
+                <div className="kpi-v" style={{ color: "var(--acc3)" }}>{formatBRL(dados.aPagar)}</div>
+                <div className="kpi-s">Títulos em aberto</div>
+              </div>
+              <div className="kpi">
+                <div className="kpi-l">Resultado do Mês</div>
+                <div className="kpi-v" style={{ color: dados.dre.resultado >= 0 ? "var(--ok)" : "var(--err)" }}>
+                  {formatBRL(dados.dre.resultado)}
+                </div>
+                <div className="kpi-s">DRE · mês atual</div>
+              </div>
+            </div>
+
+            {/* Gráficos */}
+            <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 14, marginBottom: 16 }}>
+              <div className="card">
+                <div className="ct">Receita × Despesa · últimos 6 meses</div>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={dados.receitaDespesa} barGap={4}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--b1)" vertical={false} />
+                    <XAxis dataKey="label" stroke="var(--t3)" fontSize={11} tickLine={false} axisLine={{ stroke: "var(--b1)" }} />
+                    <YAxis stroke="var(--t3)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v: number) => formatBRL(v)} width={90} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => formatBRL(v)} />
+                    <Legend wrapperStyle={{ fontSize: 12, color: "var(--t2)" }} />
+                    <Bar dataKey="receita" name="Receita" fill="var(--ok)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="despesa" name="Despesa" fill="var(--err)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="card">
+                <div className="ct">Despesas por Categoria · mês atual</div>
+                {dados.despesasCategoria.length === 0 ? (
+                  <div style={{ padding: "40px 0", textAlign: "center", color: "var(--t3)", fontSize: 12 }}>
+                    Nenhuma despesa no período.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={dados.despesasCategoria} layout="vertical" margin={{ left: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--b1)" horizontal={false} />
+                      <XAxis type="number" stroke="var(--t3)" fontSize={11} tickLine={false} axisLine={{ stroke: "var(--b1)" }} tickFormatter={(v: number) => formatBRL(v)} />
+                      <YAxis type="category" dataKey="categoria" stroke="var(--t3)" fontSize={11} tickLine={false} axisLine={false} width={110} />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => formatBRL(v)} />
+                      <Bar dataKey="valor" radius={[0, 4, 4, 0]}>
+                        {dados.despesasCategoria.map((d, i) => <Cell key={i} fill={d.cor} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            {/* Projeção de caixa */}
+            <div className="card">
+              <div className="ct">Projeção de Caixa</div>
+              <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 14 }}>
+                Saldo atual + títulos já lançados com vencimento dentro do prazo — não é estimativa estatística, é auditável em Contas a Pagar/Receber.
+              </div>
+              <div className="g3">
+                {dados.projecao.map((p: ProjecaoHorizonte) => (
+                  <div key={p.dias} style={{ textAlign: "center", padding: "14px 0" }}>
+                    <div style={{ fontSize: 10, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 6 }}>
+                      Em {p.dias} dias
+                    </div>
+                    <div style={{ fontSize: 22, fontWeight: 800, fontFamily: "'DM Mono', monospace", color: p.saldo >= 0 ? "var(--ok)" : "var(--err)" }}>
+                      {formatBRL(p.saldo)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </AppLayout>
+  );
+}

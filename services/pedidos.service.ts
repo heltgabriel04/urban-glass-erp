@@ -222,17 +222,45 @@ export async function updatePedido(id: string, updates: PedidoUpdate) {
   return data as Pedido;
 }
 
+// Soma o recebido dos lançamentos de Entrada do pedido. Lançamentos com
+// baixa registrada (fluxo novo, ver lancamentos.service.ts) somam as baixas
+// ativas — suporta parcial. Lançamentos 'Pago' sem nenhuma baixa (pagamento
+// antigo, anterior à tabela baixas_lancamento) contam o valor cheio, senão
+// todo histórico pré-baixa parcial zeraria ao recalcular.
 export async function recalcularRecebido(pedidoId: string) {
-  const { data, error } = await supabase
+  const { data: lancs, error: errLancs } = await supabase
     .from('lancamentos')
-    .select('valor')
+    .select('id, valor, status')
     .eq('pedido_id', pedidoId)
-    .eq('tipo', 'Entrada')
-    .eq('status', 'Pago');  // <-- só pagos
+    .eq('tipo', 'Entrada');
 
-  if (error) { console.error('recalcularRecebido:', error); return null; }
+  if (errLancs) { console.error('recalcularRecebido (lancamentos):', errLancs); return null; }
 
-  const total = (data ?? []).reduce((a, l) => a + Number(l.valor), 0);
+  const lancamentos = (lancs ?? []) as { id: number; valor: number; status: string }[];
+  if (lancamentos.length === 0) return updatePedido(pedidoId, { valor_recebido: 0 });
+
+  const { data: baixas, error: errBaixas } = await supabase
+    .from('baixas_lancamento')
+    .select('lancamento_id, valor, estornado_em')
+    .in('lancamento_id', lancamentos.map(l => l.id));
+
+  if (errBaixas) { console.error('recalcularRecebido (baixas):', errBaixas); return null; }
+
+  const baixasPorLancamento = new Map<number, { valor: number; estornado_em: string | null }[]>();
+  for (const b of (baixas ?? []) as { lancamento_id: number; valor: number; estornado_em: string | null }[]) {
+    const arr = baixasPorLancamento.get(b.lancamento_id) ?? [];
+    arr.push(b);
+    baixasPorLancamento.set(b.lancamento_id, arr);
+  }
+
+  const total = lancamentos.reduce((soma, l) => {
+    const suasBaixas = baixasPorLancamento.get(l.id);
+    if (suasBaixas && suasBaixas.length > 0) {
+      return soma + suasBaixas.filter(b => !b.estornado_em).reduce((a, b) => a + Number(b.valor), 0);
+    }
+    return soma + (l.status === 'Pago' ? Number(l.valor) : 0);
+  }, 0);
+
   return updatePedido(pedidoId, { valor_recebido: total });
 }
 

@@ -27,7 +27,7 @@ function periodo(ano: number, mes: number | null): { ini: string; fim: string } 
  *   Receita Bruta (faturamento por dt_pedido)
  *   (−) CMV (custo das chapas; custo_m2 atual, sem lapidação)
  *   = Lucro Bruto
- *   (−) Despesas operacionais (lançamentos de Saída por vencimento, agrupados por categoria)
+ *   (−) Despesas operacionais (lançamentos de Saída por vencimento, agrupados pelo Plano de Contas)
  *   = Resultado
  */
 export async function getDRE(ano: number, mes: number | null): Promise<DRE> {
@@ -36,7 +36,7 @@ export async function getDRE(ano: number, mes: number | null): Promise<DRE> {
   const [pedidosRes, estoqueRes, despesasRes] = await Promise.all([
     supabase.from('pedidos').select('id, valor_total').neq('status', 'Cancelado').gte('dt_pedido', ini).lte('dt_pedido', fim),
     supabase.from('estoque').select('produto_id, custo_m2'),
-    supabase.from('lancamentos').select('valor, categoria, vencimento').eq('tipo', 'Saída').gte('vencimento', ini).lte('vencimento', fim),
+    supabase.from('lancamentos').select('valor, vencimento, plano_contas(descricao)').eq('tipo', 'Saída').gte('vencimento', ini).lte('vencimento', fim),
   ]);
 
   const pedidos = (pedidosRes.data ?? []) as Array<{ id: string; valor_total: number }>;
@@ -64,10 +64,11 @@ export async function getDRE(ano: number, mes: number | null): Promise<DRE> {
 
   const lucroBruto = parseFloat((receita - cmv).toFixed(2));
 
-  // Despesas agrupadas por categoria
+  // Despesas agrupadas pelo Plano de Contas (mesma referência usada em
+  // Contas a Pagar/Receber — antes lia um campo texto solto e divergia)
   const porCat = new Map<string, number>();
-  for (const d of (despesasRes.data ?? []) as Array<{ valor: number; categoria: string | null }>) {
-    const cat = d.categoria && d.categoria.trim() ? d.categoria.trim() : 'Sem categoria';
+  for (const d of (despesasRes.data ?? []) as unknown as Array<{ valor: number; plano_contas: { descricao: string } | null }>) {
+    const cat = d.plano_contas?.descricao?.trim() || 'Sem categoria';
     porCat.set(cat, (porCat.get(cat) ?? 0) + (Number(d.valor) || 0));
   }
   const despesas = [...porCat.entries()]

@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { Suspense, useEffect, useState, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
+import { getBaixasPorLancamentos } from "@/services/lancamentos.service";
+import type { BaixaLancamento } from "@/types";
 
 interface Mov {
   id: number;
@@ -14,6 +17,8 @@ interface Mov {
   conta: string | null;
   status: string;
 }
+
+interface EventoRealizado { data: string; valor: number; tipo: "Entrada" | "Saída"; }
 
 function mesAtual() {
   const d = new Date();
@@ -42,12 +47,33 @@ function ColorVal({ v, zero = "var(--t3)" }: { v: number; zero?: string }) {
 }
 
 export default function FluxoPage() {
-  const [mes, setMes]           = useState(mesAtual());
-  const [conta, setConta]       = useState("");
+  return (
+    <Suspense fallback={<AppLayout><div className="loading">Carregando...</div></AppLayout>}>
+      <FluxoPageInner />
+    </Suspense>
+  );
+}
+
+function FluxoPageInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [mes, setMes]           = useState(searchParams.get("mes") || mesAtual());
+  const [conta, setConta]       = useState(searchParams.get("conta") ?? "");
   const [movs, setMovs]         = useState<Mov[]>([]);
+  const [baixasMap, setBaixasMap] = useState<Map<number, BaixaLancamento[]>>(new Map());
   const [loading, setLoading]   = useState(true);
 
   useEffect(() => { load(); }, [mes, conta]);
+
+  // Navegação inteligente: mês/conta sobrevivem a refresh/voltar do navegador.
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (mes !== mesAtual()) params.set("mes", mes);
+    if (conta) params.set("conta", conta);
+    const qs = params.toString();
+    router.replace(qs ? `/fluxo?${qs}` : "/fluxo", { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mes, conta]);
 
   async function load() {
     setLoading(true);
@@ -56,9 +82,28 @@ export default function FluxoPage() {
       .select("id, tipo, valor, vencimento, dt_pagamento, conta, status");
     if (conta) q = q.eq("conta", conta);
     const { data } = await q;
-    setMovs((data ?? []) as Mov[]);
+    const movsCarregados = (data ?? []) as Mov[];
+    setMovs(movsCarregados);
+    setBaixasMap(await getBaixasPorLancamentos(movsCarregados.map(m => m.id)));
     setLoading(false);
   }
+
+  // Eventos de caixa efetivamente realizados: uma baixa = um evento na data
+  // dela (suporta parcial — um título pode gerar vários eventos em dias
+  // diferentes). Lançamento 'Pago' sem baixa nenhuma é pagamento anterior à
+  // existência dessa tabela — conta como um evento único no dt_pagamento.
+  const eventosRealizados = useMemo(() => {
+    const eventos: EventoRealizado[] = [];
+    for (const mv of movs) {
+      const ativas = (baixasMap.get(mv.id) ?? []).filter(b => !b.estornado_em);
+      if (ativas.length > 0) {
+        for (const b of ativas) eventos.push({ data: b.data, valor: Number(b.valor), tipo: mv.tipo });
+      } else if (mv.status === "Pago" && mv.dt_pagamento) {
+        eventos.push({ data: mv.dt_pagamento, valor: Number(mv.valor), tipo: mv.tipo });
+      }
+    }
+    return eventos;
+  }, [movs, baixasMap]);
 
   // ── Contas únicas para filtro ──────────────────────────────
   const contasUnicas = useMemo(() => {
@@ -73,10 +118,11 @@ export default function FluxoPage() {
     const [y, m] = mes.split("-").map(Number);
     const inicio = primeirodia(mes);
 
-    // Saldo anterior REALIZADO: dt_pagamento existe e < inicio do mês
-    const saldoAntReal = movs
-      .filter(mv => mv.dt_pagamento && mv.dt_pagamento < inicio)
-      .reduce((s, mv) => s + (mv.tipo === "Entrada" ? Number(mv.valor) : -Number(mv.valor)), 0);
+    // Saldo anterior REALIZADO: soma dos eventos de baixa (ou pagamento
+    // legado) com data < início do mês
+    const saldoAntReal = eventosRealizados
+      .filter(ev => ev.data < inicio)
+      .reduce((s, ev) => s + (ev.tipo === "Entrada" ? ev.valor : -ev.valor), 0);
 
     // Saldo anterior PROJETADO: vencimento existe e < inicio do mês
     const saldoAntProj = movs
@@ -92,9 +138,9 @@ export default function FluxoPage() {
     for (let d = 1; d <= total; d++) {
       const data = `${y}-${pad(m)}-${pad(d)}`;
 
-      // REALIZADO: usa dt_pagamento
-      const entR = movs.filter(mv => mv.dt_pagamento === data && mv.tipo === "Entrada").reduce((s, mv) => s + Number(mv.valor), 0);
-      const saiR = movs.filter(mv => mv.dt_pagamento === data && mv.tipo === "Saída").reduce((s, mv) => s + Number(mv.valor), 0);
+      // REALIZADO: soma os eventos de baixa (parcial ou total) do dia
+      const entR = eventosRealizados.filter(ev => ev.data === data && ev.tipo === "Entrada").reduce((s, ev) => s + ev.valor, 0);
+      const saiR = eventosRealizados.filter(ev => ev.data === data && ev.tipo === "Saída").reduce((s, ev) => s + ev.valor, 0);
       const sdR  = entR - saiR;
       acumReal  += sdR;
       realizado.push({ dia: d, entradas: entR, saidas: saiR, saldoDia: sdR, saldoMes: acumReal });
@@ -108,7 +154,7 @@ export default function FluxoPage() {
     }
 
     return { realizado, projetado, saldoAntReal, saldoAntProj };
-  }, [movs, mes]);
+  }, [movs, eventosRealizados, mes]);
 
   // totais do mês
   const totReal = realizado.reduce((s, d) => ({ ent: s.ent + d.entradas, sai: s.sai + d.saidas }), { ent: 0, sai: 0 });

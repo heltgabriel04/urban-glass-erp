@@ -41,7 +41,7 @@ export default function DREPage() {
       <div className="con">
         <div className="al al-i" style={{ marginBottom: "16px", fontSize: "12px" }}>
           DRE por competência ({periodoLabel}). Receita = faturamento (pedidos por data). CMV usa o custo/m² atual
-          do estoque (sem lapidação). Despesas = lançamentos de saída agrupados pela categoria.
+          do estoque (sem lapidação). Despesas = lançamentos de saída agrupados pelo Plano de Contas.
         </div>
 
         {loading || !dre ? <div className="loading">Calculando DRE...</div> : (

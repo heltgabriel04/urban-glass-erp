@@ -7,8 +7,11 @@ import { getFinanceiroClientes, getFaturamentoMensal } from "@/services/financei
 import { getResumoQualidade } from "@/services/qualidade.service";
 import { getCompras } from "@/services/compras.service";
 import { getEstoque } from "@/services/estoque.service";
+import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatPercent } from "@/lib/formatters";
 import type { Pedido, FinanceiroCliente, FaturamentoMensal, EstoqueItem } from "@/types";
+
+interface ContaPagarMin { valor: number; vencimento: string | null; }
 
 const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
@@ -31,6 +34,7 @@ export default function DashboardPage() {
   const [ncsAbertas, setNcsAbertas] = useState(0);
   const [ncsCriticas, setNcsCriticas] = useState(0);
   const [comprasPend, setComprasPend] = useState(0);
+  const [contasPagarAbertas, setContasPagarAbertas] = useState<ContaPagarMin[]>([]);
   const [loading, setLoading]       = useState(true);
   const [mesSel, setMesSel]         = useState<number | null>(null);
 
@@ -38,13 +42,14 @@ export default function DashboardPage() {
 
   async function load() {
     setLoading(true);
-    const [peds, fin, fat, est, qualidade, compras] = await Promise.all([
+    const [peds, fin, fat, est, qualidade, compras, { data: cp }] = await Promise.all([
       getPedidos(),
       getFinanceiroClientes(),
       getFaturamentoMensal(new Date().getFullYear()),
       getEstoque(),
       getResumoQualidade(),
       getCompras(),
+      supabase.from("lancamentos").select("valor, vencimento").eq("tipo", "Saída").neq("status", "Pago"),
     ]);
     setPedidos(peds);
     setFinanceiro(fin);
@@ -53,6 +58,7 @@ export default function DashboardPage() {
     setNcsAbertas(qualidade.ncsAbertas);
     setNcsCriticas(qualidade.ncsCriticas);
     setComprasPend(compras.filter(c => c.status !== 'recebido').length);
+    setContasPagarAbertas((cp ?? []) as ContaPagarMin[]);
     setLoading(false);
   }
 
@@ -110,8 +116,13 @@ export default function DashboardPage() {
     return d >= agora && d <= hoje3d && p.status !== "Entregue" && p.status !== "Cancelado";
   });
 
+  const hojeStr = new Date().toISOString().split("T")[0];
+  const contasPagarVencidas  = contasPagarAbertas.filter(c => c.vencimento && c.vencimento < hojeStr);
+  const contasPagarVenceHoje = contasPagarAbertas.filter(c => c.vencimento === hojeStr);
+
   const alertTotal = inadimplentes.length + parciais.length + aguardandoOtim.length
-    + itensRuptura.length + ncsAbertas + comprasPend + retiradas3d.length;
+    + itensRuptura.length + ncsAbertas + comprasPend + retiradas3d.length
+    + contasPagarVencidas.length + contasPagarVenceHoje.length;
 
   const topCli = useMemo(() => {
     if (!mesSel) {
@@ -260,6 +271,20 @@ export default function DashboardPage() {
                     <a href="/contas-receber" style={{ textDecoration: "none" }}>
                       <span className="chip cy" style={{ cursor: "pointer" }}>
                         {parciais.length} {parciais.length > 1 ? "parciais" : "parcial"} &middot; {formatBRL(parciais.reduce((a, f) => a + Number(f.a_receber), 0))}
+                      </span>
+                    </a>
+                  )}
+                  {contasPagarVencidas.length > 0 && (
+                    <a href="/contas-pagar?tab=vencido" style={{ textDecoration: "none" }}>
+                      <span className="chip cr" style={{ cursor: "pointer" }}>
+                        {contasPagarVencidas.length} conta{contasPagarVencidas.length > 1 ? "s" : ""} a pagar vencida{contasPagarVencidas.length > 1 ? "s" : ""} &middot; {formatBRL(contasPagarVencidas.reduce((a, c) => a + Number(c.valor), 0))}
+                      </span>
+                    </a>
+                  )}
+                  {contasPagarVenceHoje.length > 0 && (
+                    <a href="/contas-pagar?tab=aberto" style={{ textDecoration: "none" }}>
+                      <span className="chip cy" style={{ cursor: "pointer" }}>
+                        {contasPagarVenceHoje.length} conta{contasPagarVenceHoje.length > 1 ? "s" : ""} a pagar vence{contasPagarVenceHoje.length > 1 ? "m" : ""} hoje &middot; {formatBRL(contasPagarVenceHoje.reduce((a, c) => a + Number(c.valor), 0))}
                       </span>
                     </a>
                   )}

@@ -495,7 +495,7 @@ export default function ContabilidadePage() {
   return (
     <AppLayout>
       <div className="tb">
-        <div className="tb-title">Contabilidade</div>
+        <div className="tb-title">Configuração Fiscal</div>
         <div style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", background: "var(--surf2)", border: "1px solid var(--b1)", borderRadius: "6px", padding: "4px 10px" }}>
           Configurações Fiscais e Tributárias
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { Suspense, useEffect, useState, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
@@ -8,6 +9,13 @@ import CurrencyInput from "@/components/ui/CurrencyInput";
 import DateInput from "@/components/ui/DateInput";
 import SearchInput from "@/components/ui/SearchInput";
 import { registrarLog } from "@/services/log.service";
+import { useToast } from "@/components/ui/toast";
+import { getContasBancarias } from "@/services/contasBancarias.service";
+import { getCentrosCusto } from "@/services/centrosCusto.service";
+import { registrarBaixa, estornarBaixa, getBaixasPorLancamentos, calcularSaldo } from "@/services/lancamentos.service";
+import { useEscToClose } from "@/components/ui/useEscToClose";
+import ActionMenu from "@/components/ui/ActionMenu";
+import type { ContaBancaria, CentroCusto, BaixaLancamento } from "@/types";
 
 interface PlanoItem { id: number; codigo_estruturado: string; descricao: string; }
 
@@ -24,6 +32,8 @@ interface Conta {
   obs: string | null;
   plano_contas_id: number | null;
   plano_contas: PlanoItem | null;
+  conta_id: number | null;
+  centro_custo_id: number | null;
   created_at: string;
 }
 
@@ -32,6 +42,7 @@ type TabFiltro = "todos" | "aberto" | "pago" | "vencido";
 const EMPTY_FORM = {
   descricao: "", valor: 0, documento: "", fornecedor: "",
   vencimento: "", dt_emissao: "", obs: "", plano_contas_id: "" as string | number,
+  conta_id: "" as string | number, centro_custo_id: "" as string | number,
 };
 
 function hoje() { return new Date().toISOString().split("T")[0]; }
@@ -41,57 +52,117 @@ function fmtData(s: string | null) {
   return d.toLocaleDateString("pt-BR");
 }
 
+// Bucket usado por filtro/aba — só olha o campo status guardado (fonte da
+// verdade após uma baixa), não mais dt_pagamento (que agora também é
+// preenchido em baixa parcial).
 function getStatusEfetivo(c: Conta): "Pago" | "Vencido" | "Em aberto" {
-  if (c.dt_pagamento || c.status === "Pago") return "Pago";
+  if (c.status === "Pago") return "Pago";
   if (c.vencimento && c.vencimento < hoje()) return "Vencido";
   return "Em aberto";
 }
 
+// Rótulo exibido no chip: Parcial tem prioridade visual sobre o bucket,
+// mesmo que o título já esteja vencido (ele continua parcialmente pago).
+function getStatusExibicao(c: Conta, valorPago: number): "Pago" | "Parcial" | "Vencido" | "Em aberto" {
+  const base = getStatusEfetivo(c);
+  if (base !== "Pago" && valorPago > 0) return "Parcial";
+  return base;
+}
+
 const STATUS_STYLE: Record<string, React.CSSProperties> = {
-  "Pago":      { background: "rgba(61,255,160,.12)", color: "var(--ok)",  border: "1px solid rgba(61,255,160,.3)" },
-  "Vencido":   { background: "rgba(255,80,80,.12)",  color: "var(--err)", border: "1px solid rgba(255,80,80,.3)" },
-  "Em aberto": { background: "rgba(45,95,166,.15)",  color: "#60a5fa",    border: "1px solid rgba(45,95,166,.35)" },
+  "Pago":      { background: "rgba(61,255,160,.12)", color: "var(--ok)",   border: "1px solid rgba(61,255,160,.3)" },
+  "Parcial":   { background: "rgba(245,158,11,.12)", color: "var(--warn)", border: "1px solid rgba(245,158,11,.35)" },
+  "Vencido":   { background: "rgba(255,80,80,.12)",  color: "var(--err)",  border: "1px solid rgba(255,80,80,.3)" },
+  "Em aberto": { background: "rgba(45,95,166,.15)",  color: "#60a5fa",     border: "1px solid rgba(45,95,166,.35)" },
 };
 
 export default function ContasPagarPage() {
+  return (
+    <Suspense fallback={<AppLayout><div className="loading">Carregando...</div></AppLayout>}>
+      <ContasPagarPageInner />
+    </Suspense>
+  );
+}
+
+function ContasPagarPageInner() {
+  const { toast } = useToast();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [contas, setContas]       = useState<Conta[]>([]);
   const [planos, setPlanos]       = useState<PlanoItem[]>([]);
+  const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>([]);
+  const [centrosCusto, setCentrosCusto]       = useState<CentroCusto[]>([]);
+  const [baixasMap, setBaixasMap] = useState<Map<number, BaixaLancamento[]>>(new Map());
   const [loading, setLoading]     = useState(true);
-  const [tab, setTab]             = useState<TabFiltro>("aberto");
-  const [busca, setBusca]         = useState("");
+  const [tab, setTab]             = useState<TabFiltro>((searchParams.get("tab") as TabFiltro) || "aberto");
+  const [busca, setBusca]         = useState(searchParams.get("q") ?? "");
   const [filtroVencIni, setFiltroVencIni] = useState("");
   const [filtroVencFim, setFiltroVencFim] = useState("");
   const [filtroEmisIni, setFiltroEmisIni] = useState("");
   const [filtroEmissFim, setFiltroEmissFim] = useState("");
   const [filtroPgtoIni, setFiltroPgtoIni] = useState("");
   const [filtroPgtoFim, setFiltroPgtoFim] = useState("");
-  const [modal, setModal]         = useState<"add" | "edit" | "pagar" | null>(null);
+  const [modal, setModal]         = useState<"add" | "edit" | "pagar" | "baixas" | "lote-pagar" | null>(null);
   const [form, setForm]           = useState({ ...EMPTY_FORM });
   const [editId, setEditId]       = useState<number | null>(null);
   const [pagarId, setPagarId]     = useState<number | null>(null);
   const [dtPgto, setDtPgto]       = useState(hoje());
+  const [valorBaixa, setValorBaixa] = useState(0);
+  const [contaBaixaId, setContaBaixaId] = useState<string | number>("");
+  const [formaPgtoBaixa, setFormaPgtoBaixa] = useState("");
+  const [obsBaixa, setObsBaixa]   = useState("");
+  const [baixasVerId, setBaixasVerId] = useState<number | null>(null);
+  const [estornandoBaixaId, setEstornandoBaixaId] = useState<number | null>(null);
+  const [motivoEstorno, setMotivoEstorno] = useState("");
   const [salvando, setSalvando]   = useState(false);
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
+  const [dtLote, setDtLote]       = useState(hoje());
 
   useEffect(() => { load(); }, []);
 
+  // Navegação inteligente: aba e busca sobrevivem a refresh/voltar do navegador.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const params = new URLSearchParams();
+      if (busca.trim()) params.set("q", busca.trim());
+      if (tab !== "aberto") params.set("tab", tab);
+      const qs = params.toString();
+      router.replace(qs ? `/contas-pagar?${qs}` : "/contas-pagar", { scroll: false });
+    }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, busca]);
+
+  useEffect(() => { setSelecionados(new Set()); }, [tab, busca]);
+
+  useEscToClose(modal === "add" || modal === "edit", closeModal);
+  useEscToClose(modal === "pagar", closeModal);
+  useEscToClose(modal === "baixas", closeModal);
+  useEscToClose(modal === "lote-pagar", closeModal);
+
   async function load() {
     setLoading(true);
-    const [{ data: cs }, { data: pls }] = await Promise.all([
+    const [{ data: cs }, { data: pls }, cbs, ccs] = await Promise.all([
       supabase
         .from("lancamentos")
-        .select("id, descricao, valor, status, vencimento, documento, dt_emissao, dt_pagamento, fornecedor, obs, plano_contas_id, created_at, plano_contas(id, codigo_estruturado, descricao)")
+        .select("id, descricao, valor, status, vencimento, documento, dt_emissao, dt_pagamento, fornecedor, obs, plano_contas_id, conta_id, centro_custo_id, created_at, plano_contas(id, codigo_estruturado, descricao)")
         .eq("tipo", "Saída")
         .order("vencimento", { ascending: true }),
       supabase.from("plano_contas").select("id, codigo_estruturado, descricao").order("codigo"),
+      getContasBancarias(true),
+      getCentrosCusto(true),
     ]);
-    setContas((cs ?? []) as unknown as Conta[]);
+    const contasCarregadas = (cs ?? []) as unknown as Conta[];
+    setContas(contasCarregadas);
     setPlanos((pls ?? []) as PlanoItem[]);
+    setContasBancarias(cbs);
+    setCentrosCusto(ccs);
+    setBaixasMap(await getBaixasPorLancamentos(contasCarregadas.map(c => c.id)));
     setLoading(false);
   }
 
   const filtradas = useMemo(() => {
-    const hj = hoje();
     return contas.filter(c => {
       const st = getStatusEfetivo(c);
       if (tab === "aberto"  && st !== "Em aberto") return false;
@@ -105,16 +176,27 @@ export default function ContasPagarPage() {
       if (filtroEmissFim && (c.dt_emissao ?? "") > filtroEmissFim) return false;
       if (filtroPgtoIni && (c.dt_pagamento ?? "") < filtroPgtoIni) return false;
       if (filtroPgtoFim && (c.dt_pagamento ?? "") > filtroPgtoFim) return false;
-      void hj;
       return true;
     });
   }, [contas, tab, busca, filtroVencIni, filtroVencFim, filtroEmisIni, filtroEmissFim, filtroPgtoIni, filtroPgtoFim]);
 
   const totalTitulos = filtradas.reduce((s, c) => s + Number(c.valor), 0);
-  const totalPago    = filtradas.filter(c => getStatusEfetivo(c) === "Pago").reduce((s, c) => s + Number(c.valor), 0);
-  const totalAberto  = filtradas.filter(c => getStatusEfetivo(c) !== "Pago").reduce((s, c) => s + Number(c.valor), 0);
+  const totalPago    = filtradas.reduce((s, c) => s + calcularSaldo(c, baixasMap.get(c.id)).valorPago, 0);
+  const totalAberto  = totalTitulos - totalPago;
 
   const contasVencidas = contas.filter(c => getStatusEfetivo(c) === "Vencido").length;
+  const todosSelecionados = filtradas.length > 0 && filtradas.every(c => selecionados.has(c.id));
+
+  function toggleSelecionado(id: number) {
+    setSelecionados(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+  function toggleSelecionarTodos() {
+    setSelecionados(todosSelecionados ? new Set() : new Set(filtradas.map(c => c.id)));
+  }
 
   function openAdd() {
     setForm({ ...EMPTY_FORM, dt_emissao: hoje(), vencimento: hoje() });
@@ -127,22 +209,41 @@ export default function ContasPagarPage() {
       documento: c.documento ?? "", fornecedor: c.fornecedor ?? "",
       vencimento: c.vencimento ?? "", dt_emissao: c.dt_emissao ?? "",
       obs: c.obs ?? "", plano_contas_id: c.plano_contas_id ?? "",
+      conta_id: c.conta_id ?? "", centro_custo_id: c.centro_custo_id ?? "",
     });
     setEditId(c.id);
     setModal("edit");
   }
   function openPagar(c: Conta) {
+    const { saldo } = calcularSaldo(c, baixasMap.get(c.id));
     setPagarId(c.id);
     setDtPgto(hoje());
+    setValorBaixa(saldo > 0 ? saldo : Number(c.valor));
+    setContaBaixaId("");
+    setFormaPgtoBaixa("");
+    setObsBaixa("");
     setModal("pagar");
   }
-  function closeModal() { setModal(null); setEditId(null); setPagarId(null); }
+  function openBaixas(c: Conta) {
+    setBaixasVerId(c.id);
+    setEstornandoBaixaId(null);
+    setMotivoEstorno("");
+    setModal("baixas");
+  }
+  function openLotePagar() {
+    setDtLote(hoje());
+    setModal("lote-pagar");
+  }
+  function closeModal() {
+    setModal(null); setEditId(null); setPagarId(null);
+    setBaixasVerId(null); setEstornandoBaixaId(null); setMotivoEstorno("");
+  }
 
   async function salvarConta() {
     if (!form.descricao.trim() || form.valor <= 0) return;
     setSalvando(true);
     // Não inclui `status` aqui: editar uma conta não deve reabrir uma que já
-    // está paga. Status só muda via confirmarPagamento/desfazerPagamento.
+    // está paga. Status só muda via registrarBaixa/estornarBaixa.
     const payload = {
       tipo: "Saída",
       descricao: form.descricao.trim(),
@@ -153,6 +254,8 @@ export default function ContasPagarPage() {
       fornecedor: form.fornecedor.trim() || null,
       obs: form.obs.trim() || null,
       plano_contas_id: form.plano_contas_id ? Number(form.plano_contas_id) : null,
+      conta_id: form.conta_id ? Number(form.conta_id) : null,
+      centro_custo_id: form.centro_custo_id ? Number(form.centro_custo_id) : null,
     };
     if (editId) {
       registrarLog({
@@ -170,28 +273,78 @@ export default function ContasPagarPage() {
   }
 
   async function confirmarPagamento() {
-    if (!pagarId || !dtPgto) return;
+    if (!pagarId || !dtPgto || valorBaixa <= 0) return;
     setSalvando(true);
-    registrarLog({
-      acao: "pagou", tabela: "lancamentos", registro_id: String(pagarId),
-      descricao: `Marcou conta a pagar #${pagarId} como Paga`,
-      campos_alterados: { status: { de: "Pendente", para: "Pago" }, dt_pagamento: dtPgto },
+    const res = await registrarBaixa({
+      lancamentoId: pagarId,
+      valor: valorBaixa,
+      data: dtPgto,
+      contaId: contaBaixaId ? Number(contaBaixaId) : null,
+      formaPgto: formaPgtoBaixa.trim() || null,
+      obs: obsBaixa.trim() || null,
     });
-    await supabase.from("lancamentos").update({ status: "Pago", dt_pagamento: dtPgto } as never).eq("id", pagarId);
     setSalvando(false);
+    if (res) {
+      toast("Baixa registrada");
+      closeModal();
+      load();
+    } else {
+      toast("Erro ao registrar baixa", "err");
+    }
+  }
+
+  async function confirmarPagamentoLote() {
+    if (!dtLote) return;
+    setSalvando(true);
+    const alvos = contas.filter(c => selecionados.has(c.id) && calcularSaldo(c, baixasMap.get(c.id)).saldo > 0);
+    let ok = 0;
+    for (const c of alvos) {
+      const { saldo } = calcularSaldo(c, baixasMap.get(c.id));
+      const res = await registrarBaixa({ lancamentoId: c.id, valor: saldo, data: dtLote });
+      if (res) ok++;
+    }
+    setSalvando(false);
+    toast(
+      ok === alvos.length ? `${ok} baixa(s) registrada(s)` : `${ok} de ${alvos.length} baixas registradas`,
+      ok === alvos.length ? undefined : "err"
+    );
+    setSelecionados(new Set());
     closeModal();
     load();
   }
 
-  async function desfazerPagamento(id: number) {
-    if (!confirm("Desfazer pagamento e voltar para Em aberto?")) return;
-    registrarLog({
-      acao: "desfez_pagamento", tabela: "lancamentos", registro_id: String(id),
-      descricao: `Desfez pagamento da conta a pagar #${id}`,
-      campos_alterados: { status: { de: "Pago", para: "Pendente" } },
-    });
-    await supabase.from("lancamentos").update({ status: "Pendente", dt_pagamento: null } as never).eq("id", id);
+  async function excluirLote() {
+    const n = selecionados.size;
+    if (!confirm(`Excluir ${n} conta(s) selecionada(s)?`)) return;
+    setSalvando(true);
+    for (const id of selecionados) {
+      const conta = contas.find(c => c.id === id);
+      registrarLog({
+        acao: "excluiu", tabela: "lancamentos", registro_id: String(id),
+        descricao: `Excluiu conta a pagar (lote): ${conta?.descricao ?? id}`,
+        campos_alterados: { valor: conta?.valor, status: conta?.status },
+      });
+      await supabase.from("lancamentos").delete().eq("id", id);
+    }
+    setSalvando(false);
+    setSelecionados(new Set());
+    toast(`${n} conta(s) excluída(s)`);
     load();
+  }
+
+  async function confirmarEstorno(baixaId: number) {
+    if (!motivoEstorno.trim()) { toast("Informe o motivo do estorno", "err"); return; }
+    setSalvando(true);
+    const ok = await estornarBaixa({ baixaId, motivo: motivoEstorno.trim() });
+    setSalvando(false);
+    if (ok) {
+      toast("Baixa estornada");
+      setEstornandoBaixaId(null);
+      setMotivoEstorno("");
+      load();
+    } else {
+      toast("Erro ao estornar baixa", "err");
+    }
   }
 
   async function excluir(id: number) {
@@ -228,7 +381,7 @@ export default function ContasPagarPage() {
             { label: "Total de Títulos", val: contas.length,                                        sub: "lançamentos",    cor: "var(--t1)" },
             { label: "Em Aberto",        val: formatBRL(contas.filter(c => getStatusEfetivo(c) === "Em aberto").reduce((s,c) => s+Number(c.valor),0)), sub: `${contas.filter(c => getStatusEfetivo(c) === "Em aberto").length} contas`, cor: "#60a5fa" },
             { label: "Vencido",          val: formatBRL(contas.filter(c => getStatusEfetivo(c) === "Vencido").reduce((s,c) => s+Number(c.valor),0)),   sub: `${contasVencidas} conta(s)`, cor: "var(--err)" },
-            { label: "Pago (total)",     val: formatBRL(contas.filter(c => getStatusEfetivo(c) === "Pago").reduce((s,c) => s+Number(c.valor),0)),       sub: `${contas.filter(c => getStatusEfetivo(c) === "Pago").length} contas`, cor: "var(--ok)" },
+            { label: "Pago (total)",     val: formatBRL(contas.reduce((s,c) => s + calcularSaldo(c, baixasMap.get(c.id)).valorPago, 0)),       sub: `${contas.filter(c => getStatusEfetivo(c) === "Pago").length} contas`, cor: "var(--ok)" },
           ].map(s => (
             <div key={s.label} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "14px 16px" }}>
               <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: "6px" }}>{s.label}</div>
@@ -281,6 +434,17 @@ export default function ContasPagarPage() {
             value={busca} onChange={setBusca} inputStyle={{ margin: 0, width: "100%" }} />
         </div>
 
+        {/* Barra de ações em lote */}
+        {selecionados.size > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", marginBottom: "10px", background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: "8px" }}>
+            <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--t1)" }}>{selecionados.size} selecionado(s)</span>
+            <button className="btn bp xs" onClick={openLotePagar}>Marcar como pago(s)</button>
+            <button className="btn bg xs" onClick={excluirLote} style={{ color: "var(--err)" }}>Excluir selecionados</button>
+            <div style={{ flex: 1 }} />
+            <button className="btn bg xs" onClick={() => setSelecionados(new Set())}>Limpar seleção</button>
+          </div>
+        )}
+
         {/* Tabela */}
         {loading ? <div className="loading">Carregando...</div> : (
           <>
@@ -288,6 +452,9 @@ export default function ContasPagarPage() {
               <table>
                 <thead>
                   <tr>
+                    <th style={{ width: "30px" }}>
+                      <input type="checkbox" checked={todosSelecionados} onChange={toggleSelecionarTodos} />
+                    </th>
                     <th style={{ width: "130px" }}>Documento</th>
                     <th style={{ width: "90px" }}>Emissão</th>
                     <th style={{ width: "200px" }}>Plano de Contas</th>
@@ -297,20 +464,24 @@ export default function ContasPagarPage() {
                     <th style={{ width: "110px", textAlign: "right" }}>Valor Pago</th>
                     <th style={{ width: "90px" }}>Pagamento</th>
                     <th style={{ width: "90px" }}>Status</th>
-                    <th style={{ width: "90px" }}>Ações</th>
+                    <th style={{ width: "50px" }}>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtradas.length === 0 && (
-                    <tr><td colSpan={10} style={{ textAlign: "center", color: "var(--t3)", padding: "40px" }}>
+                    <tr><td colSpan={11} style={{ textAlign: "center", color: "var(--t3)", padding: "40px" }}>
                       Nenhuma conta encontrada.
                     </td></tr>
                   )}
                   {filtradas.map(c => {
                     const st = getStatusEfetivo(c);
-                    const valorPago = st === "Pago" ? Number(c.valor) : 0;
+                    const { valorPago, saldo } = calcularSaldo(c, baixasMap.get(c.id));
+                    const stExibida = getStatusExibicao(c, valorPago);
                     return (
                       <tr key={c.id}>
+                        <td>
+                          <input type="checkbox" checked={selecionados.has(c.id)} onChange={() => toggleSelecionado(c.id)} />
+                        </td>
                         <td className="mono" style={{ fontSize: "11px", color: "var(--t2)" }}>
                           {c.documento || <span style={{ color: "var(--t3)" }}>—</span>}
                         </td>
@@ -335,21 +506,17 @@ export default function ContasPagarPage() {
                         </td>
                         <td style={{ fontSize: "12px" }}>{fmtData(c.dt_pagamento)}</td>
                         <td>
-                          <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "99px", whiteSpace: "nowrap", ...STATUS_STYLE[st] }}>
-                            {st}
+                          <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "99px", whiteSpace: "nowrap", ...STATUS_STYLE[stExibida] }}>
+                            {stExibida}
                           </span>
                         </td>
                         <td>
-                          <div style={{ display: "flex", gap: "3px" }}>
-                            {st !== "Pago" && (
-                              <button className="btn bp xs" onClick={() => openPagar(c)} title="Registrar pagamento">✓</button>
-                            )}
-                            {st === "Pago" && (
-                              <button className="btn bg xs" onClick={() => desfazerPagamento(c.id)} title="Desfazer pagamento" style={{ color: "var(--warn)" }}>↩</button>
-                            )}
-                            <button className="btn bg xs" onClick={() => openEdit(c)} title="Editar">✎</button>
-                            <button className="btn bg xs" onClick={() => excluir(c.id)} style={{ color: "var(--err)" }} title="Excluir">✕</button>
-                          </div>
+                          <ActionMenu items={[
+                            { label: "Registrar baixa", onClick: () => openPagar(c), hidden: saldo <= 0 },
+                            { label: "Ver baixas / estornar", onClick: () => openBaixas(c), hidden: valorPago <= 0 },
+                            { label: "Editar", onClick: () => openEdit(c) },
+                            { label: "Excluir", onClick: () => excluir(c.id), danger: true },
+                          ]} />
                         </td>
                       </tr>
                     );
@@ -412,12 +579,31 @@ export default function ContasPagarPage() {
                   onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} />
               </div>
 
+              <div className="fr">
+                <div className="fg">
+                  <label className="fl">Plano de Contas</label>
+                  <select className="fc" value={form.plano_contas_id}
+                    onChange={e => setForm(f => ({ ...f, plano_contas_id: e.target.value }))}>
+                    <option value="">Selecione...</option>
+                    {planos.map(p => <option key={p.id} value={p.id}>{p.codigo_estruturado} · {p.descricao}</option>)}
+                  </select>
+                </div>
+                <div className="fg">
+                  <label className="fl">Centro de Custo</label>
+                  <select className="fc" value={form.centro_custo_id}
+                    onChange={e => setForm(f => ({ ...f, centro_custo_id: e.target.value }))}>
+                    <option value="">Selecione...</option>
+                    {centrosCusto.map(cc => <option key={cc.id} value={cc.id}>{cc.nome}</option>)}
+                  </select>
+                </div>
+              </div>
+
               <div className="fg">
-                <label className="fl">Plano de Contas</label>
-                <select className="fc" value={form.plano_contas_id}
-                  onChange={e => setForm(f => ({ ...f, plano_contas_id: e.target.value }))}>
+                <label className="fl">Conta Bancária (previsão de pagamento)</label>
+                <select className="fc" value={form.conta_id}
+                  onChange={e => setForm(f => ({ ...f, conta_id: e.target.value }))}>
                   <option value="">Selecione...</option>
-                  {planos.map(p => <option key={p.id} value={p.id}>{p.codigo_estruturado} · {p.descricao}</option>)}
+                  {contasBancarias.map(cb => <option key={cb.id} value={cb.id}>{cb.nome}</option>)}
                 </select>
               </div>
 
@@ -453,28 +639,132 @@ export default function ContasPagarPage() {
         </div>
       )}
 
-      {/* ── MODAL PAGAMENTO ── */}
+      {/* ── MODAL BAIXA (pagamento total ou parcial) ── */}
       {modal === "pagar" && (
         <div className="mov open" onClick={e => e.target === e.currentTarget && closeModal()}>
-          <div className="mod" style={{ width: "380px" }}>
+          <div className="mod" style={{ width: "420px" }}>
             <div className="mhd">
-              <div className="mtit">Confirmar Pagamento</div>
+              <div className="mtit">Registrar Baixa</div>
               <button className="mcl" onClick={closeModal}>✕</button>
             </div>
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <div style={{ fontSize: "12px", color: "var(--t3)" }}>
                 {contas.find(c => c.id === pagarId)?.descricao}
               </div>
+              <div className="fr">
+                <div className="fg">
+                  <label className="fl">Valor da Baixa</label>
+                  <CurrencyInput value={valorBaixa} onChange={setValorBaixa} />
+                </div>
+                <div className="fg">
+                  <label className="fl">Data</label>
+                  <DateInput value={dtPgto} onChange={setDtPgto} />
+                </div>
+              </div>
               <div className="fg">
-                <label className="fl">Data do Pagamento</label>
-                <DateInput value={dtPgto} onChange={setDtPgto} />
+                <label className="fl">Conta Bancária</label>
+                <select className="fc" value={contaBaixaId} onChange={e => setContaBaixaId(e.target.value)}>
+                  <option value="">Não informado</option>
+                  {contasBancarias.map(cb => <option key={cb.id} value={cb.id}>{cb.nome}</option>)}
+                </select>
+              </div>
+              <div className="fg">
+                <label className="fl">Forma de Pagamento</label>
+                <input className="fc" placeholder="PIX, boleto, transferência..." value={formaPgtoBaixa} onChange={e => setFormaPgtoBaixa(e.target.value)} />
+              </div>
+              <div className="fg">
+                <label className="fl">Observação</label>
+                <input className="fc" value={obsBaixa} onChange={e => setObsBaixa(e.target.value)} />
               </div>
             </div>
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
               <button className="btn bg" onClick={closeModal}>Cancelar</button>
-              <button className="btn bp" onClick={confirmarPagamento} disabled={salvando || !dtPgto}>
+              <button className="btn bp" onClick={confirmarPagamento} disabled={salvando || !dtPgto || valorBaixa <= 0}>
                 {salvando ? "Salvando..." : "Confirmar"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL BAIXA EM LOTE ── */}
+      {modal === "lote-pagar" && (
+        <div className="mov open" onClick={e => e.target === e.currentTarget && closeModal()}>
+          <div className="mod" style={{ width: "360px" }}>
+            <div className="mhd">
+              <div className="mtit">Marcar {selecionados.size} conta(s) como pagas</div>
+              <button className="mcl" onClick={closeModal}>✕</button>
+            </div>
+            <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div className="fg">
+                <label className="fl">Data do Pagamento</label>
+                <DateInput value={dtLote} onChange={setDtLote} />
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--t3)" }}>
+                Cada título é baixado pelo saldo em aberto integral (sem parcial).
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
+              <button className="btn bg" onClick={closeModal}>Cancelar</button>
+              <button className="btn bp" onClick={confirmarPagamentoLote} disabled={salvando || !dtLote}>
+                {salvando ? "Processando..." : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL HISTÓRICO DE BAIXAS / ESTORNO ── */}
+      {modal === "baixas" && (
+        <div className="mov open" onClick={e => e.target === e.currentTarget && closeModal()}>
+          <div className="mod" style={{ width: "480px", maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
+            <div className="mhd">
+              <div className="mtit">Baixas · {contas.find(c => c.id === baixasVerId)?.descricao}</div>
+              <button className="mcl" onClick={closeModal}>✕</button>
+            </div>
+            <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "10px" }}>
+              {(baixasMap.get(baixasVerId ?? -1) ?? []).length === 0 && (
+                <div style={{ fontSize: "12px", color: "var(--t3)" }}>Nenhuma baixa registrada.</div>
+              )}
+              {(baixasMap.get(baixasVerId ?? -1) ?? []).map(b => (
+                <div key={b.id} style={{ border: "1px solid var(--b1)", borderRadius: "8px", padding: "10px 12px", opacity: b.estornado_em ? 0.55 : 1 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>{formatBRL(Number(b.valor))}</div>
+                      <div style={{ fontSize: "11px", color: "var(--t3)" }}>
+                        {fmtData(b.data)}{b.contas_bancarias?.nome ? ` · ${b.contas_bancarias.nome}` : ""}{b.forma_pgto ? ` · ${b.forma_pgto}` : ""}
+                      </div>
+                    </div>
+                    {b.estornado_em ? (
+                      <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "99px", ...STATUS_STYLE["Vencido"] }}>Estornada</span>
+                    ) : (
+                      estornandoBaixaId !== b.id && (
+                        <button className="btn bg xs" onClick={() => { setEstornandoBaixaId(b.id); setMotivoEstorno(""); }} style={{ color: "var(--err)" }}>
+                          Estornar
+                        </button>
+                      )
+                    )}
+                  </div>
+                  {b.estornado_em && b.estornado_motivo && (
+                    <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "6px" }}>Motivo: {b.estornado_motivo}</div>
+                  )}
+                  {estornandoBaixaId === b.id && (
+                    <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                      <textarea className="fc" rows={2} placeholder="Motivo do estorno *" value={motivoEstorno}
+                        onChange={e => setMotivoEstorno(e.target.value)} style={{ margin: 0, resize: "vertical" }} />
+                      <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
+                        <button className="btn bg xs" onClick={() => setEstornandoBaixaId(null)}>Cancelar</button>
+                        <button className="btn bw xs" onClick={() => confirmarEstorno(b.id)} disabled={salvando || !motivoEstorno.trim()}>
+                          {salvando ? "Estornando..." : "Confirmar estorno"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
+              <button className="btn bg" onClick={closeModal}>Fechar</button>
             </div>
           </div>
         </div>

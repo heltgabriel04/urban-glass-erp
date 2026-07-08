@@ -44,6 +44,10 @@ const IC = {
   notas:       ["M10 1.5H3.5a.5.5 0 00-.5.5v12a.5.5 0 00.5.5h9a.5.5 0 00.5-.5V5.5L10 1.5z", "M10 1.5v4h4", "M5.5 8h5", "M5.5 10.5h5", "M5.5 13h2.5"],
   contabilidade:["M3 2h10a.5.5 0 01.5.5v11a.5.5 0 01-.5.5H3a.5.5 0 01-.5-.5V2.5A.5.5 0 013 2z", "M6 2v12", "M3 6h10", "M3 9h10", "M3 12h10"],
   planoContas: ["M2.5 3.5h4", "M2.5 8h11", "M2.5 12.5h7.5", "M6.5 1v5", "M9.5 6v7"],
+  bancos:      ["M1.5 6l6.5-4 6.5 4", "M2.5 6.5v6.5", "M13.5 6.5v6.5", "M5.5 6.5v6.5", "M10.5 6.5v6.5", "M1.5 13.5h13"],
+  centroCusto: ["M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13z", "M8 4.5v3.5l2.5 1.5", "M8 1.5v1.5", "M8 12v1.5", "M1.5 8h1.5", "M13 8h1.5"],
+  recorrencia: ["M13 4a6 6 0 10.9 7.5", "M13 1.5v3h-3", "M8 4.5v4l2.5 1.5"],
+  visaoGeral:  ["M2 9.5h3v4.5H2z", "M6.5 6h3v8H6.5z", "M11 3h3v11h-3z"],
   produtos:    ["M2 2h4v4H2z", "M10 2h4v4h-4z", "M2 10h4v4H2z", "M10 10h4v4h-4z"],
   tabelas:     ["M8 2L2 4.5v7L8 14l6-2.5v-7L8 2z", "M8 2v12", "M2 4.5l6 3 6-3", "M5.5 8h1"],
   relatorios:  ["M3 13.5V6", "M7 13.5V4", "M11 13.5V8", "M1.5 13.5h13"],
@@ -84,19 +88,23 @@ const NAV = [
   {
     grupo: "FINANCEIRO",
     items: [
+      { href: "/dashboard-financeiro", label: "Visão Geral",  icon: IC.visaoGeral },
       { href: "/contas-receber",  label: "Contas a Receber", icon: IC.receber },
       { href: "/contas-pagar",    label: "Contas a Pagar",   icon: IC.pagar },
       { href: "/fluxo",           label: "Fluxo de Caixa",   icon: IC.fluxo },
       { href: "/movimentacoes",   label: "Movimentações",    icon: IC.movimentacoes },
       { href: "/investimentos",   label: "Investimentos",    icon: IC.investimentos },
-      { href: "/notas",           label: "Notas Fiscais",    icon: IC.notas },
-      { href: "/contabilidade",   label: "Contabilidade",    icon: IC.contabilidade },
+      { href: "/bancos-caixa",    label: "Bancos & Caixa",   icon: IC.bancos },
+      { href: "/centro-custo",    label: "Centro de Custo",  icon: IC.centroCusto },
+      { href: "/recorrencias",    label: "Recorrências",     icon: IC.recorrencia },
+      { href: "/plano-contas",    label: "Plano de Contas",  icon: IC.planoContas },
     ],
   },
   {
-    grupo: "CONFIGURAÇÕES",
+    grupo: "FISCAL",
     items: [
-      { href: "/plano-contas", label: "Plano de Contas", icon: IC.planoContas },
+      { href: "/notas",           label: "Notas Fiscais",       icon: IC.notas },
+      { href: "/contabilidade",   label: "Configuração Fiscal", icon: IC.contabilidade },
     ],
   },
   {

@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { Suspense, useEffect, useState, useMemo, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
 import SearchInput from "@/components/ui/SearchInput";
+import { getBaixasPorLancamentos, calcularSaldo } from "@/services/lancamentos.service";
+import type { BaixaLancamento } from "@/types";
 
 interface PlanoContasMin { id: number; codigo_estruturado: string; descricao: string }
 interface ClienteMin    { id: number; nome: string }
@@ -14,6 +17,7 @@ interface Mov {
   tipo: "Entrada" | "Saída";
   descricao: string;
   valor: number;
+  status: string;
   vencimento: string | null;
   dt_emissao: string | null;
   dt_pagamento: string | null;
@@ -34,11 +38,21 @@ type TipoDate = "pagamento" | "vencimento" | "emissao";
 type FiltroTipo = "Todos" | "Entrada" | "Saída";
 type FiltroStatus = "Todos" | "Quitado" | "Em aberto" | "Vencido";
 
+// Bucket usado por filtro — só olha o campo status guardado (fonte da
+// verdade após uma baixa), não mais dt_pagamento (que também é preenchido
+// em baixa parcial, então não serve mais como sinal de "quitado").
 function getStatusEfetivo(m: Mov): "Quitado" | "Em aberto" | "Vencido" {
-  if (m.dt_pagamento) return "Quitado";
+  if (m.status === "Pago") return "Quitado";
   const hoje = new Date().toISOString().split("T")[0];
   if (m.vencimento && m.vencimento < hoje) return "Vencido";
   return "Em aberto";
+}
+
+// Rótulo exibido no chip: Parcial tem prioridade visual sobre o bucket.
+function getStatusExibicao(m: Mov, valorPago: number): "Quitado" | "Parcial" | "Em aberto" | "Vencido" {
+  const base = getStatusEfetivo(m);
+  if (base !== "Quitado" && valorPago > 0) return "Parcial";
+  return base;
 }
 
 function dataEfetiva(m: Mov, tipo: TipoDate): string | null {
@@ -57,31 +71,57 @@ const BRL = (v: number) => formatBRL(v);
 
 const STATUS_COLOR: Record<string, string> = {
   Quitado:    "var(--ok)",
+  Parcial:    "var(--warn)",
   "Em aberto": "#60a5fa",
   Vencido:    "var(--err)",
 };
 
 export default function MovimentacoesPage() {
+  return (
+    <Suspense fallback={<AppLayout><div className="loading">Carregando...</div></AppLayout>}>
+      <MovimentacoesPageInner />
+    </Suspense>
+  );
+}
+
+function MovimentacoesPageInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [movs, setMovs]               = useState<Mov[]>([]);
   const [loading, setLoading]         = useState(true);
   const [planos, setPlanos]           = useState<PlanoContasMin[]>([]);
+  const [baixasMap, setBaixasMap]     = useState<Map<number, BaixaLancamento[]>>(new Map());
 
   // filtros
   const [tipoDate, setTipoDate]       = useState<TipoDate>("pagamento");
   const [dataIni, setDataIni]         = useState("");
   const [dataFim, setDataFim]         = useState("");
-  const [filtroTipo, setFiltroTipo]   = useState<FiltroTipo>("Todos");
-  const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>("Todos");
+  const [filtroTipo, setFiltroTipo]   = useState<FiltroTipo>((searchParams.get("tipo") as FiltroTipo) || "Todos");
+  const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>((searchParams.get("status") as FiltroStatus) || "Todos");
   const [filtroPlano, setFiltroPlano] = useState("");
   const [filtroConta, setFiltroConta] = useState("");
-  const [filtroPessoa, setFiltroPessoa] = useState("");
+  const [filtroPessoa, setFiltroPessoa] = useState(searchParams.get("q") ?? "");
+
+  // Navegação inteligente: tipo/status/busca sobrevivem a refresh/voltar do navegador.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const params = new URLSearchParams();
+      if (filtroTipo !== "Todos") params.set("tipo", filtroTipo);
+      if (filtroStatus !== "Todos") params.set("status", filtroStatus);
+      if (filtroPessoa.trim()) params.set("q", filtroPessoa.trim());
+      const qs = params.toString();
+      router.replace(qs ? `/movimentacoes?${qs}` : "/movimentacoes", { scroll: false });
+    }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtroTipo, filtroStatus, filtroPessoa]);
 
   const load = useCallback(async () => {
     setLoading(true);
     const [{ data: movData }, { data: planoData }] = await Promise.all([
       supabase
         .from("lancamentos")
-        .select(`id, tipo, descricao, valor, vencimento, dt_emissao, dt_pagamento,
+        .select(`id, tipo, descricao, valor, status, vencimento, dt_emissao, dt_pagamento,
                  conta, forma_pgto, pedido_id, cliente_id, documento, fornecedor, obs,
                  plano_contas_id, created_at,
                  plano_contas(id, codigo_estruturado, descricao),
@@ -92,8 +132,10 @@ export default function MovimentacoesPage() {
         .select("id, codigo_estruturado, descricao")
         .order("codigo_estruturado"),
     ]);
-    setMovs((movData ?? []) as unknown as Mov[]);
+    const movsCarregados = (movData ?? []) as unknown as Mov[];
+    setMovs(movsCarregados);
     setPlanos((planoData ?? []) as unknown as PlanoContasMin[]);
+    setBaixasMap(await getBaixasPorLancamentos(movsCarregados.map(m => m.id)));
     setLoading(false);
   }, []);
 
@@ -304,6 +346,8 @@ export default function MovimentacoesPage() {
                     <tr><td colSpan={12} style={{ padding: "32px", textAlign: "center", color: "var(--t3)", fontSize: "13px" }}>Nenhuma movimentação encontrada</td></tr>
                   ) : filtered.map((m, i) => {
                     const st = getStatusEfetivo(m);
+                    const { valorPago } = calcularSaldo(m, baixasMap.get(m.id));
+                    const stExibida = getStatusExibicao(m, valorPago);
                     const isVenc = st === "Vencido";
                     const pessoa = m.clientes?.nome ?? m.fornecedor ?? "—";
                     return (
@@ -379,7 +423,7 @@ export default function MovimentacoesPage() {
 
                         {/* Status */}
                         <td style={{ padding: "8px 10px" }}>
-                          <Badge label={st} color={STATUS_COLOR[st]} />
+                          <Badge label={stExibida} color={STATUS_COLOR[stExibida]} />
                         </td>
 
                         {/* Ação */}
