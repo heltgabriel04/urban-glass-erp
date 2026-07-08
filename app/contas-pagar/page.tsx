@@ -8,14 +8,20 @@ import { formatBRL } from "@/lib/formatters";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import DateInput from "@/components/ui/DateInput";
 import SearchInput from "@/components/ui/SearchInput";
-import { registrarLog } from "@/services/log.service";
 import { useToast } from "@/components/ui/toast";
 import { getContasBancarias } from "@/services/contasBancarias.service";
 import { getCentrosCusto } from "@/services/centrosCusto.service";
-import { registrarBaixa, estornarBaixa, getBaixasPorLancamentos, calcularSaldo } from "@/services/lancamentos.service";
+import { registrarBaixa, estornarBaixa, getBaixasPorLancamentos, calcularSaldo, excluirLancamento, editarLancamento, verificarDuplicado, getRateio, salvarRateio, criarAdiantamento, criarReembolso, getAdiantamentosDisponiveis, getHistorico, getUltimoPlanoContas, type LancamentoDuplicado, type AdiantamentoComSaldo, type VersaoLancamento } from "@/services/lancamentos.service";
+import { getFornecedores } from "@/services/fornecedores.service";
+import { getFormasPagamento } from "@/services/formasPagamento.service";
 import { useEscToClose } from "@/components/ui/useEscToClose";
+import { useGlobalShortcut } from "@/components/ui/useGlobalShortcut";
+import { exportarExcel } from "@/lib/exportExcel";
+import { parseLinhaDigitavel } from "@/lib/boleto";
+import { getFiltrosSalvos, salvarFiltro, excluirFiltroSalvo, type FiltroSalvo } from "@/services/filtrosSalvos.service";
 import ActionMenu from "@/components/ui/ActionMenu";
-import type { ContaBancaria, CentroCusto, BaixaLancamento } from "@/types";
+import AutocompleteInput from "@/components/ui/AutocompleteInput";
+import type { ContaBancaria, CentroCusto, BaixaLancamento, Fornecedor, FormaPagamento } from "@/types";
 
 interface PlanoItem { id: number; codigo_estruturado: string; descricao: string; }
 
@@ -29,6 +35,7 @@ interface Conta {
   dt_emissao: string | null;
   dt_pagamento: string | null;
   fornecedor: string | null;
+  fornecedor_id: number | null;
   obs: string | null;
   plano_contas_id: number | null;
   plano_contas: PlanoItem | null;
@@ -40,7 +47,7 @@ interface Conta {
 type TabFiltro = "todos" | "aberto" | "pago" | "vencido";
 
 const EMPTY_FORM = {
-  descricao: "", valor: 0, documento: "", fornecedor: "",
+  descricao: "", valor: 0, documento: "", fornecedor: "", fornecedor_id: null as number | null,
   vencimento: "", dt_emissao: "", obs: "", plano_contas_id: "" as string | number,
   conta_id: "" as string | number, centro_custo_id: "" as string | number,
 };
@@ -102,7 +109,7 @@ function ContasPagarPageInner() {
   const [filtroEmissFim, setFiltroEmissFim] = useState("");
   const [filtroPgtoIni, setFiltroPgtoIni] = useState("");
   const [filtroPgtoFim, setFiltroPgtoFim] = useState("");
-  const [modal, setModal]         = useState<"add" | "edit" | "pagar" | "baixas" | "lote-pagar" | null>(null);
+  const [modal, setModal]         = useState<"add" | "edit" | "pagar" | "baixas" | "lote-pagar" | "excluir" | "adiantamento" | "reembolso" | null>(null);
   const [form, setForm]           = useState({ ...EMPTY_FORM });
   const [editId, setEditId]       = useState<number | null>(null);
   const [pagarId, setPagarId]     = useState<number | null>(null);
@@ -118,8 +125,47 @@ function ContasPagarPageInner() {
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   const [dtLote, setDtLote]       = useState(hoje());
+  const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
+  const [formasPagamento, setFormasPagamento] = useState<FormaPagamento[]>([]);
+  const [duplicados, setDuplicados] = useState<LancamentoDuplicado[]>([]);
+  const [motivoRenegociacao, setMotivoRenegociacao] = useState("");
+  const [mostrarExtrasBaixa, setMostrarExtrasBaixa] = useState(false);
+  const [valorJurosBaixa, setValorJurosBaixa] = useState(0);
+  const [valorMultaBaixa, setValorMultaBaixa] = useState(0);
+  const [valorDescontoBaixa, setValorDescontoBaixa] = useState(0);
+  const [excluirId, setExcluirId] = useState<number | null>(null);
+  const [motivoExclusao, setMotivoExclusao] = useState("");
+  const [mostrarRateio, setMostrarRateio] = useState(false);
+  const [rateioItens, setRateioItens] = useState<{ centroCustoId: string | number; percentual: number }[]>([]);
+  const [adiantamentosDisponiveis, setAdiantamentosDisponiveis] = useState<AdiantamentoComSaldo[]>([]);
+  const [adiantamentoUsadoId, setAdiantamentoUsadoId] = useState<string | number>("");
+  const [modalAdiantamento, setModalAdiantamento] = useState(false);
+  const [formAdiant, setFormAdiant] = useState({ descricao: "", valor: 0, data: hoje(), fornecedorId: null as number | null, fornecedorNome: "", contaId: "" as string | number, obs: "" });
+  const [reembolsarId, setReembolsarId] = useState<number | null>(null);
+  const [formReembolso, setFormReembolso] = useState({ valor: 0, data: hoje(), obs: "" });
+  const [historico, setHistorico] = useState<VersaoLancamento[]>([]);
+  const [filtrosSalvos, setFiltrosSalvos] = useState<FiltroSalvo[]>([]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); loadFiltrosSalvos(); }, []);
+
+  async function loadFiltrosSalvos() {
+    setFiltrosSalvos(await getFiltrosSalvos("contas-pagar"));
+  }
+  function aplicarFiltroSalvo(f: FiltroSalvo) {
+    setTab((f.filtros.tab as TabFiltro) || "aberto");
+    setBusca(f.filtros.busca ?? "");
+  }
+  async function handleSalvarFiltro() {
+    const nome = window.prompt("Nome para este filtro (aba + busca atuais):");
+    if (!nome?.trim()) return;
+    const ok = await salvarFiltro("contas-pagar", nome.trim(), { tab, busca });
+    if (ok) { toast("Filtro salvo"); await loadFiltrosSalvos(); }
+    else toast("Erro ao salvar filtro", "err");
+  }
+  async function handleExcluirFiltroSalvo(id: number) {
+    const ok = await excluirFiltroSalvo(id);
+    if (ok) setFiltrosSalvos(prev => prev.filter(f => f.id !== id));
+  }
 
   // Navegação inteligente: aba e busca sobrevivem a refresh/voltar do navegador.
   useEffect(() => {
@@ -140,24 +186,36 @@ function ContasPagarPageInner() {
   useEscToClose(modal === "pagar", closeModal);
   useEscToClose(modal === "baixas", closeModal);
   useEscToClose(modal === "lote-pagar", closeModal);
+  useEscToClose(modal === "excluir", closeModal);
+  useEscToClose(modal === "adiantamento", closeModal);
+  useEscToClose(modal === "reembolso", closeModal);
+
+  useGlobalShortcut("/", () => document.getElementById("busca-contas-pagar")?.focus(), modal === null);
+  useGlobalShortcut("n", openAdd, modal === null);
+  useGlobalShortcut("", salvarConta, modal === "add" || modal === "edit", { ctrlEnter: true });
 
   async function load() {
     setLoading(true);
-    const [{ data: cs }, { data: pls }, cbs, ccs] = await Promise.all([
+    const [{ data: cs }, { data: pls }, cbs, ccs, forns, formasPg] = await Promise.all([
       supabase
         .from("lancamentos")
-        .select("id, descricao, valor, status, vencimento, documento, dt_emissao, dt_pagamento, fornecedor, obs, plano_contas_id, conta_id, centro_custo_id, created_at, plano_contas(id, codigo_estruturado, descricao)")
+        .select("id, descricao, valor, status, vencimento, documento, dt_emissao, dt_pagamento, fornecedor, fornecedor_id, obs, plano_contas_id, conta_id, centro_custo_id, created_at, plano_contas(id, codigo_estruturado, descricao)")
         .eq("tipo", "Saída")
+        .is("deletado_em", null)
         .order("vencimento", { ascending: true }),
       supabase.from("plano_contas").select("id, codigo_estruturado, descricao").order("codigo"),
       getContasBancarias(true),
       getCentrosCusto(true),
+      getFornecedores(true),
+      getFormasPagamento(true),
     ]);
     const contasCarregadas = (cs ?? []) as unknown as Conta[];
     setContas(contasCarregadas);
     setPlanos((pls ?? []) as PlanoItem[]);
     setContasBancarias(cbs);
     setCentrosCusto(ccs);
+    setFornecedores(forns);
+    setFormasPagamento(formasPg);
     setBaixasMap(await getBaixasPorLancamentos(contasCarregadas.map(c => c.id)));
     setLoading(false);
   }
@@ -201,20 +259,44 @@ function ContasPagarPageInner() {
   function openAdd() {
     setForm({ ...EMPTY_FORM, dt_emissao: hoje(), vencimento: hoje() });
     setEditId(null);
+    setDuplicados([]);
+    setMotivoRenegociacao("");
+    setMostrarRateio(false);
+    setRateioItens([]);
     setModal("add");
   }
-  function openEdit(c: Conta) {
+  async function openEdit(c: Conta) {
     setForm({
       descricao: c.descricao, valor: Number(c.valor),
-      documento: c.documento ?? "", fornecedor: c.fornecedor ?? "",
+      documento: c.documento ?? "", fornecedor: c.fornecedor ?? "", fornecedor_id: c.fornecedor_id ?? null,
       vencimento: c.vencimento ?? "", dt_emissao: c.dt_emissao ?? "",
       obs: c.obs ?? "", plano_contas_id: c.plano_contas_id ?? "",
       conta_id: c.conta_id ?? "", centro_custo_id: c.centro_custo_id ?? "",
     });
     setEditId(c.id);
+    setDuplicados([]);
+    setMotivoRenegociacao("");
+    const rateio = await getRateio(c.id);
+    setRateioItens(rateio.map(r => ({ centroCustoId: r.centro_custo_id, percentual: r.percentual })));
+    setMostrarRateio(rateio.length > 0);
     setModal("edit");
   }
-  function openPagar(c: Conta) {
+  function openDuplicar(c: Conta) {
+    setForm({
+      descricao: c.descricao, valor: Number(c.valor),
+      documento: "", fornecedor: c.fornecedor ?? "", fornecedor_id: c.fornecedor_id ?? null,
+      vencimento: "", dt_emissao: hoje(),
+      obs: c.obs ?? "", plano_contas_id: c.plano_contas_id ?? "",
+      conta_id: c.conta_id ?? "", centro_custo_id: c.centro_custo_id ?? "",
+    });
+    setEditId(null);
+    setDuplicados([]);
+    setMotivoRenegociacao("");
+    setMostrarRateio(false);
+    setRateioItens([]);
+    setModal("add");
+  }
+  async function openPagar(c: Conta) {
     const { saldo } = calcularSaldo(c, baixasMap.get(c.id));
     setPagarId(c.id);
     setDtPgto(hoje());
@@ -222,25 +304,103 @@ function ContasPagarPageInner() {
     setContaBaixaId("");
     setFormaPgtoBaixa("");
     setObsBaixa("");
+    setMostrarExtrasBaixa(false);
+    setValorJurosBaixa(0);
+    setValorMultaBaixa(0);
+    setValorDescontoBaixa(0);
+    setAdiantamentoUsadoId("");
+    setAdiantamentosDisponiveis(
+      c.fornecedor_id ? await getAdiantamentosDisponiveis({ tipo: "Saída", fornecedorId: c.fornecedor_id }) : []
+    );
     setModal("pagar");
   }
-  function openBaixas(c: Conta) {
+  function openAdiantamento() {
+    setFormAdiant({ descricao: "", valor: 0, data: hoje(), fornecedorId: null, fornecedorNome: "", contaId: "", obs: "" });
+    setModal("adiantamento");
+  }
+  function openReembolso(c: Conta) {
+    setReembolsarId(c.id);
+    setFormReembolso({ valor: Number(c.valor), data: hoje(), obs: "" });
+    setModal("reembolso");
+  }
+  async function confirmarAdiantamento() {
+    if (!formAdiant.descricao.trim() || formAdiant.valor <= 0) { toast("Informe descrição e valor", "err"); return; }
+    setSalvando(true);
+    const res = await criarAdiantamento({
+      tipo: "Saída", descricao: formAdiant.descricao.trim(), valor: formAdiant.valor, data: formAdiant.data,
+      fornecedorId: formAdiant.fornecedorId, contaId: formAdiant.contaId ? Number(formAdiant.contaId) : null,
+      obs: formAdiant.obs.trim() || null,
+    });
+    setSalvando(false);
+    if (res) { toast("Adiantamento registrado"); closeModal(); load(); }
+    else toast("Erro ao registrar adiantamento", "err");
+  }
+  async function confirmarReembolso() {
+    if (!reembolsarId || formReembolso.valor <= 0) return;
+    setSalvando(true);
+    const res = await criarReembolso({ lancamentoOrigemId: reembolsarId, valor: formReembolso.valor, data: formReembolso.data, obs: formReembolso.obs.trim() || null });
+    setSalvando(false);
+    if (res) { toast("Reembolso registrado em Contas a Receber"); closeModal(); load(); }
+    else toast("Erro ao registrar reembolso", "err");
+  }
+  async function openBaixas(c: Conta) {
     setBaixasVerId(c.id);
     setEstornandoBaixaId(null);
     setMotivoEstorno("");
+    setHistorico(await getHistorico(c.id));
     setModal("baixas");
   }
   function openLotePagar() {
     setDtLote(hoje());
     setModal("lote-pagar");
   }
+  function abrirExcluir(c: Conta) {
+    const temBaixa = (baixasMap.get(c.id) ?? []).length > 0;
+    if (!temBaixa) {
+      if (!confirm("Excluir esta conta a pagar?")) return;
+      excluirLancamento(c.id).then(ok => {
+        if (ok) { toast("Conta excluída"); load(); } else toast("Erro ao excluir", "err");
+      });
+      return;
+    }
+    setExcluirId(c.id);
+    setMotivoExclusao("");
+    setModal("excluir");
+  }
   function closeModal() {
     setModal(null); setEditId(null); setPagarId(null);
     setBaixasVerId(null); setEstornandoBaixaId(null); setMotivoEstorno("");
+    setExcluirId(null); setMotivoExclusao(""); setDuplicados([]); setMotivoRenegociacao("");
+    setMostrarRateio(false); setRateioItens([]); setReembolsarId(null); setAdiantamentoUsadoId("");
   }
+
+  async function checarDuplicado(fornecedorId: number | null, documento: string) {
+    if (modal !== "add" || !documento.trim() || !fornecedorId) { setDuplicados([]); return; }
+    setDuplicados(await verificarDuplicado(documento, fornecedorId, "Saída"));
+  }
+
+  function addLinhaRateio() {
+    setRateioItens(prev => [...prev, { centroCustoId: "", percentual: 0 }]);
+  }
+  function removerLinhaRateio(idx: number) {
+    setRateioItens(prev => prev.filter((_, i) => i !== idx));
+  }
+  function atualizarLinhaRateio(idx: number, campo: "centroCustoId" | "percentual", valor: string | number) {
+    setRateioItens(prev => prev.map((it, i) => i === idx ? { ...it, [campo]: valor } : it));
+  }
+  const somaRateio = rateioItens.reduce((a, i) => a + Number(i.percentual || 0), 0);
+  const rateioValido = rateioItens.length === 0 || Math.abs(somaRateio - 100) < 0.01;
+
+  const contaEditando = editId ? contas.find(c => c.id === editId) ?? null : null;
+  const baixasContaEditando = editId ? (baixasMap.get(editId) ?? []) : [];
+  const precisaMotivoRenegociacao = modal === "edit" && baixasContaEditando.length > 0 && (
+    form.vencimento !== (contaEditando?.vencimento ?? "") || form.valor !== Number(contaEditando?.valor ?? 0)
+  );
 
   async function salvarConta() {
     if (!form.descricao.trim() || form.valor <= 0) return;
+    if (precisaMotivoRenegociacao && !motivoRenegociacao.trim()) { toast("Informe o motivo da renegociação", "err"); return; }
+    if (!rateioValido) { toast("A soma do rateio precisa fechar 100%", "err"); return; }
     setSalvando(true);
     // Não inclui `status` aqui: editar uma conta não deve reabrir uma que já
     // está paga. Status só muda via registrarBaixa/estornarBaixa.
@@ -252,22 +412,34 @@ function ContasPagarPageInner() {
       dt_emissao: form.dt_emissao || null,
       documento: form.documento.trim() || null,
       fornecedor: form.fornecedor.trim() || null,
+      fornecedor_id: form.fornecedor_id,
       obs: form.obs.trim() || null,
       plano_contas_id: form.plano_contas_id ? Number(form.plano_contas_id) : null,
       conta_id: form.conta_id ? Number(form.conta_id) : null,
       centro_custo_id: form.centro_custo_id ? Number(form.centro_custo_id) : null,
     };
     if (editId) {
-      registrarLog({
-        acao: "editou", tabela: "lancamentos", registro_id: String(editId),
-        descricao: `Editou conta a pagar: ${payload.descricao}`,
-        campos_alterados: { valor: payload.valor, vencimento: payload.vencimento },
+      const ok = await editarLancamento({
+        id: editId, updates: payload,
+        motivoRenegociacao: precisaMotivoRenegociacao ? motivoRenegociacao.trim() : undefined,
       });
-      await supabase.from("lancamentos").update(payload as never).eq("id", editId);
-    } else {
-      await supabase.from("lancamentos").insert([{ ...payload, status: "Pendente", pedido_id: null, cliente_id: null }] as never);
+      if (ok && mostrarRateio) {
+        await salvarRateio(editId, rateioItens.filter(i => i.centroCustoId).map(i => ({ centroCustoId: Number(i.centroCustoId), percentual: Number(i.percentual) })));
+      } else if (ok && !mostrarRateio) {
+        await salvarRateio(editId, []);
+      }
+      setSalvando(false);
+      if (ok) { toast("Conta atualizada"); closeModal(); load(); }
+      else toast("Erro ao salvar — verifique o motivo da renegociação", "err");
+      return;
+    }
+    const { data: novaConta, error } = await supabase.from("lancamentos").insert([{ ...payload, status: "Pendente", pedido_id: null, cliente_id: null }] as never).select("id").single();
+    if (!error && novaConta && mostrarRateio && rateioItens.length > 0) {
+      await salvarRateio((novaConta as { id: number }).id, rateioItens.filter(i => i.centroCustoId).map(i => ({ centroCustoId: Number(i.centroCustoId), percentual: Number(i.percentual) })));
     }
     setSalvando(false);
+    if (error) { toast("Erro ao criar conta", "err"); return; }
+    toast("Conta criada");
     closeModal();
     load();
   }
@@ -279,9 +451,13 @@ function ContasPagarPageInner() {
       lancamentoId: pagarId,
       valor: valorBaixa,
       data: dtPgto,
-      contaId: contaBaixaId ? Number(contaBaixaId) : null,
-      formaPgto: formaPgtoBaixa.trim() || null,
+      contaId: adiantamentoUsadoId ? null : (contaBaixaId ? Number(contaBaixaId) : null),
+      formaPgto: adiantamentoUsadoId ? "Adiantamento" : (formaPgtoBaixa.trim() || null),
       obs: obsBaixa.trim() || null,
+      valorJuros: valorJurosBaixa || undefined,
+      valorMulta: valorMultaBaixa || undefined,
+      valorDesconto: valorDescontoBaixa || undefined,
+      origemAdiantamentoId: adiantamentoUsadoId ? Number(adiantamentoUsadoId) : null,
     });
     setSalvando(false);
     if (res) {
@@ -291,6 +467,19 @@ function ContasPagarPageInner() {
     } else {
       toast("Erro ao registrar baixa", "err");
     }
+  }
+
+  function handleExportar() {
+    const linhas = filtradas.map(c => {
+      const { valorPago } = calcularSaldo(c, baixasMap.get(c.id));
+      return [
+        c.documento ?? "", fmtData(c.dt_emissao), c.plano_contas?.descricao ?? "", c.fornecedor ?? "", c.descricao,
+        fmtData(c.vencimento), Number(c.valor), valorPago, fmtData(c.dt_pagamento), getStatusExibicao(c, valorPago),
+      ];
+    });
+    exportarExcel("ContasPagar_UrbanGlass",
+      ["Documento", "Emissão", "Plano de Contas", "Fornecedor", "Descrição", "Vencimento", "Valor", "Valor Pago", "Pagamento", "Status"],
+      linhas);
   }
 
   async function confirmarPagamentoLote() {
@@ -318,13 +507,7 @@ function ContasPagarPageInner() {
     if (!confirm(`Excluir ${n} conta(s) selecionada(s)?`)) return;
     setSalvando(true);
     for (const id of selecionados) {
-      const conta = contas.find(c => c.id === id);
-      registrarLog({
-        acao: "excluiu", tabela: "lancamentos", registro_id: String(id),
-        descricao: `Excluiu conta a pagar (lote): ${conta?.descricao ?? id}`,
-        campos_alterados: { valor: conta?.valor, status: conta?.status },
-      });
-      await supabase.from("lancamentos").delete().eq("id", id);
+      await excluirLancamento(id);
     }
     setSalvando(false);
     setSelecionados(new Set());
@@ -347,16 +530,13 @@ function ContasPagarPageInner() {
     }
   }
 
-  async function excluir(id: number) {
-    if (!confirm("Excluir esta conta a pagar?")) return;
-    const conta = contas.find(c => c.id === id);
-    registrarLog({
-      acao: "excluiu", tabela: "lancamentos", registro_id: String(id),
-      descricao: `Excluiu conta a pagar: ${conta?.descricao ?? id}`,
-      campos_alterados: { valor: conta?.valor, status: conta?.status },
-    });
-    await supabase.from("lancamentos").delete().eq("id", id);
-    load();
+  async function confirmarExclusao() {
+    if (!excluirId || !motivoExclusao.trim()) { toast("Informe o motivo da exclusão", "err"); return; }
+    setSalvando(true);
+    const ok = await excluirLancamento(excluirId, motivoExclusao.trim());
+    setSalvando(false);
+    if (ok) { toast("Conta excluída"); closeModal(); load(); }
+    else toast("Erro ao excluir", "err");
   }
 
   const TABS: { key: TabFiltro; label: string }[] = [
@@ -370,6 +550,8 @@ function ContasPagarPageInner() {
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Contas a Pagar</div>
+        <button className="btn bg sm" onClick={handleExportar}>⇩ Exportar</button>
+        <button className="btn bg sm" onClick={openAdiantamento}>+ Adiantamento</button>
         <button className="btn bp sm" onClick={openAdd}>+ Adicionar</button>
       </div>
 
@@ -408,6 +590,24 @@ function ContasPagarPageInner() {
           }}>⚙ Filtros por data</button>
         </div>
 
+        {/* Filtros salvos */}
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center", marginBottom: "14px" }}>
+          {filtrosSalvos.map(f => (
+            <div key={f.id} style={{
+              display: "flex", alignItems: "center", gap: "6px", fontSize: "11px",
+              padding: "3px 4px 3px 10px", borderRadius: "99px", border: "1px solid var(--b2)", background: "var(--surf1)",
+            }}>
+              <button onClick={() => aplicarFiltroSalvo(f)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t2)", fontWeight: 600, padding: 0 }}>
+                ☆ {f.nome}
+              </button>
+              <button onClick={() => handleExcluirFiltroSalvo(f.id)} title="Remover filtro" style={{
+                background: "none", border: "none", cursor: "pointer", color: "var(--t3)", fontSize: "13px", lineHeight: 1, padding: "0 4px",
+              }}>×</button>
+            </div>
+          ))}
+          <button className="btn bg sm" onClick={handleSalvarFiltro}>☆ Salvar filtro atual</button>
+        </div>
+
         {/* Filtros de data (colapsável) */}
         {mostrarFiltros && (
           <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "14px 16px", marginBottom: "14px", display: "flex", gap: "16px", flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -430,7 +630,7 @@ function ContasPagarPageInner() {
 
         {/* Busca */}
         <div style={{ marginBottom: "12px" }}>
-          <SearchInput icon={false} className="fc" placeholder="Buscar por descrição, fornecedor ou documento..."
+          <SearchInput id="busca-contas-pagar" icon={false} className="fc" placeholder="Buscar por descrição, fornecedor ou documento... (atalho: /)"
             value={busca} onChange={setBusca} inputStyle={{ margin: 0, width: "100%" }} />
         </div>
 
@@ -514,8 +714,10 @@ function ContasPagarPageInner() {
                           <ActionMenu items={[
                             { label: "Registrar baixa", onClick: () => openPagar(c), hidden: saldo <= 0 },
                             { label: "Ver baixas / estornar", onClick: () => openBaixas(c), hidden: valorPago <= 0 },
+                            { label: "Registrar reembolso", onClick: () => openReembolso(c), hidden: valorPago <= 0 },
                             { label: "Editar", onClick: () => openEdit(c) },
-                            { label: "Excluir", onClick: () => excluir(c.id), danger: true },
+                            { label: "Duplicar", onClick: () => openDuplicar(c) },
+                            { label: "Excluir", onClick: () => abrirExcluir(c), danger: true },
                           ]} />
                         </td>
                       </tr>
@@ -560,24 +762,71 @@ function ContasPagarPageInner() {
             </div>
 
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px", overflowY: "auto", flex: 1 }}>
+              {modal === "add" && (
+                <div className="fg">
+                  <label className="fl">Colar linha digitável do boleto (opcional)</label>
+                  <input className="fc" placeholder="00190.00009 01234.567890 12345.678901 1 23456789012345"
+                    onChange={e => {
+                      const dados = parseLinhaDigitavel(e.target.value);
+                      if (dados) {
+                        setForm(f => ({ ...f, valor: dados.valor, vencimento: dados.vencimento ?? f.vencimento }));
+                        toast(`Valor ${formatBRL(dados.valor)} e vencimento preenchidos a partir do boleto`);
+                      }
+                    }} />
+                </div>
+              )}
               <div className="fr">
                 <div className="fg">
                   <label className="fl">Documento</label>
                   <input className="fc" placeholder="NF 001, Boleto..." value={form.documento}
-                    onChange={e => setForm(f => ({ ...f, documento: e.target.value }))} />
+                    onChange={e => setForm(f => ({ ...f, documento: e.target.value }))}
+                    onBlur={() => checarDuplicado(form.fornecedor_id, form.documento)} />
                 </div>
                 <div className="fg">
                   <label className="fl">Fornecedor / Pessoa</label>
-                  <input className="fc" placeholder="Nome do fornecedor" value={form.fornecedor}
-                    onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))} />
+                  <AutocompleteInput
+                    options={fornecedores.map(f => ({ id: f.id, label: f.nome, sub: f.categoria || undefined }))}
+                    value={form.fornecedor_id}
+                    valueLabel={form.fornecedor}
+                    allowFreeText
+                    placeholder="Nome do fornecedor"
+                    onChange={async (id, label) => {
+                      setForm(f => ({ ...f, fornecedor_id: id, fornecedor: label }));
+                      checarDuplicado(id, form.documento);
+                      if (modal === "add" && id && !form.plano_contas_id && !form.centro_custo_id) {
+                        const sugestao = await getUltimoPlanoContas({ fornecedorId: id });
+                        if (sugestao.planoContasId || sugestao.centroCustoId) {
+                          setForm(f => ({
+                            ...f,
+                            plano_contas_id: f.plano_contas_id || sugestao.planoContasId || "",
+                            centro_custo_id: f.centro_custo_id || sugestao.centroCustoId || "",
+                          }));
+                        }
+                      }
+                    }}
+                  />
                 </div>
               </div>
+
+              {duplicados.length > 0 && (
+                <div className="al al-w" style={{ fontSize: "12px" }}>
+                  ⚠ Já existe {duplicados.length === 1 ? "um lançamento parecido" : `${duplicados.length} lançamentos parecidos`} desse fornecedor com esse documento: {duplicados.map(d => `${d.descricao} (${formatBRL(Number(d.valor))})`).join(", ")}. Confira antes de salvar — pode ser duplicado.
+                </div>
+              )}
 
               <div className="fg">
                 <label className="fl">Descrição *</label>
                 <input className="fc" placeholder="Descrição da conta" value={form.descricao}
                   onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} />
               </div>
+
+              {precisaMotivoRenegociacao && (
+                <div className="al al-w" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div style={{ fontSize: "12px" }}>⚠ Este título já tem baixa registrada. Alterar vencimento ou valor exige o motivo da renegociação:</div>
+                  <textarea className="fc" rows={2} placeholder="Motivo da renegociação *" value={motivoRenegociacao}
+                    onChange={e => setMotivoRenegociacao(e.target.value)} style={{ margin: 0, resize: "vertical" }} />
+                </div>
+              )}
 
               <div className="fr">
                 <div className="fg">
@@ -590,13 +839,43 @@ function ContasPagarPageInner() {
                 </div>
                 <div className="fg">
                   <label className="fl">Centro de Custo</label>
-                  <select className="fc" value={form.centro_custo_id}
+                  <select className="fc" value={form.centro_custo_id} disabled={mostrarRateio}
                     onChange={e => setForm(f => ({ ...f, centro_custo_id: e.target.value }))}>
                     <option value="">Selecione...</option>
                     {centrosCusto.map(cc => <option key={cc.id} value={cc.id}>{cc.nome}</option>)}
                   </select>
                 </div>
               </div>
+
+              {!mostrarRateio ? (
+                <button type="button" className="btn bg xs" style={{ alignSelf: "flex-start" }}
+                  onClick={() => { setMostrarRateio(true); if (rateioItens.length === 0) addLinhaRateio(); }}>
+                  Ratear entre centros de custo
+                </button>
+              ) : (
+                <div style={{ border: "1px solid var(--b1)", borderRadius: "8px", padding: "12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                    <span style={{ fontSize: "12px", fontWeight: 700 }}>Rateio por centro de custo</span>
+                    <button type="button" className="btn bg xs" onClick={() => { setMostrarRateio(false); setRateioItens([]); }}>Cancelar rateio</button>
+                  </div>
+                  {rateioItens.map((item, idx) => (
+                    <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 90px 28px", gap: "6px", marginBottom: "6px" }}>
+                      <select className="fc" style={{ margin: 0 }} value={item.centroCustoId}
+                        onChange={e => atualizarLinhaRateio(idx, "centroCustoId", e.target.value)}>
+                        <option value="">Centro de custo...</option>
+                        {centrosCusto.map(cc => <option key={cc.id} value={cc.id}>{cc.nome}</option>)}
+                      </select>
+                      <input className="fc" type="number" style={{ margin: 0 }} placeholder="%" value={item.percentual || ""}
+                        onChange={e => atualizarLinhaRateio(idx, "percentual", Number(e.target.value))} />
+                      <button type="button" className="btn bg xs" onClick={() => removerLinhaRateio(idx)}>✕</button>
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
+                    <button type="button" className="btn bg xs" onClick={addLinhaRateio}>+ linha</button>
+                    <span style={{ fontSize: "12px", color: rateioValido ? "var(--ok)" : "var(--err)" }}>Soma: {somaRateio.toFixed(2)}%</span>
+                  </div>
+                </div>
+              )}
 
               <div className="fg">
                 <label className="fl">Conta Bancária (previsão de pagamento)</label>
@@ -631,7 +910,7 @@ function ContasPagarPageInner() {
 
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)", flexShrink: 0 }}>
               <button className="btn bg" onClick={closeModal}>Cancelar</button>
-              <button className="btn bp" onClick={salvarConta} disabled={salvando || !form.descricao.trim() || form.valor <= 0}>
+              <button className="btn bp" onClick={salvarConta} disabled={salvando || !form.descricao.trim() || form.valor <= 0 || (precisaMotivoRenegociacao && !motivoRenegociacao.trim()) || !rateioValido}>
                 {salvando ? "Salvando..." : modal === "add" ? "Adicionar" : "Salvar alterações"}
               </button>
             </div>
@@ -661,7 +940,16 @@ function ContasPagarPageInner() {
                   <DateInput value={dtPgto} onChange={setDtPgto} />
                 </div>
               </div>
-              <div className="fg">
+              {adiantamentosDisponiveis.length > 0 && (
+                <div className="fg">
+                  <label className="fl">Usar saldo de adiantamento</label>
+                  <select className="fc" value={adiantamentoUsadoId} onChange={e => setAdiantamentoUsadoId(e.target.value)}>
+                    <option value="">Não usar — pagar de conta bancária</option>
+                    {adiantamentosDisponiveis.map(a => <option key={a.id} value={a.id}>{a.descricao} · saldo {formatBRL(a.saldo)}</option>)}
+                  </select>
+                </div>
+              )}
+              <div className="fg" style={{ display: adiantamentoUsadoId ? "none" : undefined }}>
                 <label className="fl">Conta Bancária</label>
                 <select className="fc" value={contaBaixaId} onChange={e => setContaBaixaId(e.target.value)}>
                   <option value="">Não informado</option>
@@ -670,12 +958,36 @@ function ContasPagarPageInner() {
               </div>
               <div className="fg">
                 <label className="fl">Forma de Pagamento</label>
-                <input className="fc" placeholder="PIX, boleto, transferência..." value={formaPgtoBaixa} onChange={e => setFormaPgtoBaixa(e.target.value)} />
+                <select className="fc" value={formaPgtoBaixa} onChange={e => setFormaPgtoBaixa(e.target.value)}>
+                  <option value="">Não informado</option>
+                  {formasPagamento.map(fp => <option key={fp.id} value={fp.nome}>{fp.nome}</option>)}
+                </select>
               </div>
               <div className="fg">
                 <label className="fl">Observação</label>
                 <input className="fc" value={obsBaixa} onChange={e => setObsBaixa(e.target.value)} />
               </div>
+
+              {!mostrarExtrasBaixa ? (
+                <button type="button" className="btn bg xs" style={{ alignSelf: "flex-start" }} onClick={() => setMostrarExtrasBaixa(true)}>
+                  + juros / multa / desconto
+                </button>
+              ) : (
+                <div className="fr3">
+                  <div className="fg">
+                    <label className="fl">Juros</label>
+                    <CurrencyInput value={valorJurosBaixa} onChange={setValorJurosBaixa} />
+                  </div>
+                  <div className="fg">
+                    <label className="fl">Multa</label>
+                    <CurrencyInput value={valorMultaBaixa} onChange={setValorMultaBaixa} />
+                  </div>
+                  <div className="fg">
+                    <label className="fl">Desconto</label>
+                    <CurrencyInput value={valorDescontoBaixa} onChange={setValorDescontoBaixa} />
+                  </div>
+                </div>
+              )}
             </div>
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
               <button className="btn bg" onClick={closeModal}>Cancelar</button>
@@ -739,9 +1051,14 @@ function ContasPagarPageInner() {
                       <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "99px", ...STATUS_STYLE["Vencido"] }}>Estornada</span>
                     ) : (
                       estornandoBaixaId !== b.id && (
-                        <button className="btn bg xs" onClick={() => { setEstornandoBaixaId(b.id); setMotivoEstorno(""); }} style={{ color: "var(--err)" }}>
-                          Estornar
-                        </button>
+                        <div style={{ display: "flex", gap: "6px" }}>
+                          <button className="btn bg xs" onClick={() => window.open(`/api/lancamentos/baixas/${b.id}/gerar-comprovante`, "_blank")}>
+                            Comprovante
+                          </button>
+                          <button className="btn bg xs" onClick={() => { setEstornandoBaixaId(b.id); setMotivoEstorno(""); }} style={{ color: "var(--err)" }}>
+                            Estornar
+                          </button>
+                        </div>
                       )
                     )}
                   </div>
@@ -762,9 +1079,140 @@ function ContasPagarPageInner() {
                   )}
                 </div>
               ))}
+
+              {historico.length > 0 && (
+                <>
+                  <div className="ct" style={{ marginTop: "10px" }}>Histórico de alterações</div>
+                  {historico.map(v => (
+                    <div key={v.id} style={{ fontSize: "11px", color: "var(--t3)", padding: "6px 0", borderTop: "1px solid var(--b1)" }}>
+                      {fmtData(v.alterado_em.split("T")[0])} {v.alterado_em.split("T")[1]?.slice(0,5)} · {v.alterado_por ?? "sistema"} — valor era {formatBRL(Number(v.snapshot.valor))}, vencimento {fmtData(v.snapshot.vencimento as string | null)}
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
               <button className="btn bg" onClick={closeModal}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL EXCLUSÃO (título já tem baixa — exige motivo) ── */}
+      {modal === "excluir" && (
+        <div className="mov open" onClick={e => e.target === e.currentTarget && closeModal()}>
+          <div className="mod" style={{ width: "400px" }}>
+            <div className="mhd">
+              <div className="mtit">Excluir conta a pagar</div>
+              <button className="mcl" onClick={closeModal}>✕</button>
+            </div>
+            <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div className="al al-w" style={{ fontSize: "12px" }}>
+                ⚠ Este título já tem baixa registrada. A conta não é apagada — fica marcada como excluída, com o histórico preservado.
+              </div>
+              <div className="fg">
+                <label className="fl">Motivo da exclusão *</label>
+                <textarea className="fc" rows={3} value={motivoExclusao} onChange={e => setMotivoExclusao(e.target.value)} style={{ margin: 0, resize: "vertical" }} />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
+              <button className="btn bg" onClick={closeModal}>Cancelar</button>
+              <button className="btn bw" onClick={confirmarExclusao} disabled={salvando || !motivoExclusao.trim()}>
+                {salvando ? "Excluindo..." : "Confirmar exclusão"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL ADIANTAMENTO ── */}
+      {modal === "adiantamento" && (
+        <div className="mov open" onClick={e => e.target === e.currentTarget && closeModal()}>
+          <div className="mod" style={{ width: "480px" }}>
+            <div className="mhd">
+              <div className="mtit">Registrar Adiantamento (a fornecedor)</div>
+              <button className="mcl" onClick={closeModal}>✕</button>
+            </div>
+            <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div className="fg">
+                <label className="fl">Fornecedor</label>
+                <AutocompleteInput
+                  options={fornecedores.map(f => ({ id: f.id, label: f.nome }))}
+                  value={formAdiant.fornecedorId}
+                  valueLabel={formAdiant.fornecedorNome}
+                  allowFreeText
+                  placeholder="Nome do fornecedor"
+                  onChange={(id, label) => setFormAdiant(f => ({ ...f, fornecedorId: id, fornecedorNome: label }))}
+                />
+              </div>
+              <div className="fg">
+                <label className="fl">Descrição *</label>
+                <input className="fc" placeholder="Adiantamento p/ compra de material..." value={formAdiant.descricao}
+                  onChange={e => setFormAdiant(f => ({ ...f, descricao: e.target.value }))} style={{ margin: 0 }} />
+              </div>
+              <div className="fr">
+                <div className="fg">
+                  <label className="fl">Valor *</label>
+                  <CurrencyInput value={formAdiant.valor} onChange={v => setFormAdiant(f => ({ ...f, valor: v }))} />
+                </div>
+                <div className="fg">
+                  <label className="fl">Data</label>
+                  <DateInput value={formAdiant.data} onChange={v => setFormAdiant(f => ({ ...f, data: v }))} />
+                </div>
+              </div>
+              <div className="fg">
+                <label className="fl">Conta Bancária (de onde saiu)</label>
+                <select className="fc" value={formAdiant.contaId} onChange={e => setFormAdiant(f => ({ ...f, contaId: e.target.value }))} style={{ margin: 0 }}>
+                  <option value="">Não informado</option>
+                  {contasBancarias.map(cb => <option key={cb.id} value={cb.id}>{cb.nome}</option>)}
+                </select>
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--t3)" }}>
+                Fica disponível pra abater de uma conta a pagar futura desse fornecedor.
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
+              <button className="btn bg" onClick={closeModal}>Cancelar</button>
+              <button className="btn bp" onClick={confirmarAdiantamento} disabled={salvando || !formAdiant.descricao.trim() || formAdiant.valor <= 0}>
+                {salvando ? "Salvando..." : "Registrar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL REEMBOLSO ── */}
+      {modal === "reembolso" && (
+        <div className="mov open" onClick={e => e.target === e.currentTarget && closeModal()}>
+          <div className="mod" style={{ width: "420px" }}>
+            <div className="mhd">
+              <div className="mtit">Registrar Reembolso</div>
+              <button className="mcl" onClick={closeModal}>✕</button>
+            </div>
+            <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div style={{ fontSize: "12px", color: "var(--t3)" }}>
+                Referente a: {contas.find(c => c.id === reembolsarId)?.descricao} — vira um lançamento novo em Contas a Receber, sem reabrir este título.
+              </div>
+              <div className="fr">
+                <div className="fg">
+                  <label className="fl">Valor do Reembolso *</label>
+                  <CurrencyInput value={formReembolso.valor} onChange={v => setFormReembolso(f => ({ ...f, valor: v }))} />
+                </div>
+                <div className="fg">
+                  <label className="fl">Data</label>
+                  <DateInput value={formReembolso.data} onChange={v => setFormReembolso(f => ({ ...f, data: v }))} />
+                </div>
+              </div>
+              <div className="fg">
+                <label className="fl">Observação</label>
+                <input className="fc" value={formReembolso.obs} onChange={e => setFormReembolso(f => ({ ...f, obs: e.target.value }))} style={{ margin: 0 }} />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
+              <button className="btn bg" onClick={closeModal}>Cancelar</button>
+              <button className="btn bp" onClick={confirmarReembolso} disabled={salvando || formReembolso.valor <= 0}>
+                {salvando ? "Salvando..." : "Registrar reembolso"}
+              </button>
             </div>
           </div>
         </div>

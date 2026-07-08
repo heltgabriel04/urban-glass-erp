@@ -6,6 +6,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
 import { getBaixasPorLancamentos } from "@/services/lancamentos.service";
+import { exportarExcel } from "@/lib/exportExcel";
 import type { BaixaLancamento } from "@/types";
 
 interface Mov {
@@ -79,7 +80,8 @@ function FluxoPageInner() {
     setLoading(true);
     let q = supabase
       .from("lancamentos")
-      .select("id, tipo, valor, vencimento, dt_pagamento, conta, status");
+      .select("id, tipo, valor, vencimento, dt_pagamento, conta, status")
+      .is("deletado_em", null);
     if (conta) q = q.eq("conta", conta);
     const { data } = await q;
     const movsCarregados = (data ?? []) as Mov[];
@@ -253,6 +255,10 @@ function FluxoPageInner() {
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Fluxo de Caixa Diário</div>
+        <button className="btn bg sm" onClick={() => exportarExcel(`FluxoCaixa_UrbanGlass_${mes}`,
+          ["Dia", "Entradas Realizadas", "Saídas Realizadas", "Saldo Realizado", "Entradas Projetadas", "Saídas Projetadas", "Saldo Projetado"],
+          realizado.map((r, i) => [r.dia, r.entradas, r.saidas, r.saldoMes, projetado[i]?.entradas ?? 0, projetado[i]?.saidas ?? 0, projetado[i]?.saldoMes ?? 0])
+        )}>⇩ Exportar</button>
       </div>
 
       <div className="con">

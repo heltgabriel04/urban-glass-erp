@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase/client';
 import type { Compra, CompraInsert, CompraItemInsert } from '@/types';
 import { registrarMovimentacao, reverterMovimentacao } from './estoqueMovimentacoes.service';
+import { getUltimoPlanoContas } from './lancamentos.service';
+import { registrarLog } from './log.service';
 
 export async function getProximoIdCompra(): Promise<string> {
   const { data } = await supabase
@@ -64,9 +66,10 @@ export async function deletarCompra(compraId: string): Promise<boolean> {
 /** Confirma o recebimento: gera a entrada de cada item no livro-razão de
  *  estoque (idempotente — chamar de novo não duplica) e marca a compra como recebida. */
 export async function confirmarRecebimento(compraId: string): Promise<{ ok: boolean; motivo?: string }> {
-  const { data: compra } = await supabase.from('compras').select('id, status').eq('id', compraId).maybeSingle();
-  if (!compra) return { ok: false, motivo: 'compra não encontrada' };
-  if ((compra as { status: string }).status === 'recebido') return { ok: true };
+  const { data: compraRow } = await supabase.from('compras').select('id, status, fornecedor_id, valor_total, nf').eq('id', compraId).maybeSingle();
+  if (!compraRow) return { ok: false, motivo: 'compra não encontrada' };
+  const compra = compraRow as { id: string; status: string; fornecedor_id: number | null; valor_total: number; nf: string | null };
+  if (compra.status === 'recebido') return { ok: true };
 
   const { data: itens, error: errItens } = await supabase
     .from('compras_itens')
@@ -90,5 +93,44 @@ export async function confirmarRecebimento(compraId: string): Promise<{ ok: bool
     .eq('id', compraId);
   if (error) return { ok: false, motivo: error.message };
 
+  await gerarContaAPagarDaCompra(compra);
+
   return { ok: true };
+}
+
+// Idempotente — se a compra já tiver um lançamento (compra_id preenchido),
+// não cria de novo. Sem vencimento de propósito: o financeiro decide o
+// prazo ao revisar, o sistema só evita a redigitação de fornecedor/valor.
+async function gerarContaAPagarDaCompra(compra: { id: string; fornecedor_id: number | null; valor_total: number; nf: string | null }): Promise<void> {
+  const { data: existente } = await supabase.from('lancamentos').select('id').eq('compra_id', compra.id).maybeSingle();
+  if (existente) return;
+  if (!(compra.valor_total > 0)) return;
+
+  const sugestao = compra.fornecedor_id ? await getUltimoPlanoContas({ fornecedorId: compra.fornecedor_id }) : { planoContasId: null, centroCustoId: null };
+
+  const { data: novoLancamento, error } = await supabase
+    .from('lancamentos')
+    .insert([{
+      tipo: 'Saída',
+      descricao: `Compra ${compra.id}`,
+      valor: compra.valor_total,
+      status: 'Pendente',
+      vencimento: null,
+      documento: compra.nf,
+      fornecedor_id: compra.fornecedor_id,
+      compra_id: compra.id,
+      plano_contas_id: sugestao.planoContasId,
+      centro_custo_id: sugestao.centroCustoId,
+      pedido_id: null,
+      cliente_id: null,
+    } as never])
+    .select('id')
+    .single();
+  if (error) { console.error('gerarContaAPagarDaCompra:', error); return; }
+
+  registrarLog({
+    acao: 'criou', tabela: 'lancamentos', registro_id: String((novoLancamento as { id: number }).id),
+    descricao: `Gerou conta a pagar automaticamente da compra ${compra.id} · R$ ${compra.valor_total.toFixed(2)}`,
+    campos_alterados: { compra_id: compra.id, valor: compra.valor_total },
+  });
 }

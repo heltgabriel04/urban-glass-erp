@@ -11,10 +11,14 @@ import SearchInput from "@/components/ui/SearchInput";
 import { useToast } from "@/components/ui/toast";
 import { getContasBancarias } from "@/services/contasBancarias.service";
 import { getCentrosCusto } from "@/services/centrosCusto.service";
-import { registrarBaixa, estornarBaixa, getBaixasPorLancamentos, calcularSaldo } from "@/services/lancamentos.service";
+import { registrarBaixa, estornarBaixa, getBaixasPorLancamentos, calcularSaldo, excluirLancamento, editarLancamento, verificarDuplicadoCliente, criarAdiantamento, criarReembolso, getAdiantamentosDisponiveis, getHistorico, getUltimoPlanoContas, type LancamentoDuplicado, type AdiantamentoComSaldo, type VersaoLancamento } from "@/services/lancamentos.service";
+import { getFormasPagamento } from "@/services/formasPagamento.service";
 import { useEscToClose } from "@/components/ui/useEscToClose";
+import { useGlobalShortcut } from "@/components/ui/useGlobalShortcut";
+import { exportarExcel } from "@/lib/exportExcel";
+import { getFiltrosSalvos, salvarFiltro, excluirFiltroSalvo, type FiltroSalvo } from "@/services/filtrosSalvos.service";
 import ActionMenu from "@/components/ui/ActionMenu";
-import type { ContaBancaria, CentroCusto, BaixaLancamento } from "@/types";
+import type { ContaBancaria, CentroCusto, BaixaLancamento, FormaPagamento } from "@/types";
 
 interface PlanoItem { id: number; codigo_estruturado: string; descricao: string; }
 interface ClienteItem { id: number; nome: string; }
@@ -105,7 +109,7 @@ function ContasReceberPageInner() {
   const [filtroEmissFim, setFiltroEmissFim] = useState("");
   const [filtroPgtoIni, setFiltroPgtoIni]   = useState("");
   const [filtroPgtoFim, setFiltroPgtoFim]   = useState("");
-  const [modal, setModal]           = useState<"add" | "edit" | "receber" | "baixas" | "lote-receber" | null>(null);
+  const [modal, setModal]           = useState<"add" | "edit" | "receber" | "baixas" | "lote-receber" | "excluir" | "adiantamento" | "reembolso" | null>(null);
   const [form, setForm]             = useState({ ...EMPTY_FORM });
   const [editId, setEditId]         = useState<number | null>(null);
   const [receberId, setReceberId]   = useState<number | null>(null);
@@ -121,8 +125,43 @@ function ContasReceberPageInner() {
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   const [dtLote, setDtLote]         = useState(hoje());
+  const [formasPagamento, setFormasPagamento] = useState<FormaPagamento[]>([]);
+  const [duplicados, setDuplicados] = useState<LancamentoDuplicado[]>([]);
+  const [motivoRenegociacao, setMotivoRenegociacao] = useState("");
+  const [mostrarExtrasBaixa, setMostrarExtrasBaixa] = useState(false);
+  const [valorJurosBaixa, setValorJurosBaixa] = useState(0);
+  const [valorMultaBaixa, setValorMultaBaixa] = useState(0);
+  const [valorDescontoBaixa, setValorDescontoBaixa] = useState(0);
+  const [excluirId, setExcluirId] = useState<number | null>(null);
+  const [motivoExclusao, setMotivoExclusao] = useState("");
+  const [adiantamentosDisponiveis, setAdiantamentosDisponiveis] = useState<AdiantamentoComSaldo[]>([]);
+  const [adiantamentoUsadoId, setAdiantamentoUsadoId] = useState<string | number>("");
+  const [formAdiant, setFormAdiant] = useState({ descricao: "", valor: 0, data: hoje(), clienteId: "" as string | number, contaId: "" as string | number, obs: "" });
+  const [reembolsarId, setReembolsarId] = useState<number | null>(null);
+  const [formReembolso, setFormReembolso] = useState({ valor: 0, data: hoje(), obs: "" });
+  const [historico, setHistorico] = useState<VersaoLancamento[]>([]);
+  const [filtrosSalvos, setFiltrosSalvos] = useState<FiltroSalvo[]>([]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); loadFiltrosSalvos(); }, []);
+
+  async function loadFiltrosSalvos() {
+    setFiltrosSalvos(await getFiltrosSalvos("contas-receber"));
+  }
+  function aplicarFiltroSalvo(f: FiltroSalvo) {
+    setTab((f.filtros.tab as TabFiltro) || "aberto");
+    setBusca(f.filtros.busca ?? "");
+  }
+  async function handleSalvarFiltro() {
+    const nome = window.prompt("Nome para este filtro (aba + busca atuais):");
+    if (!nome?.trim()) return;
+    const ok = await salvarFiltro("contas-receber", nome.trim(), { tab, busca });
+    if (ok) { toast("Filtro salvo"); await loadFiltrosSalvos(); }
+    else toast("Erro ao salvar filtro", "err");
+  }
+  async function handleExcluirFiltroSalvo(id: number) {
+    const ok = await excluirFiltroSalvo(id);
+    if (ok) setFiltrosSalvos(prev => prev.filter(f => f.id !== id));
+  }
 
   // Navegação inteligente: aba e busca sobrevivem a refresh/voltar do navegador.
   useEffect(() => {
@@ -143,19 +182,28 @@ function ContasReceberPageInner() {
   useEscToClose(modal === "receber", closeModal);
   useEscToClose(modal === "baixas", closeModal);
   useEscToClose(modal === "lote-receber", closeModal);
+  useEscToClose(modal === "excluir", closeModal);
+  useEscToClose(modal === "adiantamento", closeModal);
+  useEscToClose(modal === "reembolso", closeModal);
+
+  useGlobalShortcut("/", () => document.getElementById("busca-contas-receber")?.focus(), modal === null);
+  useGlobalShortcut("n", openAdd, modal === null);
+  useGlobalShortcut("", salvarRecebivel, modal === "add" || modal === "edit", { ctrlEnter: true });
 
   async function load() {
     setLoading(true);
-    const [{ data: rs }, { data: pls }, { data: cls }, cbs, ccs] = await Promise.all([
+    const [{ data: rs }, { data: pls }, { data: cls }, cbs, ccs, formasPg] = await Promise.all([
       supabase
         .from("lancamentos")
         .select("id, descricao, valor, status, vencimento, documento, dt_emissao, dt_pagamento, obs, pedido_id, cliente_id, plano_contas_id, conta_id, centro_custo_id, created_at, plano_contas(id, codigo_estruturado, descricao), clientes(id, nome)")
         .eq("tipo", "Entrada")
+        .is("deletado_em", null)
         .order("vencimento", { ascending: true }),
       supabase.from("plano_contas").select("id, codigo_estruturado, descricao").order("codigo"),
       supabase.from("clientes").select("id, nome").order("nome"),
       getContasBancarias(true),
       getCentrosCusto(true),
+      getFormasPagamento(true),
     ]);
     const recebiveisCarregados = (rs ?? []) as unknown as Recebivel[];
     setRecebiveis(recebiveisCarregados);
@@ -163,6 +211,7 @@ function ContasReceberPageInner() {
     setClientes((cls ?? []) as ClienteItem[]);
     setContasBancarias(cbs);
     setCentrosCusto(ccs);
+    setFormasPagamento(formasPg);
     setBaixasMap(await getBaixasPorLancamentos(recebiveisCarregados.map(r => r.id)));
     setLoading(false);
   }
@@ -208,6 +257,8 @@ function ContasReceberPageInner() {
   function openAdd() {
     setForm({ ...EMPTY_FORM, dt_emissao: hoje(), vencimento: hoje() });
     setEditId(null);
+    setDuplicados([]);
+    setMotivoRenegociacao("");
     setModal("add");
   }
   function openEdit(r: Recebivel) {
@@ -219,9 +270,24 @@ function ContasReceberPageInner() {
       conta_id: r.conta_id ?? "", centro_custo_id: r.centro_custo_id ?? "",
     });
     setEditId(r.id);
+    setDuplicados([]);
+    setMotivoRenegociacao("");
     setModal("edit");
   }
-  function openReceber(r: Recebivel) {
+  function openDuplicar(r: Recebivel) {
+    setForm({
+      descricao: r.descricao, valor: Number(r.valor),
+      documento: "", cliente_id: r.cliente_id ?? "",
+      vencimento: "", dt_emissao: hoje(),
+      obs: r.obs ?? "", plano_contas_id: r.plano_contas_id ?? "",
+      conta_id: r.conta_id ?? "", centro_custo_id: r.centro_custo_id ?? "",
+    });
+    setEditId(null);
+    setDuplicados([]);
+    setMotivoRenegociacao("");
+    setModal("add");
+  }
+  async function openReceber(r: Recebivel) {
     const { saldo } = calcularSaldo(r, baixasMap.get(r.id));
     setReceberId(r.id);
     setDtRec(hoje());
@@ -229,25 +295,90 @@ function ContasReceberPageInner() {
     setContaBaixaId("");
     setFormaPgtoBaixa("");
     setObsBaixa("");
+    setMostrarExtrasBaixa(false);
+    setValorJurosBaixa(0);
+    setValorMultaBaixa(0);
+    setValorDescontoBaixa(0);
+    setAdiantamentoUsadoId("");
+    setAdiantamentosDisponiveis(
+      r.cliente_id ? await getAdiantamentosDisponiveis({ tipo: "Entrada", clienteId: r.cliente_id }) : []
+    );
     setModal("receber");
   }
-  function openBaixas(r: Recebivel) {
+  function openAdiantamento() {
+    setFormAdiant({ descricao: "", valor: 0, data: hoje(), clienteId: "", contaId: "", obs: "" });
+    setModal("adiantamento");
+  }
+  function openReembolso(r: Recebivel) {
+    setReembolsarId(r.id);
+    setFormReembolso({ valor: Number(r.valor), data: hoje(), obs: "" });
+    setModal("reembolso");
+  }
+  async function confirmarAdiantamento() {
+    if (!formAdiant.descricao.trim() || formAdiant.valor <= 0) { toast("Informe descrição e valor", "err"); return; }
+    setSalvando(true);
+    const res = await criarAdiantamento({
+      tipo: "Entrada", descricao: formAdiant.descricao.trim(), valor: formAdiant.valor, data: formAdiant.data,
+      clienteId: formAdiant.clienteId ? Number(formAdiant.clienteId) : null, contaId: formAdiant.contaId ? Number(formAdiant.contaId) : null,
+      obs: formAdiant.obs.trim() || null,
+    });
+    setSalvando(false);
+    if (res) { toast("Adiantamento registrado"); closeModal(); load(); }
+    else toast("Erro ao registrar adiantamento", "err");
+  }
+  async function confirmarReembolso() {
+    if (!reembolsarId || formReembolso.valor <= 0) return;
+    setSalvando(true);
+    const res = await criarReembolso({ lancamentoOrigemId: reembolsarId, valor: formReembolso.valor, data: formReembolso.data, obs: formReembolso.obs.trim() || null });
+    setSalvando(false);
+    if (res) { toast("Reembolso registrado em Contas a Pagar"); closeModal(); load(); }
+    else toast("Erro ao registrar reembolso", "err");
+  }
+  async function openBaixas(r: Recebivel) {
     setBaixasVerId(r.id);
     setEstornandoBaixaId(null);
     setMotivoEstorno("");
+    setHistorico(await getHistorico(r.id));
     setModal("baixas");
   }
   function openLoteReceber() {
     setDtLote(hoje());
     setModal("lote-receber");
   }
+  function abrirExcluir(r: Recebivel) {
+    const temBaixa = (baixasMap.get(r.id) ?? []).length > 0;
+    if (!temBaixa) {
+      if (!confirm("Excluir este recebível?")) return;
+      excluirLancamento(r.id).then(ok => {
+        if (ok) { toast("Recebível excluído"); load(); } else toast("Erro ao excluir", "err");
+      });
+      return;
+    }
+    setExcluirId(r.id);
+    setMotivoExclusao("");
+    setModal("excluir");
+  }
   function closeModal() {
     setModal(null); setEditId(null); setReceberId(null);
     setBaixasVerId(null); setEstornandoBaixaId(null); setMotivoEstorno("");
+    setExcluirId(null); setMotivoExclusao(""); setDuplicados([]); setMotivoRenegociacao("");
+    setReembolsarId(null); setAdiantamentoUsadoId("");
   }
+
+  async function checarDuplicado(clienteId: string | number, documento: string) {
+    if (modal !== "add" || !documento.trim() || !clienteId) { setDuplicados([]); return; }
+    setDuplicados(await verificarDuplicadoCliente(documento, Number(clienteId)));
+  }
+
+  const recebivelEditando = editId ? recebiveis.find(r => r.id === editId) ?? null : null;
+  const baixasRecebivelEditando = editId ? (baixasMap.get(editId) ?? []) : [];
+  const precisaMotivoRenegociacao = modal === "edit" && baixasRecebivelEditando.length > 0 && (
+    form.vencimento !== (recebivelEditando?.vencimento ?? "") || form.valor !== Number(recebivelEditando?.valor ?? 0)
+  );
 
   async function salvarRecebivel() {
     if (!form.descricao.trim() || form.valor <= 0) return;
+    if (precisaMotivoRenegociacao && !motivoRenegociacao.trim()) { toast("Informe o motivo da renegociação", "err"); return; }
     setSalvando(true);
     const payload = {
       tipo: "Entrada",
@@ -263,11 +394,19 @@ function ContasReceberPageInner() {
       centro_custo_id: form.centro_custo_id ? Number(form.centro_custo_id) : null,
     };
     if (editId) {
-      await supabase.from("lancamentos").update(payload as never).eq("id", editId);
-    } else {
-      await supabase.from("lancamentos").insert([{ ...payload, status: "A Receber", pedido_id: null }] as never);
+      const ok = await editarLancamento({
+        id: editId, updates: payload,
+        motivoRenegociacao: precisaMotivoRenegociacao ? motivoRenegociacao.trim() : undefined,
+      });
+      setSalvando(false);
+      if (ok) { toast("Recebível atualizado"); closeModal(); load(); }
+      else toast("Erro ao salvar — verifique o motivo da renegociação", "err");
+      return;
     }
+    const { error } = await supabase.from("lancamentos").insert([{ ...payload, status: "A Receber", pedido_id: null }] as never);
     setSalvando(false);
+    if (error) { toast("Erro ao criar recebível", "err"); return; }
+    toast("Recebível criado");
     closeModal();
     load();
   }
@@ -279,9 +418,13 @@ function ContasReceberPageInner() {
       lancamentoId: receberId,
       valor: valorBaixa,
       data: dtRec,
-      contaId: contaBaixaId ? Number(contaBaixaId) : null,
-      formaPgto: formaPgtoBaixa.trim() || null,
+      contaId: adiantamentoUsadoId ? null : (contaBaixaId ? Number(contaBaixaId) : null),
+      formaPgto: adiantamentoUsadoId ? "Adiantamento" : (formaPgtoBaixa.trim() || null),
       obs: obsBaixa.trim() || null,
+      valorJuros: valorJurosBaixa || undefined,
+      valorMulta: valorMultaBaixa || undefined,
+      valorDesconto: valorDescontoBaixa || undefined,
+      origemAdiantamentoId: adiantamentoUsadoId ? Number(adiantamentoUsadoId) : null,
     });
     setSalvando(false);
     if (res) {
@@ -291,6 +434,19 @@ function ContasReceberPageInner() {
     } else {
       toast("Erro ao registrar recebimento", "err");
     }
+  }
+
+  function handleExportar() {
+    const linhas = filtrados.map(r => {
+      const { valorPago } = calcularSaldo(r, baixasMap.get(r.id));
+      return [
+        r.pedido_id ?? r.documento ?? "", fmtData(r.dt_emissao ?? r.created_at), r.plano_contas?.descricao ?? "", r.clientes?.nome ?? "", r.descricao,
+        fmtData(r.vencimento), Number(r.valor), valorPago, fmtData(r.dt_pagamento), getStatusExibicao(r, valorPago),
+      ];
+    });
+    exportarExcel("ContasReceber_UrbanGlass",
+      ["Pedido/Doc.", "Emissão", "Plano de Contas", "Cliente", "Descrição", "Vencimento", "Valor", "Recebido", "Recebimento", "Status"],
+      linhas);
   }
 
   async function confirmarRecebimentoLote() {
@@ -318,7 +474,7 @@ function ContasReceberPageInner() {
     if (!confirm(`Excluir ${n} recebível(is) selecionado(s)?`)) return;
     setSalvando(true);
     for (const id of selecionados) {
-      await supabase.from("lancamentos").delete().eq("id", id);
+      await excluirLancamento(id);
     }
     setSalvando(false);
     setSelecionados(new Set());
@@ -341,10 +497,13 @@ function ContasReceberPageInner() {
     }
   }
 
-  async function excluir(id: number) {
-    if (!confirm("Excluir este recebível?")) return;
-    await supabase.from("lancamentos").delete().eq("id", id);
-    load();
+  async function confirmarExclusao() {
+    if (!excluirId || !motivoExclusao.trim()) { toast("Informe o motivo da exclusão", "err"); return; }
+    setSalvando(true);
+    const ok = await excluirLancamento(excluirId, motivoExclusao.trim());
+    setSalvando(false);
+    if (ok) { toast("Recebível excluído"); closeModal(); load(); }
+    else toast("Erro ao excluir", "err");
   }
 
   const TABS: { key: TabFiltro; label: string }[] = [
@@ -358,6 +517,8 @@ function ContasReceberPageInner() {
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Contas a Receber</div>
+        <button className="btn bg sm" onClick={handleExportar}>⇩ Exportar</button>
+        <button className="btn bg sm" onClick={openAdiantamento}>+ Adiantamento</button>
         <button className="btn bp sm" onClick={openAdd}>+ Adicionar</button>
       </div>
 
@@ -395,6 +556,24 @@ function ContasReceberPageInner() {
           }}>⚙ Filtros por data</button>
         </div>
 
+        {/* Filtros salvos */}
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center", marginBottom: "14px" }}>
+          {filtrosSalvos.map(f => (
+            <div key={f.id} style={{
+              display: "flex", alignItems: "center", gap: "6px", fontSize: "11px",
+              padding: "3px 4px 3px 10px", borderRadius: "99px", border: "1px solid var(--b2)", background: "var(--surf1)",
+            }}>
+              <button onClick={() => aplicarFiltroSalvo(f)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t2)", fontWeight: 600, padding: 0 }}>
+                ☆ {f.nome}
+              </button>
+              <button onClick={() => handleExcluirFiltroSalvo(f.id)} title="Remover filtro" style={{
+                background: "none", border: "none", cursor: "pointer", color: "var(--t3)", fontSize: "13px", lineHeight: 1, padding: "0 4px",
+              }}>×</button>
+            </div>
+          ))}
+          <button className="btn bg sm" onClick={handleSalvarFiltro}>☆ Salvar filtro atual</button>
+        </div>
+
         {/* Filtros de data */}
         {mostrarFiltros && (
           <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "14px 16px", marginBottom: "14px", display: "flex", gap: "16px", flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -417,7 +596,7 @@ function ContasReceberPageInner() {
 
         {/* Busca */}
         <div style={{ marginBottom: "12px" }}>
-          <SearchInput icon={false} className="fc" placeholder="Buscar por descrição, cliente, pedido ou documento..."
+          <SearchInput id="busca-contas-receber" icon={false} className="fc" placeholder="Buscar por descrição, cliente, pedido ou documento... (atalho: /)"
             value={busca} onChange={setBusca} inputStyle={{ margin: 0, width: "100%" }} />
         </div>
 
@@ -505,8 +684,10 @@ function ContasReceberPageInner() {
                           <ActionMenu items={[
                             { label: "Registrar recebimento", onClick: () => openReceber(r), hidden: saldo <= 0 },
                             { label: "Ver baixas / estornar", onClick: () => openBaixas(r), hidden: valorRec <= 0 },
+                            { label: "Registrar reembolso", onClick: () => openReembolso(r), hidden: valorRec <= 0 },
                             { label: "Editar", onClick: () => openEdit(r) },
-                            { label: "Excluir", onClick: () => excluir(r.id), danger: true },
+                            { label: "Duplicar", onClick: () => openDuplicar(r) },
+                            { label: "Excluir", onClick: () => abrirExcluir(r), danger: true },
                           ]} />
                         </td>
                       </tr>
@@ -555,23 +736,52 @@ function ContasReceberPageInner() {
                 <div className="fg">
                   <label className="fl">Documento</label>
                   <input className="fc" placeholder="NF, recibo..." value={form.documento as string}
-                    onChange={e => setForm(f => ({ ...f, documento: e.target.value }))} />
+                    onChange={e => setForm(f => ({ ...f, documento: e.target.value }))}
+                    onBlur={() => checarDuplicado(form.cliente_id, form.documento as string)} />
                 </div>
                 <div className="fg">
                   <label className="fl">Cliente</label>
                   <select className="fc" value={form.cliente_id}
-                    onChange={e => setForm(f => ({ ...f, cliente_id: e.target.value }))}>
+                    onChange={async e => {
+                      const clienteId = e.target.value;
+                      setForm(f => ({ ...f, cliente_id: clienteId }));
+                      checarDuplicado(clienteId, form.documento as string);
+                      if (modal === "add" && clienteId && !form.plano_contas_id && !form.centro_custo_id) {
+                        const sugestao = await getUltimoPlanoContas({ clienteId: Number(clienteId) });
+                        if (sugestao.planoContasId || sugestao.centroCustoId) {
+                          setForm(f => ({
+                            ...f,
+                            plano_contas_id: f.plano_contas_id || sugestao.planoContasId || "",
+                            centro_custo_id: f.centro_custo_id || sugestao.centroCustoId || "",
+                          }));
+                        }
+                      }
+                    }}>
                     <option value="">Selecione...</option>
                     {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                   </select>
                 </div>
               </div>
 
+              {duplicados.length > 0 && (
+                <div className="al al-w" style={{ fontSize: "12px" }}>
+                  ⚠ Já existe {duplicados.length === 1 ? "um lançamento parecido" : `${duplicados.length} lançamentos parecidos`} desse cliente com esse documento: {duplicados.map(d => `${d.descricao} (${formatBRL(Number(d.valor))})`).join(", ")}. Confira antes de salvar — pode ser duplicado.
+                </div>
+              )}
+
               <div className="fg">
                 <label className="fl">Descrição *</label>
                 <input className="fc" placeholder="Descrição do recebível" value={form.descricao}
                   onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} />
               </div>
+
+              {precisaMotivoRenegociacao && (
+                <div className="al al-w" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div style={{ fontSize: "12px" }}>⚠ Este título já tem baixa registrada. Alterar vencimento ou valor exige o motivo da renegociação:</div>
+                  <textarea className="fc" rows={2} placeholder="Motivo da renegociação *" value={motivoRenegociacao}
+                    onChange={e => setMotivoRenegociacao(e.target.value)} style={{ margin: 0, resize: "vertical" }} />
+                </div>
+              )}
 
               <div className="fr">
                 <div className="fg">
@@ -625,7 +835,7 @@ function ContasReceberPageInner() {
 
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)", flexShrink: 0 }}>
               <button className="btn bg" onClick={closeModal}>Cancelar</button>
-              <button className="btn bp" onClick={salvarRecebivel} disabled={salvando || !form.descricao.trim() || form.valor <= 0}>
+              <button className="btn bp" onClick={salvarRecebivel} disabled={salvando || !form.descricao.trim() || form.valor <= 0 || (precisaMotivoRenegociacao && !motivoRenegociacao.trim())}>
                 {salvando ? "Salvando..." : modal === "add" ? "Adicionar" : "Salvar alterações"}
               </button>
             </div>
@@ -655,7 +865,16 @@ function ContasReceberPageInner() {
                   <DateInput value={dtRec} onChange={setDtRec} />
                 </div>
               </div>
-              <div className="fg">
+              {adiantamentosDisponiveis.length > 0 && (
+                <div className="fg">
+                  <label className="fl">Usar saldo de adiantamento</label>
+                  <select className="fc" value={adiantamentoUsadoId} onChange={e => setAdiantamentoUsadoId(e.target.value)}>
+                    <option value="">Não usar — receber em conta bancária</option>
+                    {adiantamentosDisponiveis.map(a => <option key={a.id} value={a.id}>{a.descricao} · saldo {formatBRL(a.saldo)}</option>)}
+                  </select>
+                </div>
+              )}
+              <div className="fg" style={{ display: adiantamentoUsadoId ? "none" : undefined }}>
                 <label className="fl">Conta Bancária</label>
                 <select className="fc" value={contaBaixaId} onChange={e => setContaBaixaId(e.target.value)}>
                   <option value="">Não informado</option>
@@ -664,12 +883,36 @@ function ContasReceberPageInner() {
               </div>
               <div className="fg">
                 <label className="fl">Forma de Pagamento</label>
-                <input className="fc" placeholder="PIX, boleto, transferência..." value={formaPgtoBaixa} onChange={e => setFormaPgtoBaixa(e.target.value)} />
+                <select className="fc" value={formaPgtoBaixa} onChange={e => setFormaPgtoBaixa(e.target.value)}>
+                  <option value="">Não informado</option>
+                  {formasPagamento.map(fp => <option key={fp.id} value={fp.nome}>{fp.nome}</option>)}
+                </select>
               </div>
               <div className="fg">
                 <label className="fl">Observação</label>
                 <input className="fc" value={obsBaixa} onChange={e => setObsBaixa(e.target.value)} />
               </div>
+
+              {!mostrarExtrasBaixa ? (
+                <button type="button" className="btn bg xs" style={{ alignSelf: "flex-start" }} onClick={() => setMostrarExtrasBaixa(true)}>
+                  + juros / multa / desconto
+                </button>
+              ) : (
+                <div className="fr3">
+                  <div className="fg">
+                    <label className="fl">Juros</label>
+                    <CurrencyInput value={valorJurosBaixa} onChange={setValorJurosBaixa} />
+                  </div>
+                  <div className="fg">
+                    <label className="fl">Multa</label>
+                    <CurrencyInput value={valorMultaBaixa} onChange={setValorMultaBaixa} />
+                  </div>
+                  <div className="fg">
+                    <label className="fl">Desconto</label>
+                    <CurrencyInput value={valorDescontoBaixa} onChange={setValorDescontoBaixa} />
+                  </div>
+                </div>
+              )}
             </div>
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
               <button className="btn bg" onClick={closeModal}>Cancelar</button>
@@ -733,9 +976,14 @@ function ContasReceberPageInner() {
                       <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "99px", ...STATUS_STYLE["Vencido"] }}>Estornada</span>
                     ) : (
                       estornandoBaixaId !== b.id && (
-                        <button className="btn bg xs" onClick={() => { setEstornandoBaixaId(b.id); setMotivoEstorno(""); }} style={{ color: "var(--err)" }}>
-                          Estornar
-                        </button>
+                        <div style={{ display: "flex", gap: "6px" }}>
+                          <button className="btn bg xs" onClick={() => window.open(`/api/lancamentos/baixas/${b.id}/gerar-comprovante`, "_blank")}>
+                            Comprovante
+                          </button>
+                          <button className="btn bg xs" onClick={() => { setEstornandoBaixaId(b.id); setMotivoEstorno(""); }} style={{ color: "var(--err)" }}>
+                            Estornar
+                          </button>
+                        </div>
                       )
                     )}
                   </div>
@@ -756,9 +1004,136 @@ function ContasReceberPageInner() {
                   )}
                 </div>
               ))}
+
+              {historico.length > 0 && (
+                <>
+                  <div className="ct" style={{ marginTop: "10px" }}>Histórico de alterações</div>
+                  {historico.map(v => (
+                    <div key={v.id} style={{ fontSize: "11px", color: "var(--t3)", padding: "6px 0", borderTop: "1px solid var(--b1)" }}>
+                      {fmtData(v.alterado_em.split("T")[0])} {v.alterado_em.split("T")[1]?.slice(0,5)} · {v.alterado_por ?? "sistema"} — valor era {formatBRL(Number(v.snapshot.valor))}, vencimento {fmtData(v.snapshot.vencimento as string | null)}
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
               <button className="btn bg" onClick={closeModal}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL EXCLUSÃO (título já tem baixa — exige motivo) ── */}
+      {modal === "excluir" && (
+        <div className="mov open" onClick={e => e.target === e.currentTarget && closeModal()}>
+          <div className="mod" style={{ width: "400px" }}>
+            <div className="mhd">
+              <div className="mtit">Excluir recebível</div>
+              <button className="mcl" onClick={closeModal}>✕</button>
+            </div>
+            <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div className="al al-w" style={{ fontSize: "12px" }}>
+                ⚠ Este título já tem baixa registrada. A conta não é apagada — fica marcada como excluída, com o histórico preservado.
+              </div>
+              <div className="fg">
+                <label className="fl">Motivo da exclusão *</label>
+                <textarea className="fc" rows={3} value={motivoExclusao} onChange={e => setMotivoExclusao(e.target.value)} style={{ margin: 0, resize: "vertical" }} />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
+              <button className="btn bg" onClick={closeModal}>Cancelar</button>
+              <button className="btn bw" onClick={confirmarExclusao} disabled={salvando || !motivoExclusao.trim()}>
+                {salvando ? "Excluindo..." : "Confirmar exclusão"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL ADIANTAMENTO ── */}
+      {modal === "adiantamento" && (
+        <div className="mov open" onClick={e => e.target === e.currentTarget && closeModal()}>
+          <div className="mod" style={{ width: "480px" }}>
+            <div className="mhd">
+              <div className="mtit">Registrar Adiantamento (de cliente)</div>
+              <button className="mcl" onClick={closeModal}>✕</button>
+            </div>
+            <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div className="fg">
+                <label className="fl">Cliente</label>
+                <select className="fc" value={formAdiant.clienteId} onChange={e => setFormAdiant(f => ({ ...f, clienteId: e.target.value }))} style={{ margin: 0 }}>
+                  <option value="">Selecione...</option>
+                  {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                </select>
+              </div>
+              <div className="fg">
+                <label className="fl">Descrição *</label>
+                <input className="fc" placeholder="Adiantamento p/ pedido futuro..." value={formAdiant.descricao}
+                  onChange={e => setFormAdiant(f => ({ ...f, descricao: e.target.value }))} style={{ margin: 0 }} />
+              </div>
+              <div className="fr">
+                <div className="fg">
+                  <label className="fl">Valor *</label>
+                  <CurrencyInput value={formAdiant.valor} onChange={v => setFormAdiant(f => ({ ...f, valor: v }))} />
+                </div>
+                <div className="fg">
+                  <label className="fl">Data</label>
+                  <DateInput value={formAdiant.data} onChange={v => setFormAdiant(f => ({ ...f, data: v }))} />
+                </div>
+              </div>
+              <div className="fg">
+                <label className="fl">Conta Bancária (onde entrou)</label>
+                <select className="fc" value={formAdiant.contaId} onChange={e => setFormAdiant(f => ({ ...f, contaId: e.target.value }))} style={{ margin: 0 }}>
+                  <option value="">Não informado</option>
+                  {contasBancarias.map(cb => <option key={cb.id} value={cb.id}>{cb.nome}</option>)}
+                </select>
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--t3)" }}>
+                Fica disponível pra abater de um recebível futuro desse cliente.
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
+              <button className="btn bg" onClick={closeModal}>Cancelar</button>
+              <button className="btn bp" onClick={confirmarAdiantamento} disabled={salvando || !formAdiant.descricao.trim() || formAdiant.valor <= 0}>
+                {salvando ? "Salvando..." : "Registrar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL REEMBOLSO ── */}
+      {modal === "reembolso" && (
+        <div className="mov open" onClick={e => e.target === e.currentTarget && closeModal()}>
+          <div className="mod" style={{ width: "420px" }}>
+            <div className="mhd">
+              <div className="mtit">Registrar Reembolso</div>
+              <button className="mcl" onClick={closeModal}>✕</button>
+            </div>
+            <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div style={{ fontSize: "12px", color: "var(--t3)" }}>
+                Referente a: {recebiveis.find(r => r.id === reembolsarId)?.descricao} — vira um lançamento novo em Contas a Pagar, sem reabrir este título.
+              </div>
+              <div className="fr">
+                <div className="fg">
+                  <label className="fl">Valor do Reembolso *</label>
+                  <CurrencyInput value={formReembolso.valor} onChange={v => setFormReembolso(f => ({ ...f, valor: v }))} />
+                </div>
+                <div className="fg">
+                  <label className="fl">Data</label>
+                  <DateInput value={formReembolso.data} onChange={v => setFormReembolso(f => ({ ...f, data: v }))} />
+                </div>
+              </div>
+              <div className="fg">
+                <label className="fl">Observação</label>
+                <input className="fc" value={formReembolso.obs} onChange={e => setFormReembolso(f => ({ ...f, obs: e.target.value }))} style={{ margin: 0 }} />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
+              <button className="btn bg" onClick={closeModal}>Cancelar</button>
+              <button className="btn bp" onClick={confirmarReembolso} disabled={salvando || formReembolso.valor <= 0}>
+                {salvando ? "Salvando..." : "Registrar reembolso"}
+              </button>
             </div>
           </div>
         </div>

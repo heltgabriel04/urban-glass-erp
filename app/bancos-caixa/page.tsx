@@ -8,6 +8,8 @@ import { formatBRL } from "@/lib/formatters";
 import SearchInput from "@/components/ui/SearchInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import { useEscToClose } from "@/components/ui/useEscToClose";
+import DateInput from "@/components/ui/DateInput";
+import { getTransferencias, registrarTransferencia, type Transferencia } from "@/services/transferencias.service";
 import type { ContaBancaria, ContaBancariaInsert, TipoContaBancaria } from "@/types";
 
 const TIPOS: TipoContaBancaria[] = ["Caixa", "Banco", "Aplicação"];
@@ -16,24 +18,67 @@ const VAZIO: ContaBancariaInsert = {
   nome: "", banco: "", tipo: "Banco", saldo_inicial: 0, ativo: true,
 };
 
+function hoje() { return new Date().toISOString().split("T")[0]; }
+function fmtData(s: string) {
+  const [y, m, d] = s.split("-");
+  return `${d}/${m}/${y}`;
+}
+
 export default function BancosCaixaPage() {
   const { toast } = useToast();
   const [contas, setContas] = useState<ContaBancaria[]>([]);
+  const [transferencias, setTransferencias] = useState<Transferencia[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState<ContaBancariaInsert>(VAZIO);
   const [salvando, setSalvando] = useState(false);
+  const [modalTransfAberto, setModalTransfAberto] = useState(false);
+  const [contaOrigemId, setContaOrigemId] = useState<string | number>("");
+  const [contaDestinoId, setContaDestinoId] = useState<string | number>("");
+  const [valorTransf, setValorTransf] = useState(0);
+  const [dataTransf, setDataTransf] = useState(hoje());
+  const [obsTransf, setObsTransf] = useState("");
 
   useEscToClose(modalAberto, () => setModalAberto(false));
+  useEscToClose(modalTransfAberto, () => setModalTransfAberto(false));
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     setLoading(true);
-    setContas(await getContasBancarias());
+    const [cs, ts] = await Promise.all([getContasBancarias(), getTransferencias()]);
+    setContas(cs);
+    setTransferencias(ts);
     setLoading(false);
+  }
+
+  function abrirTransferencia() {
+    setContaOrigemId("");
+    setContaDestinoId("");
+    setValorTransf(0);
+    setDataTransf(hoje());
+    setObsTransf("");
+    setModalTransfAberto(true);
+  }
+
+  async function salvarTransferencia() {
+    if (!contaOrigemId || !contaDestinoId || contaOrigemId === contaDestinoId || valorTransf <= 0) {
+      toast("Selecione contas diferentes e um valor válido", "err");
+      return;
+    }
+    setSalvando(true);
+    const ok = await registrarTransferencia({
+      contaOrigemId: Number(contaOrigemId),
+      contaDestinoId: Number(contaDestinoId),
+      valor: valorTransf,
+      data: dataTransf,
+      obs: obsTransf.trim() || null,
+    });
+    setSalvando(false);
+    if (ok) { toast("Transferência registrada"); setModalTransfAberto(false); load(); }
+    else toast("Erro ao registrar transferência", "err");
   }
 
   function abrirNovo() {
@@ -93,6 +138,7 @@ export default function BancosCaixaPage() {
       <div className="tb">
         <div className="tb-title">Bancos &amp; Caixa</div>
         <SearchInput placeholder="Buscar por nome ou banco..." value={busca} onChange={setBusca} />
+        <button className="btn bg sm" onClick={abrirTransferencia}>⇄ Transferência</button>
         <button className="btn bp sm" onClick={abrirNovo}>+ Nova Conta</button>
       </div>
 
@@ -153,6 +199,36 @@ export default function BancosCaixaPage() {
           </div>
         )}
         <div style={{ marginTop: "10px", fontSize: "12px", color: "var(--t3)" }}>{totalAtivos} conta(s) ativa(s)</div>
+
+        <div className="ct" style={{ marginTop: "24px" }}>Transferências recentes</div>
+        {transferencias.length === 0 ? (
+          <div style={{ fontSize: "12px", color: "var(--t3)", padding: "12px 0" }}>Nenhuma transferência registrada.</div>
+        ) : (
+          <div className="tw">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>De</th>
+                  <th>Para</th>
+                  <th style={{ textAlign: "right" }}>Valor</th>
+                  <th>Obs.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transferencias.map(t => (
+                  <tr key={t.id}>
+                    <td className="mono" style={{ fontSize: "12px" }}>{fmtData(t.data)}</td>
+                    <td>{t.origem?.nome ?? "—"}</td>
+                    <td>{t.destino?.nome ?? "—"}</td>
+                    <td className="mono" style={{ textAlign: "right" }}>{formatBRL(t.valor)}</td>
+                    <td style={{ fontSize: "12px", color: "var(--t3)" }}>{t.obs ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {modalAberto && (
@@ -184,6 +260,48 @@ export default function BancosCaixaPage() {
               <button className="btn bg" onClick={() => setModalAberto(false)}>Cancelar</button>
               <button className="btn bp" onClick={salvar} disabled={salvando}>
                 {salvando ? "Salvando..." : editId != null ? "Salvar alterações" : "Criar conta"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalTransfAberto && (
+        <div className="mov open" onClick={e => e.target === e.currentTarget && setModalTransfAberto(false)}>
+          <div className="mod" style={{ width: "420px" }}>
+            <div className="mhd">
+              <div className="mtit">Nova Transferência</div>
+              <button className="mcl" onClick={() => setModalTransfAberto(false)}>✕</button>
+            </div>
+            <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
+              <Campo label="De (conta de origem) *">
+                <select className="fc" value={contaOrigemId} onChange={e => setContaOrigemId(e.target.value)} style={{ margin: 0 }}>
+                  <option value="">Selecione...</option>
+                  {contas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                </select>
+              </Campo>
+              <Campo label="Para (conta de destino) *">
+                <select className="fc" value={contaDestinoId} onChange={e => setContaDestinoId(e.target.value)} style={{ margin: 0 }}>
+                  <option value="">Selecione...</option>
+                  {contas.filter(c => String(c.id) !== String(contaOrigemId)).map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                </select>
+              </Campo>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                <Campo label="Valor *">
+                  <CurrencyInput value={valorTransf} onChange={setValorTransf} />
+                </Campo>
+                <Campo label="Data *">
+                  <DateInput value={dataTransf} onChange={setDataTransf} />
+                </Campo>
+              </div>
+              <Campo label="Observação">
+                <input className="fc" value={obsTransf} onChange={e => setObsTransf(e.target.value)} style={{ margin: 0 }} />
+              </Campo>
+            </div>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
+              <button className="btn bg" onClick={() => setModalTransfAberto(false)}>Cancelar</button>
+              <button className="btn bp" onClick={salvarTransferencia} disabled={salvando}>
+                {salvando ? "Salvando..." : "Confirmar transferência"}
               </button>
             </div>
           </div>

@@ -232,7 +232,8 @@ export async function recalcularRecebido(pedidoId: string) {
     .from('lancamentos')
     .select('id, valor, status')
     .eq('pedido_id', pedidoId)
-    .eq('tipo', 'Entrada');
+    .eq('tipo', 'Entrada')
+    .is('deletado_em', null);
 
   if (errLancs) { console.error('recalcularRecebido (lancamentos):', errLancs); return null; }
 

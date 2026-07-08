@@ -30,7 +30,8 @@ export async function getAbertoPorTipo(tipo: 'Entrada' | 'Saída'): Promise<numb
     .from('lancamentos')
     .select('id, valor, status')
     .eq('tipo', tipo)
-    .neq('status', 'Pago');
+    .neq('status', 'Pago')
+    .is('deletado_em', null);
 
   const lista = (lancs ?? []) as { id: number; valor: number; status: string }[];
   if (lista.length === 0) return 0;
@@ -70,16 +71,47 @@ export async function getDespesasPorMes(meses = 6): Promise<MesValor[]> {
 
 export interface ProjecaoHorizonte { dias: number; saldo: number; }
 
+interface OcorrenciaFutura { tipo: 'Entrada' | 'Saída'; valor: number; data: string; }
+
+// Ocorrências futuras de recorrências ativas que ainda não viraram
+// lançamento físico (além de gerado_ate) — sem isso, a projeção só
+// enxerga o que já foi gerado, e depende do usuário lembrar de clicar
+// "gerar mais meses" em /recorrencias.
+async function getOcorrenciasRecorrentesFuturas(limiteMax: Date): Promise<OcorrenciaFutura[]> {
+  const { data } = await supabase.from('lancamentos_recorrentes').select('tipo, valor, dia_vencimento, gerado_ate').eq('ativo', true);
+  const hoje = new Date();
+  const ocorrencias: OcorrenciaFutura[] = [];
+
+  for (const r of (data ?? []) as { tipo: 'Entrada' | 'Saída'; valor: number; dia_vencimento: number; gerado_ate: string | null }[]) {
+    let cursor: Date;
+    if (r.gerado_ate) {
+      const [y, m] = r.gerado_ate.split('-').map(Number);
+      cursor = new Date(y, m - 1 + 1, 1);
+    } else {
+      cursor = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    }
+    for (let i = 0; i < 6; i++) {
+      const data2 = new Date(cursor.getFullYear(), cursor.getMonth(), r.dia_vencimento);
+      if (data2 > limiteMax) break;
+      ocorrencias.push({ tipo: r.tipo, valor: Number(r.valor), data: fmtData(data2) });
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+  }
+  return ocorrencias;
+}
+
 // Projeção de caixa baseada em compromissos já lançados (não estimativa
 // estatística): saldo atual + títulos em aberto com vencimento dentro do
-// horizonte.
+// horizonte + ocorrências futuras de recorrências ativas ainda não geradas.
 export async function getProjecaoCaixa(): Promise<ProjecaoHorizonte[]> {
   const saldoAtual = await getSaldoCaixaTotal();
   const hoje = new Date();
+  const limiteMax = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 90);
 
-  const [{ data: entradas }, { data: saidas }] = await Promise.all([
-    supabase.from('lancamentos').select('id, valor, status, vencimento').eq('tipo', 'Entrada').neq('status', 'Pago').not('vencimento', 'is', null),
-    supabase.from('lancamentos').select('id, valor, status, vencimento').eq('tipo', 'Saída').neq('status', 'Pago').not('vencimento', 'is', null),
+  const [{ data: entradas }, { data: saidas }, ocorrenciasRecorrentes] = await Promise.all([
+    supabase.from('lancamentos').select('id, valor, status, vencimento').eq('tipo', 'Entrada').neq('status', 'Pago').not('vencimento', 'is', null).is('deletado_em', null),
+    supabase.from('lancamentos').select('id, valor, status, vencimento').eq('tipo', 'Saída').neq('status', 'Pago').not('vencimento', 'is', null).is('deletado_em', null),
+    getOcorrenciasRecorrentesFuturas(limiteMax),
   ]);
   const entradasList = (entradas ?? []) as { id: number; valor: number; status: string; vencimento: string }[];
   const saidasList = (saidas ?? []) as { id: number; valor: number; status: string; vencimento: string }[];
@@ -94,6 +126,8 @@ export async function getProjecaoCaixa(): Promise<ProjecaoHorizonte[]> {
     const saidasSaldo = saidasList
       .filter(l => l.vencimento <= limite)
       .reduce((a, l) => a + calcularSaldo(l, baixasMap.get(l.id)).saldo, 0);
-    return { dias, saldo: saldoAtual + entradasSaldo - saidasSaldo };
+    const entradasRecorrentes = ocorrenciasRecorrentes.filter(o => o.tipo === 'Entrada' && o.data <= limite).reduce((a, o) => a + o.valor, 0);
+    const saidasRecorrentes = ocorrenciasRecorrentes.filter(o => o.tipo === 'Saída' && o.data <= limite).reduce((a, o) => a + o.valor, 0);
+    return { dias, saldo: saldoAtual + entradasSaldo - saidasSaldo + entradasRecorrentes - saidasRecorrentes };
   });
 }

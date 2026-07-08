@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/client";
 import { getClientes } from "@/services/clientes.service";
 import { createPedido, getProximoIdPedido, getPedidoById } from "@/services/pedidos.service";
 import { criarLancamentosParcelados } from "@/services/financeiro.service";
+import { getFormasPagamento } from "@/services/formasPagamento.service";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import DateInput from "@/components/ui/DateInput";
@@ -117,6 +118,7 @@ function NovoPedidoPageInner() {
   const [tabelas, setTabelas]         = useState<TabelaPreco[]>([]);
   const [tabelaItens, setTabelaItens] = useState<TabelaPrecoItem[]>([]);
   const [vendedores, setVendedores]   = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
+  const [formasPagamento, setFormasPagamento] = useState<string[]>(["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"]);
   const [proximoId, setProximoId]     = useState("");
 
   const [clienteId, setClienteId]   = useState<number | null>(null);
@@ -139,13 +141,14 @@ function NovoPedidoPageInner() {
   useEffect(() => { load(); }, []);
 
   async function load() {
-    const [clis, prods, tabs, itens, pid, vends] = await Promise.all([
+    const [clis, prods, tabs, itens, pid, vends, formasPg] = await Promise.all([
       getClientes(true),
       supabase.from("produtos").select("*").eq("ativo", true).then(r => r.data as Produto[]),
       supabase.from("tabelas_preco").select("*").eq("ativo", true).then(r => r.data as TabelaPreco[]),
       supabase.from("tabela_preco_itens").select("*").then(r => r.data as TabelaPrecoItem[] || []),
       getProximoIdPedido(),
       supabase.from("vendedores").select("id, nome, comissao_pct").eq("ativo", true).order("nome").then(r => r.data ?? []),
+      getFormasPagamento(true),
     ]);
     setClientes(clis || []);
     setProdutos(prods || []);
@@ -154,6 +157,7 @@ function NovoPedidoPageInner() {
     setVendedores(vends as Pick<Vendedor, "id" | "nome" | "comissao_pct">[]);
     setProximoId(pid);
     setItens([{ ...ITEM_VAZIO }]);
+    if (formasPg.length > 0) setFormasPagamento(formasPg.map(f => f.nome));
 
     const duplicarDe = searchParams.get("duplicarDe");
     if (duplicarDe) {
@@ -502,6 +506,12 @@ function NovoPedidoPageInner() {
               <AutocompleteInput options={clienteOpts} value={clienteId} onChange={(id) => setClienteId(id)} placeholder="Buscar cliente..." />
             </div>
 
+            {clienteId && clientes.find(c => c.id === clienteId)?.bloqueado_credito && (
+              <div className="al al-w" style={{ marginBottom: "10px", fontSize: "12px" }}>
+                ⛔ Este cliente está com o crédito bloqueado (inadimplência). Confira antes de seguir com o pedido.
+              </div>
+            )}
+
             <div className="fg" style={{ marginBottom: "10px" }}>
               <label className="fl">Vendedor / Comissão</label>
               <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
@@ -584,7 +594,7 @@ function NovoPedidoPageInner() {
                         onChange={e => handleFormaParc(idx, e.target.value)}
                       >
                         <option value="">— Forma —</option>
-                        {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
+                        {formasPagamento.map(f => <option key={f}>{f}</option>)}
                       </select>
                       <select
                         className="fc"

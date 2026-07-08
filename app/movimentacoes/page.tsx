@@ -126,6 +126,7 @@ function MovimentacoesPageInner() {
                  plano_contas_id, created_at,
                  plano_contas(id, codigo_estruturado, descricao),
                  clientes(id, nome)`)
+        .is("deletado_em", null)
         .order("created_at", { ascending: false }),
       supabase
         .from("plano_contas")

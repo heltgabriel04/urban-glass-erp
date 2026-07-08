@@ -13,15 +13,17 @@ interface Props {
   className?: string;
   wrapperStyle?: CSSProperties;
   inputStyle?: CSSProperties;
+  id?: string;
 }
 
 export default function SearchInput({
-  value, onChange, placeholder, icon = true, className, wrapperStyle, inputStyle,
+  value, onChange, placeholder, icon = true, className, wrapperStyle, inputStyle, id,
 }: Props) {
   return (
     <div className={icon ? "tb-search" : undefined} style={{ position: "relative", ...wrapperStyle }}>
       {icon && <span className="tb-search-ic">⌕</span>}
       <input
+        id={id}
         className={className}
         placeholder={placeholder}
         value={value}

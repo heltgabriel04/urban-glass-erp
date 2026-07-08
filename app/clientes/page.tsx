@@ -127,6 +127,12 @@ export default function ClientesPage() {
 
   function finDe(id: number) { return financeiro.find(f => f.cliente_id === id) ?? null; }
 
+  async function toggleBloqueioCredito(c: Cliente) {
+    const bloquear = !c.bloqueado_credito;
+    const res = await updateCliente(c.id, { bloqueado_credito: bloquear, bloqueado_credito_em: bloquear ? new Date().toISOString() : null });
+    if (res) load();
+  }
+
   function abrirNovo() { setForm(VAZIO); setEditId(null); setAba("geral"); setCnpjStatus(""); setModal(true); }
 
   function abrirEdit(c: Cliente) {
@@ -314,6 +320,7 @@ export default function ClientesPage() {
                         <strong>{c.nome}</strong>
                         {c.email && <div className="tdim">{c.email}</div>}
                         {!c.ativo && <span className="chip cr" style={{ fontSize:"9px", marginTop:"2px" }}>Inativo</span>}
+                        {c.bloqueado_credito && <span className="chip cr" style={{ fontSize:"9px", marginTop:"2px" }} title="Crédito bloqueado">⛔ Crédito bloqueado</span>}
                       </td>
                       <td className="mono">
                         <div style={{ fontSize:"10px", color:"var(--t3)" }}>{c.tipo_pessoa === "PF" ? "CPF" : "CNPJ"}</div>
@@ -349,6 +356,10 @@ export default function ClientesPage() {
                         <div style={{ display:"flex", gap:"6px" }}>
                           <a href={`/clientes/${c.id}`} className="btn bg xs" onClick={e => e.stopPropagation()}>Ver</a>
                           <button className="btn bg xs" onClick={e => { e.stopPropagation(); abrirEdit(c); }}>Editar</button>
+                          <button className="btn bg xs" style={{ color: c.bloqueado_credito ? "var(--ok)" : "var(--err)" }}
+                            onClick={e => { e.stopPropagation(); toggleBloqueioCredito(c); }}>
+                            {c.bloqueado_credito ? "Desbloquear" : "Bloquear crédito"}
+                          </button>
                         </div>
                       </td>
                       <td style={{ width:"40px", textAlign:"center" }}>

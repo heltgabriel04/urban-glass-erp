@@ -49,7 +49,7 @@ export default function DashboardPage() {
       getEstoque(),
       getResumoQualidade(),
       getCompras(),
-      supabase.from("lancamentos").select("valor, vencimento").eq("tipo", "Saída").neq("status", "Pago"),
+      supabase.from("lancamentos").select("valor, vencimento").eq("tipo", "Saída").neq("status", "Pago").is("deletado_em", null),
     ]);
     setPedidos(peds);
     setFinanceiro(fin);

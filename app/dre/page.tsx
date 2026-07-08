@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
-import { getDRE, type DRE } from "@/services/dre.service";
+import { getDRE, type DRE, type RegimeDRE } from "@/services/dre.service";
 import { formatBRL, formatPercent, MESES } from "@/lib/formatters";
+import { exportarExcel } from "@/lib/exportExcel";
 
 const ANO_ATUAL = new Date().getFullYear();
 const ANOS = [ANO_ATUAL, ANO_ATUAL - 1, ANO_ATUAL - 2];
@@ -11,14 +12,15 @@ const ANOS = [ANO_ATUAL, ANO_ATUAL - 1, ANO_ATUAL - 2];
 export default function DREPage() {
   const [ano, setAno] = useState(ANO_ATUAL);
   const [mes, setMes] = useState<number | null>(null); // null = ano todo
+  const [regime, setRegime] = useState<RegimeDRE>("competencia");
   const [dre, setDre] = useState<DRE | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { (async () => {
     setLoading(true);
-    setDre(await getDRE(ano, mes));
+    setDre(await getDRE(ano, mes, regime));
     setLoading(false);
-  })(); }, [ano, mes]);
+  })(); }, [ano, mes, regime]);
 
   const periodoLabel = mes ? `${MESES[mes - 1]}/${ano}` : `${ano} (ano todo)`;
   const corResultado = (dre?.resultado ?? 0) >= 0 ? "var(--ok)" : "var(--err)";
@@ -28,6 +30,10 @@ export default function DREPage() {
       <div className="tb">
         <div className="tb-title">DRE · Resultado</div>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <div style={{ display: "flex", border: "1px solid var(--b2)", borderRadius: "8px", overflow: "hidden" }}>
+            <button className={regime === "competencia" ? "btn bp sm" : "btn bg sm"} style={{ borderRadius: 0 }} onClick={() => setRegime("competencia")}>Competência</button>
+            <button className={regime === "caixa" ? "btn bp sm" : "btn bg sm"} style={{ borderRadius: 0 }} onClick={() => setRegime("caixa")}>Caixa</button>
+          </div>
           <select className="fc" value={mes ?? ""} onChange={e => setMes(e.target.value ? Number(e.target.value) : null)} style={{ margin: 0, width: "auto" }}>
             <option value="">Ano todo</option>
             {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
@@ -35,18 +41,36 @@ export default function DREPage() {
           <select className="fc" value={ano} onChange={e => setAno(Number(e.target.value))} style={{ margin: 0, width: "auto" }}>
             {ANOS.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
+          <button className="btn bg sm" disabled={!dre} onClick={() => dre && exportarExcel(`DRE_UrbanGlass_${periodoLabel.replace("/", "-")}`,
+            ["Linha", "Valor"],
+            [
+              ["Receita Bruta", dre.receitaBruta],
+              ...(dre.devolucoes > 0 ? [["(-) Devoluções", -dre.devolucoes]] : []),
+              ["(-) CMV", -dre.cmv],
+              ["= Lucro Bruto", dre.lucroBruto],
+              ...dre.despesas.map(d => [`(-) ${d.categoria}`, -d.valor]),
+              ["(-) Total de Despesas", -dre.despesasTotal],
+              ["= Resultado", dre.resultado],
+            ] as (string | number)[][]
+          )}>⇩ Exportar</button>
         </div>
       </div>
 
       <div className="con">
         <div className="al al-i" style={{ marginBottom: "16px", fontSize: "12px" }}>
-          DRE por competência ({periodoLabel}). Receita = faturamento (pedidos por data). CMV usa o custo/m² atual
-          do estoque (sem lapidação). Despesas = lançamentos de saída agrupados pelo Plano de Contas.
+          {regime === "competencia" ? (
+            <>DRE por competência ({periodoLabel}). Receita = faturamento (pedidos por data). CMV usa o custo/m² atual
+            do estoque (sem lapidação). Despesas = lançamentos de saída agrupados pelo Plano de Contas.</>
+          ) : (
+            <>DRE por caixa ({periodoLabel}). Receita e despesas somadas pela data em que a baixa foi registrada
+            (dinheiro que efetivamente mudou de mão) — CMV não é calculado nesse regime.</>
+          )}
         </div>
 
         {loading || !dre ? <div className="loading">Calculando DRE...</div> : (
           <div style={{ maxWidth: "640px", background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "12px", overflow: "hidden" }}>
-            <Linha label="Receita Bruta" valor={dre.receita} forte />
+            <Linha label="Receita Bruta" valor={dre.receitaBruta} forte />
+            {dre.devolucoes > 0 && <Linha label="(−) Devoluções" valor={-dre.devolucoes} cor="var(--warn)" />}
             <Linha label="(−) CMV" valor={-dre.cmv} cor="var(--warn)" />
             <Linha label="= Lucro Bruto" valor={dre.lucroBruto} forte sub={formatPercent(dre.margemBrutaPct, 1) + " da receita"} divisor />
 

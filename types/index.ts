@@ -54,6 +54,8 @@ export interface Cliente {
   tabela: TabelaCliente;
   ativo: boolean;
   credito: number;
+  bloqueado_credito?: boolean;
+  bloqueado_credito_em?: string | null;
   created_at: string;
 }
 
@@ -475,7 +477,15 @@ export interface Lancamento {
   dt_emissao?: string | null;
   dt_pagamento?: string | null;
   fornecedor?: string | null;
+  fornecedor_id?: number | null;
   obs?: string | null;
+  natureza?: NaturezaLancamento;
+  lancamento_origem_id?: number | null;
+  grupo_parcelamento_id?: string | null;
+  compra_id?: string | null;
+  deletado_em?: string | null;
+  deletado_por?: string | null;
+  deletado_motivo?: string | null;
   created_at: string;
   pedidos?: Pick<Pedido, 'id'>;
   clientes?: Pick<Cliente, 'id' | 'nome'>;
@@ -515,13 +525,20 @@ export type CentroCustoInsert = Omit<CentroCusto, 'id' | 'created_at'>;
 export type CentroCustoUpdate = Partial<CentroCustoInsert>;
 
 // ─── BAIXA DE LANÇAMENTO ───────────────────────────────────
+export type NaturezaLancamento = 'normal' | 'adiantamento' | 'reembolso' | 'devolucao';
+
 export interface BaixaLancamento {
   id: number;
-  lancamento_id: number;
+  lancamento_id: number | null;
+  transferencia_id?: number | null;
   valor: number;
+  valor_juros?: number;
+  valor_multa?: number;
+  valor_desconto?: number;
   data: string;
   conta_id: number | null;
   forma_pgto: string | null;
+  origem_adiantamento_id?: number | null;
   obs: string | null;
   estornado_em: string | null;
   estornado_motivo: string | null;
@@ -550,6 +567,28 @@ export interface LancamentoRecorrente {
 
 export type LancamentoRecorrenteInsert = Omit<LancamentoRecorrente, 'id' | 'created_at' | 'gerado_ate'>;
 export type LancamentoRecorrenteUpdate = Partial<LancamentoRecorrenteInsert>;
+
+// ─── FORMA DE PAGAMENTO ─────────────────────────────────────
+export interface FormaPagamento {
+  id: number;
+  nome: string;
+  ativo: boolean;
+  taxa_pct: number | null;
+  created_at: string;
+}
+
+export type FormaPagamentoInsert = Omit<FormaPagamento, 'id' | 'created_at'>;
+export type FormaPagamentoUpdate = Partial<FormaPagamentoInsert>;
+
+// ─── RATEIO DE LANÇAMENTO ────────────────────────────────────
+export interface LancamentoRateio {
+  id: number;
+  lancamento_id: number;
+  centro_custo_id: number;
+  percentual: number;
+  created_at: string;
+  centros_custo?: Pick<CentroCusto, 'id' | 'nome'> | null;
+}
 
 // ─── HISTÓRICO OTIMIZADOR ──────────────────────────────────
 export interface HistoricoOtimizador {
@@ -943,6 +982,7 @@ export type Database = {
       centros_custo:           { Row: CentroCusto;         Insert: CentroCustoInsert;   Update: CentroCustoUpdate   };
       baixas_lancamento:       { Row: BaixaLancamento;     Insert: BaixaLancamentoInsert                       };
       lancamentos_recorrentes: { Row: LancamentoRecorrente; Insert: LancamentoRecorrenteInsert; Update: LancamentoRecorrenteUpdate };
+      formas_pagamento:        { Row: FormaPagamento;       Insert: FormaPagamentoInsert; Update: FormaPagamentoUpdate };
       historico_otimizador:    { Row: HistoricoOtimizador                                                     };
       tabelas_preco:           { Row: TabelaPreco                                                             };
       tabela_preco_itens:      { Row: TabelaPrecoItem                                                         };
