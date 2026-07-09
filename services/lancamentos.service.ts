@@ -195,6 +195,78 @@ export async function estornarBaixa(params: EstornarBaixaParams): Promise<boolea
   return true;
 }
 
+// ── Edição direta de baixa (correção de data/valor já realizados) ──────────
+// Diferente do estorno (que desfaz e exige um novo lançamento de baixa),
+// isso corrige a baixa no lugar — pensado pro Fluxo de Caixa, onde faz mais
+// sentido "mudei a data errada" do que "estornar e lançar de novo". Sempre
+// exige motivo, igual estorno, porque altera histórico financeiro já
+// fechado.
+export interface EditarBaixaParams {
+  baixaId: number;
+  data?: string;
+  valor?: number;
+  motivo: string;
+}
+
+export async function editarBaixa(params: EditarBaixaParams): Promise<boolean> {
+  const motivo = params.motivo?.trim();
+  if (!motivo) { console.error('editarBaixa: motivo é obrigatório'); return false; }
+
+  const { data: baixaRow, error: errBaixa } = await supabase
+    .from('baixas_lancamento')
+    .select('id, lancamento_id, valor, data, estornado_em')
+    .eq('id', params.baixaId)
+    .maybeSingle();
+  if (errBaixa || !baixaRow) { console.error('editarBaixa: baixa não encontrada', errBaixa); return false; }
+  const baixa = baixaRow as { id: number; lancamento_id: number | null; valor: number; data: string; estornado_em: string | null };
+  if (baixa.estornado_em) { console.warn('editarBaixa: baixa já estornada'); return false; }
+  if (!baixa.lancamento_id) { console.warn('editarBaixa: baixa de transferência, não suportado aqui'); return false; }
+
+  const updates: Record<string, unknown> = {};
+  if (params.data !== undefined && params.data !== baixa.data) updates.data = params.data;
+  if (params.valor !== undefined && Number(params.valor) !== Number(baixa.valor)) updates.valor = params.valor;
+  if (Object.keys(updates).length === 0) return true;
+
+  const { error: errUpdate } = await supabase.from('baixas_lancamento').update(updates as never).eq('id', params.baixaId);
+  if (errUpdate) { console.error('editarBaixa (update):', errUpdate); return false; }
+
+  const { data: lancRow } = await supabase
+    .from('lancamentos')
+    .select('id, valor, tipo, pedido_id')
+    .eq('id', baixa.lancamento_id)
+    .maybeSingle();
+  const lanc = lancRow as { id: number; valor: number; tipo: string; pedido_id: string | null } | null;
+
+  if (lanc) {
+    const ativas = (await getBaixas(baixa.lancamento_id)).filter(b => !b.estornado_em);
+    const valorPago = ativas.reduce((a, b) => a + Number(b.valor), 0);
+    const statusAberto = lanc.tipo === 'Entrada' ? 'A Receber' : 'Pendente';
+    const ultimaData = ativas.length > 0
+      ? ativas.reduce((max, b) => (b.data > max ? b.data : max), ativas[0].data)
+      : null;
+
+    await supabase
+      .from('lancamentos')
+      .update({
+        status: valorPago >= Number(lanc.valor) ? 'Pago' : statusAberto,
+        dt_pagamento: ultimaData,
+      } as never)
+      .eq('id', lanc.id);
+
+    if (lanc.tipo === 'Entrada' && lanc.pedido_id) {
+      await recalcularRecebido(lanc.pedido_id);
+    }
+  }
+
+  registrarLog({
+    acao: 'editou', tabela: 'baixas_lancamento', registro_id: String(params.baixaId),
+    descricao: `Editou baixa #${params.baixaId} do lançamento #${baixa.lancamento_id} — motivo: ${motivo}`,
+    campos_alterados: { ...updates, motivo, valor_anterior: baixa.valor, data_anterior: baixa.data },
+  });
+
+  return true;
+}
+
 // ── Exclusão (soft-delete quando já teve baixa) ─────────────────────────────
 
 // Lançamento que nunca teve baixa (nem estornada) é apagado de verdade —

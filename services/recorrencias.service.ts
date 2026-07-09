@@ -106,3 +106,51 @@ export async function gerarProximosMeses(regraId: number, meses = 12): Promise<n
 
   return inserts.length;
 }
+
+export interface OcorrenciaFuturaDetalhada {
+  recorrenciaId: number;
+  data: string;
+  tipo: 'Entrada' | 'Saída';
+  valor: number;
+  descricao: string;
+  pessoa: string | null;
+}
+
+// Ocorrências futuras de recorrências ativas que ainda não viraram
+// lançamento físico (além de gerado_ate) — usado no Fluxo de Caixa pra
+// mostrar o compromisso mesmo antes de alguém clicar em "gerar" em
+// /recorrencias. Mesmo critério da projeção do Dashboard Financeiro,
+// mas com os dados identificáveis (pessoa/descrição) pro extrato.
+export async function getOcorrenciasFuturas(horizonteDias = 180): Promise<OcorrenciaFuturaDetalhada[]> {
+  const { data, error } = await supabase.from('lancamentos_recorrentes').select('*, clientes(id, nome)').eq('ativo', true);
+  if (error) { console.error('getOcorrenciasFuturas:', error); return []; }
+  const regras = (data ?? []) as LancamentoRecorrente[];
+
+  const hoje = new Date();
+  const limiteMax = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + horizonteDias);
+  const ocorrencias: OcorrenciaFuturaDetalhada[] = [];
+
+  for (const r of regras) {
+    let cursor: Date;
+    if (r.gerado_ate) {
+      const [y, m] = r.gerado_ate.split('-').map(Number);
+      cursor = new Date(y, m - 1 + 1, 1);
+    } else {
+      cursor = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    }
+    for (let i = 0; i < 24; i++) {
+      const data = new Date(cursor.getFullYear(), cursor.getMonth(), r.dia_vencimento);
+      if (data > limiteMax) break;
+      ocorrencias.push({
+        recorrenciaId: r.id,
+        data: fmtData(data),
+        tipo: r.tipo,
+        valor: Number(r.valor),
+        descricao: r.descricao,
+        pessoa: r.clientes?.nome ?? r.fornecedor ?? null,
+      });
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+  }
+  return ocorrencias;
+}

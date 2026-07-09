@@ -1,51 +1,60 @@
 "use client";
 
-import { Suspense, useEffect, useState, useMemo } from "react";
+import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
-import { formatBRL } from "@/lib/formatters";
-import { getBaixasPorLancamentos } from "@/services/lancamentos.service";
+import { formatBRL, formatDate } from "@/lib/formatters";
+import DateInput from "@/components/ui/DateInput";
+import CurrencyInput from "@/components/ui/CurrencyInput";
+import { useToast } from "@/components/ui/toast";
+import { editarBaixa, editarLancamento } from "@/services/lancamentos.service";
+import { getSaldoCaixaTotal } from "@/services/dashboardFinanceiro.service";
+import { getOcorrenciasFuturas } from "@/services/recorrencias.service";
+import { recalcularRecebido } from "@/services/pedidos.service";
 import { exportarExcel } from "@/lib/exportExcel";
-import type { BaixaLancamento } from "@/types";
 
-interface Mov {
-  id: number;
+// ── Datas ─────────────────────────────────────────────────────────────────
+function fmtISO(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+function hojeISO() { return fmtISO(new Date()); }
+function inicioMes(base = new Date()) { return fmtISO(new Date(base.getFullYear(), base.getMonth(), 1)); }
+function fimMes(base = new Date()) { return fmtISO(new Date(base.getFullYear(), base.getMonth() + 1, 0)); }
+function addDias(iso: string, n: number) { const [y, m, d] = iso.split("-").map(Number); return fmtISO(new Date(y, m - 1, d + n)); }
+
+const ATALHOS: { label: string; get: () => readonly [string, string] }[] = [
+  { label: "Este mês", get: () => [inicioMes(), fimMes()] },
+  { label: "Mês passado", get: () => { const d = new Date(); d.setMonth(d.getMonth() - 1); return [inicioMes(d), fimMes(d)]; } },
+  { label: "Últimos 30 dias", get: () => [addDias(hojeISO(), -30), hojeISO()] },
+  { label: "Próximos 30 dias", get: () => [hojeISO(), addDias(hojeISO(), 30)] },
+];
+
+// ── Linhas do extrato ────────────────────────────────────────────────────
+type OrigemLinha = "baixa" | "pago-legado" | "pendente" | "recorrencia-futura";
+
+interface LinhaBase {
+  key: string;
+  data: string;
   tipo: "Entrada" | "Saída";
   valor: number;
-  vencimento: string | null;
-  dt_pagamento: string | null;
-  conta: string | null;
-  status: string;
+  descricao: string;
+  pessoa: string | null;
+  pedidoId: string | null;
+  documento: string | null;
+  origem: OrigemLinha;
+  lancamentoId?: number;
+  baixaId?: number;
+  temBaixaAtiva?: boolean;
 }
+interface Linha extends LinhaBase { saldoAcumulado: number; }
 
-interface EventoRealizado { data: string; valor: number; tipo: "Entrada" | "Saída"; }
+interface EdicaoLinha { data: string; valor: number; motivo: string; salvando: boolean; }
 
-function mesAtual() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function diasNoMes(yyyyMM: string) {
-  const [y, m] = yyyyMM.split("-").map(Number);
-  return new Date(y, m, 0).getDate();
-}
-
-function primeirodia(yyyyMM: string) { return `${yyyyMM}-01`; }
-
-function labelMes(yyyyMM: string) {
-  const [y, m] = yyyyMM.split("-").map(Number);
-  return new Date(y, m - 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-}
-
-function pad(n: number) { return String(n).padStart(2, "0"); }
-
-const BRL = (v: number) => formatBRL(v);
-
-function ColorVal({ v, zero = "var(--t3)" }: { v: number; zero?: string }) {
-  const cor = v > 0 ? "var(--ok)" : v < 0 ? "var(--err)" : zero;
-  return <span style={{ color: cor, fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>{BRL(v)}</span>;
-}
+type LancRow = {
+  id: number; tipo: "Entrada" | "Saída"; descricao: string; valor: number; status: string;
+  vencimento: string | null; dt_pagamento: string | null; pedido_id: string | null;
+  fornecedor: string | null; documento: string | null; clientes: { id: number; nome: string } | null;
+};
+type BaixaRow = { id: number; lancamento_id: number; valor: number; data: string };
 
 export default function FluxoPage() {
   return (
@@ -58,300 +67,382 @@ export default function FluxoPage() {
 function FluxoPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [mes, setMes]           = useState(searchParams.get("mes") || mesAtual());
-  const [conta, setConta]       = useState(searchParams.get("conta") ?? "");
-  const [movs, setMovs]         = useState<Mov[]>([]);
-  const [baixasMap, setBaixasMap] = useState<Map<number, BaixaLancamento[]>>(new Map());
-  const [loading, setLoading]   = useState(true);
+  const { toast } = useToast();
 
-  useEffect(() => { load(); }, [mes, conta]);
+  const [dataIni, setDataIni] = useState(searchParams.get("de") || inicioMes());
+  const [dataFim, setDataFim] = useState(searchParams.get("ate") || fimMes());
+  const [loading, setLoading] = useState(true);
+  const [linhasBase, setLinhasBase] = useState<LinhaBase[]>([]);
+  const [saldoInicialContas, setSaldoInicialContas] = useState(0);
+  const [saldoAtual, setSaldoAtual] = useState(0);
+  const [editando, setEditando] = useState<string | null>(null);
+  const [edicao, setEdicao] = useState<EdicaoLinha>({ data: "", valor: 0, motivo: "", salvando: false });
 
-  // Navegação inteligente: mês/conta sobrevivem a refresh/voltar do navegador.
+  useEffect(() => { load(); }, []);
+
+  // Filtro sobrevive a refresh/voltar do navegador.
   useEffect(() => {
     const params = new URLSearchParams();
-    if (mes !== mesAtual()) params.set("mes", mes);
-    if (conta) params.set("conta", conta);
+    if (dataIni !== inicioMes()) params.set("de", dataIni);
+    if (dataFim !== fimMes()) params.set("ate", dataFim);
     const qs = params.toString();
     router.replace(qs ? `/fluxo?${qs}` : "/fluxo", { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mes, conta]);
+  }, [dataIni, dataFim]);
 
   async function load() {
     setLoading(true);
-    let q = supabase
-      .from("lancamentos")
-      .select("id, tipo, valor, vencimento, dt_pagamento, conta, status")
-      .is("deletado_em", null);
-    if (conta) q = q.eq("conta", conta);
-    const { data } = await q;
-    const movsCarregados = (data ?? []) as Mov[];
-    setMovs(movsCarregados);
-    setBaixasMap(await getBaixasPorLancamentos(movsCarregados.map(m => m.id)));
+    const [{ data: lancsRaw }, { data: baixasRaw }, { data: contasRaw }, ocorrencias, saldoAtualCalc] = await Promise.all([
+      supabase.from("lancamentos")
+        .select("id, tipo, descricao, valor, status, vencimento, dt_pagamento, pedido_id, fornecedor, documento, clientes(id, nome)")
+        .is("deletado_em", null),
+      supabase.from("baixas_lancamento")
+        .select("id, lancamento_id, valor, data")
+        .is("estornado_em", null)
+        .not("lancamento_id", "is", null),
+      supabase.from("contas_bancarias").select("saldo_inicial").eq("ativo", true),
+      getOcorrenciasFuturas(400),
+      getSaldoCaixaTotal(),
+    ]);
+
+    const lancs = (lancsRaw ?? []) as unknown as LancRow[];
+    const baixas = (baixasRaw ?? []) as unknown as BaixaRow[];
+    const somaSaldoInicial = ((contasRaw ?? []) as { saldo_inicial: number }[]).reduce((a, c) => a + Number(c.saldo_inicial), 0);
+
+    const lancMap = new Map(lancs.map(l => [l.id, l]));
+    const baixasPorLanc = new Map<number, BaixaRow[]>();
+    for (const b of baixas) {
+      const arr = baixasPorLanc.get(b.lancamento_id) ?? [];
+      arr.push(b);
+      baixasPorLanc.set(b.lancamento_id, arr);
+    }
+
+    const linhas: LinhaBase[] = [];
+
+    for (const b of baixas) {
+      const l = lancMap.get(b.lancamento_id);
+      if (!l) continue;
+      linhas.push({
+        key: `baixa-${b.id}`, data: b.data, tipo: l.tipo, valor: Number(b.valor),
+        descricao: l.descricao, pessoa: l.clientes?.nome ?? l.fornecedor ?? null,
+        pedidoId: l.pedido_id, documento: l.documento, origem: "baixa",
+        lancamentoId: l.id, baixaId: b.id,
+      });
+    }
+
+    for (const l of lancs) {
+      const baixasDoLanc = baixasPorLanc.get(l.id) ?? [];
+      if (l.status === "Pago" && baixasDoLanc.length === 0 && l.dt_pagamento) {
+        linhas.push({
+          key: `legado-${l.id}`, data: l.dt_pagamento, tipo: l.tipo, valor: Number(l.valor),
+          descricao: l.descricao, pessoa: l.clientes?.nome ?? l.fornecedor ?? null,
+          pedidoId: l.pedido_id, documento: l.documento, origem: "pago-legado",
+          lancamentoId: l.id,
+        });
+        continue;
+      }
+      if (l.status === "Pago") continue;
+      const valorPago = baixasDoLanc.reduce((a, bx) => a + Number(bx.valor), 0);
+      const saldo = Number(l.valor) - valorPago;
+      if (saldo <= 0 || !l.vencimento) continue;
+      linhas.push({
+        key: `pendente-${l.id}`, data: l.vencimento, tipo: l.tipo, valor: saldo,
+        descricao: l.descricao, pessoa: l.clientes?.nome ?? l.fornecedor ?? null,
+        pedidoId: l.pedido_id, documento: l.documento, origem: "pendente",
+        lancamentoId: l.id, temBaixaAtiva: baixasDoLanc.length > 0,
+      });
+    }
+
+    for (const o of ocorrencias) {
+      linhas.push({
+        key: `rec-${o.recorrenciaId}-${o.data}`, data: o.data, tipo: o.tipo, valor: o.valor,
+        descricao: o.descricao, pessoa: o.pessoa, pedidoId: null, documento: null, origem: "recorrencia-futura",
+      });
+    }
+
+    linhas.sort((a, b) => a.data.localeCompare(b.data) || a.key.localeCompare(b.key));
+
+    setLinhasBase(linhas);
+    setSaldoInicialContas(somaSaldoInicial);
+    setSaldoAtual(saldoAtualCalc);
     setLoading(false);
   }
 
-  // Eventos de caixa efetivamente realizados: uma baixa = um evento na data
-  // dela (suporta parcial — um título pode gerar vários eventos em dias
-  // diferentes). Lançamento 'Pago' sem baixa nenhuma é pagamento anterior à
-  // existência dessa tabela — conta como um evento único no dt_pagamento.
-  const eventosRealizados = useMemo(() => {
-    const eventos: EventoRealizado[] = [];
-    for (const mv of movs) {
-      const ativas = (baixasMap.get(mv.id) ?? []).filter(b => !b.estornado_em);
-      if (ativas.length > 0) {
-        for (const b of ativas) eventos.push({ data: b.data, valor: Number(b.valor), tipo: mv.tipo });
-      } else if (mv.status === "Pago" && mv.dt_pagamento) {
-        eventos.push({ data: mv.dt_pagamento, valor: Number(mv.valor), tipo: mv.tipo });
-      }
-    }
-    return eventos;
-  }, [movs, baixasMap]);
+  // Saldo acumulado ao longo de TODA a linha do tempo (não só o período
+  // visível) — pra "menor saldo" e o saldo de cada linha ficarem corretos
+  // mesmo filtrando uma janela que não começa do zero.
+  const linhasComSaldo: Linha[] = useMemo(() => {
+    let acumulado = saldoInicialContas;
+    return linhasBase.map(l => {
+      acumulado += l.tipo === "Entrada" ? l.valor : -l.valor;
+      return { ...l, saldoAcumulado: acumulado };
+    });
+  }, [linhasBase, saldoInicialContas]);
 
-  // ── Contas únicas para filtro ──────────────────────────────
-  const contasUnicas = useMemo(() => {
-    const set = new Set<string>();
-    movs.forEach(m => { if (m.conta) set.add(m.conta); });
-    return [...set].sort();
-  }, [movs]);
+  const visiveis = useMemo(
+    () => linhasComSaldo.filter(l => l.data >= dataIni && l.data <= dataFim),
+    [linhasComSaldo, dataIni, dataFim]
+  );
 
-  // ── Dia a dia ─────────────────────────────────────────────
-  const { realizado, projetado, saldoAntReal, saldoAntProj } = useMemo(() => {
-    const total = diasNoMes(mes);
-    const [y, m] = mes.split("-").map(Number);
-    const inicio = primeirodia(mes);
+  const totaisPeriodo = useMemo(() => {
+    const ent = visiveis.filter(l => l.tipo === "Entrada").reduce((a, l) => a + l.valor, 0);
+    const sai = visiveis.filter(l => l.tipo === "Saída").reduce((a, l) => a + l.valor, 0);
+    return { ent, sai };
+  }, [visiveis]);
 
-    // Saldo anterior REALIZADO: soma dos eventos de baixa (ou pagamento
-    // legado) com data < início do mês
-    const saldoAntReal = eventosRealizados
-      .filter(ev => ev.data < inicio)
-      .reduce((s, ev) => s + (ev.tipo === "Entrada" ? ev.valor : -ev.valor), 0);
+  const menorSaldo = useMemo(() => {
+    if (visiveis.length === 0) return null;
+    return visiveis.reduce((min, l) => (l.saldoAcumulado < min.saldoAcumulado ? l : min), visiveis[0]);
+  }, [visiveis]);
 
-    // Saldo anterior PROJETADO: vencimento existe e < inicio do mês
-    const saldoAntProj = movs
-      .filter(mv => mv.vencimento && mv.vencimento < inicio)
-      .reduce((s, mv) => s + (mv.tipo === "Entrada" ? Number(mv.valor) : -Number(mv.valor)), 0);
+  function abrirEdicao(l: Linha) {
+    setEditando(l.key);
+    setEdicao({ data: l.data, valor: l.valor, motivo: "", salvando: false });
+  }
+  function cancelarEdicao() { setEditando(null); }
 
-    let acumReal = saldoAntReal;
-    let acumProj = saldoAntProj;
+  async function salvarEdicao(l: Linha) {
+    if (!(edicao.valor > 0)) { toast("Valor precisa ser maior que zero", "err"); return; }
+    setEdicao(e => ({ ...e, salvando: true }));
 
-    const realizado: { dia: number; entradas: number; saidas: number; saldoDia: number; saldoMes: number }[] = [];
-    const projetado: { dia: number; entradas: number; saidas: number; saldoDia: number; saldoMes: number }[] = [];
-
-    for (let d = 1; d <= total; d++) {
-      const data = `${y}-${pad(m)}-${pad(d)}`;
-
-      // REALIZADO: soma os eventos de baixa (parcial ou total) do dia
-      const entR = eventosRealizados.filter(ev => ev.data === data && ev.tipo === "Entrada").reduce((s, ev) => s + ev.valor, 0);
-      const saiR = eventosRealizados.filter(ev => ev.data === data && ev.tipo === "Saída").reduce((s, ev) => s + ev.valor, 0);
-      const sdR  = entR - saiR;
-      acumReal  += sdR;
-      realizado.push({ dia: d, entradas: entR, saidas: saiR, saldoDia: sdR, saldoMes: acumReal });
-
-      // PROJETADO: usa vencimento
-      const entP = movs.filter(mv => mv.vencimento === data && mv.tipo === "Entrada").reduce((s, mv) => s + Number(mv.valor), 0);
-      const saiP = movs.filter(mv => mv.vencimento === data && mv.tipo === "Saída").reduce((s, mv) => s + Number(mv.valor), 0);
-      const sdP  = entP - saiP;
-      acumProj  += sdP;
-      projetado.push({ dia: d, entradas: entP, saidas: saiP, saldoDia: sdP, saldoMes: acumProj });
+    let ok = false;
+    if (l.origem === "baixa") {
+      if (!edicao.motivo.trim()) { toast("Informe o motivo da correção", "err"); setEdicao(e => ({ ...e, salvando: false })); return; }
+      ok = await editarBaixa({ baixaId: l.baixaId!, data: edicao.data, valor: edicao.valor, motivo: edicao.motivo.trim() });
+    } else if (l.origem === "pago-legado") {
+      ok = await editarLancamento({ id: l.lancamentoId!, updates: { dt_pagamento: edicao.data, valor: edicao.valor } });
+      if (ok && l.tipo === "Entrada" && l.pedidoId) await recalcularRecebido(l.pedidoId);
+    } else if (l.origem === "pendente") {
+      // Com baixa parcial já registrada, `l.valor` é o SALDO (não o total do
+      // lançamento) e o campo fica bloqueado na UI — nunca manda esse valor
+      // pro update, senão sobrescreve o total do lançamento com o saldo.
+      const mudouData = edicao.data !== l.data;
+      const precisaMotivo = !!l.temBaixaAtiva && mudouData;
+      if (precisaMotivo && !edicao.motivo.trim()) { toast("Título com pagamento parcial — informe o motivo da renegociação", "err"); setEdicao(e => ({ ...e, salvando: false })); return; }
+      const updates: Record<string, unknown> = { vencimento: edicao.data };
+      if (!l.temBaixaAtiva) updates.valor = edicao.valor;
+      ok = await editarLancamento({
+        id: l.lancamentoId!,
+        updates,
+        motivoRenegociacao: precisaMotivo ? edicao.motivo.trim() : undefined,
+      });
     }
 
-    return { realizado, projetado, saldoAntReal, saldoAntProj };
-  }, [movs, eventosRealizados, mes]);
+    setEdicao(e => ({ ...e, salvando: false }));
+    if (ok) { toast("✓ Atualizado"); setEditando(null); load(); }
+    else toast("Erro ao salvar — confira os dados", "err");
+  }
 
-  // totais do mês
-  const totReal = realizado.reduce((s, d) => ({ ent: s.ent + d.entradas, sai: s.sai + d.saidas }), { ent: 0, sai: 0 });
-  const totProj = projetado.reduce((s, d) => ({ ent: s.ent + d.entradas, sai: s.sai + d.saidas }), { ent: 0, sai: 0 });
-  const saldoFinalReal = realizado.length ? realizado[realizado.length - 1].saldoMes : saldoAntReal;
-  const saldoFinalProj = projetado.length ? projetado[projetado.length - 1].saldoMes : saldoAntProj;
-
-  const hoje = new Date().toISOString().split("T")[0];
-  const [hY, hM, hD] = hoje.split("-").map(Number);
-  const [mY, mM] = mes.split("-").map(Number);
-  const diaHoje = (hY === mY && hM === mM) ? hD : null;
-
-  const thStyle: React.CSSProperties = {
-    padding: "7px 10px", fontSize: "9px", fontWeight: 700,
-    textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--t3)",
-    borderBottom: "1px solid var(--b1)", textAlign: "right", background: "var(--surf2)",
-  };
-  const thFirst: React.CSSProperties = { ...thStyle, textAlign: "left", width: "36px" };
-  const td = (v: number, right = true): React.CSSProperties => ({
-    padding: "5px 10px", fontSize: "12px", textAlign: right ? "right" : "left",
-    fontFamily: "'DM Mono',monospace",
-  });
-
-  function Tabela({ dados, saldoAnt, acento }: {
-    dados: typeof realizado;
-    saldoAnt: number;
-    acento: string;
-  }) {
-    const totalEnt  = dados.reduce((s, d) => s + d.entradas, 0);
-    const totalSai  = dados.reduce((s, d) => s + d.saidas, 0);
-    const saldoFinal = dados.length ? dados[dados.length - 1].saldoMes : saldoAnt;
-
-    return (
-      <div style={{ overflowX: "auto" }}>
-        <div style={{ fontSize: "11px", color: "var(--t3)", marginBottom: "10px", display: "flex", justifyContent: "flex-end", gap: "6px" }}>
-          Saldo Final do Mês Anterior
-          <span style={{ fontFamily: "'DM Mono',monospace", fontWeight: 700, color: saldoAnt >= 0 ? "var(--ok)" : "var(--err)" }}>
-            {BRL(saldoAnt)}
-          </span>
-        </div>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={{ ...thFirst, background: `${acento}10` }}>Dia</th>
-              <th style={{ ...thStyle, background: `${acento}10`, color: acento }}>Entradas</th>
-              <th style={{ ...thStyle, background: `${acento}10`, color: "var(--err)" }}>Saídas</th>
-              <th style={{ ...thStyle, background: `${acento}10` }}>Saldo do Dia</th>
-              <th style={{ ...thStyle, background: `${acento}10`, color: acento }}>Saldo do Mês</th>
-            </tr>
-          </thead>
-          <tbody>
-            {dados.map(row => {
-              const isHoje = diaHoje === row.dia;
-              const rowBg = isHoje ? `${acento}09` : row.dia % 2 === 0 ? "var(--surf2)" : "transparent";
-              return (
-                <tr key={row.dia} style={{ background: rowBg, outline: isHoje ? `1px solid ${acento}40` : "none" }}>
-                  <td style={{ ...td(0, false), fontWeight: isHoje ? 800 : 400, color: isHoje ? acento : "var(--t2)", fontSize: "12px" }}>
-                    {row.dia}
-                    {isHoje && <span style={{ fontSize: "8px", marginLeft: "3px", color: acento }}>●</span>}
-                  </td>
-                  <td style={td(row.entradas)}>
-                    {row.entradas > 0 ? <span style={{ color: "var(--ok)" }}>{BRL(row.entradas)}</span> : <span style={{ color: "var(--t3)" }}>0,00</span>}
-                  </td>
-                  <td style={td(row.saidas)}>
-                    {row.saidas > 0 ? <span style={{ color: "var(--err)" }}>{BRL(row.saidas)}</span> : <span style={{ color: "var(--t3)" }}>0,00</span>}
-                  </td>
-                  <td style={td(row.saldoDia)}>
-                    {row.saldoDia !== 0 ? <ColorVal v={row.saldoDia} /> : <span style={{ color: "var(--t3)" }}>0,00</span>}
-                  </td>
-                  <td style={td(row.saldoMes)}>
-                    <ColorVal v={row.saldoMes} zero="var(--t2)" />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot>
-            <tr style={{ borderTop: "2px solid var(--b1)", background: `${acento}08` }}>
-              <td style={{ ...td(0, false), fontWeight: 700, color: "var(--t2)", fontSize: "11px" }}>Total</td>
-              <td style={{ ...td(0), color: "var(--ok)", fontWeight: 800 }}>{BRL(totalEnt)}</td>
-              <td style={{ ...td(0), color: "var(--err)", fontWeight: 800 }}>{BRL(totalSai)}</td>
-              <td style={{ ...td(0) }}><ColorVal v={totalEnt - totalSai} /></td>
-              <td style={{ ...td(0) }}>
-                <span style={{ fontFamily: "'DM Mono',monospace", fontWeight: 800, fontSize: "13px", color: saldoFinal >= 0 ? "var(--ok)" : "var(--err)" }}>
-                  {BRL(saldoFinal)}
-                </span>
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+  function handleExportar() {
+    exportarExcel(`FluxoCaixa_UrbanGlass_${dataIni}_a_${dataFim}`,
+      ["Data", "Cliente/Fornecedor", "Descrição", "Pedido/Documento", "Situação", "Valor", "Saldo"],
+      visiveis.map(l => [
+        formatDate(l.data), l.pessoa ?? "", l.descricao, l.pedidoId ?? l.documento ?? "",
+        situacaoLabel(l), l.tipo === "Saída" ? -l.valor : l.valor, l.saldoAcumulado,
+      ])
     );
   }
 
   return (
     <AppLayout>
       <div className="tb">
-        <div className="tb-title">Fluxo de Caixa Diário</div>
-        <button className="btn bg sm" onClick={() => exportarExcel(`FluxoCaixa_UrbanGlass_${mes}`,
-          ["Dia", "Entradas Realizadas", "Saídas Realizadas", "Saldo Realizado", "Entradas Projetadas", "Saídas Projetadas", "Saldo Projetado"],
-          realizado.map((r, i) => [r.dia, r.entradas, r.saidas, r.saldoMes, projetado[i]?.entradas ?? 0, projetado[i]?.saidas ?? 0, projetado[i]?.saldoMes ?? 0])
-        )}>⇩ Exportar</button>
+        <div className="tb-title">Fluxo de Caixa</div>
+        <button className="btn bg sm" onClick={handleExportar}>⇩ Exportar</button>
       </div>
 
       <div className="con">
 
-        {/* Filtros */}
-        <div style={{ display: "flex", gap: "12px", alignItems: "flex-end", marginBottom: "20px", background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "14px 16px" }}>
-          <div>
-            <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Mês / Ano</div>
-            <input type="month" className="fc" style={{ margin: 0, width: "160px" }} value={mes}
-              onChange={e => setMes(e.target.value)} />
+        {/* Filtro de período — estilo extrato */}
+        <div style={{ display: "flex", gap: "10px", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "16px", background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "14px 16px" }}>
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+            {ATALHOS.map(a => {
+              const [ai, af] = a.get();
+              const ativo = ai === dataIni && af === dataFim;
+              return (
+                <button key={a.label} className={ativo ? "btn bp xs" : "btn bg xs"}
+                  onClick={() => { setDataIni(ai); setDataFim(af); }}>
+                  {a.label}
+                </button>
+              );
+            })}
           </div>
-          <div>
-            <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Conta Bancária</div>
-            <select className="fc" style={{ margin: 0, minWidth: "200px" }} value={conta} onChange={e => setConta(e.target.value)}>
-              <option value="">Todas as contas</option>
-              {contasUnicas.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t2)", marginBottom: "2px" }}>
-            {labelMes(mes)}
+          <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", marginLeft: "auto" }}>
+            <div>
+              <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>De</div>
+              <DateInput value={dataIni} onChange={setDataIni} style={{ margin: 0, width: "130px" }} />
+            </div>
+            <div>
+              <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Até</div>
+              <DateInput value={dataFim} onChange={setDataFim} style={{ margin: 0, width: "130px" }} />
+            </div>
           </div>
         </div>
 
-        {/* Resumo do mês */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px", marginBottom: "20px" }}>
-          {[
-            { label: "Entradas Realizadas", val: totReal.ent, cor: "var(--ok)" },
-            { label: "Saídas Realizadas",   val: totReal.sai, cor: "var(--err)" },
-            { label: "Saldo Realizado",     val: saldoFinalReal, cor: saldoFinalReal >= 0 ? "var(--ok)" : "var(--err)" },
-            { label: "Saldo Projetado",     val: saldoFinalProj, cor: saldoFinalProj >= 0 ? "var(--ok)" : "var(--err)" },
-          ].map(s => (
-            <div key={s.label} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "14px 16px" }}>
-              <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: "6px" }}>{s.label}</div>
-              <div style={{ fontSize: "17px", fontWeight: 800, color: s.cor, fontFamily: "'DM Mono', monospace" }}>{BRL(s.val)}</div>
+        {/* KPIs */}
+        <div className="g4" style={{ marginBottom: "16px" }}>
+          <div className="kpi">
+            <div className="kpi-l">Caixa Atual</div>
+            <div className="kpi-v" style={{ color: saldoAtual >= 0 ? "var(--ok)" : "var(--err)" }}>{formatBRL(saldoAtual)}</div>
+            <div className="kpi-s">Saldo real agora, em todas as contas</div>
+          </div>
+          <div className="kpi">
+            <div className="kpi-l">Menor Saldo no Período</div>
+            <div className="kpi-v" style={{ color: menorSaldo && menorSaldo.saldoAcumulado < 0 ? "var(--err)" : "var(--acc)" }}>
+              {menorSaldo ? formatBRL(menorSaldo.saldoAcumulado) : "—"}
             </div>
-          ))}
+            <div className="kpi-s">{menorSaldo ? `Em ${formatDate(menorSaldo.data)}` : "Sem movimentações no período"}</div>
+          </div>
+          <div className="kpi">
+            <div className="kpi-l">Entradas no Período</div>
+            <div className="kpi-v" style={{ color: "var(--ok)" }}>{formatBRL(totaisPeriodo.ent)}</div>
+            <div className="kpi-s">{visiveis.filter(l => l.tipo === "Entrada").length} lançamento(s)</div>
+          </div>
+          <div className="kpi">
+            <div className="kpi-l">Saídas no Período</div>
+            <div className="kpi-v" style={{ color: "var(--err)" }}>{formatBRL(totaisPeriodo.sai)}</div>
+            <div className="kpi-s">{visiveis.filter(l => l.tipo === "Saída").length} lançamento(s)</div>
+          </div>
         </div>
 
         {loading ? <div className="loading">Carregando...</div> : (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-
-            {/* REALIZADO */}
-            <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderTop: "3px solid var(--ok)", borderRadius: "12px", overflow: "hidden" }}>
-              <div style={{ padding: "14px 16px", background: "var(--surf2)", borderBottom: "1px solid var(--b1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: "9px", color: "var(--ok)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.09em" }}>Realizado</div>
-                  <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", marginTop: "1px" }}>Movimentações Efetivadas</div>
-                  <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "1px" }}>Baseado na data de pagamento / recebimento</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "2px" }}>Saldo Final</div>
-                  <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "'DM Mono',monospace", color: saldoFinalReal >= 0 ? "var(--ok)" : "var(--err)" }}>
-                    {BRL(saldoFinalReal)}
-                  </div>
-                </div>
-              </div>
-              <div style={{ padding: "14px" }}>
-                <Tabela dados={realizado} saldoAnt={saldoAntReal} acento="var(--ok)" />
-              </div>
-            </div>
-
-            {/* PROJETADO */}
-            <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderTop: "3px solid #60a5fa", borderRadius: "12px", overflow: "hidden" }}>
-              <div style={{ padding: "14px 16px", background: "var(--surf2)", borderBottom: "1px solid var(--b1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: "9px", color: "#60a5fa", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.09em" }}>Projetado</div>
-                  <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", marginTop: "1px" }}>Previsão de Caixa</div>
-                  <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "1px" }}>Baseado na data de vencimento de todos os títulos</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "2px" }}>Saldo Projetado</div>
-                  <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "'DM Mono',monospace", color: saldoFinalProj >= 0 ? "var(--ok)" : "var(--err)" }}>
-                    {BRL(saldoFinalProj)}
-                  </div>
-                </div>
-              </div>
-              <div style={{ padding: "14px" }}>
-                <Tabela dados={projetado} saldoAnt={saldoAntProj} acento="#60a5fa" />
-              </div>
-            </div>
-
+          <div className="tw">
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={thS}>Data</th>
+                  <th style={thS}>Cliente / Fornecedor</th>
+                  <th style={thS}>Pedido / Documento</th>
+                  <th style={thS}>Situação</th>
+                  <th style={{ ...thS, textAlign: "right" }}>Valor</th>
+                  <th style={{ ...thS, textAlign: "right" }}>Saldo</th>
+                  <th style={{ ...thS, width: "70px" }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {visiveis.length === 0 && (
+                  <tr><td colSpan={7} style={{ textAlign: "center", color: "var(--t3)", padding: "40px" }}>Nenhuma movimentação no período.</td></tr>
+                )}
+                {visiveis.map(l => {
+                  const isHoje = l.data === hojeISO();
+                  const isMenor = menorSaldo?.key === l.key;
+                  const editavel = l.origem !== "recorrencia-futura";
+                  const emEdicao = editando === l.key;
+                  return (
+                    <Fragment key={l.key}>
+                      <tr style={{
+                        background: isMenor ? "rgba(185,58,58,.06)" : isHoje ? "rgba(0,200,255,.05)" : "transparent",
+                        borderBottom: "1px solid var(--b1)",
+                      }}>
+                        <td style={{ padding: "8px 10px", fontSize: "12px", whiteSpace: "nowrap" }}>
+                          {formatDate(l.data)}
+                          {isHoje && <span style={{ fontSize: "9px", color: "var(--acc)", marginLeft: "5px" }}>● hoje</span>}
+                        </td>
+                        <td style={{ padding: "8px 10px" }}>
+                          <div style={{ fontWeight: 600, fontSize: "13px" }}>{l.pessoa ?? <span style={{ color: "var(--t3)" }}>—</span>}</div>
+                          <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "2px" }}>{l.descricao}</div>
+                        </td>
+                        <td className="mono" style={{ padding: "8px 10px", fontSize: "11px", color: "var(--acc)" }}>
+                          {l.pedidoId
+                            ? <span style={{ fontWeight: 700 }}>{l.pedidoId}</span>
+                            : l.documento
+                              ? <span style={{ color: "var(--t2)" }}>{l.documento}</span>
+                              : <span style={{ color: "var(--t3)" }}>—</span>}
+                        </td>
+                        <td style={{ padding: "8px 10px" }}><span className={`chip ${situacaoClasse(l)}`}>{situacaoLabel(l)}</span></td>
+                        <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "'DM Mono',monospace", fontWeight: 700, color: l.tipo === "Entrada" ? "var(--ok)" : "var(--err)" }}>
+                          {l.tipo === "Saída" && "−"}{formatBRL(l.valor)}
+                        </td>
+                        <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "'DM Mono',monospace", fontWeight: 700, color: l.saldoAcumulado >= 0 ? "var(--t1)" : "var(--err)" }}>
+                          {formatBRL(l.saldoAcumulado)}
+                          {isMenor && <span style={{ fontSize: "9px", color: "var(--err)", marginLeft: "4px" }}>◀ menor</span>}
+                        </td>
+                        <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                          {editavel ? (
+                            <button className="btn bg xs" onClick={() => (emEdicao ? cancelarEdicao() : abrirEdicao(l))}>
+                              {emEdicao ? "✕" : "✎"}
+                            </button>
+                          ) : (
+                            <a href="/recorrencias" style={{ fontSize: "10px", color: "var(--t3)", textDecoration: "none" }} title="Gerar essa ocorrência em Recorrências">↗</a>
+                          )}
+                        </td>
+                      </tr>
+                      {emEdicao && (
+                        <tr style={{ background: "var(--surf2)", borderBottom: "1px solid var(--b1)" }}>
+                          <td colSpan={7} style={{ padding: "12px 16px" }}>
+                            <div style={{ display: "flex", gap: "10px", alignItems: "flex-end", flexWrap: "wrap" }}>
+                              <div>
+                                <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>
+                                  {l.origem === "pendente" ? "Vencimento" : "Data"}
+                                </div>
+                                <DateInput value={edicao.data} onChange={v => setEdicao(e => ({ ...e, data: v }))} style={{ margin: 0, width: "130px" }} />
+                              </div>
+                              <div>
+                                <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Valor</div>
+                                {l.origem === "pendente" && l.temBaixaAtiva ? (
+                                  <div style={{ padding: "8px 11px", fontSize: "13px", color: "var(--t3)" }} title="Título com pagamento parcial — ajuste o valor em Contas a Pagar/Receber">
+                                    {formatBRL(l.valor)} (parcial, não editável aqui)
+                                  </div>
+                                ) : (
+                                  <CurrencyInput value={edicao.valor} onChange={v => setEdicao(e => ({ ...e, valor: v }))} style={{ margin: 0, width: "140px" }} />
+                                )}
+                              </div>
+                              {(l.origem === "baixa" || (l.origem === "pendente" && l.temBaixaAtiva)) && (
+                                <div style={{ flex: 1, minWidth: "220px" }}>
+                                  <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>
+                                    Motivo da correção *
+                                  </div>
+                                  <input className="fc" style={{ margin: 0 }} placeholder="Por que está corrigindo esse lançamento?"
+                                    value={edicao.motivo} onChange={e => setEdicao(ed => ({ ...ed, motivo: e.target.value }))} />
+                                </div>
+                              )}
+                              <div style={{ display: "flex", gap: "6px" }}>
+                                <button className="btn bg sm" onClick={cancelarEdicao} disabled={edicao.salvando}>Cancelar</button>
+                                <button className="btn bp sm" onClick={() => salvarEdicao(l)} disabled={edicao.salvando}>
+                                  {edicao.salvando ? "Salvando..." : "Salvar"}
+                                </button>
+                              </div>
+                            </div>
+                            <div style={{ fontSize: "10.5px", color: "var(--t3)", marginTop: "8px" }}>
+                              A alteração é feita no lançamento de verdade — atualiza sozinha em Contas a {l.tipo === "Entrada" ? "Receber" : "Pagar"}
+                              {l.pedidoId ? `, no Pedido ${l.pedidoId}` : ""} e em Movimentações.
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
 
-        {/* Legenda */}
-        <div style={{ marginTop: "16px", display: "flex", gap: "20px", justifyContent: "center", fontSize: "11px", color: "var(--t3)" }}>
-          <span><span style={{ color: "var(--ok)", fontWeight: 700 }}>Realizado</span> — usa data de pagamento/recebimento efetivo</span>
-          <span>·</span>
-          <span><span style={{ color: "#60a5fa", fontWeight: 700 }}>Projetado</span> — usa data de vencimento de todos os títulos (pagos e pendentes)</span>
-          {diaHoje && <><span>·</span><span><span style={{ color: "var(--acc)" }}>●</span> dia atual</span></>}
+        <div style={{ marginTop: "16px", display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap", fontSize: "11px", color: "var(--t3)" }}>
+          <span><span className="chip cg">Realizado</span> já entrou ou saiu do caixa</span>
+          <span><span className="chip cb">Previsto</span> vencimento ainda não chegou</span>
+          <span><span className="chip cy">Vencido</span> passou do vencimento e não foi pago</span>
+          <span><span className="chip cgr">Recorrência</span> ainda não virou lançamento — gere em /recorrencias</span>
         </div>
 
       </div>
     </AppLayout>
   );
 }
+
+function situacaoLabel(l: LinhaBase): string {
+  if (l.origem === "baixa" || l.origem === "pago-legado") return "Realizado";
+  if (l.origem === "recorrencia-futura") return "Recorrência";
+  return l.data < hojeISO() ? "Vencido" : "Previsto";
+}
+
+function situacaoClasse(l: LinhaBase): string {
+  if (l.origem === "baixa" || l.origem === "pago-legado") return "cg";
+  if (l.origem === "recorrencia-futura") return "cgr";
+  return l.data < hojeISO() ? "cy" : "cb";
+}
+
+const thS: React.CSSProperties = {
+  padding: "7px 10px", fontSize: "9px", fontWeight: 700,
+  textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--t3)",
+  borderBottom: "1px solid var(--b1)", textAlign: "left", background: "var(--surf2)",
+};
