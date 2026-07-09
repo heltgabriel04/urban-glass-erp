@@ -85,7 +85,6 @@ export async function gerarProximosMeses(regraId: number, meses = 12): Promise<n
       pedido_id: null,
       cliente_id: regra.cliente_id,
       plano_contas_id: regra.plano_contas_id,
-      centro_custo_id: regra.centro_custo_id,
       conta_id: regra.conta_id,
       fornecedor: regra.fornecedor,
       recorrencia_id: regraId,

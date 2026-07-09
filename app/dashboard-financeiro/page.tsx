@@ -48,13 +48,13 @@ function DashboardFinanceiroInner() {
   const [dados, setDados] = useState<Dados | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { load(); }, [filtro.periodo, filtro.centroCustoId, filtro.contaId]);
+  useEffect(() => { load(); }, [filtro.periodo, filtro.contaId]);
 
   async function load() {
     setLoading(true);
     const { ano, mes } = periodoParaAnoMes(filtro.periodo);
     const anoAtual = new Date().getFullYear();
-    const filtroDash = { centroCustoId: filtro.centroCustoId, contaId: filtro.contaId };
+    const filtroDash = { contaId: filtro.contaId };
 
     // O gráfico "últimos 6 meses" é sempre uma janela móvel a partir de
     // hoje — não muda com o período selecionado no filtro global, então

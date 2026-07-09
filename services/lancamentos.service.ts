@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
-import type { BaixaLancamento, LancamentoRateio } from '@/types';
+import type { BaixaLancamento } from '@/types';
 import { registrarLog } from './log.service';
 import { recalcularRecebido } from './pedidos.service';
 
@@ -350,45 +350,6 @@ export async function verificarDuplicadoCliente(
   return (data ?? []) as LancamentoDuplicado[];
 }
 
-// ── Rateio entre centros de custo ───────────────────────────────────────────
-
-export async function getRateio(lancamentoId: number): Promise<LancamentoRateio[]> {
-  const { data, error } = await supabase
-    .from('lancamento_rateio')
-    .select('*, centros_custo(id, nome)')
-    .eq('lancamento_id', lancamentoId);
-  if (error) { console.error('getRateio:', error); return []; }
-  return data as LancamentoRateio[];
-}
-
-// Substitui o rateio inteiro do lançamento pela nova lista. Soma dos
-// percentuais precisa fechar 100% — validado aqui, não no banco (mesma
-// convenção do projeto: regra de negócio na camada de app).
-export async function salvarRateio(lancamentoId: number, itens: { centroCustoId: number; percentual: number }[]): Promise<boolean> {
-  const soma = itens.reduce((a, i) => a + i.percentual, 0);
-  if (itens.length > 0 && Math.abs(soma - 100) > 0.01) {
-    console.error('salvarRateio: soma dos percentuais precisa ser 100%, veio', soma);
-    return false;
-  }
-
-  const { error: errDelete } = await supabase.from('lancamento_rateio').delete().eq('lancamento_id', lancamentoId);
-  if (errDelete) { console.error('salvarRateio (delete):', errDelete); return false; }
-
-  if (itens.length === 0) return true;
-
-  const { error: errInsert } = await supabase.from('lancamento_rateio').insert(
-    itens.map(i => ({ lancamento_id: lancamentoId, centro_custo_id: i.centroCustoId, percentual: i.percentual })) as never[]
-  );
-  if (errInsert) { console.error('salvarRateio (insert):', errInsert); return false; }
-
-  registrarLog({
-    acao: 'rateou', tabela: 'lancamentos', registro_id: String(lancamentoId),
-    descricao: `Definiu rateio entre ${itens.length} centro(s) de custo no lançamento #${lancamentoId}`,
-    campos_alterados: { rateio: itens },
-  });
-  return true;
-}
-
 // ── Adiantamento ─────────────────────────────────────────────────────────
 
 export interface CriarAdiantamentoParams {
@@ -496,11 +457,11 @@ export interface CriarReembolsoParams {
 export async function criarReembolso(params: CriarReembolsoParams) {
   const { data: origemRow } = await supabase
     .from('lancamentos')
-    .select('id, tipo, descricao, cliente_id, fornecedor_id, plano_contas_id, centro_custo_id')
+    .select('id, tipo, descricao, cliente_id, fornecedor_id, plano_contas_id')
     .eq('id', params.lancamentoOrigemId)
     .maybeSingle();
   if (!origemRow) { console.error('criarReembolso: lançamento de origem não encontrado'); return null; }
-  const origem = origemRow as { id: number; tipo: string; descricao: string; cliente_id: number | null; fornecedor_id: number | null; plano_contas_id: number | null; centro_custo_id: number | null };
+  const origem = origemRow as { id: number; tipo: string; descricao: string; cliente_id: number | null; fornecedor_id: number | null; plano_contas_id: number | null };
 
   // Reembolso de uma Saída (empresa pagou fornecedor a mais) volta como
   // Entrada; reembolso de uma Entrada (cliente foi reembolsado) vira Saída.
@@ -519,7 +480,6 @@ export async function criarReembolso(params: CriarReembolsoParams) {
       cliente_id: origem.cliente_id,
       fornecedor_id: origem.fornecedor_id,
       plano_contas_id: origem.plano_contas_id,
-      centro_custo_id: origem.centro_custo_id,
       pedido_id: null,
       obs: params.obs ?? null,
     } as never])
@@ -557,22 +517,22 @@ export async function getHistorico(lancamentoId: number): Promise<VersaoLancamen
 
 // ── Sugestão por histórico ───────────────────────────────────────────────
 
-// Plano de Contas / Centro de Custo usados da última vez pra esse mesmo
-// fornecedor ou cliente — preenchimento inteligente, não é IA, é "o que
-// você fez da última vez".
-export async function getUltimoPlanoContas(params: { fornecedorId?: number | null; clienteId?: number | null }): Promise<{ planoContasId: number | null; centroCustoId: number | null }> {
-  const vazio = { planoContasId: null, centroCustoId: null };
+// Plano de Contas usado da última vez pra esse mesmo fornecedor ou
+// cliente — preenchimento inteligente, não é IA, é "o que você fez da
+// última vez".
+export async function getUltimoPlanoContas(params: { fornecedorId?: number | null; clienteId?: number | null }): Promise<{ planoContasId: number | null }> {
+  const vazio = { planoContasId: null };
   if (!params.fornecedorId && !params.clienteId) return vazio;
 
   let query = supabase
     .from('lancamentos')
-    .select('plano_contas_id, centro_custo_id')
+    .select('plano_contas_id')
     .order('created_at', { ascending: false })
     .limit(1);
   query = params.fornecedorId ? query.eq('fornecedor_id', params.fornecedorId) : query.eq('cliente_id', params.clienteId!);
 
   const { data } = await query.maybeSingle();
   if (!data) return vazio;
-  const row = data as { plano_contas_id: number | null; centro_custo_id: number | null };
-  return { planoContasId: row.plano_contas_id, centroCustoId: row.centro_custo_id };
+  const row = data as { plano_contas_id: number | null };
+  return { planoContasId: row.plano_contas_id };
 }

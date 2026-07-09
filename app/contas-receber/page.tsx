@@ -10,7 +10,6 @@ import DateInput from "@/components/ui/DateInput";
 import SearchInput from "@/components/ui/SearchInput";
 import { useToast } from "@/components/ui/toast";
 import { getContasBancarias } from "@/services/contasBancarias.service";
-import { getCentrosCusto } from "@/services/centrosCusto.service";
 import { registrarBaixa, estornarBaixa, getBaixasPorLancamentos, calcularSaldo, excluirLancamento, editarLancamento, verificarDuplicadoCliente, criarAdiantamento, criarReembolso, getAdiantamentosDisponiveis, getHistorico, getUltimoPlanoContas, type LancamentoDuplicado, type AdiantamentoComSaldo, type VersaoLancamento } from "@/services/lancamentos.service";
 import { getFormasPagamento } from "@/services/formasPagamento.service";
 import { useEscToClose } from "@/components/ui/useEscToClose";
@@ -19,7 +18,7 @@ import { exportarExcel } from "@/lib/exportExcel";
 import { getFiltrosSalvos, salvarFiltro, excluirFiltroSalvo, type FiltroSalvo } from "@/services/filtrosSalvos.service";
 import { registrarRecente } from "@/lib/recentes";
 import ActionMenu from "@/components/ui/ActionMenu";
-import type { ContaBancaria, CentroCusto, BaixaLancamento, FormaPagamento } from "@/types";
+import type { ContaBancaria, BaixaLancamento, FormaPagamento } from "@/types";
 
 interface PlanoItem { id: number; codigo_estruturado: string; descricao: string; }
 interface ClienteItem { id: number; nome: string; }
@@ -40,7 +39,6 @@ interface Recebivel {
   plano_contas: PlanoItem | null;
   clientes: { id: number; nome: string } | null;
   conta_id: number | null;
-  centro_custo_id: number | null;
   created_at: string;
 }
 
@@ -49,7 +47,7 @@ type TabFiltro = "todos" | "aberto" | "recebido" | "vencido";
 const EMPTY_FORM = {
   descricao: "", valor: 0, documento: "", cliente_id: "" as string | number,
   vencimento: "", dt_emissao: "", obs: "", plano_contas_id: "" as string | number,
-  conta_id: "" as string | number, centro_custo_id: "" as string | number,
+  conta_id: "" as string | number,
 };
 
 function hoje() { return new Date().toISOString().split("T")[0]; }
@@ -99,7 +97,6 @@ function ContasReceberPageInner() {
   const [planos, setPlanos]         = useState<PlanoItem[]>([]);
   const [clientes, setClientes]     = useState<ClienteItem[]>([]);
   const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>([]);
-  const [centrosCusto, setCentrosCusto]       = useState<CentroCusto[]>([]);
   const [baixasMap, setBaixasMap]   = useState<Map<number, BaixaLancamento[]>>(new Map());
   const [loading, setLoading]       = useState(true);
   const [tab, setTab]               = useState<TabFiltro>((searchParams.get("tab") as TabFiltro) || "aberto");
@@ -193,17 +190,16 @@ function ContasReceberPageInner() {
 
   async function load() {
     setLoading(true);
-    const [{ data: rs }, { data: pls }, { data: cls }, cbs, ccs, formasPg] = await Promise.all([
+    const [{ data: rs }, { data: pls }, { data: cls }, cbs, formasPg] = await Promise.all([
       supabase
         .from("lancamentos")
-        .select("id, descricao, valor, status, vencimento, documento, dt_emissao, dt_pagamento, obs, pedido_id, cliente_id, plano_contas_id, conta_id, centro_custo_id, created_at, plano_contas(id, codigo_estruturado, descricao), clientes(id, nome)")
+        .select("id, descricao, valor, status, vencimento, documento, dt_emissao, dt_pagamento, obs, pedido_id, cliente_id, plano_contas_id, conta_id, created_at, plano_contas(id, codigo_estruturado, descricao), clientes(id, nome)")
         .eq("tipo", "Entrada")
         .is("deletado_em", null)
         .order("vencimento", { ascending: true }),
       supabase.from("plano_contas").select("id, codigo_estruturado, descricao").order("codigo"),
       supabase.from("clientes").select("id, nome").order("nome"),
       getContasBancarias(true),
-      getCentrosCusto(true),
       getFormasPagamento(true),
     ]);
     const recebiveisCarregados = (rs ?? []) as unknown as Recebivel[];
@@ -211,7 +207,6 @@ function ContasReceberPageInner() {
     setPlanos((pls ?? []) as PlanoItem[]);
     setClientes((cls ?? []) as ClienteItem[]);
     setContasBancarias(cbs);
-    setCentrosCusto(ccs);
     setFormasPagamento(formasPg);
     setBaixasMap(await getBaixasPorLancamentos(recebiveisCarregados.map(r => r.id)));
     setLoading(false);
@@ -268,7 +263,7 @@ function ContasReceberPageInner() {
       documento: r.documento ?? "", cliente_id: r.cliente_id ?? "",
       vencimento: r.vencimento ?? "", dt_emissao: r.dt_emissao ?? "",
       obs: r.obs ?? "", plano_contas_id: r.plano_contas_id ?? "",
-      conta_id: r.conta_id ?? "", centro_custo_id: r.centro_custo_id ?? "",
+      conta_id: r.conta_id ?? "",
     });
     setEditId(r.id);
     setDuplicados([]);
@@ -281,7 +276,7 @@ function ContasReceberPageInner() {
       documento: "", cliente_id: r.cliente_id ?? "",
       vencimento: "", dt_emissao: hoje(),
       obs: r.obs ?? "", plano_contas_id: r.plano_contas_id ?? "",
-      conta_id: r.conta_id ?? "", centro_custo_id: r.centro_custo_id ?? "",
+      conta_id: r.conta_id ?? "",
     });
     setEditId(null);
     setDuplicados([]);
@@ -392,7 +387,6 @@ function ContasReceberPageInner() {
       cliente_id: form.cliente_id ? Number(form.cliente_id) : null,
       plano_contas_id: form.plano_contas_id ? Number(form.plano_contas_id) : null,
       conta_id: form.conta_id ? Number(form.conta_id) : null,
-      centro_custo_id: form.centro_custo_id ? Number(form.centro_custo_id) : null,
     };
     if (editId) {
       const ok = await editarLancamento({
@@ -747,13 +741,12 @@ function ContasReceberPageInner() {
                       const clienteId = e.target.value;
                       setForm(f => ({ ...f, cliente_id: clienteId }));
                       checarDuplicado(clienteId, form.documento as string);
-                      if (modal === "add" && clienteId && !form.plano_contas_id && !form.centro_custo_id) {
+                      if (modal === "add" && clienteId && !form.plano_contas_id) {
                         const sugestao = await getUltimoPlanoContas({ clienteId: Number(clienteId) });
-                        if (sugestao.planoContasId || sugestao.centroCustoId) {
+                        if (sugestao.planoContasId) {
                           setForm(f => ({
                             ...f,
                             plano_contas_id: f.plano_contas_id || sugestao.planoContasId || "",
-                            centro_custo_id: f.centro_custo_id || sugestao.centroCustoId || "",
                           }));
                         }
                       }
@@ -784,23 +777,13 @@ function ContasReceberPageInner() {
                 </div>
               )}
 
-              <div className="fr">
-                <div className="fg">
-                  <label className="fl">Plano de Contas</label>
-                  <select className="fc" value={form.plano_contas_id}
-                    onChange={e => setForm(f => ({ ...f, plano_contas_id: e.target.value }))}>
-                    <option value="">Selecione...</option>
-                    {planos.map(p => <option key={p.id} value={p.id}>{p.codigo_estruturado} · {p.descricao}</option>)}
-                  </select>
-                </div>
-                <div className="fg">
-                  <label className="fl">Centro de Custo</label>
-                  <select className="fc" value={form.centro_custo_id}
-                    onChange={e => setForm(f => ({ ...f, centro_custo_id: e.target.value }))}>
-                    <option value="">Selecione...</option>
-                    {centrosCusto.map(cc => <option key={cc.id} value={cc.id}>{cc.nome}</option>)}
-                  </select>
-                </div>
+              <div className="fg">
+                <label className="fl">Plano de Contas</label>
+                <select className="fc" value={form.plano_contas_id}
+                  onChange={e => setForm(f => ({ ...f, plano_contas_id: e.target.value }))}>
+                  <option value="">Selecione...</option>
+                  {planos.map(p => <option key={p.id} value={p.id}>{p.codigo_estruturado} · {p.descricao}</option>)}
+                </select>
               </div>
 
               <div className="fg">

@@ -6,20 +6,19 @@ import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
 import { getRecorrencias, createRecorrencia, updateRecorrencia, deletarRecorrencia, gerarProximosMeses } from "@/services/recorrencias.service";
 import { getContasBancarias } from "@/services/contasBancarias.service";
-import { getCentrosCusto } from "@/services/centrosCusto.service";
 import { useToast } from "@/components/ui/toast";
 import { useEscToClose } from "@/components/ui/useEscToClose";
 import ActionMenu from "@/components/ui/ActionMenu";
 import SearchInput from "@/components/ui/SearchInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
-import type { LancamentoRecorrente, LancamentoRecorrenteInsert, ContaBancaria, CentroCusto } from "@/types";
+import type { LancamentoRecorrente, LancamentoRecorrenteInsert, ContaBancaria } from "@/types";
 
 interface PlanoItem { id: number; codigo_estruturado: string; descricao: string; }
 interface ClienteItem { id: number; nome: string; }
 
 const VAZIO: LancamentoRecorrenteInsert = {
   tipo: "Saída", descricao: "", valor: 0, dia_vencimento: 5,
-  plano_contas_id: null, centro_custo_id: null, conta_id: null,
+  plano_contas_id: null, conta_id: null,
   fornecedor: "", cliente_id: null, ativo: true,
 };
 
@@ -35,7 +34,6 @@ export default function RecorrenciasPage() {
   const [planos, setPlanos] = useState<PlanoItem[]>([]);
   const [clientes, setClientes] = useState<ClienteItem[]>([]);
   const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>([]);
-  const [centrosCusto, setCentrosCusto] = useState<CentroCusto[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
@@ -49,18 +47,16 @@ export default function RecorrenciasPage() {
 
   async function load() {
     setLoading(true);
-    const [rs, pls, cls, cbs, ccs] = await Promise.all([
+    const [rs, pls, cls, cbs] = await Promise.all([
       getRecorrencias(),
       supabase.from("plano_contas").select("id, codigo_estruturado, descricao").order("codigo"),
       supabase.from("clientes").select("id, nome").order("nome"),
       getContasBancarias(true),
-      getCentrosCusto(true),
     ]);
     setRegras(rs);
     setPlanos(((pls as { data: PlanoItem[] | null }).data ?? []));
     setClientes(((cls as { data: ClienteItem[] | null }).data ?? []));
     setContasBancarias(cbs);
-    setCentrosCusto(ccs);
     setLoading(false);
   }
 
@@ -73,7 +69,7 @@ export default function RecorrenciasPage() {
     setEditId(r.id);
     setForm({
       tipo: r.tipo, descricao: r.descricao, valor: r.valor, dia_vencimento: r.dia_vencimento,
-      plano_contas_id: r.plano_contas_id, centro_custo_id: r.centro_custo_id, conta_id: r.conta_id,
+      plano_contas_id: r.plano_contas_id, conta_id: r.conta_id,
       fornecedor: r.fornecedor ?? "", cliente_id: r.cliente_id, ativo: r.ativo,
     });
     setModalAberto(true);
@@ -235,16 +231,10 @@ export default function RecorrenciasPage() {
                 </Campo>
               )}
 
-              <Campo label="Plano de Contas">
+              <Campo label="Plano de Contas" span2>
                 <select className="fc" value={form.plano_contas_id ?? ""} onChange={e => upd("plano_contas_id", e.target.value ? Number(e.target.value) : null)} style={{ margin: 0 }}>
                   <option value="">Selecione...</option>
                   {planos.map(p => <option key={p.id} value={p.id}>{p.codigo_estruturado} · {p.descricao}</option>)}
-                </select>
-              </Campo>
-              <Campo label="Centro de Custo">
-                <select className="fc" value={form.centro_custo_id ?? ""} onChange={e => upd("centro_custo_id", e.target.value ? Number(e.target.value) : null)} style={{ margin: 0 }}>
-                  <option value="">Selecione...</option>
-                  {centrosCusto.map(cc => <option key={cc.id} value={cc.id}>{cc.nome}</option>)}
                 </select>
               </Campo>
 

@@ -1,13 +1,12 @@
-// Filtro global do dashboard financeiro (Etapa 5) — período, centro de
-// custo e conta bancária compartilhados entre os 4 níveis (Executiva,
-// Operacional, Analítica, Estratégica). Vive na URL pra ser voltável e
+// Filtro global do dashboard financeiro (Etapa 5) — período e conta
+// bancária compartilhados entre os 4 níveis (Executiva, Operacional,
+// Analítica, Estratégica). Vive na URL pra ser voltável e
 // compartilhável, não em estado local de componente.
 
 export type PeriodoFiltro = "mes" | "ano" | "ano-anterior";
 
 export interface FiltroFinanceiroGlobal {
   periodo: PeriodoFiltro;
-  centroCustoId: number | null;
   contaId: number | null;
 }
 

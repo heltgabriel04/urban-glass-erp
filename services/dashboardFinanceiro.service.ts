@@ -5,7 +5,7 @@ function fmtData(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-export interface FiltroDashboard { centroCustoId?: number | null; contaId?: number | null; }
+export interface FiltroDashboard { contaId?: number | null; }
 
 // Saldo em caixa = saldo inicial das contas bancárias ativas + todas as
 // baixas ativas (Entrada soma, Saída subtrai) já registradas. Com
@@ -39,7 +39,6 @@ export async function getAbertoPorTipo(tipo: 'Entrada' | 'Saída', filtro?: Filt
     .eq('tipo', tipo)
     .neq('status', 'Pago')
     .is('deletado_em', null);
-  if (filtro?.centroCustoId) query = query.eq('centro_custo_id', filtro.centroCustoId);
   if (filtro?.contaId) query = query.eq('conta_id', filtro.contaId);
   const { data: lancs } = await query;
 
@@ -89,7 +88,6 @@ interface OcorrenciaFutura { tipo: 'Entrada' | 'Saída'; valor: number; data: st
 // "gerar mais meses" em /recorrencias.
 async function getOcorrenciasRecorrentesFuturas(limiteMax: Date, filtro?: FiltroDashboard): Promise<OcorrenciaFutura[]> {
   let query = supabase.from('lancamentos_recorrentes').select('tipo, valor, dia_vencimento, gerado_ate').eq('ativo', true);
-  if (filtro?.centroCustoId) query = query.eq('centro_custo_id', filtro.centroCustoId);
   if (filtro?.contaId) query = query.eq('conta_id', filtro.contaId);
   const { data } = await query;
   const hoje = new Date();
@@ -123,7 +121,6 @@ export async function getProjecaoCaixa(filtro?: FiltroDashboard): Promise<Projec
 
   let entradasQuery = supabase.from('lancamentos').select('id, valor, status, vencimento').eq('tipo', 'Entrada').neq('status', 'Pago').not('vencimento', 'is', null).is('deletado_em', null);
   let saidasQuery = supabase.from('lancamentos').select('id, valor, status, vencimento').eq('tipo', 'Saída').neq('status', 'Pago').not('vencimento', 'is', null).is('deletado_em', null);
-  if (filtro?.centroCustoId) { entradasQuery = entradasQuery.eq('centro_custo_id', filtro.centroCustoId); saidasQuery = saidasQuery.eq('centro_custo_id', filtro.centroCustoId); }
   if (filtro?.contaId) { entradasQuery = entradasQuery.eq('conta_id', filtro.contaId); saidasQuery = saidasQuery.eq('conta_id', filtro.contaId); }
 
   const [{ data: entradas }, { data: saidas }, ocorrenciasRecorrentes] = await Promise.all([

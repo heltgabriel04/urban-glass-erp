@@ -31,7 +31,6 @@ export const NAV_ROUTES: NavRoute[] = [
   { grupo: "FINANCEIRO", href: "/movimentacoes", label: "Movimentações", iconKey: "movimentacoes" },
   { grupo: "FINANCEIRO", href: "/investimentos", label: "Investimentos", iconKey: "investimentos" },
   { grupo: "FINANCEIRO", href: "/bancos-caixa", label: "Bancos & Caixa", iconKey: "bancos" },
-  { grupo: "FINANCEIRO", href: "/centro-custo", label: "Centro de Custo", iconKey: "centroCusto" },
   { grupo: "FINANCEIRO", href: "/recorrencias", label: "Recorrências", iconKey: "recorrencia" },
   { grupo: "FINANCEIRO", href: "/formas-pagamento", label: "Formas de Pagamento", iconKey: "formaPgto" },
   { grupo: "FINANCEIRO", href: "/conciliacao", label: "Conciliação Bancária", iconKey: "conciliacao" },

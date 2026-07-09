@@ -2,25 +2,22 @@
 
 import { useEffect, useState } from "react";
 import { useFiltroFinanceiro } from "./useFiltroFinanceiro";
-import { getCentrosCusto } from "@/services/centrosCusto.service";
 import { getContasBancarias } from "@/services/contasBancarias.service";
 import { PERIODO_LABEL, type PeriodoFiltro } from "@/lib/filtroFinanceiro";
-import type { CentroCusto, ContaBancaria } from "@/types";
+import type { ContaBancaria } from "@/types";
 
 // Barra de filtro compartilhada pelos 4 níveis do dashboard financeiro.
 // Vive na URL (useFiltroFinanceiro) — cada nível decide sozinho quais
-// desses 3 filtros de fato usa nas suas próprias consultas.
+// desses filtros de fato usa nas suas próprias consultas.
 export default function FiltroGlobalFinanceiro() {
   const { filtro, setFiltro } = useFiltroFinanceiro();
-  const [centros, setCentros] = useState<CentroCusto[]>([]);
   const [contas, setContas] = useState<ContaBancaria[]>([]);
 
   useEffect(() => {
-    getCentrosCusto(true).then(setCentros);
     getContasBancarias(true).then(setContas);
   }, []);
 
-  const temFiltroAtivo = filtro.periodo !== "mes" || filtro.centroCustoId != null || filtro.contaId != null;
+  const temFiltroAtivo = filtro.periodo !== "mes" || filtro.contaId != null;
 
   return (
     <div className="no-print" style={{
@@ -37,18 +34,13 @@ export default function FiltroGlobalFinanceiro() {
           <option key={p} value={p}>{PERIODO_LABEL[p]}</option>
         ))}
       </select>
-      <select className="fc" style={{ margin: 0, width: "auto" }} value={filtro.centroCustoId ?? ""}
-        onChange={e => setFiltro({ centroCustoId: e.target.value ? Number(e.target.value) : null })}>
-        <option value="">Todos os centros de custo</option>
-        {centros.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-      </select>
       <select className="fc" style={{ margin: 0, width: "auto" }} value={filtro.contaId ?? ""}
         onChange={e => setFiltro({ contaId: e.target.value ? Number(e.target.value) : null })}>
         <option value="">Todas as contas</option>
         {contas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
       </select>
       {temFiltroAtivo && (
-        <button className="btn bg xs" onClick={() => setFiltro({ periodo: "mes", centroCustoId: null, contaId: null })}>
+        <button className="btn bg xs" onClick={() => setFiltro({ periodo: "mes", contaId: null })}>
           Limpar
         </button>
       )}

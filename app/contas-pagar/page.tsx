@@ -10,8 +10,7 @@ import DateInput from "@/components/ui/DateInput";
 import SearchInput from "@/components/ui/SearchInput";
 import { useToast } from "@/components/ui/toast";
 import { getContasBancarias } from "@/services/contasBancarias.service";
-import { getCentrosCusto } from "@/services/centrosCusto.service";
-import { registrarBaixa, estornarBaixa, getBaixasPorLancamentos, calcularSaldo, excluirLancamento, editarLancamento, verificarDuplicado, getRateio, salvarRateio, criarAdiantamento, criarReembolso, getAdiantamentosDisponiveis, getHistorico, getUltimoPlanoContas, type LancamentoDuplicado, type AdiantamentoComSaldo, type VersaoLancamento } from "@/services/lancamentos.service";
+import { registrarBaixa, estornarBaixa, getBaixasPorLancamentos, calcularSaldo, excluirLancamento, editarLancamento, verificarDuplicado, criarAdiantamento, criarReembolso, getAdiantamentosDisponiveis, getHistorico, getUltimoPlanoContas, type LancamentoDuplicado, type AdiantamentoComSaldo, type VersaoLancamento } from "@/services/lancamentos.service";
 import { getFornecedores } from "@/services/fornecedores.service";
 import { getFormasPagamento } from "@/services/formasPagamento.service";
 import { useEscToClose } from "@/components/ui/useEscToClose";
@@ -22,7 +21,7 @@ import { getFiltrosSalvos, salvarFiltro, excluirFiltroSalvo, type FiltroSalvo } 
 import { registrarRecente } from "@/lib/recentes";
 import ActionMenu from "@/components/ui/ActionMenu";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
-import type { ContaBancaria, CentroCusto, BaixaLancamento, Fornecedor, FormaPagamento } from "@/types";
+import type { ContaBancaria, BaixaLancamento, Fornecedor, FormaPagamento } from "@/types";
 
 interface PlanoItem { id: number; codigo_estruturado: string; descricao: string; }
 
@@ -41,7 +40,6 @@ interface Conta {
   plano_contas_id: number | null;
   plano_contas: PlanoItem | null;
   conta_id: number | null;
-  centro_custo_id: number | null;
   created_at: string;
 }
 
@@ -50,7 +48,7 @@ type TabFiltro = "todos" | "aberto" | "pago" | "vencido";
 const EMPTY_FORM = {
   descricao: "", valor: 0, documento: "", fornecedor: "", fornecedor_id: null as number | null,
   vencimento: "", dt_emissao: "", obs: "", plano_contas_id: "" as string | number,
-  conta_id: "" as string | number, centro_custo_id: "" as string | number,
+  conta_id: "" as string | number,
 };
 
 function hoje() { return new Date().toISOString().split("T")[0]; }
@@ -99,7 +97,6 @@ function ContasPagarPageInner() {
   const [contas, setContas]       = useState<Conta[]>([]);
   const [planos, setPlanos]       = useState<PlanoItem[]>([]);
   const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>([]);
-  const [centrosCusto, setCentrosCusto]       = useState<CentroCusto[]>([]);
   const [baixasMap, setBaixasMap] = useState<Map<number, BaixaLancamento[]>>(new Map());
   const [loading, setLoading]     = useState(true);
   const [tab, setTab]             = useState<TabFiltro>((searchParams.get("tab") as TabFiltro) || "aberto");
@@ -136,8 +133,6 @@ function ContasPagarPageInner() {
   const [valorDescontoBaixa, setValorDescontoBaixa] = useState(0);
   const [excluirId, setExcluirId] = useState<number | null>(null);
   const [motivoExclusao, setMotivoExclusao] = useState("");
-  const [mostrarRateio, setMostrarRateio] = useState(false);
-  const [rateioItens, setRateioItens] = useState<{ centroCustoId: string | number; percentual: number }[]>([]);
   const [adiantamentosDisponiveis, setAdiantamentosDisponiveis] = useState<AdiantamentoComSaldo[]>([]);
   const [adiantamentoUsadoId, setAdiantamentoUsadoId] = useState<string | number>("");
   const [modalAdiantamento, setModalAdiantamento] = useState(false);
@@ -197,16 +192,15 @@ function ContasPagarPageInner() {
 
   async function load() {
     setLoading(true);
-    const [{ data: cs }, { data: pls }, cbs, ccs, forns, formasPg] = await Promise.all([
+    const [{ data: cs }, { data: pls }, cbs, forns, formasPg] = await Promise.all([
       supabase
         .from("lancamentos")
-        .select("id, descricao, valor, status, vencimento, documento, dt_emissao, dt_pagamento, fornecedor, fornecedor_id, obs, plano_contas_id, conta_id, centro_custo_id, created_at, plano_contas(id, codigo_estruturado, descricao)")
+        .select("id, descricao, valor, status, vencimento, documento, dt_emissao, dt_pagamento, fornecedor, fornecedor_id, obs, plano_contas_id, conta_id, created_at, plano_contas(id, codigo_estruturado, descricao)")
         .eq("tipo", "Saída")
         .is("deletado_em", null)
         .order("vencimento", { ascending: true }),
       supabase.from("plano_contas").select("id, codigo_estruturado, descricao").order("codigo"),
       getContasBancarias(true),
-      getCentrosCusto(true),
       getFornecedores(true),
       getFormasPagamento(true),
     ]);
@@ -214,7 +208,6 @@ function ContasPagarPageInner() {
     setContas(contasCarregadas);
     setPlanos((pls ?? []) as PlanoItem[]);
     setContasBancarias(cbs);
-    setCentrosCusto(ccs);
     setFornecedores(forns);
     setFormasPagamento(formasPg);
     setBaixasMap(await getBaixasPorLancamentos(contasCarregadas.map(c => c.id)));
@@ -262,8 +255,6 @@ function ContasPagarPageInner() {
     setEditId(null);
     setDuplicados([]);
     setMotivoRenegociacao("");
-    setMostrarRateio(false);
-    setRateioItens([]);
     setModal("add");
   }
   async function openEdit(c: Conta) {
@@ -272,14 +263,11 @@ function ContasPagarPageInner() {
       documento: c.documento ?? "", fornecedor: c.fornecedor ?? "", fornecedor_id: c.fornecedor_id ?? null,
       vencimento: c.vencimento ?? "", dt_emissao: c.dt_emissao ?? "",
       obs: c.obs ?? "", plano_contas_id: c.plano_contas_id ?? "",
-      conta_id: c.conta_id ?? "", centro_custo_id: c.centro_custo_id ?? "",
+      conta_id: c.conta_id ?? "",
     });
     setEditId(c.id);
     setDuplicados([]);
     setMotivoRenegociacao("");
-    const rateio = await getRateio(c.id);
-    setRateioItens(rateio.map(r => ({ centroCustoId: r.centro_custo_id, percentual: r.percentual })));
-    setMostrarRateio(rateio.length > 0);
     setModal("edit");
   }
   function openDuplicar(c: Conta) {
@@ -288,13 +276,11 @@ function ContasPagarPageInner() {
       documento: "", fornecedor: c.fornecedor ?? "", fornecedor_id: c.fornecedor_id ?? null,
       vencimento: "", dt_emissao: hoje(),
       obs: c.obs ?? "", plano_contas_id: c.plano_contas_id ?? "",
-      conta_id: c.conta_id ?? "", centro_custo_id: c.centro_custo_id ?? "",
+      conta_id: c.conta_id ?? "",
     });
     setEditId(null);
     setDuplicados([]);
     setMotivoRenegociacao("");
-    setMostrarRateio(false);
-    setRateioItens([]);
     setModal("add");
   }
   async function openPagar(c: Conta) {
@@ -372,25 +358,13 @@ function ContasPagarPageInner() {
     setModal(null); setEditId(null); setPagarId(null);
     setBaixasVerId(null); setEstornandoBaixaId(null); setMotivoEstorno("");
     setExcluirId(null); setMotivoExclusao(""); setDuplicados([]); setMotivoRenegociacao("");
-    setMostrarRateio(false); setRateioItens([]); setReembolsarId(null); setAdiantamentoUsadoId("");
+    setReembolsarId(null); setAdiantamentoUsadoId("");
   }
 
   async function checarDuplicado(fornecedorId: number | null, documento: string) {
     if (modal !== "add" || !documento.trim() || !fornecedorId) { setDuplicados([]); return; }
     setDuplicados(await verificarDuplicado(documento, fornecedorId, "Saída"));
   }
-
-  function addLinhaRateio() {
-    setRateioItens(prev => [...prev, { centroCustoId: "", percentual: 0 }]);
-  }
-  function removerLinhaRateio(idx: number) {
-    setRateioItens(prev => prev.filter((_, i) => i !== idx));
-  }
-  function atualizarLinhaRateio(idx: number, campo: "centroCustoId" | "percentual", valor: string | number) {
-    setRateioItens(prev => prev.map((it, i) => i === idx ? { ...it, [campo]: valor } : it));
-  }
-  const somaRateio = rateioItens.reduce((a, i) => a + Number(i.percentual || 0), 0);
-  const rateioValido = rateioItens.length === 0 || Math.abs(somaRateio - 100) < 0.01;
 
   const contaEditando = editId ? contas.find(c => c.id === editId) ?? null : null;
   const baixasContaEditando = editId ? (baixasMap.get(editId) ?? []) : [];
@@ -401,7 +375,6 @@ function ContasPagarPageInner() {
   async function salvarConta() {
     if (!form.descricao.trim() || form.valor <= 0) return;
     if (precisaMotivoRenegociacao && !motivoRenegociacao.trim()) { toast("Informe o motivo da renegociação", "err"); return; }
-    if (!rateioValido) { toast("A soma do rateio precisa fechar 100%", "err"); return; }
     setSalvando(true);
     // Não inclui `status` aqui: editar uma conta não deve reabrir uma que já
     // está paga. Status só muda via registrarBaixa/estornarBaixa.
@@ -417,27 +390,18 @@ function ContasPagarPageInner() {
       obs: form.obs.trim() || null,
       plano_contas_id: form.plano_contas_id ? Number(form.plano_contas_id) : null,
       conta_id: form.conta_id ? Number(form.conta_id) : null,
-      centro_custo_id: form.centro_custo_id ? Number(form.centro_custo_id) : null,
     };
     if (editId) {
       const ok = await editarLancamento({
         id: editId, updates: payload,
         motivoRenegociacao: precisaMotivoRenegociacao ? motivoRenegociacao.trim() : undefined,
       });
-      if (ok && mostrarRateio) {
-        await salvarRateio(editId, rateioItens.filter(i => i.centroCustoId).map(i => ({ centroCustoId: Number(i.centroCustoId), percentual: Number(i.percentual) })));
-      } else if (ok && !mostrarRateio) {
-        await salvarRateio(editId, []);
-      }
       setSalvando(false);
       if (ok) { toast("Conta atualizada"); closeModal(); load(); }
       else toast("Erro ao salvar — verifique o motivo da renegociação", "err");
       return;
     }
-    const { data: novaConta, error } = await supabase.from("lancamentos").insert([{ ...payload, status: "Pendente", pedido_id: null, cliente_id: null }] as never).select("id").single();
-    if (!error && novaConta && mostrarRateio && rateioItens.length > 0) {
-      await salvarRateio((novaConta as { id: number }).id, rateioItens.filter(i => i.centroCustoId).map(i => ({ centroCustoId: Number(i.centroCustoId), percentual: Number(i.percentual) })));
-    }
+    const { error } = await supabase.from("lancamentos").insert([{ ...payload, status: "Pendente", pedido_id: null, cliente_id: null }] as never).select("id").single();
     setSalvando(false);
     if (error) { toast("Erro ao criar conta", "err"); return; }
     toast("Conta criada");
@@ -794,13 +758,12 @@ function ContasPagarPageInner() {
                     onChange={async (id, label) => {
                       setForm(f => ({ ...f, fornecedor_id: id, fornecedor: label }));
                       checarDuplicado(id, form.documento);
-                      if (modal === "add" && id && !form.plano_contas_id && !form.centro_custo_id) {
+                      if (modal === "add" && id && !form.plano_contas_id) {
                         const sugestao = await getUltimoPlanoContas({ fornecedorId: id });
-                        if (sugestao.planoContasId || sugestao.centroCustoId) {
+                        if (sugestao.planoContasId) {
                           setForm(f => ({
                             ...f,
                             plano_contas_id: f.plano_contas_id || sugestao.planoContasId || "",
-                            centro_custo_id: f.centro_custo_id || sugestao.centroCustoId || "",
                           }));
                         }
                       }
@@ -829,54 +792,14 @@ function ContasPagarPageInner() {
                 </div>
               )}
 
-              <div className="fr">
-                <div className="fg">
-                  <label className="fl">Plano de Contas</label>
-                  <select className="fc" value={form.plano_contas_id}
-                    onChange={e => setForm(f => ({ ...f, plano_contas_id: e.target.value }))}>
-                    <option value="">Selecione...</option>
-                    {planos.map(p => <option key={p.id} value={p.id}>{p.codigo_estruturado} · {p.descricao}</option>)}
-                  </select>
-                </div>
-                <div className="fg">
-                  <label className="fl">Centro de Custo</label>
-                  <select className="fc" value={form.centro_custo_id} disabled={mostrarRateio}
-                    onChange={e => setForm(f => ({ ...f, centro_custo_id: e.target.value }))}>
-                    <option value="">Selecione...</option>
-                    {centrosCusto.map(cc => <option key={cc.id} value={cc.id}>{cc.nome}</option>)}
-                  </select>
-                </div>
+              <div className="fg">
+                <label className="fl">Plano de Contas</label>
+                <select className="fc" value={form.plano_contas_id}
+                  onChange={e => setForm(f => ({ ...f, plano_contas_id: e.target.value }))}>
+                  <option value="">Selecione...</option>
+                  {planos.map(p => <option key={p.id} value={p.id}>{p.codigo_estruturado} · {p.descricao}</option>)}
+                </select>
               </div>
-
-              {!mostrarRateio ? (
-                <button type="button" className="btn bg xs" style={{ alignSelf: "flex-start" }}
-                  onClick={() => { setMostrarRateio(true); if (rateioItens.length === 0) addLinhaRateio(); }}>
-                  Ratear entre centros de custo
-                </button>
-              ) : (
-                <div style={{ border: "1px solid var(--b1)", borderRadius: "8px", padding: "12px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                    <span style={{ fontSize: "12px", fontWeight: 700 }}>Rateio por centro de custo</span>
-                    <button type="button" className="btn bg xs" onClick={() => { setMostrarRateio(false); setRateioItens([]); }}>Cancelar rateio</button>
-                  </div>
-                  {rateioItens.map((item, idx) => (
-                    <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 90px 28px", gap: "6px", marginBottom: "6px" }}>
-                      <select className="fc" style={{ margin: 0 }} value={item.centroCustoId}
-                        onChange={e => atualizarLinhaRateio(idx, "centroCustoId", e.target.value)}>
-                        <option value="">Centro de custo...</option>
-                        {centrosCusto.map(cc => <option key={cc.id} value={cc.id}>{cc.nome}</option>)}
-                      </select>
-                      <input className="fc" type="number" style={{ margin: 0 }} placeholder="%" value={item.percentual || ""}
-                        onChange={e => atualizarLinhaRateio(idx, "percentual", Number(e.target.value))} />
-                      <button type="button" className="btn bg xs" onClick={() => removerLinhaRateio(idx)}>✕</button>
-                    </div>
-                  ))}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
-                    <button type="button" className="btn bg xs" onClick={addLinhaRateio}>+ linha</button>
-                    <span style={{ fontSize: "12px", color: rateioValido ? "var(--ok)" : "var(--err)" }}>Soma: {somaRateio.toFixed(2)}%</span>
-                  </div>
-                </div>
-              )}
 
               <div className="fg">
                 <label className="fl">Conta Bancária (previsão de pagamento)</label>
@@ -911,7 +834,7 @@ function ContasPagarPageInner() {
 
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)", flexShrink: 0 }}>
               <button className="btn bg" onClick={closeModal}>Cancelar</button>
-              <button className="btn bp" onClick={salvarConta} disabled={salvando || !form.descricao.trim() || form.valor <= 0 || (precisaMotivoRenegociacao && !motivoRenegociacao.trim()) || !rateioValido}>
+              <button className="btn bp" onClick={salvarConta} disabled={salvando || !form.descricao.trim() || form.valor <= 0 || (precisaMotivoRenegociacao && !motivoRenegociacao.trim())}>
                 {salvando ? "Salvando..." : modal === "add" ? "Adicionar" : "Salvar alterações"}
               </button>
             </div>

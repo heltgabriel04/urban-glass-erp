@@ -106,7 +106,7 @@ async function gerarContaAPagarDaCompra(compra: { id: string; fornecedor_id: num
   if (existente) return;
   if (!(compra.valor_total > 0)) return;
 
-  const sugestao = compra.fornecedor_id ? await getUltimoPlanoContas({ fornecedorId: compra.fornecedor_id }) : { planoContasId: null, centroCustoId: null };
+  const sugestao = compra.fornecedor_id ? await getUltimoPlanoContas({ fornecedorId: compra.fornecedor_id }) : { planoContasId: null };
 
   const { data: novoLancamento, error } = await supabase
     .from('lancamentos')
@@ -120,7 +120,6 @@ async function gerarContaAPagarDaCompra(compra: { id: string; fornecedor_id: num
       fornecedor_id: compra.fornecedor_id,
       compra_id: compra.id,
       plano_contas_id: sugestao.planoContasId,
-      centro_custo_id: sugestao.centroCustoId,
       pedido_id: null,
       cliente_id: null,
     } as never])

@@ -472,7 +472,6 @@ export interface Lancamento {
   vendedor_id?: number | null;
   plano_contas_id?: number | null;
   conta_id?: number | null;
-  centro_custo_id?: number | null;
   recorrencia_id?: number | null;
   documento?: string | null;
   dt_emissao?: string | null;
@@ -493,7 +492,6 @@ export interface Lancamento {
   vendedores?: Pick<Vendedor, 'id' | 'nome'>;
   plano_contas?: { id: number; codigo_estruturado: string; descricao: string } | null;
   contas_bancarias?: Pick<ContaBancaria, 'id' | 'nome'> | null;
-  centros_custo?: Pick<CentroCusto, 'id' | 'nome'> | null;
 }
 
 export type LancamentoInsert = Omit<Lancamento, 'id' | 'created_at' | 'pedidos' | 'clientes'>;
@@ -513,17 +511,6 @@ export interface ContaBancaria {
 
 export type ContaBancariaInsert = Omit<ContaBancaria, 'id' | 'created_at'>;
 export type ContaBancariaUpdate = Partial<ContaBancariaInsert>;
-
-// ─── CENTRO DE CUSTO ───────────────────────────────────────
-export interface CentroCusto {
-  id: number;
-  nome: string;
-  ativo: boolean;
-  created_at: string;
-}
-
-export type CentroCustoInsert = Omit<CentroCusto, 'id' | 'created_at'>;
-export type CentroCustoUpdate = Partial<CentroCustoInsert>;
 
 // ─── BAIXA DE LANÇAMENTO ───────────────────────────────────
 export type NaturezaLancamento = 'normal' | 'adiantamento' | 'reembolso' | 'devolucao';
@@ -557,7 +544,6 @@ export interface LancamentoRecorrente {
   valor: number;
   dia_vencimento: number;
   plano_contas_id: number | null;
-  centro_custo_id: number | null;
   conta_id: number | null;
   fornecedor: string | null;
   cliente_id: number | null;
@@ -580,16 +566,6 @@ export interface FormaPagamento {
 
 export type FormaPagamentoInsert = Omit<FormaPagamento, 'id' | 'created_at'>;
 export type FormaPagamentoUpdate = Partial<FormaPagamentoInsert>;
-
-// ─── RATEIO DE LANÇAMENTO ────────────────────────────────────
-export interface LancamentoRateio {
-  id: number;
-  lancamento_id: number;
-  centro_custo_id: number;
-  percentual: number;
-  created_at: string;
-  centros_custo?: Pick<CentroCusto, 'id' | 'nome'> | null;
-}
 
 // ─── HISTÓRICO OTIMIZADOR ──────────────────────────────────
 export interface HistoricoOtimizador {
@@ -980,7 +956,6 @@ export type Database = {
       orcamentos:              { Row: Orcamento;           Insert: OrcamentoInsert                            };
       lancamentos:             { Row: Lancamento;          Insert: LancamentoInsert                           };
       contas_bancarias:        { Row: ContaBancaria;       Insert: ContaBancariaInsert; Update: ContaBancariaUpdate };
-      centros_custo:           { Row: CentroCusto;         Insert: CentroCustoInsert;   Update: CentroCustoUpdate   };
       baixas_lancamento:       { Row: BaixaLancamento;     Insert: BaixaLancamentoInsert                       };
       lancamentos_recorrentes: { Row: LancamentoRecorrente; Insert: LancamentoRecorrenteInsert; Update: LancamentoRecorrenteUpdate };
       formas_pagamento:        { Row: FormaPagamento;       Insert: FormaPagamentoInsert; Update: FormaPagamentoUpdate };
