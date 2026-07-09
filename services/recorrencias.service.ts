@@ -114,6 +114,7 @@ export interface OcorrenciaFuturaDetalhada {
   valor: number;
   descricao: string;
   pessoa: string | null;
+  planoContasId: number | null;
 }
 
 // Ocorrências futuras de recorrências ativas que ainda não viraram
@@ -148,6 +149,7 @@ export async function getOcorrenciasFuturas(horizonteDias = 180): Promise<Ocorre
         valor: Number(r.valor),
         descricao: r.descricao,
         pessoa: r.clientes?.nome ?? r.fornecedor ?? null,
+        planoContasId: r.plano_contas_id,
       });
       cursor.setMonth(cursor.getMonth() + 1);
     }

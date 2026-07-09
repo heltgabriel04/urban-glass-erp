@@ -7,7 +7,7 @@ import type { FiltroFinanceiroGlobal, PeriodoFiltro } from "@/lib/filtroFinancei
 // Lê/escreve o filtro global do financeiro na querystring (?periodo=&conta=).
 // Precisa ser chamado por um componente que já está dentro de um <Suspense>
 // (useSearchParams exige isso no App Router) — os 4 níveis do dashboard
-// financeiro seguem o mesmo padrão usado em /movimentacoes.
+// financeiro seguem o mesmo padrão usado em /fluxo.
 export function useFiltroFinanceiro() {
   const router = useRouter();
   const pathname = usePathname();

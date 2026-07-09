@@ -40,6 +40,7 @@ interface LinhaBase {
   pessoa: string | null;
   pedidoId: string | null;
   documento: string | null;
+  planoContasId: number | null;
   origem: OrigemLinha;
   lancamentoId?: number;
   baixaId?: number;
@@ -49,12 +50,17 @@ interface Linha extends LinhaBase { saldoAcumulado: number; }
 
 interface EdicaoLinha { data: string; valor: number; motivo: string; salvando: boolean; }
 
+type PlanoItem = { id: number; codigo_estruturado: string; descricao: string };
+
 type LancRow = {
   id: number; tipo: "Entrada" | "Saída"; descricao: string; valor: number; status: string;
   vencimento: string | null; dt_pagamento: string | null; pedido_id: string | null;
-  fornecedor: string | null; documento: string | null; clientes: { id: number; nome: string } | null;
+  fornecedor: string | null; documento: string | null; plano_contas_id: number | null;
+  clientes: { id: number; nome: string } | null;
 };
 type BaixaRow = { id: number; lancamento_id: number; valor: number; data: string };
+
+const SITUACOES = ["Realizado", "Previsto", "Vencido", "Recorrência"] as const;
 
 export default function FluxoPage() {
   return (
@@ -74,10 +80,17 @@ function FluxoPageInner() {
   const [verTudo, setVerTudo] = useState(searchParams.get("tudo") === "1");
   const [loading, setLoading] = useState(true);
   const [linhasBase, setLinhasBase] = useState<LinhaBase[]>([]);
+  const [planos, setPlanos] = useState<PlanoItem[]>([]);
   const [saldoInicialContas, setSaldoInicialContas] = useState(0);
   const [saldoAtual, setSaldoAtual] = useState(0);
   const [editando, setEditando] = useState<string | null>(null);
   const [edicao, setEdicao] = useState<EdicaoLinha>({ data: "", valor: 0, motivo: "", salvando: false });
+
+  // Filtros extras (vieram de Movimentações, que foi descontinuada)
+  const [filtroTipo, setFiltroTipo] = useState<"Todos" | "Entrada" | "Saída">("Todos");
+  const [filtroSituacao, setFiltroSituacao] = useState<"Todos" | (typeof SITUACOES)[number]>("Todos");
+  const [filtroPlano, setFiltroPlano] = useState("");
+  const [busca, setBusca] = useState("");
 
   useEffect(() => { load(); }, []);
 
@@ -104,15 +117,16 @@ function FluxoPageInner() {
 
   async function load() {
     setLoading(true);
-    const [{ data: lancsRaw }, { data: baixasRaw }, { data: contasRaw }, ocorrencias, saldoAtualCalc] = await Promise.all([
+    const [{ data: lancsRaw }, { data: baixasRaw }, { data: contasRaw }, { data: planosRaw }, ocorrencias, saldoAtualCalc] = await Promise.all([
       supabase.from("lancamentos")
-        .select("id, tipo, descricao, valor, status, vencimento, dt_pagamento, pedido_id, fornecedor, documento, clientes(id, nome)")
+        .select("id, tipo, descricao, valor, status, vencimento, dt_pagamento, pedido_id, fornecedor, documento, plano_contas_id, clientes(id, nome)")
         .is("deletado_em", null),
       supabase.from("baixas_lancamento")
         .select("id, lancamento_id, valor, data")
         .is("estornado_em", null)
         .not("lancamento_id", "is", null),
       supabase.from("contas_bancarias").select("saldo_inicial").eq("ativo", true),
+      supabase.from("plano_contas").select("id, codigo_estruturado, descricao").order("codigo_estruturado"),
       getOcorrenciasFuturas(400),
       getSaldoCaixaTotal(),
     ]);
@@ -120,6 +134,7 @@ function FluxoPageInner() {
     const lancs = (lancsRaw ?? []) as unknown as LancRow[];
     const baixas = (baixasRaw ?? []) as unknown as BaixaRow[];
     const somaSaldoInicial = ((contasRaw ?? []) as { saldo_inicial: number }[]).reduce((a, c) => a + Number(c.saldo_inicial), 0);
+    setPlanos((planosRaw ?? []) as PlanoItem[]);
 
     const lancMap = new Map(lancs.map(l => [l.id, l]));
     const baixasPorLanc = new Map<number, BaixaRow[]>();
@@ -137,7 +152,7 @@ function FluxoPageInner() {
       linhas.push({
         key: `baixa-${b.id}`, data: b.data, tipo: l.tipo, valor: Number(b.valor),
         descricao: l.descricao, pessoa: l.clientes?.nome ?? l.fornecedor ?? null,
-        pedidoId: l.pedido_id, documento: l.documento, origem: "baixa",
+        pedidoId: l.pedido_id, documento: l.documento, planoContasId: l.plano_contas_id, origem: "baixa",
         lancamentoId: l.id, baixaId: b.id,
       });
     }
@@ -148,7 +163,7 @@ function FluxoPageInner() {
         linhas.push({
           key: `legado-${l.id}`, data: l.dt_pagamento, tipo: l.tipo, valor: Number(l.valor),
           descricao: l.descricao, pessoa: l.clientes?.nome ?? l.fornecedor ?? null,
-          pedidoId: l.pedido_id, documento: l.documento, origem: "pago-legado",
+          pedidoId: l.pedido_id, documento: l.documento, planoContasId: l.plano_contas_id, origem: "pago-legado",
           lancamentoId: l.id,
         });
         continue;
@@ -160,7 +175,7 @@ function FluxoPageInner() {
       linhas.push({
         key: `pendente-${l.id}`, data: l.vencimento, tipo: l.tipo, valor: saldo,
         descricao: l.descricao, pessoa: l.clientes?.nome ?? l.fornecedor ?? null,
-        pedidoId: l.pedido_id, documento: l.documento, origem: "pendente",
+        pedidoId: l.pedido_id, documento: l.documento, planoContasId: l.plano_contas_id, origem: "pendente",
         lancamentoId: l.id, temBaixaAtiva: baixasDoLanc.length > 0,
       });
     }
@@ -168,7 +183,8 @@ function FluxoPageInner() {
     for (const o of ocorrencias) {
       linhas.push({
         key: `rec-${o.recorrenciaId}-${o.data}`, data: o.data, tipo: o.tipo, valor: o.valor,
-        descricao: o.descricao, pessoa: o.pessoa, pedidoId: null, documento: null, origem: "recorrencia-futura",
+        descricao: o.descricao, pessoa: o.pessoa, pedidoId: null, documento: null,
+        planoContasId: o.planoContasId, origem: "recorrencia-futura",
       });
     }
 
@@ -191,10 +207,20 @@ function FluxoPageInner() {
     });
   }, [linhasBase, saldoInicialContas]);
 
-  const visiveis = useMemo(
-    () => verTudo ? linhasComSaldo : linhasComSaldo.filter(l => l.data >= dataIni && l.data <= dataFim),
-    [linhasComSaldo, dataIni, dataFim, verTudo]
-  );
+  const visiveis = useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    return linhasComSaldo.filter(l => {
+      if (!verTudo && (l.data < dataIni || l.data > dataFim)) return false;
+      if (filtroTipo !== "Todos" && l.tipo !== filtroTipo) return false;
+      if (filtroSituacao !== "Todos" && situacaoLabel(l) !== filtroSituacao) return false;
+      if (filtroPlano && l.planoContasId !== Number(filtroPlano)) return false;
+      if (q) {
+        const alvo = `${l.pessoa ?? ""} ${l.descricao}`.toLowerCase();
+        if (!alvo.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [linhasComSaldo, dataIni, dataFim, verTudo, filtroTipo, filtroSituacao, filtroPlano, busca]);
 
   const totaisPeriodo = useMemo(() => {
     const ent = visiveis.filter(l => l.tipo === "Entrada").reduce((a, l) => a + l.valor, 0);
@@ -259,7 +285,11 @@ function FluxoPageInner() {
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Fluxo de Caixa</div>
-        <button className="btn bg sm" onClick={handleExportar}>⇩ Exportar</button>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button className="btn bg sm" onClick={() => router.push("/contas-receber?novo=1")}>+ A Receber</button>
+          <button className="btn bg sm" onClick={() => router.push("/contas-pagar?novo=1")}>+ A Pagar</button>
+          <button className="btn bg sm" onClick={handleExportar}>⇩ Exportar</button>
+        </div>
       </div>
 
       <div className="con">
@@ -287,6 +317,30 @@ function FluxoPageInner() {
             <span style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Até</span>
             <DateInput value={dataFim} onChange={v => setPeriodo(dataIni, v)} style={inputXs} />
           </div>
+        </div>
+
+        {/* Filtros extras — vieram de Movimentações */}
+        <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap", marginBottom: "16px", background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "8px", padding: "9px 12px" }}>
+          <select className="fc" style={inputSelXs} value={filtroTipo} onChange={e => setFiltroTipo(e.target.value as typeof filtroTipo)}>
+            <option value="Todos">Todos os tipos</option>
+            <option value="Entrada">↑ Entrada</option>
+            <option value="Saída">↓ Saída</option>
+          </select>
+          <select className="fc" style={inputSelXs} value={filtroSituacao} onChange={e => setFiltroSituacao(e.target.value as typeof filtroSituacao)}>
+            <option value="Todos">Todas as situações</option>
+            {SITUACOES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select className="fc" style={{ ...inputSelXs, width: "200px" }} value={filtroPlano} onChange={e => setFiltroPlano(e.target.value)}>
+            <option value="">Todos os planos de contas</option>
+            {planos.map(p => <option key={p.id} value={p.id}>{p.codigo_estruturado} · {p.descricao}</option>)}
+          </select>
+          <input className="fc" style={{ ...inputSelXs, width: "220px" }} placeholder="Buscar cliente, fornecedor ou descrição..."
+            value={busca} onChange={e => setBusca(e.target.value)} />
+          {(filtroTipo !== "Todos" || filtroSituacao !== "Todos" || filtroPlano || busca) && (
+            <button className="btn bg xs" onClick={() => { setFiltroTipo("Todos"); setFiltroSituacao("Todos"); setFiltroPlano(""); setBusca(""); }}>
+              ✕ Limpar
+            </button>
+          )}
         </div>
 
         {/* KPIs */}
@@ -414,8 +468,8 @@ function FluxoPageInner() {
                               </div>
                             </div>
                             <div style={{ fontSize: "10.5px", color: "var(--t3)", marginTop: "8px" }}>
-                              A alteração é feita no lançamento de verdade — atualiza sozinha em Contas a {l.tipo === "Entrada" ? "Receber" : "Pagar"}
-                              {l.pedidoId ? `, no Pedido ${l.pedidoId}` : ""} e em Movimentações.
+                              A alteração é feita no lançamento de verdade — atualiza sozinho em Contas a {l.tipo === "Entrada" ? "Receber" : "Pagar"}
+                              {l.pedidoId ? `, no Pedido ${l.pedidoId}` : ""}.
                             </div>
                           </td>
                         </tr>
@@ -461,3 +515,4 @@ const thS: React.CSSProperties = {
 // Mesma altura visual dos botões .xs do filtro, pra "De"/"Até" não
 // ficarem maiores que os atalhos ao lado.
 const inputXs: React.CSSProperties = { margin: 0, width: "108px", padding: "3px 8px", fontSize: "11px" };
+const inputSelXs: React.CSSProperties = { margin: 0, padding: "4px 8px", fontSize: "11px" };

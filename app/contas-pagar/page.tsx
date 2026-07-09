@@ -144,6 +144,16 @@ function ContasPagarPageInner() {
 
   useEffect(() => { load(); loadFiltrosSalvos(); }, []);
 
+  // Atalho vindo de outra tela (ex: Fluxo de Caixa "+ A Pagar") — abre o
+  // formulário de novo lançamento direto, sem duplicar o formulário lá.
+  useEffect(() => {
+    if (searchParams.get("novo") === "1") {
+      openAdd();
+      router.replace("/contas-pagar");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function loadFiltrosSalvos() {
     setFiltrosSalvos(await getFiltrosSalvos("contas-pagar"));
   }
