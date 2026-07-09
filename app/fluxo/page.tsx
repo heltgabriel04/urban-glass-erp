@@ -71,6 +71,7 @@ function FluxoPageInner() {
 
   const [dataIni, setDataIni] = useState(searchParams.get("de") || inicioMes());
   const [dataFim, setDataFim] = useState(searchParams.get("ate") || fimMes());
+  const [verTudo, setVerTudo] = useState(searchParams.get("tudo") === "1");
   const [loading, setLoading] = useState(true);
   const [linhasBase, setLinhasBase] = useState<LinhaBase[]>([]);
   const [saldoInicialContas, setSaldoInicialContas] = useState(0);
@@ -80,15 +81,26 @@ function FluxoPageInner() {
 
   useEffect(() => { load(); }, []);
 
-  // Filtro sobrevive a refresh/voltar do navegador.
+  // Filtro sobrevive a refresh/voltar do navegador. Padrão continua "Este
+  // mês" — "Ver tudo" só entra na URL quando ativado de propósito.
   useEffect(() => {
     const params = new URLSearchParams();
-    if (dataIni !== inicioMes()) params.set("de", dataIni);
-    if (dataFim !== fimMes()) params.set("ate", dataFim);
+    if (verTudo) {
+      params.set("tudo", "1");
+    } else {
+      if (dataIni !== inicioMes()) params.set("de", dataIni);
+      if (dataFim !== fimMes()) params.set("ate", dataFim);
+    }
     const qs = params.toString();
     router.replace(qs ? `/fluxo?${qs}` : "/fluxo", { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataIni, dataFim]);
+  }, [dataIni, dataFim, verTudo]);
+
+  function setPeriodo(ini: string, fim: string) {
+    setVerTudo(false);
+    setDataIni(ini);
+    setDataFim(fim);
+  }
 
   async function load() {
     setLoading(true);
@@ -180,8 +192,8 @@ function FluxoPageInner() {
   }, [linhasBase, saldoInicialContas]);
 
   const visiveis = useMemo(
-    () => linhasComSaldo.filter(l => l.data >= dataIni && l.data <= dataFim),
-    [linhasComSaldo, dataIni, dataFim]
+    () => verTudo ? linhasComSaldo : linhasComSaldo.filter(l => l.data >= dataIni && l.data <= dataFim),
+    [linhasComSaldo, dataIni, dataFim, verTudo]
   );
 
   const totaisPeriodo = useMemo(() => {
@@ -253,28 +265,27 @@ function FluxoPageInner() {
       <div className="con">
 
         {/* Filtro de período — estilo extrato */}
-        <div style={{ display: "flex", gap: "10px", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "16px", background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "14px 16px" }}>
-          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", marginBottom: "14px", background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "8px", padding: "9px 12px" }}>
+          <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
             {ATALHOS.map(a => {
               const [ai, af] = a.get();
-              const ativo = ai === dataIni && af === dataFim;
+              const ativo = !verTudo && ai === dataIni && af === dataFim;
               return (
                 <button key={a.label} className={ativo ? "btn bp xs" : "btn bg xs"}
-                  onClick={() => { setDataIni(ai); setDataFim(af); }}>
+                  onClick={() => setPeriodo(ai, af)}>
                   {a.label}
                 </button>
               );
             })}
+            <button className={verTudo ? "btn bp xs" : "btn bg xs"} onClick={() => setVerTudo(true)}>
+              Ver tudo
+            </button>
           </div>
-          <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", marginLeft: "auto" }}>
-            <div>
-              <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>De</div>
-              <DateInput value={dataIni} onChange={setDataIni} style={{ margin: 0, width: "130px" }} />
-            </div>
-            <div>
-              <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Até</div>
-              <DateInput value={dataFim} onChange={setDataFim} style={{ margin: 0, width: "130px" }} />
-            </div>
+          <div style={{ display: "flex", gap: "6px", alignItems: "center", marginLeft: "auto" }}>
+            <span style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>De</span>
+            <DateInput value={dataIni} onChange={v => setPeriodo(v, dataFim)} style={inputXs} />
+            <span style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Até</span>
+            <DateInput value={dataFim} onChange={v => setPeriodo(dataIni, v)} style={inputXs} />
           </div>
         </div>
 
@@ -446,3 +457,7 @@ const thS: React.CSSProperties = {
   textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--t3)",
   borderBottom: "1px solid var(--b1)", textAlign: "left", background: "var(--surf2)",
 };
+
+// Mesma altura visual dos botões .xs do filtro, pra "De"/"Até" não
+// ficarem maiores que os atalhos ao lado.
+const inputXs: React.CSSProperties = { margin: 0, width: "108px", padding: "3px 8px", fontSize: "11px" };
