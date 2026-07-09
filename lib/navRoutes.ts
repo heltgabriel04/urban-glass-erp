@@ -12,14 +12,11 @@ export const NAV_ROUTES: NavRoute[] = [
 
   { grupo: "COMERCIAL", href: "/orcamentos", label: "Orçamentos", iconKey: "orcamentos" },
   { grupo: "COMERCIAL", href: "/pedidos", label: "Pedidos", iconKey: "pedidos" },
-  { grupo: "COMERCIAL", href: "/clientes", label: "Clientes", iconKey: "clientes" },
-  { grupo: "COMERCIAL", href: "/vendedores", label: "Vendedores", iconKey: "vendedores" },
 
   { grupo: "OPERAÇÃO", href: "/otimizador", label: "Otimizador de Corte", iconKey: "otimizador" },
   { grupo: "OPERAÇÃO", href: "/programacao", label: "Programação APS", iconKey: "aps" },
   { grupo: "OPERAÇÃO", href: "/producao", label: "Produção", iconKey: "producao" },
   { grupo: "OPERAÇÃO", href: "/compras", label: "Compras", iconKey: "compras" },
-  { grupo: "OPERAÇÃO", href: "/fornecedores", label: "Fornecedores", iconKey: "fornecedores" },
   { grupo: "OPERAÇÃO", href: "/estoque", label: "Estoque · Chapas", iconKey: "estoque" },
   { grupo: "OPERAÇÃO", href: "/retalhos", label: "Retalhos", iconKey: "retalhos" },
   { grupo: "OPERAÇÃO", href: "/qualidade", label: "Qualidade", iconKey: "qualidade" },
@@ -30,20 +27,26 @@ export const NAV_ROUTES: NavRoute[] = [
   { grupo: "FINANCEIRO", href: "/fluxo", label: "Fluxo de Caixa", iconKey: "fluxo" },
   { grupo: "FINANCEIRO", href: "/movimentacoes", label: "Movimentações", iconKey: "movimentacoes" },
   { grupo: "FINANCEIRO", href: "/investimentos", label: "Investimentos", iconKey: "investimentos" },
-  { grupo: "FINANCEIRO", href: "/bancos-caixa", label: "Bancos & Caixa", iconKey: "bancos" },
   { grupo: "FINANCEIRO", href: "/recorrencias", label: "Recorrências", iconKey: "recorrencia" },
-  { grupo: "FINANCEIRO", href: "/formas-pagamento", label: "Formas de Pagamento", iconKey: "formaPgto" },
   { grupo: "FINANCEIRO", href: "/conciliacao", label: "Conciliação Bancária", iconKey: "conciliacao" },
-  { grupo: "FINANCEIRO", href: "/plano-contas", label: "Plano de Contas", iconKey: "planoContas" },
 
   { grupo: "FISCAL", href: "/notas", label: "Notas Fiscais", iconKey: "notas" },
-  { grupo: "FISCAL", href: "/contabilidade", label: "Configuração Fiscal", iconKey: "contabilidade" },
 
-  { grupo: "GESTÃO", href: "/produtos", label: "Produtos", iconKey: "produtos" },
-  { grupo: "GESTÃO", href: "/tabelas", label: "Tabelas de Preço", iconKey: "tabelas" },
-  { grupo: "GESTÃO", href: "/relatorios", label: "Relatórios & BI", iconKey: "relatorios" },
-  { grupo: "GESTÃO", href: "/giro", label: "Giro & Cobertura", iconKey: "giro" },
-  { grupo: "GESTÃO", href: "/logs", label: "Histórico", iconKey: "historico" },
+  // Tudo que é cadastrado uma vez e fica fixo — separado do que é usado
+  // no dia a dia, pra não competir por atenção no menu.
+  { grupo: "CADASTROS", href: "/clientes", label: "Clientes", iconKey: "clientes" },
+  { grupo: "CADASTROS", href: "/vendedores", label: "Vendedores", iconKey: "vendedores" },
+  { grupo: "CADASTROS", href: "/fornecedores", label: "Fornecedores", iconKey: "fornecedores" },
+  { grupo: "CADASTROS", href: "/produtos", label: "Produtos", iconKey: "produtos" },
+  { grupo: "CADASTROS", href: "/tabelas", label: "Tabelas de Preço", iconKey: "tabelas" },
+  { grupo: "CADASTROS", href: "/bancos-caixa", label: "Bancos & Caixa", iconKey: "bancos" },
+  { grupo: "CADASTROS", href: "/formas-pagamento", label: "Formas de Pagamento", iconKey: "formaPgto" },
+  { grupo: "CADASTROS", href: "/plano-contas", label: "Plano de Contas", iconKey: "planoContas" },
+  { grupo: "CADASTROS", href: "/contabilidade", label: "Configuração Fiscal", iconKey: "contabilidade" },
+
+  { grupo: "RELATÓRIOS", href: "/relatorios", label: "Relatórios & BI", iconKey: "relatorios" },
+  { grupo: "RELATÓRIOS", href: "/giro", label: "Giro & Cobertura", iconKey: "giro" },
+  { grupo: "RELATÓRIOS", href: "/logs", label: "Histórico", iconKey: "historico" },
 ];
 
 // Ações rápidas de criação — atalho pra rotas /novo já existentes.
