@@ -50,6 +50,7 @@ export async function criarRascunho(pedido: Pedido, cfop: string): Promise<NotaF
     cfop, natureza_op: "Venda de mercadoria",
     valor_produtos: valorProdutos, valor_icms: valorProdutos * aliqIcms,
     valor_pis: valorProdutos * 0.0165, valor_cofins: valorProdutos * 0.076,
+    valor_ipi: 0,
     valor_total: valorProdutos, numero: null, serie: "1",
     chave: null, protocolo: null, nuvem_fiscal_id: null,
     xml_url: null, danfe_url: null, motivo_rejeicao: null,

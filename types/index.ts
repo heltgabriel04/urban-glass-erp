@@ -624,6 +624,7 @@ export interface NotaFiscal {
   valor_icms: number;
   valor_pis: number;
   valor_cofins: number;
+  valor_ipi: number;
   valor_total: number;
   cfop: string;
   natureza_op: string;
@@ -667,6 +668,83 @@ export interface ConfigFiscalPadrao {
   cfop_dentro_padrao: string;
   cfop_fora_padrao: string;
   ncm_padrao: string;
+  updated_at: string;
+}
+
+// ─── CONTABILIDADE — DOCUMENTOS FISCAIS (Fase 1) ───────────
+export type TipoDocumentoFiscal = 'compra' | 'perda' | 'cancelamento' | 'carta_correcao' | 'inutilizacao';
+
+export interface DocumentoFiscal {
+  id: number;
+  tipo: TipoDocumentoFiscal;
+  entrada: boolean;
+  competencia_ano: number;
+  competencia_mes: number;
+  numero_documento: string | null;
+  serie: string | null;
+  chave_acesso: string | null;
+  fornecedor_id: number | null;
+  compra_id: string | null;
+  nota_fiscal_id: number | null;
+  ncm: string | null;
+  cfop: string | null;
+  cst: string | null;
+  valor_produtos: number | null;
+  valor_icms: number | null;
+  valor_pis: number | null;
+  valor_cofins: number | null;
+  valor_ipi: number | null;
+  valor_total: number | null;
+  motivo: string | null;
+  material: string | null;
+  quantidade: number | null;
+  numero_inicial: number | null;
+  numero_final: number | null;
+  sequencia_evento: number | null;
+  texto_correcao: string | null;
+  responsavel: string | null;
+  observacoes: string | null;
+  xml_url: string | null;
+  pdf_url: string | null;
+  fotos_urls: string[] | null;
+  status: 'ativo' | 'cancelado';
+  criado_por: string | null;
+  deletado_em: string | null;
+  deletado_por: string | null;
+  motivo_exclusao: string | null;
+  created_at: string;
+  updated_at: string;
+  fornecedores?: Pick<Fornecedor, 'id' | 'nome' | 'cnpj'>;
+}
+
+export type DocumentoFiscalInsert = Omit<DocumentoFiscal,
+  'id' | 'status' | 'deletado_em' | 'deletado_por' | 'motivo_exclusao' | 'created_at' | 'updated_at' | 'fornecedores'>;
+
+// ─── CONTABILIDADE — FECHAMENTO / CHECKLIST (Fase 1) ───────
+export interface ContabilidadeFechamento {
+  id: number;
+  competencia_ano: number;
+  competencia_mes: number;
+  status: 'aberto' | 'concluido';
+  percentual: number;
+  concluido_em: string | null;
+  concluido_por: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type StatusChecklistItem = 'pendente' | 'em_andamento' | 'concluido' | 'nao_aplicavel';
+
+export interface ChecklistItem {
+  id: number;
+  fechamento_id: number;
+  item_key: string;
+  status: StatusChecklistItem;
+  data_conclusao: string | null;
+  responsavel: string | null;
+  observacao: string | null;
+  anexos: string[] | null;
+  created_at: string;
   updated_at: string;
 }
 

@@ -29,7 +29,8 @@ export const NAV_ROUTES: NavRoute[] = [
   { grupo: "FINANCEIRO", href: "/recorrencias", label: "Recorrências", iconKey: "recorrencia" },
   { grupo: "FINANCEIRO", href: "/conciliacao", label: "Conciliação Bancária", iconKey: "conciliacao" },
 
-  { grupo: "FISCAL", href: "/notas", label: "Notas Fiscais", iconKey: "notas" },
+  { grupo: "CONTABILIDADE", href: "/notas", label: "Notas Fiscais", iconKey: "notas" },
+  { grupo: "CONTABILIDADE", href: "/contabilidade", label: "Contabilidade", iconKey: "contabilidade" },
 
   // Tudo que é cadastrado uma vez e fica fixo — separado do que é usado
   // no dia a dia, pra não competir por atenção no menu.
@@ -42,7 +43,6 @@ export const NAV_ROUTES: NavRoute[] = [
   { grupo: "CADASTROS", href: "/formas-pagamento", label: "Formas de Pagamento", iconKey: "formaPgto" },
   { grupo: "CADASTROS", href: "/plano-contas", label: "Plano de Contas", iconKey: "planoContas" },
   { grupo: "CADASTROS", href: "/metas", label: "Metas Financeiras", iconKey: "metas" },
-  { grupo: "CADASTROS", href: "/contabilidade", label: "Configuração Fiscal", iconKey: "contabilidade" },
 
   { grupo: "RELATÓRIOS", href: "/relatorios", label: "Relatórios & BI", iconKey: "relatorios" },
   { grupo: "RELATÓRIOS", href: "/giro", label: "Giro & Cobertura", iconKey: "giro" },
