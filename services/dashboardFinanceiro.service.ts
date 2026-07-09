@@ -49,6 +49,65 @@ export async function getAbertoPorTipo(tipo: 'Entrada' | 'Saída', filtro?: Filt
   return lista.reduce((a, l) => a + calcularSaldo(l, baixasMap.get(l.id)).saldo, 0);
 }
 
+export interface ResumoAberto { total: number; vencido: number; aVencer7: number; aVencer30: number; }
+
+// Detalha o "em aberto" de um tipo em faixas — vencido, a vencer em 7 e
+// em 30 dias (considerando saldo real, suporta baixa parcial). Usado na
+// Visão Operacional pra dar mais contexto que só o total.
+export async function getResumoAberto(tipo: 'Entrada' | 'Saída', filtro?: FiltroDashboard): Promise<ResumoAberto> {
+  let query = supabase
+    .from('lancamentos')
+    .select('id, valor, status, vencimento')
+    .eq('tipo', tipo)
+    .neq('status', 'Pago')
+    .is('deletado_em', null);
+  if (filtro?.contaId) query = query.eq('conta_id', filtro.contaId);
+  const { data: lancs } = await query;
+
+  const lista = (lancs ?? []) as { id: number; valor: number; status: string; vencimento: string | null }[];
+  const vazio: ResumoAberto = { total: 0, vencido: 0, aVencer7: 0, aVencer30: 0 };
+  if (lista.length === 0) return vazio;
+
+  const baixasMap = await getBaixasPorLancamentos(lista.map(l => l.id));
+  const hoje = new Date();
+  const hojeStr = fmtData(hoje);
+  const em7 = fmtData(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 7));
+  const em30 = fmtData(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 30));
+
+  return lista.reduce((acc, l) => {
+    const { saldo } = calcularSaldo(l, baixasMap.get(l.id));
+    if (saldo <= 0) return acc;
+    acc.total += saldo;
+    if (l.vencimento && l.vencimento < hojeStr) acc.vencido += saldo;
+    else if (l.vencimento && l.vencimento <= em7) acc.aVencer7 += saldo;
+    else if (l.vencimento && l.vencimento <= em30) acc.aVencer30 += saldo;
+    return acc;
+  }, { ...vazio });
+}
+
+export interface SaldoConta { id: number; nome: string; tipo: string; saldo: number; }
+
+// Saldo atual de cada conta bancária ativa (saldo inicial + baixas
+// ativas creditadas naquela conta específica).
+export async function getSaldosPorConta(): Promise<SaldoConta[]> {
+  const [{ data: contas }, { data: baixas }] = await Promise.all([
+    supabase.from('contas_bancarias').select('id, nome, tipo, saldo_inicial').eq('ativo', true).order('nome'),
+    supabase.from('baixas_lancamento').select('conta_id, valor, lancamentos(tipo)').is('estornado_em', null).not('conta_id', 'is', null),
+  ]);
+
+  const porConta = new Map<number, number>();
+  for (const b of (baixas ?? []) as unknown as { conta_id: number; valor: number; lancamentos: { tipo: string } | null }[]) {
+    if (!b.lancamentos) continue;
+    const delta = b.lancamentos.tipo === 'Entrada' ? Number(b.valor) : -Number(b.valor);
+    porConta.set(b.conta_id, (porConta.get(b.conta_id) ?? 0) + delta);
+  }
+
+  return ((contas ?? []) as { id: number; nome: string; tipo: string; saldo_inicial: number }[]).map(c => ({
+    id: c.id, nome: c.nome, tipo: c.tipo,
+    saldo: Number(c.saldo_inicial) + (porConta.get(c.id) ?? 0),
+  }));
+}
+
 export interface MesValor { ano: number; mes: number; valor: number; }
 
 // Despesas (baixas de Saída) somadas por mês, últimos N meses.

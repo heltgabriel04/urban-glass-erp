@@ -45,6 +45,17 @@ export async function getLinhasExtrato(extratoId: number): Promise<ExtratoLinha[
   return data as ExtratoLinha[];
 }
 
+export interface ResumoConciliacaoPendente { quantidade: number; valor: number; }
+
+// Contagem + soma de linhas de extrato ainda não conciliadas (e não
+// marcadas como ignoradas) — usado na Visão Operacional do dashboard.
+export async function getResumoPendentes(): Promise<ResumoConciliacaoPendente> {
+  const { data, error } = await supabase.from('extrato_linhas').select('valor').eq('conciliado', false).eq('ignorado', false);
+  if (error) { console.error('getResumoPendentes:', error); return { quantidade: 0, valor: 0 }; }
+  const lista = (data ?? []) as { valor: number }[];
+  return { quantidade: lista.length, valor: lista.reduce((a, l) => a + Number(l.valor), 0) };
+}
+
 // Importa um extrato já parseado (server-side, via /api/bancos-caixa/importar-extrato)
 // — cria o cabeçalho + uma linha por item, tudo não conciliado ainda.
 export async function criarExtratoComLinhas(contaId: number, arquivoNome: string, linhas: LinhaExtratoImportada[]): Promise<number | null> {
