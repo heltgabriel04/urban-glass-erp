@@ -138,7 +138,7 @@ function DashboardFinanceiroInner() {
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--b1)" vertical={false} />
                     <XAxis dataKey="label" stroke="var(--t3)" fontSize={11} tickLine={false} axisLine={{ stroke: "var(--b1)" }} />
                     <YAxis stroke="var(--t3)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v: number) => formatBRL(v)} width={90} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => formatBRL(v)} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => formatBRL(v)} cursor={{ fill: "var(--surf3)", opacity: 0.5 }} />
                     <Legend wrapperStyle={{ fontSize: 12, color: "var(--t2)" }} />
                     <Bar dataKey="receita" name="Receita" fill="var(--ok)" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="despesa" name="Despesa" fill="var(--err)" radius={[4, 4, 0, 0]} />
@@ -158,7 +158,7 @@ function DashboardFinanceiroInner() {
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--b1)" horizontal={false} />
                       <XAxis type="number" stroke="var(--t3)" fontSize={11} tickLine={false} axisLine={{ stroke: "var(--b1)" }} tickFormatter={(v: number) => formatBRL(v)} />
                       <YAxis type="category" dataKey="categoria" stroke="var(--t3)" fontSize={11} tickLine={false} axisLine={false} width={110} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => formatBRL(v)} />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => formatBRL(v)} cursor={{ fill: "var(--surf3)", opacity: 0.5 }} />
                       <Bar dataKey="valor" radius={[0, 4, 4, 0]}>
                         {dados.despesasCategoria.map((d, i) => <Cell key={i} fill={d.cor} />)}
                       </Bar>
