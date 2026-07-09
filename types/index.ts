@@ -568,6 +568,19 @@ export interface FormaPagamento {
 export type FormaPagamentoInsert = Omit<FormaPagamento, 'id' | 'created_at'>;
 export type FormaPagamentoUpdate = Partial<FormaPagamentoInsert>;
 
+// ─── META FINANCEIRA ─────────────────────────────────────────
+export interface MetaFinanceira {
+  id: number;
+  ano: number;
+  mes: number;
+  tipo: 'Entrada' | 'Saída';
+  valor_meta: number;
+  created_at: string;
+}
+
+export type MetaFinanceiraInsert = Omit<MetaFinanceira, 'id' | 'created_at'>;
+export type MetaFinanceiraUpdate = Partial<MetaFinanceiraInsert>;
+
 // ─── HISTÓRICO OTIMIZADOR ──────────────────────────────────
 export interface HistoricoOtimizador {
   id: number;
@@ -960,6 +973,7 @@ export type Database = {
       baixas_lancamento:       { Row: BaixaLancamento;     Insert: BaixaLancamentoInsert                       };
       lancamentos_recorrentes: { Row: LancamentoRecorrente; Insert: LancamentoRecorrenteInsert; Update: LancamentoRecorrenteUpdate };
       formas_pagamento:        { Row: FormaPagamento;       Insert: FormaPagamentoInsert; Update: FormaPagamentoUpdate };
+      metas_financeiras:       { Row: MetaFinanceira;       Insert: MetaFinanceiraInsert; Update: MetaFinanceiraUpdate };
       historico_otimizador:    { Row: HistoricoOtimizador                                                     };
       tabelas_preco:           { Row: TabelaPreco                                                             };
       tabela_preco_itens:      { Row: TabelaPrecoItem                                                         };

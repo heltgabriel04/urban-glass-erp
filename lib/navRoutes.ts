@@ -41,6 +41,7 @@ export const NAV_ROUTES: NavRoute[] = [
   { grupo: "CADASTROS", href: "/bancos-caixa", label: "Bancos & Caixa", iconKey: "bancos" },
   { grupo: "CADASTROS", href: "/formas-pagamento", label: "Formas de Pagamento", iconKey: "formaPgto" },
   { grupo: "CADASTROS", href: "/plano-contas", label: "Plano de Contas", iconKey: "planoContas" },
+  { grupo: "CADASTROS", href: "/metas", label: "Metas Financeiras", iconKey: "metas" },
   { grupo: "CADASTROS", href: "/contabilidade", label: "Configuração Fiscal", iconKey: "contabilidade" },
 
   { grupo: "RELATÓRIOS", href: "/relatorios", label: "Relatórios & BI", iconKey: "relatorios" },

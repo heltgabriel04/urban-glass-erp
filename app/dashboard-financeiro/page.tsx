@@ -12,10 +12,12 @@ import {
   getSaldoCaixaTotal, getAbertoPorTipo, getDespesasPorMes, getProjecaoCaixa,
   type MesValor, type ProjecaoHorizonte,
 } from "@/services/dashboardFinanceiro.service";
+import { getMeta } from "@/services/metas.service";
 import NivelTabs from "@/components/financeiro/NivelTabs";
 import FiltroGlobalFinanceiro from "@/components/financeiro/FiltroGlobalFinanceiro";
 import { useFiltroFinanceiro } from "@/components/financeiro/useFiltroFinanceiro";
 import { PERIODO_LABEL, periodoParaAnoMes } from "@/lib/filtroFinanceiro";
+import type { MetaFinanceira } from "@/types";
 
 const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const CORES_CATEGORIA = ["var(--acc)", "var(--acc2)", "var(--acc3)", "var(--acc4)"];
@@ -33,6 +35,8 @@ interface Dados {
   receitaDespesa: { label: string; receita: number; despesa: number }[];
   despesasCategoria: { categoria: string; valor: number; cor: string }[];
   projecao: ProjecaoHorizonte[];
+  metaEntrada: MetaFinanceira | null;
+  metaSaida: MetaFinanceira | null;
 }
 
 export default function DashboardFinanceiroPage() {
@@ -59,7 +63,7 @@ function DashboardFinanceiroInner() {
     // O gráfico "últimos 6 meses" é sempre uma janela móvel a partir de
     // hoje — não muda com o período selecionado no filtro global, então
     // busca faturamento sempre do ano atual/anterior, não do `ano` do filtro.
-    const [fatAtual, fatAnterior, saldoCaixa, aReceber, aPagar, dre, despesasPorMes, projecao] = await Promise.all([
+    const [fatAtual, fatAnterior, saldoCaixa, aReceber, aPagar, dre, despesasPorMes, projecao, metaEntrada, metaSaida] = await Promise.all([
       getFaturamentoMensal(anoAtual),
       getFaturamentoMensal(anoAtual - 1),
       getSaldoCaixaTotal(filtro.contaId),
@@ -68,6 +72,8 @@ function DashboardFinanceiroInner() {
       getDRE(ano, mes),
       getDespesasPorMes(6),
       getProjecaoCaixa(filtroDash),
+      mes != null ? getMeta(ano, mes, "Entrada") : Promise.resolve(null),
+      mes != null ? getMeta(ano, mes, "Saída") : Promise.resolve(null),
     ]);
 
     const fatMap = new Map<string, number>();
@@ -86,7 +92,7 @@ function DashboardFinanceiroInner() {
       ...(outros > 0 ? [{ categoria: "Outros", valor: outros, cor: "var(--t3)" }] : []),
     ];
 
-    setDados({ saldoCaixa, aReceber, aPagar, dre, receitaDespesa, despesasCategoria, projecao });
+    setDados({ saldoCaixa, aReceber, aPagar, dre, receitaDespesa, despesasCategoria, projecao, metaEntrada, metaSaida });
     setLoading(false);
   }
 
@@ -128,6 +134,24 @@ function DashboardFinanceiroInner() {
                 <div className="kpi-s">DRE · {PERIODO_LABEL[filtro.periodo].toLowerCase()}</div>
               </div>
             </div>
+
+            {/* Meta do mês */}
+            {(dados.metaEntrada || dados.metaSaida) && (
+              <div className="card" style={{ marginBottom: 16 }}>
+                <div className="ct">
+                  <span>Meta do Mês</span>
+                  <a href="/metas" className="btn bg xs" style={{ textDecoration: "none" }}>Editar metas →</a>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: dados.metaEntrada && dados.metaSaida ? "1fr 1fr" : "1fr", gap: 20 }}>
+                  {dados.metaEntrada && (
+                    <BarraMeta label="Receita" realizado={dados.dre.receita} meta={Number(dados.metaEntrada.valor_meta)} cor="var(--ok)" />
+                  )}
+                  {dados.metaSaida && (
+                    <BarraMeta label="Despesa" realizado={dados.dre.despesasTotal} meta={Number(dados.metaSaida.valor_meta)} cor="var(--err)" />
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Gráficos */}
             <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 14, marginBottom: 16 }}>
@@ -191,5 +215,27 @@ function DashboardFinanceiroInner() {
         )}
       </div>
     </AppLayout>
+  );
+}
+
+function BarraMeta({ label, realizado, meta, cor }: { label: string; realizado: number; meta: number; cor: string }) {
+  const pct = meta > 0 ? Math.min(100, (realizado / meta) * 100) : 0;
+  const estourou = realizado > meta;
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--t2)" }}>{label}</span>
+        <span style={{ fontSize: 12, fontFamily: "'DM Mono',monospace" }}>
+          <strong style={{ color: estourou ? "var(--err)" : cor }}>{formatBRL(realizado)}</strong>
+          <span style={{ color: "var(--t3)" }}> / {formatBRL(meta)}</span>
+        </span>
+      </div>
+      <div style={{ height: 8, borderRadius: 99, background: "var(--surf2)", overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${pct}%`, borderRadius: 99, background: estourou ? "var(--err)" : cor, transition: "width .3s" }} />
+      </div>
+      <div style={{ fontSize: 10.5, color: "var(--t3)", marginTop: 4 }}>
+        {((realizado / meta) * 100 || 0).toFixed(0)}% da meta{estourou ? " — ultrapassou" : ""}
+      </div>
+    </div>
   );
 }

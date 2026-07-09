@@ -9,6 +9,7 @@ import { formatBRL } from "@/lib/formatters";
 import { getFaturamentoMensal } from "@/services/financeiro.service";
 import { getDRE, type DRE } from "@/services/dre.service";
 import { getDespesasPorMes, type MesValor } from "@/services/dashboardFinanceiro.service";
+import { getMetas } from "@/services/metas.service";
 import NivelTabs from "@/components/financeiro/NivelTabs";
 import FiltroGlobalFinanceiro from "@/components/financeiro/FiltroGlobalFinanceiro";
 
@@ -20,7 +21,7 @@ const TOOLTIP_STYLE = {
   borderRadius: 8, fontSize: 12, color: "var(--t1)",
 };
 
-interface PontoEvolucao { label: string; receita: number; despesa: number; mediaMovelReceita: number | null; }
+interface PontoEvolucao { label: string; receita: number; despesa: number; mediaMovelReceita: number | null; metaReceita: number | null; }
 
 interface Dados {
   dreMesAtual: DRE;
@@ -66,6 +67,7 @@ function AnaliticaInner() {
       dreMesAtual, dreMesAnterior, dreAnoAnterior,
       fatAno0, fatAno1, fatAno2,
       despesasPorMes,
+      metasAno0, metasAno1,
     ] = await Promise.all([
       getDRE(anoAtual, mesAtual),
       getDRE(mesAnteriorDate.getFullYear(), mesAnteriorDate.getMonth() + 1),
@@ -74,10 +76,15 @@ function AnaliticaInner() {
       getFaturamentoMensal(anoAtual - 1),
       getFaturamentoMensal(anoAtual - 2),
       getDespesasPorMes(12),
+      getMetas(anoAtual),
+      getMetas(anoAtual - 1),
     ]);
 
     const fatMap = new Map<string, number>();
     [...fatAno0, ...fatAno1, ...fatAno2].forEach(f => fatMap.set(`${f.ano}-${f.mes}`, Number(f.faturado)));
+
+    const metaMap = new Map<string, number>();
+    [...metasAno0, ...metasAno1].filter(m => m.tipo === "Entrada").forEach(m => metaMap.set(`${m.ano}-${m.mes}`, Number(m.valor_meta)));
 
     const receitas: number[] = despesasPorMes.map((d: MesValor) => fatMap.get(`${d.ano}-${d.mes}`) ?? 0);
     const evolucao: PontoEvolucao[] = despesasPorMes.map((d: MesValor, i: number) => ({
@@ -85,6 +92,7 @@ function AnaliticaInner() {
       receita: receitas[i],
       despesa: d.valor,
       mediaMovelReceita: i >= 2 ? (receitas[i] + receitas[i - 1] + receitas[i - 2]) / 3 : null,
+      metaReceita: metaMap.get(`${d.ano}-${d.mes}`) ?? null,
     }));
 
     const anos = [anoAtual - 2, anoAtual - 1, anoAtual];
@@ -156,6 +164,7 @@ function AnaliticaInner() {
                   <Line type="monotone" dataKey="receita" name="Receita" stroke="var(--ok)" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="despesa" name="Despesa" stroke="var(--err)" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="mediaMovelReceita" name="Receita · média móvel 3m" stroke="var(--acc2)" strokeWidth={2} strokeDasharray="4 3" dot={false} />
+                  <Line type="monotone" dataKey="metaReceita" name="Meta de Receita" stroke="var(--t3)" strokeWidth={1.5} strokeDasharray="2 2" dot={false} connectNulls />
                 </LineChart>
               </ResponsiveContainer>
             </div>
