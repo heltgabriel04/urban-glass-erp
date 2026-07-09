@@ -2,6 +2,7 @@ import { getNotas } from "./notas.service";
 import { getDocumentosFiscais } from "./contabilidadeDocumentos.service";
 import { getOrCreateFechamento } from "./contabilidadeChecklist.service";
 import { getItensEstoqueGerais } from "./itensEstoqueGerais.service";
+import { getAtivosImobilizados } from "./ativosImobilizados.service";
 import type { NotaFiscal } from "@/types";
 
 // ─── NF Saída — 100% derivado de notas_fiscais, sem cadastro duplicado ────
@@ -186,10 +187,28 @@ export async function getStatusAreas(ano: number, mes: number): Promise<StatusAr
       ? { area: "estoque", label: "Estoque / CMV", semaforo: "amarelo", detalhe: "Checklist de estoque ainda pendente" }
       : { area: "estoque", label: "Estoque / CMV", semaforo: "verde", detalhe: "Completo" };
 
+  const ativosImobilizados = await getAtivosImobilizados({ ativo: true });
+  const hojeStr = new Date().toISOString().split("T")[0];
+  const semContaContabil = ativosImobilizados.filter((a) => !a.plano_contas_id).length;
+  const garantiaVencida = ativosImobilizados.filter((a) => a.garantia_ate !== null && a.garantia_ate < hojeStr).length;
+  const itemChecklistAtivo = itens.find((i) => i.item_key === "ativo_imobilizado");
+  const checklistAtivoPendente = itemChecklistAtivo?.status === "pendente" || itemChecklistAtivo?.status === "em_andamento";
+
+  const ativoImobilizado: StatusArea =
+    ativosImobilizados.length === 0
+      ? { area: "ativo_imobilizado", label: "Ativo Imobilizado", semaforo: "amarelo", detalhe: "Nenhum ativo cadastrado ainda" }
+      : semContaContabil > 0
+      ? { area: "ativo_imobilizado", label: "Ativo Imobilizado", semaforo: "amarelo", detalhe: `${semContaContabil} ativo(s) sem conta contábil vinculada` }
+      : garantiaVencida > 0
+      ? { area: "ativo_imobilizado", label: "Ativo Imobilizado", semaforo: "amarelo", detalhe: `${garantiaVencida} ativo(s) com garantia vencida` }
+      : checklistAtivoPendente
+      ? { area: "ativo_imobilizado", label: "Ativo Imobilizado", semaforo: "amarelo", detalhe: "Checklist de ativo imobilizado ainda pendente" }
+      : { area: "ativo_imobilizado", label: "Ativo Imobilizado", semaforo: "verde", detalhe: "Completo" };
+
   return [
     documentosFiscais,
     estoque,
-    { area: "ativo_imobilizado", label: "Ativo Imobilizado", semaforo: "indisponivel", detalhe: "Disponível na Fase 3" },
+    ativoImobilizado,
     { area: "cartoes", label: "Cartões / Empréstimos / Consórcios", semaforo: "indisponivel", detalhe: "Disponível na Fase 4" },
   ];
 }

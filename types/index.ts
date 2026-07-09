@@ -780,6 +780,44 @@ export interface ItemEstoqueMovimentacao {
 export type ItemEstoqueMovimentacaoInsert = Omit<ItemEstoqueMovimentacao,
   'id' | 'saldo_apos' | 'custo_medio_apos' | 'created_at' | 'itens_estoque_gerais' | 'documentos_fiscais'>;
 
+// ─── CONTABILIDADE — ATIVO IMOBILIZADO (Fase 3) ────────────
+export type CategoriaAtivoImobilizado =
+  | 'maquinas_equipamentos' | 'veiculos' | 'moveis_utensilios'
+  | 'informatica' | 'imoveis' | 'outros';
+
+export interface AtivoImobilizado {
+  id: number;
+  numero_patrimonio: string;
+  descricao: string;
+  categoria: CategoriaAtivoImobilizado;
+  fornecedor_id: number | null;
+  documento_fiscal_id: number | null;
+  numero_nota: string | null;
+  plano_contas_id: number | null;
+  valor_aquisicao: number;
+  valor_residual: number;
+  vida_util_meses: number;
+  data_aquisicao: string;
+  localizacao: string | null;
+  responsavel: string | null;
+  garantia_ate: string | null;
+  xml_url: string | null;
+  pdf_url: string | null;
+  manual_url: string | null;
+  fotos_urls: string[] | null;
+  observacoes: string | null;
+  ativo: boolean;
+  criado_por: string | null;
+  created_at: string;
+  updated_at: string;
+  fornecedores?: Pick<Fornecedor, 'id' | 'nome' | 'cnpj'>;
+  plano_contas?: { id: number; codigo_estruturado: string; descricao: string };
+}
+
+export type AtivoImobilizadoInsert = Omit<AtivoImobilizado,
+  'id' | 'created_at' | 'updated_at' | 'fornecedores' | 'plano_contas'>;
+export type AtivoImobilizadoUpdate = Partial<AtivoImobilizadoInsert>;
+
 // ─── CONTABILIDADE — FECHAMENTO / CHECKLIST (Fase 1) ───────
 export interface ContabilidadeFechamento {
   id: number;
