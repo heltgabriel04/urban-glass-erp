@@ -581,6 +581,15 @@ export interface MetaFinanceira {
 export type MetaFinanceiraInsert = Omit<MetaFinanceira, 'id' | 'created_at'>;
 export type MetaFinanceiraUpdate = Partial<MetaFinanceiraInsert>;
 
+// ─── CONFIGURAÇÃO DE WIDGET DO DASHBOARD ────────────────────
+export interface DashboardWidgetConfig {
+  user_id: string;
+  nivel: string;
+  widget_key: string;
+  visivel: boolean;
+  created_at: string;
+}
+
 // ─── HISTÓRICO OTIMIZADOR ──────────────────────────────────
 export interface HistoricoOtimizador {
   id: number;

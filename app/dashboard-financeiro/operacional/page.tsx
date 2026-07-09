@@ -10,7 +10,16 @@ import {
 import { getResumoPendentes, type ResumoConciliacaoPendente } from "@/services/conciliacao.service";
 import NivelTabs from "@/components/financeiro/NivelTabs";
 import FiltroGlobalFinanceiro from "@/components/financeiro/FiltroGlobalFinanceiro";
+import PersonalizarWidgets from "@/components/financeiro/PersonalizarWidgets";
+import { useWidgetsVisiveis } from "@/components/financeiro/useWidgetsVisiveis";
+import { useRealtimeDashboard } from "@/components/financeiro/useRealtimeDashboard";
 import { useFiltroFinanceiro } from "@/components/financeiro/useFiltroFinanceiro";
+
+const WIDGETS_OPERACIONAL = [
+  { key: "contasPagarReceber", label: "Contas a Pagar / Receber" },
+  { key: "saldosConciliacaoFluxo", label: "Saldos por Conta, Conciliação e Fluxo" },
+  { key: "movimentacoes", label: "Movimentações Recentes" },
+];
 
 interface MovimentoRecente {
   id: number;
@@ -42,8 +51,10 @@ export default function OperacionalPage() {
 
 function OperacionalInner() {
   const { filtro } = useFiltroFinanceiro();
+  const { visivel, toggle, widgets } = useWidgetsVisiveis("operacional", WIDGETS_OPERACIONAL);
   const [dados, setDados] = useState<Dados | null>(null);
   const [loading, setLoading] = useState(true);
+  const { ativo: aoVivo } = useRealtimeDashboard(() => load());
 
   useEffect(() => { load(); }, [filtro.contaId]);
 
@@ -85,7 +96,11 @@ function OperacionalInner() {
   return (
     <AppLayout>
       <div className="tb">
-        <div className="tb-title">Dashboard Financeiro</div>
+        <div className="tb-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          Dashboard Financeiro
+          {aoVivo && <span className="chip cg" title="Atualiza sozinho quando algo muda">● Ao vivo</span>}
+        </div>
+        <PersonalizarWidgets widgets={widgets} visivel={visivel} toggle={toggle} />
       </div>
       <NivelTabs ativo="operacional" />
       <FiltroGlobalFinanceiro />
@@ -94,6 +109,7 @@ function OperacionalInner() {
         {loading || !dados ? <div className="loading">Carregando...</div> : (
           <>
             {/* Contas a Pagar / Contas a Receber */}
+            {visivel("contasPagarReceber") && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
               <div className="card">
                 <div className="ct">
@@ -117,8 +133,10 @@ function OperacionalInner() {
                 <ResumoStats resumo={dados.aReceber} corPrincipal="var(--acc2)" />
               </div>
             </div>
+            )}
 
             {/* Saldos por conta / Conciliação / Fluxo */}
+            {visivel("saldosConciliacaoFluxo") && (
             <div className="g3" style={{ marginBottom: 16 }}>
               <div className="card">
                 <div className="ct">
@@ -167,8 +185,10 @@ function OperacionalInner() {
                 <a href="/fluxo" className="btn bp sm" style={{ textDecoration: "none", display: "inline-block" }}>Abrir Fluxo de Caixa →</a>
               </div>
             </div>
+            )}
 
             {/* Movimentações recentes */}
+            {visivel("movimentacoes") && (
             <div className="card">
               <div className="ct">
                 <span>Movimentações Recentes</span>
@@ -194,6 +214,7 @@ function OperacionalInner() {
                 </div>
               )}
             </div>
+            )}
           </>
         )}
       </div>

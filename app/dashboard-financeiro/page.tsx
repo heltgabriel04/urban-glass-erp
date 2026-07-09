@@ -15,9 +15,19 @@ import {
 import { getMeta } from "@/services/metas.service";
 import NivelTabs from "@/components/financeiro/NivelTabs";
 import FiltroGlobalFinanceiro from "@/components/financeiro/FiltroGlobalFinanceiro";
+import PersonalizarWidgets from "@/components/financeiro/PersonalizarWidgets";
+import { useWidgetsVisiveis } from "@/components/financeiro/useWidgetsVisiveis";
+import { useRealtimeDashboard } from "@/components/financeiro/useRealtimeDashboard";
 import { useFiltroFinanceiro } from "@/components/financeiro/useFiltroFinanceiro";
 import { PERIODO_LABEL, periodoParaAnoMes } from "@/lib/filtroFinanceiro";
 import type { MetaFinanceira } from "@/types";
+
+const WIDGETS_EXECUTIVA = [
+  { key: "kpis", label: "KPIs principais" },
+  { key: "meta", label: "Meta do mês" },
+  { key: "graficos", label: "Receita × Despesa e Despesas por Categoria" },
+  { key: "projecao", label: "Projeção de Caixa" },
+];
 
 const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const CORES_CATEGORIA = ["var(--acc)", "var(--acc2)", "var(--acc3)", "var(--acc4)"];
@@ -49,8 +59,10 @@ export default function DashboardFinanceiroPage() {
 
 function DashboardFinanceiroInner() {
   const { filtro } = useFiltroFinanceiro();
+  const { visivel, toggle, widgets } = useWidgetsVisiveis("executiva", WIDGETS_EXECUTIVA);
   const [dados, setDados] = useState<Dados | null>(null);
   const [loading, setLoading] = useState(true);
+  const { ativo: aoVivo } = useRealtimeDashboard(() => load());
 
   useEffect(() => { load(); }, [filtro.periodo, filtro.contaId]);
 
@@ -99,7 +111,21 @@ function DashboardFinanceiroInner() {
   return (
     <AppLayout>
       <div className="tb">
-        <div className="tb-title">Dashboard Financeiro</div>
+        <div className="tb-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          Dashboard Financeiro
+          {aoVivo && <span className="chip cg" title="Atualiza sozinho quando algo muda">● Ao vivo</span>}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <a
+            className="btn bg xs"
+            style={{ textDecoration: "none" }}
+            href={`/api/dashboard-financeiro/relatorio-pdf?periodo=${filtro.periodo}${filtro.contaId ? `&conta=${filtro.contaId}` : ""}`}
+            target="_blank" rel="noopener noreferrer"
+          >
+            ⬇ Relatório PDF
+          </a>
+          <PersonalizarWidgets widgets={widgets} visivel={visivel} toggle={toggle} />
+        </div>
       </div>
       <NivelTabs ativo="executiva" />
       <FiltroGlobalFinanceiro />
@@ -108,6 +134,7 @@ function DashboardFinanceiroInner() {
         {loading || !dados ? <div className="loading">Carregando...</div> : (
           <>
             {/* KPIs */}
+            {visivel("kpis") && (
             <div className="g4" style={{ marginBottom: 16 }}>
               <div className="kpi">
                 <div className="kpi-l">Saldo em Caixa</div>
@@ -134,9 +161,10 @@ function DashboardFinanceiroInner() {
                 <div className="kpi-s">DRE · {PERIODO_LABEL[filtro.periodo].toLowerCase()}</div>
               </div>
             </div>
+            )}
 
             {/* Meta do mês */}
-            {(dados.metaEntrada || dados.metaSaida) && (
+            {visivel("meta") && (dados.metaEntrada || dados.metaSaida) && (
               <div className="card" style={{ marginBottom: 16 }}>
                 <div className="ct">
                   <span>Meta do Mês</span>
@@ -154,6 +182,7 @@ function DashboardFinanceiroInner() {
             )}
 
             {/* Gráficos */}
+            {visivel("graficos") && (
             <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 14, marginBottom: 16 }}>
               <div className="card">
                 <div className="ct">Receita × Despesa · últimos 6 meses</div>
@@ -191,8 +220,10 @@ function DashboardFinanceiroInner() {
                 )}
               </div>
             </div>
+            )}
 
             {/* Projeção de caixa */}
+            {visivel("projecao") && (
             <div className="card">
               <div className="ct">Projeção de Caixa</div>
               <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 14 }}>
@@ -211,6 +242,7 @@ function DashboardFinanceiroInner() {
                 ))}
               </div>
             </div>
+            )}
           </>
         )}
       </div>

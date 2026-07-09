@@ -12,6 +12,15 @@ import { getDespesasPorMes, type MesValor } from "@/services/dashboardFinanceiro
 import { getMetas } from "@/services/metas.service";
 import NivelTabs from "@/components/financeiro/NivelTabs";
 import FiltroGlobalFinanceiro from "@/components/financeiro/FiltroGlobalFinanceiro";
+import PersonalizarWidgets from "@/components/financeiro/PersonalizarWidgets";
+import { useWidgetsVisiveis } from "@/components/financeiro/useWidgetsVisiveis";
+import { useRealtimeDashboard } from "@/components/financeiro/useRealtimeDashboard";
+
+const WIDGETS_ANALITICA = [
+  { key: "comparativo", label: "Comparativo por Período" },
+  { key: "evolucao", label: "Evolução de Receitas × Despesas" },
+  { key: "sazonalidade", label: "Sazonalidade" },
+];
 
 const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MESES_LONGO = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -51,8 +60,10 @@ export default function AnaliticaPage() {
 }
 
 function AnaliticaInner() {
+  const { visivel, toggle, widgets } = useWidgetsVisiveis("analitica", WIDGETS_ANALITICA);
   const [dados, setDados] = useState<Dados | null>(null);
   const [loading, setLoading] = useState(true);
+  const { ativo: aoVivo } = useRealtimeDashboard(() => load());
 
   useEffect(() => { load(); }, []);
 
@@ -119,7 +130,11 @@ function AnaliticaInner() {
   return (
     <AppLayout>
       <div className="tb">
-        <div className="tb-title">Dashboard Financeiro</div>
+        <div className="tb-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          Dashboard Financeiro
+          {aoVivo && <span className="chip cg" title="Atualiza sozinho quando algo muda">● Ao vivo</span>}
+        </div>
+        <PersonalizarWidgets widgets={widgets} visivel={visivel} toggle={toggle} />
       </div>
       <NivelTabs ativo="analitica" />
       <FiltroGlobalFinanceiro />
@@ -128,6 +143,7 @@ function AnaliticaInner() {
         {loading || !dados ? <div className="loading">Carregando...</div> : (
           <>
             {/* Comparativo por período */}
+            {visivel("comparativo") && (
             <div className="card" style={{ marginBottom: 16 }}>
               <div className="ct">Comparativo por Período · Regime de Competência</div>
               <div style={{ overflowX: "auto" }}>
@@ -150,8 +166,10 @@ function AnaliticaInner() {
                 </table>
               </div>
             </div>
+            )}
 
             {/* Evolução */}
+            {visivel("evolucao") && (
             <div className="card" style={{ marginBottom: 16 }}>
               <div className="ct">Evolução de Receitas × Despesas · últimos 12 meses</div>
               <ResponsiveContainer width="100%" height={300}>
@@ -168,8 +186,10 @@ function AnaliticaInner() {
                 </LineChart>
               </ResponsiveContainer>
             </div>
+            )}
 
             {/* Sazonalidade */}
+            {visivel("sazonalidade") && (
             <div className="card">
               <div className="ct">Sazonalidade · Faturamento por Mês</div>
               <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 14 }}>
@@ -208,6 +228,7 @@ function AnaliticaInner() {
                 </table>
               </div>
             </div>
+            )}
           </>
         )}
       </div>

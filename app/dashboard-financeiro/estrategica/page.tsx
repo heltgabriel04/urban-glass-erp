@@ -11,6 +11,16 @@ import {
 } from "@/services/dashboardEstrategico.service";
 import NivelTabs from "@/components/financeiro/NivelTabs";
 import FiltroGlobalFinanceiro from "@/components/financeiro/FiltroGlobalFinanceiro";
+import PersonalizarWidgets from "@/components/financeiro/PersonalizarWidgets";
+import { useWidgetsVisiveis } from "@/components/financeiro/useWidgetsVisiveis";
+import { useRealtimeDashboard } from "@/components/financeiro/useRealtimeDashboard";
+
+const WIDGETS_ESTRATEGICA = [
+  { key: "previsao", label: "Previsão de Caixa Estendida" },
+  { key: "concentracao", label: "Concentração de Clientes/Fornecedores" },
+  { key: "riscos", label: "Radar de Riscos" },
+  { key: "oportunidades", label: "Oportunidades" },
+];
 
 const HORIZONTES = [30, 60, 90, 120, 150, 180];
 
@@ -33,8 +43,10 @@ export default function EstrategicaPage() {
 }
 
 function EstrategicaInner() {
+  const { visivel, toggle, widgets } = useWidgetsVisiveis("estrategica", WIDGETS_ESTRATEGICA);
   const [dados, setDados] = useState<Dados | null>(null);
   const [loading, setLoading] = useState(true);
+  const { ativo: aoVivo } = useRealtimeDashboard(() => load());
 
   useEffect(() => { load(); }, []);
 
@@ -64,7 +76,11 @@ function EstrategicaInner() {
   return (
     <AppLayout>
       <div className="tb">
-        <div className="tb-title">Dashboard Financeiro</div>
+        <div className="tb-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          Dashboard Financeiro
+          {aoVivo && <span className="chip cg" title="Atualiza sozinho quando algo muda">● Ao vivo</span>}
+        </div>
+        <PersonalizarWidgets widgets={widgets} visivel={visivel} toggle={toggle} />
       </div>
       <NivelTabs ativo="estrategica" />
       <FiltroGlobalFinanceiro />
@@ -73,6 +89,7 @@ function EstrategicaInner() {
         {loading || !dados ? <div className="loading">Carregando...</div> : (
           <>
             {/* Previsão estendida + necessidade de capital */}
+            {visivel("previsao") && (
             <div className="card" style={{ marginBottom: 16 }}>
               <div className="ct">Previsão de Caixa Estendida</div>
               <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 14 }}>
@@ -96,14 +113,18 @@ function EstrategicaInner() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Concentração */}
+            {visivel("concentracao") && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
               <PainelConcentracao titulo="Concentração de Clientes" sub="Faturamento · últimos 12 meses" dados={dados.concClientes} cor="var(--ok)" />
               <PainelConcentracao titulo="Concentração de Fornecedores" sub="Despesas · últimos 12 meses" dados={dados.concFornecedores} cor="var(--err)" />
             </div>
+            )}
 
             {/* Radar de riscos */}
+            {visivel("riscos") && (
             <div className="card" style={{ marginBottom: 16 }}>
               <div className="ct">Radar de Riscos</div>
               {riscos.length === 0 ? (
@@ -123,8 +144,10 @@ function EstrategicaInner() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Oportunidades */}
+            {visivel("oportunidades") && (
             <div className="card">
               <div className="ct">Oportunidades · Clientes Recorrentes Sem Pedido Recente</div>
               {dados.inativos.length === 0 ? (
@@ -146,6 +169,7 @@ function EstrategicaInner() {
                 </div>
               )}
             </div>
+            )}
           </>
         )}
       </div>
