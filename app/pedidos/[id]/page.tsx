@@ -996,6 +996,7 @@ export default function PedidoDetalhe() {
                 <Row label="Telefone"           value={pedido.clientes?.tel ?? "—"} />
                 <Row label="Data do pedido"     value={formatDate(pedido.dt_pedido)} />
                 <Row label="Retirada prevista"  value={formatDate(pedido.dt_retirada)} />
+                <Row label="Frete"               value={pedido.frete || "Retirada"} />
                 <Row label={(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml total" : "m² total"} value={Number(pedido.m2_total).toFixed(2) + " " + ((pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml" : "m²")} />
                 {pedido.parcelas > 1 && <Row label="Parcelas" value={pedido.parcelas + "×"} />}
                 {(() => {
@@ -1834,6 +1835,7 @@ export default function PedidoDetalhe() {
                 <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Pagamento</span><strong>{pedido.forma_pgto || "—"}</strong></div>
                 {pedido.parcelas > 1 && <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Parcelas</span><strong>{pedido.parcelas}×</strong></div>}
                 <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Retirada prevista</span><strong>{formatDate(pedido.dt_retirada)}</strong></div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Frete</span><strong>{pedido.frete || "Retirada"}</strong></div>
                 <div style={{ display:"flex", justifyContent:"space-between" }}>
                   <span style={{ color:"#333" }}>{(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml total" : "m² total"}</span>
                   <strong>

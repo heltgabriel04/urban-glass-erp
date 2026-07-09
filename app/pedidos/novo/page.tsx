@@ -125,6 +125,7 @@ function NovoPedidoPageInner() {
   const [vendedorId, setVendedorId] = useState<number | null>(null);
   const [dtPedido, setDtPedido]     = useState(new Date().toISOString().split("T")[0]);
   const [dtRetirada, setDtRetirada] = useState("");
+  const [frete, setFrete]           = useState("Retirada");
   const [formaPgto, setFormaPgto]   = useState("");
   const [conta, setConta]           = useState("");
   const [parcelas, setParcelas]     = useState(1);
@@ -430,7 +431,7 @@ function NovoPedidoPageInner() {
         status: todosChapa ? "Em Produção – Corte" : "Aguardando otimização",
         forma_pgto: parcelasForm[0]?.formaPgto || formaPgto,
         conta: parcelasForm[0]?.conta || conta,
-        parcelas, obs,
+        parcelas, frete, obs,
       };
 
       const itensInsert: ItemPedidoInsert[] = itens.map(i => ({
@@ -537,9 +538,15 @@ function NovoPedidoPageInner() {
               </div>
             )}
 
-            <div className="fr">
+            <div className="fr3">
               <div className="fg"><label className="fl">Data do Pedido</label><DateInput value={dtPedido} onChange={setDtPedido} /></div>
               <div className="fg"><label className="fl">Previsão Retirada</label><DateInput value={dtRetirada} onChange={setDtRetirada} /></div>
+              <div className="fg">
+                <label className="fl">Frete</label>
+                <select className="fc" value={frete} onChange={e => setFrete(e.target.value)}>
+                  {["Retirada","Fretado"].map(f => <option key={f}>{f}</option>)}
+                </select>
+              </div>
             </div>
             {/* ── FINANCEIRO ── */}
             <div style={{ marginTop: "14px", borderTop: "1px solid var(--b1)", paddingTop: "14px" }}>

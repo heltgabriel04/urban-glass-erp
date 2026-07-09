@@ -273,6 +273,7 @@ export interface Pedido {
   forma_pgto: string;
   conta: string;
   parcelas: number;
+  frete: string;
   obs: string;
   status_history?: StatusHistoryEntry[];
   qr_token?: string;

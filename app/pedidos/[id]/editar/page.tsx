@@ -104,6 +104,7 @@ export default function EditarPedidoPage() {
   const [vendedorId, setVendedorId] = useState<number | null>(null);
   const [dtPedido, setDtPedido]     = useState("");
   const [dtRetirada, setDtRetirada] = useState("");
+  const [frete, setFrete]           = useState("Retirada");
   const [formaPgto, setFormaPgto]   = useState("");
   const [conta, setConta]           = useState("");
   const [parcelas, setParcelas]     = useState(1);
@@ -143,6 +144,7 @@ export default function EditarPedidoPage() {
     setVendedorId(pedido.vendedor_id ?? null);
     setDtPedido(pedido.dt_pedido ?? "");
     setDtRetirada(pedido.dt_retirada ?? "");
+    setFrete(pedido.frete ?? "Retirada");
     setFormaPgto(pedido.forma_pgto ?? "");
     setConta(pedido.conta ?? "");
     setParcelas(pedido.parcelas ?? 1);
@@ -377,6 +379,7 @@ export default function EditarPedidoPage() {
       vendedor_id:  vendedorId,
       dt_pedido:    dtPedido,
       dt_retirada:  dtRetirada || null,
+      frete,
       forma_pgto:   formaPgto,
       conta,
       parcelas,
@@ -532,9 +535,15 @@ export default function EditarPedidoPage() {
               </div>
             )}
 
-            <div className="fr">
+            <div className="fr3">
               <div className="fg"><label className="fl">Data do Pedido</label><DateInput value={dtPedido} onChange={setDtPedido} /></div>
               <div className="fg"><label className="fl">Previsão Retirada</label><DateInput value={dtRetirada} onChange={setDtRetirada} /></div>
+              <div className="fg">
+                <label className="fl">Frete</label>
+                <select className="fc" value={frete} onChange={e => setFrete(e.target.value)}>
+                  {["Retirada","Fretado"].map(f => <option key={f}>{f}</option>)}
+                </select>
+              </div>
             </div>
             <div className="fr">
               <div className="fg">

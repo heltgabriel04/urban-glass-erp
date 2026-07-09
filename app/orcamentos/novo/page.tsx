@@ -169,7 +169,7 @@ function NovoOrcamentoPageInner() {
       if (original) {
         setClienteId(original.cliente_id);
         setObs(original.obs ?? "");
-        setFrete(original.frete || "Retirada");
+        setFrete(original.frete === "Retirada" ? "Retirada" : original.frete ? "Fretado" : "Retirada");
         const itensOriginais = original.itens_orcamento ?? [];
         if (itensOriginais.length > 0) {
           setItens(itensOriginais.map((i: any) => ({
@@ -538,7 +538,7 @@ function NovoOrcamentoPageInner() {
               <div className="fg">
                 <label className="fl">Frete</label>
                 <select tabIndex={-1} className="fc" value={frete} onChange={e => setFrete(e.target.value)}>
-                  {["Retirada","CIF","FOB"].map(f => <option key={f}>{f}</option>)}
+                  {["Retirada","Fretado"].map(f => <option key={f}>{f}</option>)}
                 </select>
               </div>
             </div>
