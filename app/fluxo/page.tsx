@@ -3,6 +3,7 @@
 import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
+import { useTheme } from "@/components/layout/ThemeProvider";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { ordenarPorCodigoEstruturado } from "@/lib/planoContas";
@@ -75,6 +76,7 @@ function FluxoPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const { theme } = useTheme();
 
   const [dataIni, setDataIni] = useState(searchParams.get("de") || inicioMes());
   const [dataFim, setDataFim] = useState(searchParams.get("ate") || fimMes());
@@ -293,7 +295,10 @@ function FluxoPageInner() {
         </div>
       </div>
 
-      <div className="con">
+      {/* Teste visual: fundo neutro frio (cinza-azulado) no lugar do bege
+          quente padrão do tema claro — só nesta página, só no claro, pra
+          o usuário decidir se estende pro resto do sistema. */}
+      <div className="con" style={theme === "light" ? { background: "#eef1f6" } : undefined}>
 
         {/* Filtro de período — estilo extrato */}
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", marginBottom: "14px", background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "8px", padding: "9px 12px" }}>
