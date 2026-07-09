@@ -32,13 +32,8 @@ export default function CommandPalette() {
         setOpen(o => !o);
       }
     }
-    function onAbrirExterno() { setOpen(true); }
     window.addEventListener("keydown", onKey);
-    window.addEventListener("ug:abrir-busca", onAbrirExterno);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("ug:abrir-busca", onAbrirExterno);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   useEffect(() => {
