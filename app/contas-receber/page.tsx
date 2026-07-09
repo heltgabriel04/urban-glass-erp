@@ -435,12 +435,12 @@ function ContasReceberPageInner() {
     const linhas = filtrados.map(r => {
       const { valorPago } = calcularSaldo(r, baixasMap.get(r.id));
       return [
-        r.pedido_id ?? r.documento ?? "", fmtData(r.dt_emissao ?? r.created_at), r.plano_contas?.descricao ?? "", r.clientes?.nome ?? "", r.descricao,
+        fmtData(r.dt_emissao ?? r.created_at), r.clientes?.nome ?? "", r.descricao, r.pedido_id ?? r.documento ?? "", r.plano_contas?.descricao ?? "",
         fmtData(r.vencimento), Number(r.valor), valorPago, fmtData(r.dt_pagamento), getStatusExibicao(r, valorPago),
       ];
     });
     exportarExcel("ContasReceber_UrbanGlass",
-      ["Pedido/Doc.", "Emissão", "Plano de Contas", "Cliente", "Descrição", "Vencimento", "Valor", "Recebido", "Recebimento", "Status"],
+      ["Emissão", "Cliente", "Descrição", "Pedido/Documento", "Plano de Contas", "Vencimento", "Valor", "Recebido", "Recebimento", "Status"],
       linhas);
   }
 
@@ -616,10 +616,10 @@ function ContasReceberPageInner() {
                     <th style={{ width: "30px" }}>
                       <input type="checkbox" checked={todosSelecionados} onChange={toggleSelecionarTodos} />
                     </th>
-                    <th style={{ width: "120px" }}>Pedido / Doc.</th>
                     <th style={{ width: "90px" }}>Emissão</th>
-                    <th style={{ width: "200px" }}>Plano de Contas</th>
                     <th>Cliente / Descrição</th>
+                    <th style={{ width: "120px" }}>Pedido / Documento</th>
+                    <th style={{ width: "200px" }}>Plano de Contas</th>
                     <th style={{ width: "90px" }}>Vencimento</th>
                     <th style={{ width: "110px", textAlign: "right" }}>Valor</th>
                     <th style={{ width: "110px", textAlign: "right" }}>Recebido</th>
@@ -643,6 +643,11 @@ function ContasReceberPageInner() {
                         <td>
                           <input type="checkbox" checked={selecionados.has(r.id)} onChange={() => toggleSelecionado(r.id)} />
                         </td>
+                        <td style={{ fontSize: "12px" }}>{fmtData(r.dt_emissao ?? r.created_at)}</td>
+                        <td>
+                          <div style={{ fontWeight: 600, fontSize: "13px" }}>{r.clientes?.nome ?? <span style={{ color: "var(--t3)" }}>—</span>}</div>
+                          <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "2px" }}>{r.descricao}</div>
+                        </td>
                         <td className="mono" style={{ fontSize: "11px", color: "var(--acc)" }}>
                           {r.pedido_id
                             ? <span style={{ fontWeight: 700 }}>{r.pedido_id}</span>
@@ -650,15 +655,10 @@ function ContasReceberPageInner() {
                               ? <span style={{ color: "var(--t2)" }}>{r.documento}</span>
                               : <span style={{ color: "var(--t3)" }}>—</span>}
                         </td>
-                        <td style={{ fontSize: "12px" }}>{fmtData(r.dt_emissao ?? r.created_at)}</td>
                         <td style={{ fontSize: "11px" }}>
                           {r.plano_contas
                             ? <span><span style={{ color: "var(--acc)", fontFamily: "'DM Mono',monospace", fontSize: "10px" }}>{r.plano_contas.codigo_estruturado}</span> {r.plano_contas.descricao}</span>
                             : <span style={{ color: "var(--t3)" }}>—</span>}
-                        </td>
-                        <td>
-                          <div style={{ fontWeight: 600, fontSize: "13px" }}>{r.descricao}</div>
-                          {r.clientes?.nome && <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "2px" }}>{r.clientes.nome}</div>}
                         </td>
                         <td style={{ fontSize: "12px", color: st === "Vencido" ? "var(--err)" : "var(--t1)", fontWeight: st === "Vencido" ? 700 : 400 }}>
                           {fmtData(r.vencimento)}
@@ -729,12 +729,6 @@ function ContasReceberPageInner() {
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px", overflowY: "auto", flex: 1 }}>
               <div className="fr">
                 <div className="fg">
-                  <label className="fl">Documento</label>
-                  <input className="fc" placeholder="NF, recibo..." value={form.documento as string}
-                    onChange={e => setForm(f => ({ ...f, documento: e.target.value }))}
-                    onBlur={() => checarDuplicado(form.cliente_id, form.documento as string)} />
-                </div>
-                <div className="fg">
                   <label className="fl">Cliente</label>
                   <select className="fc" value={form.cliente_id}
                     onChange={async e => {
@@ -754,6 +748,12 @@ function ContasReceberPageInner() {
                     <option value="">Selecione...</option>
                     {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                   </select>
+                </div>
+                <div className="fg">
+                  <label className="fl">Documento</label>
+                  <input className="fc" placeholder="NF, recibo..." value={form.documento as string}
+                    onChange={e => setForm(f => ({ ...f, documento: e.target.value }))}
+                    onBlur={() => checarDuplicado(form.cliente_id, form.documento as string)} />
                 </div>
               </div>
 

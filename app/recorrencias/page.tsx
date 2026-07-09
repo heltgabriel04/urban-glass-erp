@@ -162,7 +162,10 @@ export default function RecorrenciasPage() {
                     <td>
                       <span className={r.tipo === "Entrada" ? "chip cg" : "chip cr"}>{r.tipo}</span>
                     </td>
-                    <td><strong>{r.descricao}</strong>{r.fornecedor && <div className="tdim">{r.fornecedor}</div>}</td>
+                    <td>
+                      {(r.clientes?.nome ?? r.fornecedor) && <strong>{r.clientes?.nome ?? r.fornecedor}</strong>}
+                      <div className={r.clientes?.nome || r.fornecedor ? "tdim" : undefined}>{r.descricao}</div>
+                    </td>
                     <td style={{ textAlign: "right", fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>{formatBRL(r.valor)}</td>
                     <td className="mono">{r.dia_vencimento}</td>
                     <td className="mono" style={{ fontSize: "12px" }}>{fmtData(r.gerado_ate)}</td>

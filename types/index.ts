@@ -550,9 +550,10 @@ export interface LancamentoRecorrente {
   ativo: boolean;
   gerado_ate: string | null;
   created_at: string;
+  clientes?: Pick<Cliente, 'id' | 'nome'> | null;
 }
 
-export type LancamentoRecorrenteInsert = Omit<LancamentoRecorrente, 'id' | 'created_at' | 'gerado_ate'>;
+export type LancamentoRecorrenteInsert = Omit<LancamentoRecorrente, 'id' | 'created_at' | 'gerado_ate' | 'clientes'>;
 export type LancamentoRecorrenteUpdate = Partial<LancamentoRecorrenteInsert>;
 
 // ─── FORMA DE PAGAMENTO ─────────────────────────────────────

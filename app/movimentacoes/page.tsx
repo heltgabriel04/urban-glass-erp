@@ -264,7 +264,7 @@ function MovimentacoesPageInner() {
               </select>
             </div>
             <div>
-              <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Pessoa / Fornecedor / Descrição</div>
+              <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Cliente / Fornecedor / Descrição</div>
               <SearchInput icon={false} className="fc" inputStyle={fc} placeholder="Buscar..." value={filtroPessoa} onChange={setFiltroPessoa} />
             </div>
             <div style={{ display: "flex", gap: "6px", paddingBottom: "1px" }}>
@@ -330,10 +330,10 @@ function MovimentacoesPageInner() {
                   <tr>
                     <th style={thS}>Tipo</th>
                     <th style={thS}>Data</th>
+                    <th style={thS}>Cliente / Fornecedor</th>
                     <th style={thS}>Documento</th>
-                    <th style={thS}>Plano de Contas</th>
                     <th style={{ ...thS, minWidth: "200px" }}>Descrição / Origem</th>
-                    <th style={thS}>Pessoa</th>
+                    <th style={thS}>Plano de Contas</th>
                     <th style={thS}>Conta</th>
                     <th style={{ ...thS, textAlign: "right" }}>Valor</th>
                     <th style={thS}>Vencimento</th>
@@ -367,11 +367,22 @@ function MovimentacoesPageInner() {
                           {fmtDate(dataEfetiva(m, tipoDate))}
                         </td>
 
+                        {/* Cliente / Fornecedor */}
+                        <td style={{ padding: "8px 10px", fontSize: "12px", color: "var(--t1)", fontWeight: 600, whiteSpace: "nowrap", maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {pessoa}
+                        </td>
+
                         {/* Documento */}
                         <td style={{ padding: "8px 10px", fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>
                           {m.pedido_id
-                            ? <span style={{ color: "var(--acc)", fontWeight: 700 }}>#{m.pedido_id}</span>
+                            ? <span style={{ color: "var(--acc)" }}>#{m.pedido_id}</span>
                             : m.documento ?? "—"}
+                        </td>
+
+                        {/* Descrição */}
+                        <td style={{ padding: "8px 10px", fontSize: "12px", color: "var(--t1)", maxWidth: "220px" }}>
+                          <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={m.descricao}>{m.descricao}</div>
+                          {m.obs && <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "1px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={m.obs}>{m.obs}</div>}
                         </td>
 
                         {/* Plano de Contas */}
@@ -382,17 +393,6 @@ function MovimentacoesPageInner() {
                               <span style={{ color: "var(--t3)", marginLeft: "5px" }}>{m.plano_contas.descricao}</span>
                             </>
                           ) : <span style={{ color: "var(--t3)" }}>—</span>}
-                        </td>
-
-                        {/* Descrição */}
-                        <td style={{ padding: "8px 10px", fontSize: "12px", color: "var(--t1)", maxWidth: "220px" }}>
-                          <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={m.descricao}>{m.descricao}</div>
-                          {m.obs && <div style={{ fontSize: "10px", color: "var(--t3)", marginTop: "1px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={m.obs}>{m.obs}</div>}
-                        </td>
-
-                        {/* Pessoa */}
-                        <td style={{ padding: "8px 10px", fontSize: "12px", color: "var(--t2)", whiteSpace: "nowrap", maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {pessoa}
                         </td>
 
                         {/* Conta */}

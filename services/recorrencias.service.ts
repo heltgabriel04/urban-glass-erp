@@ -3,7 +3,7 @@ import type { LancamentoRecorrente, LancamentoRecorrenteInsert, LancamentoRecorr
 import { registrarLog } from './log.service';
 
 export async function getRecorrencias(apenasAtivas = false) {
-  let query = supabase.from('lancamentos_recorrentes').select('*').order('descricao');
+  let query = supabase.from('lancamentos_recorrentes').select('*, clientes(id, nome)').order('descricao');
   if (apenasAtivas) query = query.eq('ativo', true);
   const { data, error } = await query;
   if (error) { console.error('getRecorrencias:', error); return []; }

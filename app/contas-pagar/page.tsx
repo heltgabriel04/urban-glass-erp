@@ -438,12 +438,12 @@ function ContasPagarPageInner() {
     const linhas = filtradas.map(c => {
       const { valorPago } = calcularSaldo(c, baixasMap.get(c.id));
       return [
-        c.documento ?? "", fmtData(c.dt_emissao), c.plano_contas?.descricao ?? "", c.fornecedor ?? "", c.descricao,
+        fmtData(c.dt_emissao), c.fornecedor ?? "", c.descricao, c.documento ?? "", c.plano_contas?.descricao ?? "",
         fmtData(c.vencimento), Number(c.valor), valorPago, fmtData(c.dt_pagamento), getStatusExibicao(c, valorPago),
       ];
     });
     exportarExcel("ContasPagar_UrbanGlass",
-      ["Documento", "Emissão", "Plano de Contas", "Fornecedor", "Descrição", "Vencimento", "Valor", "Valor Pago", "Pagamento", "Status"],
+      ["Emissão", "Fornecedor", "Descrição", "Documento", "Plano de Contas", "Vencimento", "Valor", "Valor Pago", "Pagamento", "Status"],
       linhas);
   }
 
@@ -620,10 +620,10 @@ function ContasPagarPageInner() {
                     <th style={{ width: "30px" }}>
                       <input type="checkbox" checked={todosSelecionados} onChange={toggleSelecionarTodos} />
                     </th>
-                    <th style={{ width: "130px" }}>Documento</th>
                     <th style={{ width: "90px" }}>Emissão</th>
-                    <th style={{ width: "200px" }}>Plano de Contas</th>
                     <th>Fornecedor / Descrição</th>
+                    <th style={{ width: "130px" }}>Documento</th>
+                    <th style={{ width: "200px" }}>Plano de Contas</th>
                     <th style={{ width: "90px" }}>Vencimento</th>
                     <th style={{ width: "110px", textAlign: "right" }}>Valor</th>
                     <th style={{ width: "110px", textAlign: "right" }}>Valor Pago</th>
@@ -647,18 +647,18 @@ function ContasPagarPageInner() {
                         <td>
                           <input type="checkbox" checked={selecionados.has(c.id)} onChange={() => toggleSelecionado(c.id)} />
                         </td>
+                        <td style={{ fontSize: "12px" }}>{fmtData(c.dt_emissao)}</td>
+                        <td>
+                          <div style={{ fontWeight: 600, fontSize: "13px" }}>{c.fornecedor ?? <span style={{ color: "var(--t3)" }}>—</span>}</div>
+                          <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "2px" }}>{c.descricao}</div>
+                        </td>
                         <td className="mono" style={{ fontSize: "11px", color: "var(--t2)" }}>
                           {c.documento || <span style={{ color: "var(--t3)" }}>—</span>}
                         </td>
-                        <td style={{ fontSize: "12px" }}>{fmtData(c.dt_emissao)}</td>
                         <td style={{ fontSize: "11px" }}>
                           {c.plano_contas
                             ? <span><span style={{ color: "var(--acc)", fontFamily: "'DM Mono',monospace", fontSize: "10px" }}>{c.plano_contas.codigo_estruturado}</span> {c.plano_contas.descricao}</span>
                             : <span style={{ color: "var(--t3)" }}>—</span>}
-                        </td>
-                        <td>
-                          <div style={{ fontWeight: 600, fontSize: "13px" }}>{c.descricao}</div>
-                          {c.fornecedor && <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "2px" }}>{c.fornecedor}</div>}
                         </td>
                         <td style={{ fontSize: "12px", color: st === "Vencido" ? "var(--err)" : "var(--t1)", fontWeight: st === "Vencido" ? 700 : 400 }}>
                           {fmtData(c.vencimento)}
@@ -742,13 +742,7 @@ function ContasPagarPageInner() {
               )}
               <div className="fr">
                 <div className="fg">
-                  <label className="fl">Documento</label>
-                  <input className="fc" placeholder="NF 001, Boleto..." value={form.documento}
-                    onChange={e => setForm(f => ({ ...f, documento: e.target.value }))}
-                    onBlur={() => checarDuplicado(form.fornecedor_id, form.documento)} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Fornecedor / Pessoa</label>
+                  <label className="fl">Fornecedor</label>
                   <AutocompleteInput
                     options={fornecedores.map(f => ({ id: f.id, label: f.nome, sub: f.categoria || undefined }))}
                     value={form.fornecedor_id}
@@ -769,6 +763,12 @@ function ContasPagarPageInner() {
                       }
                     }}
                   />
+                </div>
+                <div className="fg">
+                  <label className="fl">Documento</label>
+                  <input className="fc" placeholder="NF 001, Boleto..." value={form.documento}
+                    onChange={e => setForm(f => ({ ...f, documento: e.target.value }))}
+                    onBlur={() => checarDuplicado(form.fornecedor_id, form.documento)} />
                 </div>
               </div>
 
