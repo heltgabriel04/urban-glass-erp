@@ -160,7 +160,7 @@ async function getOcorrenciasRecorrentesFuturas(limiteMax: Date, filtro?: Filtro
     } else {
       cursor = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
     }
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 8; i++) {
       const data2 = new Date(cursor.getFullYear(), cursor.getMonth(), r.dia_vencimento);
       if (data2 > limiteMax) break;
       ocorrencias.push({ tipo: r.tipo, valor: Number(r.valor), data: fmtData(data2) });
@@ -173,10 +173,12 @@ async function getOcorrenciasRecorrentesFuturas(limiteMax: Date, filtro?: Filtro
 // Projeção de caixa baseada em compromissos já lançados (não estimativa
 // estatística): saldo atual + títulos em aberto com vencimento dentro do
 // horizonte + ocorrências futuras de recorrências ativas ainda não geradas.
-export async function getProjecaoCaixa(filtro?: FiltroDashboard): Promise<ProjecaoHorizonte[]> {
+// `horizontes` default é o usado na Visão Executiva (30/60/90); a Visão
+// Estratégica chama com uma janela mais longa (até 180 dias).
+export async function getProjecaoCaixa(filtro?: FiltroDashboard, horizontes: number[] = [30, 60, 90]): Promise<ProjecaoHorizonte[]> {
   const saldoAtual = await getSaldoCaixaTotal(filtro?.contaId);
   const hoje = new Date();
-  const limiteMax = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 90);
+  const limiteMax = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + Math.max(...horizontes));
 
   let entradasQuery = supabase.from('lancamentos').select('id, valor, status, vencimento').eq('tipo', 'Entrada').neq('status', 'Pago').not('vencimento', 'is', null).is('deletado_em', null);
   let saidasQuery = supabase.from('lancamentos').select('id, valor, status, vencimento').eq('tipo', 'Saída').neq('status', 'Pago').not('vencimento', 'is', null).is('deletado_em', null);
@@ -192,7 +194,7 @@ export async function getProjecaoCaixa(filtro?: FiltroDashboard): Promise<Projec
 
   const baixasMap = await getBaixasPorLancamentos([...entradasList, ...saidasList].map(l => l.id));
 
-  return [30, 60, 90].map(dias => {
+  return horizontes.map(dias => {
     const limite = fmtData(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + dias));
     const entradasSaldo = entradasList
       .filter(l => l.vencimento <= limite)
