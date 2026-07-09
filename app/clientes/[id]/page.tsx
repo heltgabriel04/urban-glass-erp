@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate, formatPercent } from "@/lib/formatters";
+import { registrarRecente } from "@/lib/recentes";
 import type { Cliente, Pedido, FinanceiroCliente } from "@/types";
 
 const CHIP: Record<string, string> = {
@@ -46,6 +47,10 @@ export default function ClienteDetalhe() {
     setPedidos((pedData ?? []) as Pedido[]);
     setFin(finData as FinanceiroCliente ?? null);
     setLoading(false);
+    if (cliData) {
+      const c = cliData as Cliente;
+      registrarRecente({ tipo: "cliente", id: String(c.id), label: c.nome, sublabel: c.cidade ?? undefined, href: `/clientes/${c.id}` });
+    }
   }
 
   if (loading) return <AppLayout><div className="con"><div className="loading">Carregando cliente...</div></div></AppLayout>;

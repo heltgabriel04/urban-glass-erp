@@ -38,7 +38,7 @@ export default function Topbar({ onMenuClick }: Props) {
       background: "var(--surf)",
       display: "flex",
       alignItems: "center",
-      justifyContent: "flex-end",
+      justifyContent: "flex-start",
       gap: "8px",
       flexShrink: 0,
     }}>
@@ -53,12 +53,22 @@ export default function Topbar({ onMenuClick }: Props) {
           color: var(--t2);
           cursor: pointer;
           font-size: 15px; line-height: 1;
-          margin-right: auto;
           flex-shrink: 0;
         }
         @media (max-width: 860px) {
           .topbar-hamburger { display: inline-flex; }
         }
+        .topbar-busca {
+          display: flex; align-items: center; gap: 8px;
+          padding: 6px 12px; border-radius: 6px;
+          border: 1px solid var(--b1); background: var(--surf2);
+          color: var(--t3); cursor: pointer; font-size: 12px;
+          transition: border-color 0.1s, color 0.1s;
+          max-width: 260px; width: 100%;
+        }
+        .topbar-busca:hover { border-color: var(--acc); color: var(--acc); }
+        .topbar-busca .kbd { margin-left: auto; font-family: 'DM Mono', monospace; font-size: 10px; opacity: 0.7; }
+        @media (max-width: 640px) { .topbar-busca .kbd, .topbar-busca .lbl { display: none; } .topbar-busca { max-width: none; width: auto; padding: 6px 8px; } }
       `}</style>
       <button
         className="topbar-hamburger"
@@ -68,6 +78,16 @@ export default function Topbar({ onMenuClick }: Props) {
       >
         ☰
       </button>
+      <button
+        className="topbar-busca"
+        onClick={() => window.dispatchEvent(new Event("ug:abrir-busca"))}
+        title="Buscar (Ctrl+K)"
+      >
+        <span>⌕</span>
+        <span className="lbl">Buscar pedido, cliente, lançamento...</span>
+        <span className="kbd">Ctrl K</span>
+      </button>
+      <div style={{ flex: 1 }} />
       <div className="clk">{data} · {hora}</div>
       <button
         onClick={toggle}

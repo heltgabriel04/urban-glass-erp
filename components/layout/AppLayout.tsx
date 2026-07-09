@@ -5,6 +5,7 @@ import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import { ThemeProvider } from "./ThemeProvider";
 import { ToastProvider } from "@/components/ui/toast";
+import CommandPalette from "@/components/ui/CommandPalette";
 
 interface Props {
   children: React.ReactNode;
@@ -16,6 +17,7 @@ export default function AppLayout({ children }: Props) {
   return (
     <ThemeProvider>
       <ToastProvider>
+        <CommandPalette />
         <div className="erp-layout">
           <Sidebar mobileOpen={mobileNavOpen} onCloseMobile={() => setMobileNavOpen(false)} />
           <div className="erp-content">

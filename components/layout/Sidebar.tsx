@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { NAV_ROUTES } from "@/lib/navRoutes";
 
 /* ─── SVG icon system ────────────────────────────────────────
    Todos os paths são 16×16, stroke-based, strokeWidth 1.5     */
@@ -59,70 +60,22 @@ const IC = {
   logout:      ["M11 10.5l3-2.5-3-2.5", "M14 8H6.5", "M6.5 3H3a.5.5 0 00-.5.5v9A.5.5 0 003 13h3.5"],
 };
 
-const NAV = [
-  {
-    grupo: "VISÃO GERAL",
-    items: [
-      { href: "/dashboard",  label: "Dashboard",         icon: IC.dashboard },
-    ],
-  },
-  {
-    grupo: "COMERCIAL",
-    items: [
-      { href: "/orcamentos", label: "Orçamentos",         icon: IC.orcamentos },
-      { href: "/pedidos",    label: "Pedidos",             icon: IC.pedidos },
-      { href: "/clientes",   label: "Clientes",            icon: IC.clientes },
-      { href: "/vendedores", label: "Vendedores",          icon: IC.vendedores },
-    ],
-  },
-  {
-    grupo: "OPERAÇÃO",
-    items: [
-      { href: "/otimizador",   label: "Otimizador de Corte", icon: IC.otimizador },
-      { href: "/programacao",  label: "Programação APS",     icon: IC.aps },
-      { href: "/producao",     label: "Produção",             icon: IC.producao },
-      { href: "/compras",      label: "Compras",              icon: IC.compras },
-      { href: "/fornecedores", label: "Fornecedores",         icon: IC.fornecedores },
-      { href: "/estoque",      label: "Estoque · Chapas",     icon: IC.estoque },
-      { href: "/retalhos",     label: "Retalhos",             icon: IC.retalhos },
-      { href: "/qualidade",    label: "Qualidade",            icon: IC.qualidade },
-    ],
-  },
-  {
-    grupo: "FINANCEIRO",
-    items: [
-      { href: "/dashboard-financeiro", label: "Visão Geral",  icon: IC.visaoGeral },
-      { href: "/contas-receber",  label: "Contas a Receber", icon: IC.receber },
-      { href: "/contas-pagar",    label: "Contas a Pagar",   icon: IC.pagar },
-      { href: "/fluxo",           label: "Fluxo de Caixa",   icon: IC.fluxo },
-      { href: "/movimentacoes",   label: "Movimentações",    icon: IC.movimentacoes },
-      { href: "/investimentos",   label: "Investimentos",    icon: IC.investimentos },
-      { href: "/bancos-caixa",    label: "Bancos & Caixa",   icon: IC.bancos },
-      { href: "/centro-custo",    label: "Centro de Custo",  icon: IC.centroCusto },
-      { href: "/recorrencias",    label: "Recorrências",     icon: IC.recorrencia },
-      { href: "/formas-pagamento",label: "Formas de Pagamento", icon: IC.formaPgto },
-      { href: "/conciliacao",     label: "Conciliação Bancária", icon: IC.conciliacao },
-      { href: "/plano-contas",    label: "Plano de Contas",  icon: IC.planoContas },
-    ],
-  },
-  {
-    grupo: "FISCAL",
-    items: [
-      { href: "/notas",           label: "Notas Fiscais",       icon: IC.notas },
-      { href: "/contabilidade",   label: "Configuração Fiscal", icon: IC.contabilidade },
-    ],
-  },
-  {
-    grupo: "GESTÃO",
-    items: [
-      { href: "/produtos",   label: "Produtos",          icon: IC.produtos },
-      { href: "/tabelas",    label: "Tabelas de Preço",  icon: IC.tabelas },
-      { href: "/relatorios", label: "Relatórios & BI",   icon: IC.relatorios },
-      { href: "/giro",       label: "Giro & Cobertura",  icon: IC.giro },
-      { href: "/logs",       label: "Histórico",         icon: IC.historico },
-    ],
-  },
-];
+// Grupos/rotas vêm de lib/navRoutes.ts (fonte compartilhada com a Command
+// Palette) — aqui só se anexa o ícone de cada item, que é local a este
+// componente.
+const NAV = (() => {
+  const grupos: { grupo: string; items: { href: string; label: string; icon: string | string[] }[] }[] = [];
+  const porGrupo = new Map<string, { href: string; label: string; icon: string | string[] }[]>();
+  for (const r of NAV_ROUTES) {
+    if (!porGrupo.has(r.grupo)) {
+      const items: { href: string; label: string; icon: string | string[] }[] = [];
+      porGrupo.set(r.grupo, items);
+      grupos.push({ grupo: r.grupo, items });
+    }
+    porGrupo.get(r.grupo)!.push({ href: r.href, label: r.label, icon: IC[r.iconKey as keyof typeof IC] });
+  }
+  return grupos;
+})();
 
 function LogoIcon() {
   return (

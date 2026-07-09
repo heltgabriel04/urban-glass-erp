@@ -19,6 +19,7 @@ import { useGlobalShortcut } from "@/components/ui/useGlobalShortcut";
 import { exportarExcel } from "@/lib/exportExcel";
 import { parseLinhaDigitavel } from "@/lib/boleto";
 import { getFiltrosSalvos, salvarFiltro, excluirFiltroSalvo, type FiltroSalvo } from "@/services/filtrosSalvos.service";
+import { registrarRecente } from "@/lib/recentes";
 import ActionMenu from "@/components/ui/ActionMenu";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
 import type { ContaBancaria, CentroCusto, BaixaLancamento, Fornecedor, FormaPagamento } from "@/types";
@@ -1052,7 +1053,10 @@ function ContasPagarPageInner() {
                     ) : (
                       estornandoBaixaId !== b.id && (
                         <div style={{ display: "flex", gap: "6px" }}>
-                          <button className="btn bg xs" onClick={() => window.open(`/api/lancamentos/baixas/${b.id}/gerar-comprovante`, "_blank")}>
+                          <button className="btn bg xs" onClick={() => {
+                            window.open(`/api/lancamentos/baixas/${b.id}/gerar-comprovante`, "_blank");
+                            registrarRecente({ tipo: "documento", id: `baixa-${b.id}`, label: `Comprovante · ${contas.find(c => c.id === baixasVerId)?.descricao ?? ""}`, href: `/api/lancamentos/baixas/${b.id}/gerar-comprovante` });
+                          }}>
                             Comprovante
                           </button>
                           <button className="btn bg xs" onClick={() => { setEstornandoBaixaId(b.id); setMotivoEstorno(""); }} style={{ color: "var(--err)" }}>

@@ -10,6 +10,8 @@ import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, upd
 import { getRetiradasPorPedido, calcularSaldoItens, createRetirada } from "@/services/retiradas.service";
 import { getObservacoesPorPedido, createObservacao, deletarObservacao } from "@/services/observacoes.service";
 import { formatBRL, formatDate, formatDuracao, medidaReal } from "@/lib/formatters";
+import { registrarRecente } from "@/lib/recentes";
+import PedidoTabs from "@/components/pedidos/PedidoTabs";
 import { useToast } from "@/components/ui/toast";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
@@ -221,6 +223,9 @@ export default function PedidoDetalhe() {
       getObservacoesPorPedido(id),
     ]);
     setPedido(data);
+    if (data) {
+      registrarRecente({ tipo: "pedido", id: data.id, label: `Pedido ${data.id}`, sublabel: data.clientes?.nome, href: `/pedidos/${data.id}` });
+    }
     setLancamentos(lancs);
     setOtimizacoes(otims);
     setClientes(clis as { id: number; nome: string }[]);
@@ -815,30 +820,8 @@ export default function PedidoDetalhe() {
             Pedido <span style={{ color:"var(--acc)" }}>{pedido.id}</span>
           </div>
           <span className={CHIP[pedido.status] ?? "chip cgr"}>{pedido.status}</span>
-          <button className="btn bg sm" onClick={() => router.push(`/pedidos/${id}/editar`)}>✏ Editar</button>
           {temItens && !todosVidroCliente && !todosChapa && (
             <a href={"/otimizador?pedido=" + pedido.id} className="btn bg sm">◈ Otimizar Corte</a>
-          )}
-          {temItens && (
-            <a href={"/pedidos/" + pedido.id + "/etiquetas"} className="btn bg sm" style={{ textDecoration:"none" }}>🏷 Etiquetas</a>
-          )}
-          {temItens && (
-            <a href={`/pedidos/${id}/retiradas`} className="btn bg sm" style={{ textDecoration:"none" }}>🚚 Retiradas</a>
-          )}
-          {podeChecklist && (
-            <a
-              href={`/pedidos/${id}/checklist`}
-              className="btn sm"
-              style={{
-                background: "rgba(0,200,255,.12)",
-                border: "1px solid var(--acc2)",
-                color: "var(--acc2)",
-                fontWeight: 700,
-                textDecoration: "none",
-              }}
-            >
-              ☑ Checklist
-            </a>
           )}
           <button
             className="btn sm"
@@ -859,6 +842,7 @@ export default function PedidoDetalhe() {
             </button>
           )}
         </div>
+        <PedidoTabs id={id} temItens={temItens} />
 
         <div className="con no-print" style={{ display:"flex", flexDirection:"column", gap:"20px" }}>
 

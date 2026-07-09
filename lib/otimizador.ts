@@ -1116,6 +1116,28 @@ export function empacotarTodas(
     }
   }
 
+  // ── Pool de padrões de chapa (alimenta a fase 6) ──────────────────────────────
+  // Cada chapa de alto aproveitamento vista nas fases seguintes vira um "padrão":
+  // um multiconjunto canônico de medidas (peças idênticas são intercambiáveis) +
+  // um layout concreto que o realiza. A fase 6 escolhe padrões deste pool.
+  interface PadraoChapa { counts: Map<string, number>; layout: SheetState; areaUtil: number; }
+  const tipoDe = (l: number, a: number) => (l <= a ? `${l}x${a}` : `${a}x${l}`);
+  const poolPadroes = new Map<string, PadraoChapa>();
+  const POOL_MIN_FILL = W * H * 0.85;
+  function poolAdd(sheets: SheetState[]) {
+    for (const sh of sheets) {
+      let fill = 0;
+      for (const p of sh.placed) fill += p.l * p.a;
+      if (fill < POOL_MIN_FILL) continue;
+      const counts = new Map<string, number>();
+      for (const p of sh.placed) { const t = tipoDe(p.l, p.a); counts.set(t, (counts.get(t) ?? 0) + 1); }
+      const key = [...counts.keys()].sort().map(t => `${t}*${counts.get(t)}`).join("|");
+      if (!poolPadroes.has(key) && poolPadroes.size < 8000) {
+        poolPadroes.set(key, { counts, layout: sh, areaUtil: fill });
+      }
+    }
+  }
+
   // ── Fase 5: HFF por níveis com agrupamento (estilo Corte Certo) ───────────────
   // Decisivo em pedidos de esquadria onde quase toda peça compartilha uma
   // dimensão: agrupa alturas idênticas na mesma faixa e resolve o encaixe das
