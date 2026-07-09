@@ -1,6 +1,7 @@
 import { getNotas } from "./notas.service";
 import { getDocumentosFiscais } from "./contabilidadeDocumentos.service";
 import { getOrCreateFechamento } from "./contabilidadeChecklist.service";
+import { getItensEstoqueGerais } from "./itensEstoqueGerais.service";
 import type { NotaFiscal } from "@/types";
 
 // ─── NF Saída — 100% derivado de notas_fiscais, sem cadastro duplicado ────
@@ -171,9 +172,23 @@ export async function getStatusAreas(ano: number, mes: number): Promise<StatusAr
     ? { area: "documentos_fiscais", label: "Documentos Fiscais", semaforo: "amarelo", detalhe: "Itens do checklist ainda pendentes" }
     : { area: "documentos_fiscais", label: "Documentos Fiscais", semaforo: "verde", detalhe: "Completo" };
 
+  const itensGerais = await getItensEstoqueGerais({ ativo: true });
+  const abaixoMinimo = itensGerais.filter((i) => i.estoque_minimo > 0 && i.saldo_qtd <= i.estoque_minimo).length;
+  const itemChecklistEstoque = itens.find((i) => i.item_key === "estoque");
+  const checklistEstoquePendente = itemChecklistEstoque?.status === "pendente" || itemChecklistEstoque?.status === "em_andamento";
+
+  const estoque: StatusArea =
+    itensGerais.length === 0
+      ? { area: "estoque", label: "Estoque / CMV", semaforo: "amarelo", detalhe: "Nenhum item de estoque geral cadastrado ainda" }
+      : abaixoMinimo > 0
+      ? { area: "estoque", label: "Estoque / CMV", semaforo: "amarelo", detalhe: `${abaixoMinimo} item(ns) abaixo do estoque mínimo` }
+      : checklistEstoquePendente
+      ? { area: "estoque", label: "Estoque / CMV", semaforo: "amarelo", detalhe: "Checklist de estoque ainda pendente" }
+      : { area: "estoque", label: "Estoque / CMV", semaforo: "verde", detalhe: "Completo" };
+
   return [
     documentosFiscais,
-    { area: "estoque", label: "Estoque / CMV", semaforo: "indisponivel", detalhe: "Disponível na Fase 2" },
+    estoque,
     { area: "ativo_imobilizado", label: "Ativo Imobilizado", semaforo: "indisponivel", detalhe: "Disponível na Fase 3" },
     { area: "cartoes", label: "Cartões / Empréstimos / Consórcios", semaforo: "indisponivel", detalhe: "Disponível na Fase 4" },
   ];

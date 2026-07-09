@@ -720,6 +720,66 @@ export interface DocumentoFiscal {
 export type DocumentoFiscalInsert = Omit<DocumentoFiscal,
   'id' | 'status' | 'deletado_em' | 'deletado_por' | 'motivo_exclusao' | 'created_at' | 'updated_at' | 'fornecedores'>;
 
+// ─── CONTABILIDADE — ESTOQUE GERAL / CMV (Fase 2) ──────────
+export type GrupoItemEstoqueGeral =
+  | 'ferragens' | 'perfis_aluminio' | 'insumos' | 'equipamentos'
+  | 'consumiveis' | 'epis' | 'material_escritorio' | 'outros';
+
+export interface ItemEstoqueGeral {
+  id: number;
+  codigo: string;
+  descricao: string;
+  grupo: GrupoItemEstoqueGeral;
+  subgrupo: string | null;
+  localizacao: string | null;
+  unidade: string;
+  ncm: string | null;
+  fornecedor_principal_id: number | null;
+  estoque_minimo: number;
+  ativo: boolean;
+  saldo_qtd: number;
+  custo_medio: number;
+  valor_total: number;
+  ultima_compra_em: string | null;
+  ultima_movimentacao_em: string | null;
+  criado_por: string | null;
+  created_at: string;
+  updated_at: string;
+  fornecedores?: Pick<Fornecedor, 'id' | 'nome' | 'cnpj'>;
+}
+
+// Saldo/custo/valor_total ficam de fora — nunca editáveis via formulário,
+// só pelo service de movimentação (services/itensEstoqueMovimentacoes.service.ts).
+export type ItemEstoqueGeralInsert = Omit<ItemEstoqueGeral,
+  'id' | 'saldo_qtd' | 'custo_medio' | 'valor_total' | 'ultima_compra_em' | 'ultima_movimentacao_em' | 'created_at' | 'updated_at' | 'fornecedores'>;
+export type ItemEstoqueGeralUpdate = Partial<ItemEstoqueGeralInsert>;
+
+export type TipoMovimentacaoItemEstoque = 'entrada' | 'saida' | 'ajuste' | 'perda' | 'transferencia' | 'saldo_inicial';
+export type OrigemMovimentacaoItemEstoque = 'manual' | 'documento_fiscal' | 'saldo_inicial';
+
+export interface ItemEstoqueMovimentacao {
+  id: number;
+  item_id: number;
+  tipo: TipoMovimentacaoItemEstoque;
+  origem_tipo: OrigemMovimentacaoItemEstoque;
+  origem_id: string | null;
+  documento_fiscal_id: number | null;
+  quantidade: number;
+  custo_unitario: number | null;
+  saldo_apos: number;
+  custo_medio_apos: number;
+  localizacao_origem: string | null;
+  localizacao_destino: string | null;
+  usuario: string | null;
+  obs: string | null;
+  created_at: string;
+  itens_estoque_gerais?: Pick<ItemEstoqueGeral, 'id' | 'codigo' | 'descricao' | 'unidade'>;
+  documentos_fiscais?: Pick<DocumentoFiscal, 'id' | 'numero_documento' | 'tipo'>;
+}
+
+export type ItemEstoqueMovimentacaoInsert = Omit<ItemEstoqueMovimentacao,
+  'id' | 'saldo_apos' | 'custo_medio_apos' | 'created_at' | 'itens_estoque_gerais' | 'documentos_fiscais'>;
+
 // ─── CONTABILIDADE — FECHAMENTO / CHECKLIST (Fase 1) ───────
 export interface ContabilidadeFechamento {
   id: number;

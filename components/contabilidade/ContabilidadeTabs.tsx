@@ -11,10 +11,11 @@ const ABAS: Aba[] = [
   { label: "Dashboard", slug: "" },
   { label: "Checklist Mensal", slug: "checklist" },
   { label: "Documentos Fiscais", slug: "documentos" },
+  { label: "Estoque / CMV", slug: "estoque" },
   { label: "Configuração Fiscal", slug: "fiscal-produtos" },
 ];
 
-export default function ContabilidadeTabs({ ativo }: { ativo: "dashboard" | "checklist" | "documentos" | "fiscal-produtos" }) {
+export default function ContabilidadeTabs({ ativo }: { ativo: "dashboard" | "checklist" | "documentos" | "estoque" | "fiscal-produtos" }) {
   return (
     <div className="no-print" style={{ display: "flex", gap: "2px", overflowX: "auto", padding: "0 26px" }}>
       {ABAS.map((a) => {

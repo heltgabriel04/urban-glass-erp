@@ -24,7 +24,7 @@ export const CHECKLIST_ITENS: ChecklistItemDef[] = [
   { key: "cartoes_emprestimos", label: "Cartões / Empréstimos / Consórcios", area: "cartoes",           faseDisponivel: 4 },
 ];
 
-export const FASE_ATUAL = 1;
+export const FASE_ATUAL = 2;
 
 export function itemDisponivel(item: ChecklistItemDef): boolean {
   return item.faseDisponivel <= FASE_ATUAL;
