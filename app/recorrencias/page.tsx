@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
+import { ordenarPorCodigoEstruturado } from "@/lib/planoContas";
 import { getRecorrencias, createRecorrencia, updateRecorrencia, deletarRecorrencia, gerarProximosMeses } from "@/services/recorrencias.service";
 import { getContasBancarias } from "@/services/contasBancarias.service";
 import { useToast } from "@/components/ui/toast";
@@ -49,12 +50,12 @@ export default function RecorrenciasPage() {
     setLoading(true);
     const [rs, pls, cls, cbs] = await Promise.all([
       getRecorrencias(),
-      supabase.from("plano_contas").select("id, codigo_estruturado, descricao").order("codigo"),
+      supabase.from("plano_contas").select("id, codigo_estruturado, descricao"),
       supabase.from("clientes").select("id, nome").order("nome"),
       getContasBancarias(true),
     ]);
     setRegras(rs);
-    setPlanos(((pls as { data: PlanoItem[] | null }).data ?? []));
+    setPlanos(ordenarPorCodigoEstruturado((pls as { data: PlanoItem[] | null }).data ?? []));
     setClientes(((cls as { data: ClienteItem[] | null }).data ?? []));
     setContasBancarias(cbs);
     setLoading(false);

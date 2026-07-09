@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
+import { ordenarPorCodigoEstruturado } from "@/lib/planoContas";
 import SearchInput from "@/components/ui/SearchInput";
 
 interface Categoria {
@@ -74,10 +75,10 @@ export default function PlanoContasPage() {
     setLoading(true);
     const [{ data: cats }, { data: pls }] = await Promise.all([
       supabase.from("pc_categorias").select("*").order("codigo"),
-      supabase.from("plano_contas").select("*, pc_categorias(descricao, indicador)").order("codigo"),
+      supabase.from("plano_contas").select("*, pc_categorias(descricao, indicador)"),
     ]);
     setCategorias((cats ?? []) as Categoria[]);
-    setPlanos((pls ?? []) as PlanoConta[]);
+    setPlanos(ordenarPorCodigoEstruturado((pls ?? []) as PlanoConta[]));
     setLoading(false);
   }
 

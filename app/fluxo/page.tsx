@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
+import { ordenarPorCodigoEstruturado } from "@/lib/planoContas";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import { useToast } from "@/components/ui/toast";
@@ -126,7 +127,7 @@ function FluxoPageInner() {
         .is("estornado_em", null)
         .not("lancamento_id", "is", null),
       supabase.from("contas_bancarias").select("saldo_inicial").eq("ativo", true),
-      supabase.from("plano_contas").select("id, codigo_estruturado, descricao").order("codigo_estruturado"),
+      supabase.from("plano_contas").select("id, codigo_estruturado, descricao"),
       getOcorrenciasFuturas(400),
       getSaldoCaixaTotal(),
     ]);
@@ -134,7 +135,7 @@ function FluxoPageInner() {
     const lancs = (lancsRaw ?? []) as unknown as LancRow[];
     const baixas = (baixasRaw ?? []) as unknown as BaixaRow[];
     const somaSaldoInicial = ((contasRaw ?? []) as { saldo_inicial: number }[]).reduce((a, c) => a + Number(c.saldo_inicial), 0);
-    setPlanos((planosRaw ?? []) as PlanoItem[]);
+    setPlanos(ordenarPorCodigoEstruturado((planosRaw ?? []) as PlanoItem[]));
 
     const lancMap = new Map(lancs.map(l => [l.id, l]));
     const baixasPorLanc = new Map<number, BaixaRow[]>();

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
+import { ordenarPorCodigoEstruturado } from "@/lib/planoContas";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import DateInput from "@/components/ui/DateInput";
 import SearchInput from "@/components/ui/SearchInput";
@@ -207,14 +208,14 @@ function ContasReceberPageInner() {
         .eq("tipo", "Entrada")
         .is("deletado_em", null)
         .order("vencimento", { ascending: true }),
-      supabase.from("plano_contas").select("id, codigo_estruturado, descricao").order("codigo"),
+      supabase.from("plano_contas").select("id, codigo_estruturado, descricao"),
       supabase.from("clientes").select("id, nome").order("nome"),
       getContasBancarias(true),
       getFormasPagamento(true),
     ]);
     const recebiveisCarregados = (rs ?? []) as unknown as Recebivel[];
     setRecebiveis(recebiveisCarregados);
-    setPlanos((pls ?? []) as PlanoItem[]);
+    setPlanos(ordenarPorCodigoEstruturado((pls ?? []) as PlanoItem[]));
     setClientes((cls ?? []) as ClienteItem[]);
     setContasBancarias(cbs);
     setFormasPagamento(formasPg);

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
+import { ordenarPorCodigoEstruturado } from "@/lib/planoContas";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import DateInput from "@/components/ui/DateInput";
 import SearchInput from "@/components/ui/SearchInput";
@@ -209,14 +210,14 @@ function ContasPagarPageInner() {
         .eq("tipo", "Saída")
         .is("deletado_em", null)
         .order("vencimento", { ascending: true }),
-      supabase.from("plano_contas").select("id, codigo_estruturado, descricao").order("codigo"),
+      supabase.from("plano_contas").select("id, codigo_estruturado, descricao"),
       getContasBancarias(true),
       getFornecedores(true),
       getFormasPagamento(true),
     ]);
     const contasCarregadas = (cs ?? []) as unknown as Conta[];
     setContas(contasCarregadas);
-    setPlanos((pls ?? []) as PlanoItem[]);
+    setPlanos(ordenarPorCodigoEstruturado((pls ?? []) as PlanoItem[]));
     setContasBancarias(cbs);
     setFornecedores(forns);
     setFormasPagamento(formasPg);
