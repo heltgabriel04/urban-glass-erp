@@ -40,9 +40,14 @@ export default function RecorrenciasPage() {
   const [modalAberto, setModalAberto] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState<LancamentoRecorrenteInsert>(VAZIO);
+  const [mesesGerar, setMesesGerar] = useState(12);
   const [salvando, setSalvando] = useState(false);
+  const [gerarMaisId, setGerarMaisId] = useState<number | null>(null);
+  const [mesesGerarMais, setMesesGerarMais] = useState(12);
+  const [gerandoMais, setGerandoMais] = useState(false);
 
   useEscToClose(modalAberto, () => setModalAberto(false));
+  useEscToClose(gerarMaisId != null, () => setGerarMaisId(null));
 
   useEffect(() => { load(); }, []);
 
@@ -64,6 +69,7 @@ export default function RecorrenciasPage() {
   function abrirNovo() {
     setEditId(null);
     setForm(VAZIO);
+    setMesesGerar(12);
     setModalAberto(true);
   }
   function abrirEdicao(r: LancamentoRecorrente) {
@@ -82,6 +88,7 @@ export default function RecorrenciasPage() {
 
   async function salvar() {
     if (!form.descricao.trim() || form.valor <= 0) { toast("Informe descrição e valor", "err"); return; }
+    if (!(mesesGerar > 0)) { toast("Informe quantos meses gerar", "err"); return; }
     setSalvando(true);
     if (editId != null) {
       const res = await updateRecorrencia(editId, form);
@@ -92,7 +99,7 @@ export default function RecorrenciasPage() {
     }
     const nova = await createRecorrencia(form);
     if (!nova) { setSalvando(false); toast("Erro ao criar recorrência", "err"); return; }
-    const geradas = await gerarProximosMeses(nova.id, 12);
+    const geradas = await gerarProximosMeses(nova.id, mesesGerar);
     setSalvando(false);
     toast(`Recorrência criada — ${geradas} lançamento(s) gerado(s)`);
     setModalAberto(false);
@@ -106,8 +113,17 @@ export default function RecorrenciasPage() {
     else toast("Erro ao excluir recorrência", "err");
   }
 
-  async function handleGerarMais(r: LancamentoRecorrente) {
-    const n = await gerarProximosMeses(r.id, 12);
+  function abrirGerarMais(r: LancamentoRecorrente) {
+    setGerarMaisId(r.id);
+    setMesesGerarMais(12);
+  }
+
+  async function confirmarGerarMais() {
+    if (gerarMaisId == null || !(mesesGerarMais > 0)) return;
+    setGerandoMais(true);
+    const n = await gerarProximosMeses(gerarMaisId, mesesGerarMais);
+    setGerandoMais(false);
+    setGerarMaisId(null);
     if (n > 0) { toast(`${n} lançamento(s) gerado(s)`); load(); }
     else toast("Erro ao gerar lançamentos", "err");
   }
@@ -130,8 +146,8 @@ export default function RecorrenciasPage() {
 
       <div className="con">
         <div className="al al-i" style={{ marginBottom: "16px", fontSize: "12px" }}>
-          Ao criar uma recorrência, os próximos 12 lançamentos já são gerados de uma vez em Contas a Pagar/Receber.
-          Use &quot;Gerar mais 12 meses&quot; pra continuar de onde parou.
+          Ao criar uma recorrência, você escolhe quantos meses gerar de uma vez em Contas a Pagar/Receber.
+          Use &quot;Gerar mais meses&quot; pra continuar de onde parou, escolhendo a quantidade.
         </div>
 
         {loading ? (
@@ -180,7 +196,7 @@ export default function RecorrenciasPage() {
                     </td>
                     <td>
                       <ActionMenu items={[
-                        { label: "Gerar mais 12 meses", onClick: () => handleGerarMais(r) },
+                        { label: "Gerar mais meses", onClick: () => abrirGerarMais(r) },
                         { label: "Editar", onClick: () => abrirEdicao(r) },
                         { label: "Excluir", onClick: () => handleDeletar(r), danger: true },
                       ]} />
@@ -248,12 +264,42 @@ export default function RecorrenciasPage() {
                   {contasBancarias.map(cb => <option key={cb.id} value={cb.id}>{cb.nome}</option>)}
                 </select>
               </Campo>
+
+              {editId == null && (
+                <Campo label="Quantos meses gerar agora *">
+                  <input className="fc" type="number" min={1} max={60} value={mesesGerar}
+                    onChange={e => setMesesGerar(Number(e.target.value))} style={{ margin: 0 }} />
+                </Campo>
+              )}
             </div>
 
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
               <button className="btn bg" onClick={() => setModalAberto(false)}>Cancelar</button>
               <button className="btn bp" onClick={salvar} disabled={salvando}>
-                {salvando ? "Salvando..." : editId != null ? "Salvar alterações" : "Criar e gerar 12 meses"}
+                {salvando ? "Salvando..." : editId != null ? "Salvar alterações" : `Criar e gerar ${mesesGerar || 0} meses`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {gerarMaisId != null && (
+        <div className="mov open" onClick={e => e.target === e.currentTarget && setGerarMaisId(null)}>
+          <div className="mod" style={{ width: "360px" }}>
+            <div className="mhd">
+              <div className="mtit">Gerar mais meses</div>
+              <button className="mcl" onClick={() => setGerarMaisId(null)}>✕</button>
+            </div>
+            <div style={{ padding: "20px" }}>
+              <Campo label="Quantos meses gerar, a partir de onde parou *">
+                <input className="fc" type="number" min={1} max={60} autoFocus value={mesesGerarMais}
+                  onChange={e => setMesesGerarMais(Number(e.target.value))} style={{ margin: 0 }} />
+              </Campo>
+            </div>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
+              <button className="btn bg" onClick={() => setGerarMaisId(null)}>Cancelar</button>
+              <button className="btn bp" onClick={confirmarGerarMais} disabled={gerandoMais || !(mesesGerarMais > 0)}>
+                {gerandoMais ? "Gerando..." : `Gerar ${mesesGerarMais || 0} meses`}
               </button>
             </div>
           </div>
