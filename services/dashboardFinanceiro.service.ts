@@ -5,13 +5,20 @@ function fmtData(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+export interface FiltroDashboard { centroCustoId?: number | null; contaId?: number | null; }
+
 // Saldo em caixa = saldo inicial das contas bancárias ativas + todas as
-// baixas ativas (Entrada soma, Saída subtrai) já registradas.
-export async function getSaldoCaixaTotal(): Promise<number> {
-  const [{ data: contas }, { data: baixas }] = await Promise.all([
-    supabase.from('contas_bancarias').select('saldo_inicial').eq('ativo', true),
-    supabase.from('baixas_lancamento').select('valor, lancamentos(tipo)').is('estornado_em', null),
-  ]);
+// baixas ativas (Entrada soma, Saída subtrai) já registradas. Com
+// `contaId`, restringe a uma única conta bancária (é sempre um retrato
+// "agora" — não tem período).
+export async function getSaldoCaixaTotal(contaId?: number | null): Promise<number> {
+  let contasQuery = supabase.from('contas_bancarias').select('saldo_inicial').eq('ativo', true);
+  let baixasQuery = supabase.from('baixas_lancamento').select('valor, lancamentos(tipo)').is('estornado_em', null);
+  if (contaId) {
+    contasQuery = contasQuery.eq('id', contaId);
+    baixasQuery = baixasQuery.eq('conta_id', contaId);
+  }
+  const [{ data: contas }, { data: baixas }] = await Promise.all([contasQuery, baixasQuery]);
 
   const saldoInicial = (contas ?? []).reduce((a, c) => a + Number((c as { saldo_inicial: number }).saldo_inicial), 0);
 
@@ -25,13 +32,16 @@ export async function getSaldoCaixaTotal(): Promise<number> {
 }
 
 // Total em aberto (saldo real, considerando baixa parcial) de um tipo.
-export async function getAbertoPorTipo(tipo: 'Entrada' | 'Saída'): Promise<number> {
-  const { data: lancs } = await supabase
+export async function getAbertoPorTipo(tipo: 'Entrada' | 'Saída', filtro?: FiltroDashboard): Promise<number> {
+  let query = supabase
     .from('lancamentos')
     .select('id, valor, status')
     .eq('tipo', tipo)
     .neq('status', 'Pago')
     .is('deletado_em', null);
+  if (filtro?.centroCustoId) query = query.eq('centro_custo_id', filtro.centroCustoId);
+  if (filtro?.contaId) query = query.eq('conta_id', filtro.contaId);
+  const { data: lancs } = await query;
 
   const lista = (lancs ?? []) as { id: number; valor: number; status: string }[];
   if (lista.length === 0) return 0;
@@ -77,8 +87,11 @@ interface OcorrenciaFutura { tipo: 'Entrada' | 'Saída'; valor: number; data: st
 // lançamento físico (além de gerado_ate) — sem isso, a projeção só
 // enxerga o que já foi gerado, e depende do usuário lembrar de clicar
 // "gerar mais meses" em /recorrencias.
-async function getOcorrenciasRecorrentesFuturas(limiteMax: Date): Promise<OcorrenciaFutura[]> {
-  const { data } = await supabase.from('lancamentos_recorrentes').select('tipo, valor, dia_vencimento, gerado_ate').eq('ativo', true);
+async function getOcorrenciasRecorrentesFuturas(limiteMax: Date, filtro?: FiltroDashboard): Promise<OcorrenciaFutura[]> {
+  let query = supabase.from('lancamentos_recorrentes').select('tipo, valor, dia_vencimento, gerado_ate').eq('ativo', true);
+  if (filtro?.centroCustoId) query = query.eq('centro_custo_id', filtro.centroCustoId);
+  if (filtro?.contaId) query = query.eq('conta_id', filtro.contaId);
+  const { data } = await query;
   const hoje = new Date();
   const ocorrencias: OcorrenciaFutura[] = [];
 
@@ -103,15 +116,20 @@ async function getOcorrenciasRecorrentesFuturas(limiteMax: Date): Promise<Ocorre
 // Projeção de caixa baseada em compromissos já lançados (não estimativa
 // estatística): saldo atual + títulos em aberto com vencimento dentro do
 // horizonte + ocorrências futuras de recorrências ativas ainda não geradas.
-export async function getProjecaoCaixa(): Promise<ProjecaoHorizonte[]> {
-  const saldoAtual = await getSaldoCaixaTotal();
+export async function getProjecaoCaixa(filtro?: FiltroDashboard): Promise<ProjecaoHorizonte[]> {
+  const saldoAtual = await getSaldoCaixaTotal(filtro?.contaId);
   const hoje = new Date();
   const limiteMax = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 90);
 
+  let entradasQuery = supabase.from('lancamentos').select('id, valor, status, vencimento').eq('tipo', 'Entrada').neq('status', 'Pago').not('vencimento', 'is', null).is('deletado_em', null);
+  let saidasQuery = supabase.from('lancamentos').select('id, valor, status, vencimento').eq('tipo', 'Saída').neq('status', 'Pago').not('vencimento', 'is', null).is('deletado_em', null);
+  if (filtro?.centroCustoId) { entradasQuery = entradasQuery.eq('centro_custo_id', filtro.centroCustoId); saidasQuery = saidasQuery.eq('centro_custo_id', filtro.centroCustoId); }
+  if (filtro?.contaId) { entradasQuery = entradasQuery.eq('conta_id', filtro.contaId); saidasQuery = saidasQuery.eq('conta_id', filtro.contaId); }
+
   const [{ data: entradas }, { data: saidas }, ocorrenciasRecorrentes] = await Promise.all([
-    supabase.from('lancamentos').select('id, valor, status, vencimento').eq('tipo', 'Entrada').neq('status', 'Pago').not('vencimento', 'is', null).is('deletado_em', null),
-    supabase.from('lancamentos').select('id, valor, status, vencimento').eq('tipo', 'Saída').neq('status', 'Pago').not('vencimento', 'is', null).is('deletado_em', null),
-    getOcorrenciasRecorrentesFuturas(limiteMax),
+    entradasQuery,
+    saidasQuery,
+    getOcorrenciasRecorrentesFuturas(limiteMax, filtro),
   ]);
   const entradasList = (entradas ?? []) as { id: number; valor: number; status: string; vencimento: string }[];
   const saidasList = (saidas ?? []) as { id: number; valor: number; status: string; vencimento: string }[];

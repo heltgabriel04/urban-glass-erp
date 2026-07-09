@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell, ResponsiveContainer,
 } from "recharts";
@@ -12,6 +12,10 @@ import {
   getSaldoCaixaTotal, getAbertoPorTipo, getDespesasPorMes, getProjecaoCaixa,
   type MesValor, type ProjecaoHorizonte,
 } from "@/services/dashboardFinanceiro.service";
+import NivelTabs from "@/components/financeiro/NivelTabs";
+import FiltroGlobalFinanceiro from "@/components/financeiro/FiltroGlobalFinanceiro";
+import { useFiltroFinanceiro } from "@/components/financeiro/useFiltroFinanceiro";
+import { PERIODO_LABEL, periodoParaAnoMes } from "@/lib/filtroFinanceiro";
 
 const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const CORES_CATEGORIA = ["var(--acc)", "var(--acc2)", "var(--acc3)", "var(--acc4)"];
@@ -32,26 +36,38 @@ interface Dados {
 }
 
 export default function DashboardFinanceiroPage() {
+  return (
+    <Suspense fallback={<AppLayout><div className="loading">Carregando...</div></AppLayout>}>
+      <DashboardFinanceiroInner />
+    </Suspense>
+  );
+}
+
+function DashboardFinanceiroInner() {
+  const { filtro } = useFiltroFinanceiro();
   const [dados, setDados] = useState<Dados | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [filtro.periodo, filtro.centroCustoId, filtro.contaId]);
 
   async function load() {
     setLoading(true);
-    const hoje = new Date();
-    const anoAtual = hoje.getFullYear();
-    const mesAtual = hoje.getMonth() + 1;
+    const { ano, mes } = periodoParaAnoMes(filtro.periodo);
+    const anoAtual = new Date().getFullYear();
+    const filtroDash = { centroCustoId: filtro.centroCustoId, contaId: filtro.contaId };
 
+    // O gráfico "últimos 6 meses" é sempre uma janela móvel a partir de
+    // hoje — não muda com o período selecionado no filtro global, então
+    // busca faturamento sempre do ano atual/anterior, não do `ano` do filtro.
     const [fatAtual, fatAnterior, saldoCaixa, aReceber, aPagar, dre, despesasPorMes, projecao] = await Promise.all([
       getFaturamentoMensal(anoAtual),
       getFaturamentoMensal(anoAtual - 1),
-      getSaldoCaixaTotal(),
-      getAbertoPorTipo("Entrada"),
-      getAbertoPorTipo("Saída"),
-      getDRE(anoAtual, mesAtual),
+      getSaldoCaixaTotal(filtro.contaId),
+      getAbertoPorTipo("Entrada", filtroDash),
+      getAbertoPorTipo("Saída", filtroDash),
+      getDRE(ano, mes),
       getDespesasPorMes(6),
-      getProjecaoCaixa(),
+      getProjecaoCaixa(filtroDash),
     ]);
 
     const fatMap = new Map<string, number>();
@@ -77,8 +93,10 @@ export default function DashboardFinanceiroPage() {
   return (
     <AppLayout>
       <div className="tb">
-        <div className="tb-title">Visão Geral · Financeiro</div>
+        <div className="tb-title">Dashboard Financeiro</div>
       </div>
+      <NivelTabs ativo="executiva" />
+      <FiltroGlobalFinanceiro />
 
       <div className="con">
         {loading || !dados ? <div className="loading">Carregando...</div> : (
@@ -90,7 +108,7 @@ export default function DashboardFinanceiroPage() {
                 <div className="kpi-v" style={{ color: dados.saldoCaixa >= 0 ? "var(--ok)" : "var(--err)" }}>
                   {formatBRL(dados.saldoCaixa)}
                 </div>
-                <div className="kpi-s">Contas bancárias ativas</div>
+                <div className="kpi-s">{filtro.contaId ? "Conta selecionada" : "Contas bancárias ativas"}</div>
               </div>
               <div className="kpi">
                 <div className="kpi-l">A Receber</div>
@@ -103,11 +121,11 @@ export default function DashboardFinanceiroPage() {
                 <div className="kpi-s">Títulos em aberto</div>
               </div>
               <div className="kpi">
-                <div className="kpi-l">Resultado do Mês</div>
+                <div className="kpi-l">Resultado do Período</div>
                 <div className="kpi-v" style={{ color: dados.dre.resultado >= 0 ? "var(--ok)" : "var(--err)" }}>
                   {formatBRL(dados.dre.resultado)}
                 </div>
-                <div className="kpi-s">DRE · mês atual</div>
+                <div className="kpi-s">DRE · {PERIODO_LABEL[filtro.periodo].toLowerCase()}</div>
               </div>
             </div>
 
@@ -129,7 +147,7 @@ export default function DashboardFinanceiroPage() {
               </div>
 
               <div className="card">
-                <div className="ct">Despesas por Categoria · mês atual</div>
+                <div className="ct">Despesas por Categoria · {PERIODO_LABEL[filtro.periodo].toLowerCase()}</div>
                 {dados.despesasCategoria.length === 0 ? (
                   <div style={{ padding: "40px 0", textAlign: "center", color: "var(--t3)", fontSize: 12 }}>
                     Nenhuma despesa no período.
