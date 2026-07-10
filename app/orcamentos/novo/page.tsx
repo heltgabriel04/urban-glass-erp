@@ -453,9 +453,9 @@ function NovoOrcamentoPageInner() {
   const produtoOptions = produtos.map(p => ({ id: p.id, label: p.nome }));
 
   async function salvar() {
-    if (!clienteId) { alert("Selecione um cliente"); return; }
-    if (itens.some(i => !i.produto_id)) { alert("Selecione o produto em todos os itens"); return; }
-    if (itens.some(i => i.largura === 0 || i.altura === 0)) { alert("Preencha as dimensões de todos os itens"); return; }
+    if (!clienteId) { toast("Selecione um cliente", "warn"); return; }
+    if (itens.some(i => !i.produto_id)) { toast("Selecione o produto em todos os itens", "warn"); return; }
+    if (itens.some(i => i.largura === 0 || i.altura === 0)) { toast("Preencha as dimensões de todos os itens", "warn"); return; }
 
     setSalvando(true);
 

@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
+import { useToast } from "@/components/ui/toast";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import CurrencyInput from "@/components/ui/CurrencyInput";
@@ -39,6 +40,7 @@ const FORM_VAZIO = {
 };
 
 export default function ComprasPage() {
+  const { toast } = useToast();
   const [compras, setCompras]       = useState<Compra[]>([]);
   const [fornecedores, setFornecedores] = useState<{ id: number; nome: string }[]>([]);
   const [produtos, setProdutos]     = useState<Produto[]>([]);
@@ -104,9 +106,9 @@ export default function ComprasPage() {
   }
 
   async function handleSalvar() {
-    if (!form.fornecedor_id) { alert("Selecione o fornecedor."); return; }
+    if (!form.fornecedor_id) { toast("Selecione o fornecedor.", "warn"); return; }
     const itensValidos = itens.filter(it => it.produto_id && Number(it.chapas) > 0 && Number(it.m2_por_chapa) > 0);
-    if (itensValidos.length === 0) { alert("Adicione ao menos um item com produto, chapas e m²/chapa."); return; }
+    if (itensValidos.length === 0) { toast("Adicione ao menos um item com produto, chapas e m²/chapa.", "warn"); return; }
 
     setSalvando(true);
 
@@ -135,7 +137,7 @@ export default function ComprasPage() {
     }, itensPayload);
 
     setSalvando(false);
-    if (!res) { alert("Erro ao salvar compra."); return; }
+    if (!res) { toast("Erro ao salvar compra.", "err"); return; }
 
     resetForm();
     load();
@@ -146,7 +148,7 @@ export default function ComprasPage() {
     setProcessando(id);
     const res = await confirmarRecebimento(id);
     setProcessando(null);
-    if (!res.ok) { alert("Erro ao confirmar recebimento: " + res.motivo); return; }
+    if (!res.ok) { toast("Erro ao confirmar recebimento: " + res.motivo, "err"); return; }
     load();
   }
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
+import { useToast } from "@/components/ui/toast";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import { registrarMovimentacao } from "@/services/estoqueMovimentacoes.service";
@@ -27,6 +28,7 @@ interface FormState {
 const FORM_VAZIO: FormState = { produto_id: "", chapas: "", larg_chapa: "", alt_chapa: "", custo_m2: 0 };
 
 export default function EstoquePage() {
+  const { toast } = useToast();
   const [estoque, setEstoque]   = useState<EstoqueItem[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [comprometidoPorProduto, setComprometidoPorProduto] = useState<Record<number, number>>({});
@@ -55,7 +57,7 @@ export default function EstoquePage() {
       .order("created_at", { ascending: true });
 
     if (error || !historico) {
-      alert("Erro ao buscar histórico: " + (error?.message ?? "Desconhecido"));
+      toast("Erro ao buscar histórico: " + (error?.message ?? "Desconhecido"), "err");
       setSincronizando(false);
       return;
     }
@@ -99,9 +101,12 @@ export default function EstoquePage() {
     setSincronizando(false);
     load();
 
-    let msg = `Reconciliação concluída.\n${aplicados} movimentação(ões) aplicada(s) agora.\n${jaOk} já estavam em dia (nada feito).`;
-    if (falhas > 0) msg += `\n\n${falhas} falha(s):\n${erros.join("\n")}`;
-    alert(msg);
+    if (falhas > 0) {
+      console.error("Falhas na reconciliação de baixas:", erros);
+      toast(`Reconciliação: ${aplicados} aplicada(s), ${jaOk} já em dia, ${falhas} falha(s) — ver console.`, "err");
+    } else {
+      toast(`Reconciliação concluída: ${aplicados} movimentação(ões) aplicada(s), ${jaOk} já estavam em dia.`, "ok");
+    }
   }
 
   async function load() {
@@ -178,12 +183,12 @@ export default function EstoquePage() {
   }
 
   async function handleEntrada() {
-    if (!editItem && !form.produto_id) { alert("Selecione o produto."); return; }
-    if (chapasNum <= 0)  { alert("Informe a quantidade de chapas."); return; }
+    if (!editItem && !form.produto_id) { toast("Selecione o produto.", "warn"); return; }
+    if (chapasNum <= 0)  { toast("Informe a quantidade de chapas.", "warn"); return; }
 
     // Na edição, m²/chapa pode vir do campo ou do item existente
     const m2ChapFinal = m2PorChapa > 0 ? m2PorChapa : (editItem ? Number(editItem.m2_por_chapa) : 0);
-    if (m2ChapFinal <= 0) { alert("Informe as medidas da chapa."); return; }
+    if (m2ChapFinal <= 0) { toast("Informe as medidas da chapa.", "warn"); return; }
 
     const m2Final = parseFloat((chapasNum * m2ChapFinal).toFixed(4));
 
@@ -202,8 +207,8 @@ export default function EstoquePage() {
         chapas: deltaChapas, m2: deltaM2, custoUnitarioM2: novoCusto,
         obs: "Correção manual de estoque (edição de item)",
       });
-      if (!res.ok) { alert("Erro ao registrar ajuste no livro-razão: " + res.motivo); setSalvando(false); return; }
-      if (res.alertaMinimo) alert("⚠️ " + res.alertaMensagem);
+      if (!res.ok) { toast("Erro ao registrar ajuste no livro-razão: " + res.motivo, "err"); setSalvando(false); return; }
+      if (res.alertaMinimo) toast(res.alertaMensagem ?? "", "warn");
 
       // chapas_entrada/m2_entrada/m2_por_chapa são só estatística de exibição,
       // fora do livro-razão — não fazem parte da reconciliação de saldo.
@@ -214,7 +219,7 @@ export default function EstoquePage() {
         updated_at:     new Date().toISOString(),
       }).eq("id", editItem.id);
 
-      if (error) { alert("Erro: " + error.message); setSalvando(false); return; }
+      if (error) { toast("Erro: " + error.message, "err"); setSalvando(false); return; }
 
     } else if (itemExistente) {
       // Totais acumulados (entrada bruta histórica) são só estatística — não
@@ -225,14 +230,14 @@ export default function EstoquePage() {
         m2_por_chapa:   m2ChapFinal,
       }).eq("id", itemExistente.id);
 
-      if (error) { alert("Erro: " + error.message); setSalvando(false); return; }
+      if (error) { toast("Erro: " + error.message, "err"); setSalvando(false); return; }
 
       const res = await registrarMovimentacao({
         produtoId: itemExistente.produto_id, tipo: "entrada_compra", origemTipo: "manual",
         chapas: chapasNum, m2: m2Final, custoUnitarioM2: custoM2 > 0 ? custoM2 : null,
       });
-      if (!res.ok) { alert("Erro ao registrar entrada no livro-razão: " + res.motivo); setSalvando(false); return; }
-      if (res.alertaMinimo) alert("⚠️ " + res.alertaMensagem);
+      if (!res.ok) { toast("Erro ao registrar entrada no livro-razão: " + res.motivo, "err"); setSalvando(false); return; }
+      if (res.alertaMinimo) toast(res.alertaMensagem ?? "", "warn");
 
     } else {
       if (!prodSelecionado) { setSalvando(false); return; }
@@ -244,14 +249,14 @@ export default function EstoquePage() {
         updated_at: new Date().toISOString(),
       } as never]).select().single();
 
-      if (error) { alert("Erro: " + error.message); setSalvando(false); return; }
+      if (error) { toast("Erro: " + error.message, "err"); setSalvando(false); return; }
 
       const res = await registrarMovimentacao({
         produtoId: prodSelecionado.id, tipo: "entrada_compra", origemTipo: "manual",
         chapas: chapasNum, m2: m2Final, custoUnitarioM2: custoM2 || 0,
       });
       if (!res.ok) {
-        alert("Erro ao registrar entrada no livro-razão: " + res.motivo);
+        toast("Erro ao registrar entrada no livro-razão: " + res.motivo, "err");
         await supabase.from("estoque").delete().eq("id", (novoItem as { id: number }).id);
         setSalvando(false); return;
       }
@@ -280,7 +285,7 @@ export default function EstoquePage() {
     const v = Math.max(0, Math.floor(valor || 0));
     if (v === Number(item.estoque_minimo_chapas ?? 0)) return;
     const { error } = await supabase.from("estoque").update({ estoque_minimo_chapas: v } as never).eq("id", item.id);
-    if (error) { alert("Erro ao salvar mínimo: " + error.message); return; }
+    if (error) { toast("Erro ao salvar mínimo: " + error.message, "err"); return; }
     setEstoque(prev => prev.map(e => e.id === item.id ? { ...e, estoque_minimo_chapas: v } : e));
   }
 

@@ -711,6 +711,7 @@ textarea.fc { resize: vertical; min-height: 64px; }
   pointer-events: auto;
   animation: toastIn .25s cubic-bezier(.4,0,.2,1);
   max-width: 350px;
+  white-space: pre-line;
   display: flex;
   align-items: center;
   gap: 8px;

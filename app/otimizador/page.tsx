@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
+import { useToast } from "@/components/ui/toast";
 import { supabase } from "@/lib/supabase/client";
 import { salvarOtimizacao } from "@/services/otimizador.service";
 import { updatePedido } from "@/services/pedidos.service";
@@ -53,6 +54,7 @@ function getColorForPedido(pid: string) {
 function OtimizadorContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { toast } = useToast();
   const pedidoParam = searchParams.get("pedido");
   const pecasParam  = searchParams.get("pecas");
   const prodParam   = searchParams.get("prod");
@@ -786,7 +788,7 @@ function OtimizadorContent() {
     }
     setResultado(null); setMsg(""); setRetalhosGerados([]); setPedidosSelecionados(new Set()); setRetalhosUsados([]);
     setZerando(false);
-    alert("Plano zerado.");
+    toast("Plano zerado.");
   }
 
   async function handleSalvar() {
@@ -818,7 +820,7 @@ function OtimizadorContent() {
         chapa_origem: `CHAPA ${fr.chapaIdx + 1}`, pedido_origem: pedidoRef,
         status: "Disponível", dt_gerado: hoje,
       })));
-      if (!ok) { setSalvando(false); alert("Erro ao salvar retalhos. Tente novamente."); return; }
+      if (!ok) { setSalvando(false); toast("Erro ao salvar retalhos. Tente novamente.", "err"); return; }
     }
     if (retalhosUsados.length > 0) {
       for (const rid of retalhosUsados) {
@@ -841,10 +843,10 @@ function OtimizadorContent() {
       if (res.jaExistia) {
         console.warn(`Baixa de estoque para o pedido ${pedidoRef} já tinha sido registrada — não aplicada de novo. Use "Zerar" antes de reotimizar.`);
       } else if (!res.ok) {
-        alert(`⚠️ Erro ao baixar estoque de "${prodNome}": ${res.motivo}`);
+        toast(`Erro ao baixar estoque de "${prodNome}": ${res.motivo}`, "err");
         console.error("registrarMovimentacao (otimizador):", res.motivo);
       } else if (res.alertaMinimo) {
-        alert(`⚠️ ${res.alertaMensagem}`);
+        toast(res.alertaMensagem ?? "", "warn");
       }
     }
     router.push("/pedidos/" + pedidoRef);

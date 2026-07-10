@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from "react";
 import AppLayout from "@/components/layout/AppLayout";
+import { useToast } from "@/components/ui/toast";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
@@ -72,6 +73,7 @@ interface PosFinProps {
 }
 
 function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permuta, setPermuta, lancamentos, setLancamentos }: PosFinProps) {
+  const { toast } = useToast();
   const [adicionando,     setAdicionando]     = useState(false);
   const [novoBanco,       setNovoBanco]       = useState<Omit<SaldoBanco, "id">>({ banco: "", agencia: "", conta: "", saldo: 0 });
   const [pedidosAbertos,  setPedidosAbertos]  = useState<Set<string>>(new Set());
@@ -592,6 +594,7 @@ const EMPTY: RowState = {
 const SQL_MIGRACAO_COLUNAS = `-- Adiciona suporte a subcategorias em tabelas existentes:\nALTER TABLE inv_opcoes ADD COLUMN IF NOT EXISTS parent text;\nALTER TABLE investimentos ADD COLUMN IF NOT EXISTS subcategoria text;`;
 
 export default function InvestimentosPage() {
+  const { toast } = useToast();
   const [investimentos, setInvestimentos] = useState<Investimento[]>([]);
   const [loading, setLoading]             = useState(true);
   const [editingId, setEditingId]         = useState<string | null>(null);
@@ -716,7 +719,7 @@ export default function InvestimentosPage() {
     };
     if (!semColSubcat) payload.subcategoria = editForm.subcategoria || null;
     const { error } = await supabase.from("investimentos").update(payload).eq("id", editingId);
-    if (error) { alert("Erro: " + error.message); setSalvando(false); return; }
+    if (error) { toast("Erro: " + error.message, "err"); setSalvando(false); return; }
     registrarLog({ acao: "editou", tabela: "investimentos", registro_id: editingId, descricao: `Editou aporte de ${editForm.empresa}` });
     setSalvando(false); setEditingId(null); load();
   }
@@ -742,7 +745,7 @@ export default function InvestimentosPage() {
     };
     if (!semColSubcat) payload.subcategoria = newForm.subcategoria || null;
     const { error } = await supabase.from("investimentos").insert([payload] as never);
-    if (error) { alert("Erro: " + error.message); setSalvando(false); return; }
+    if (error) { toast("Erro: " + error.message, "err"); setSalvando(false); return; }
     registrarLog({ acao: "criou", tabela: "investimentos", descricao: `Aporte ${formatBRL(newForm.valor)} · ${newForm.empresa}` });
     setSalvando(false); setAddingNew(false); load();
   }
@@ -762,9 +765,9 @@ export default function InvestimentosPage() {
       const d = await r.json();
       setCorrigido(true);
       await load();
-      alert(`✓ Corrigido: ${d.fixedInvestimentos} registro(s) e ${d.fixedOpcoes} opção(ões) duplicada(s) removida(s).`);
+      toast(`Corrigido: ${d.fixedInvestimentos} registro(s) e ${d.fixedOpcoes} opção(ões) duplicada(s) removida(s).`, "ok");
     } catch {
-      alert("Erro ao corrigir.");
+      toast("Erro ao corrigir.", "err");
     } finally {
       setCorrigindo(false);
     }
@@ -772,11 +775,11 @@ export default function InvestimentosPage() {
 
   async function addOpcao(tipo: "banco" | "categoria", valor: string) {
     if (!valor.trim()) return;
-    if (semTabela) { alert("Execute o SQL de migração primeiro."); return; }
+    if (semTabela) { toast("Execute o SQL de migração primeiro.", "warn"); return; }
     const { error } = await supabase.from("inv_opcoes").insert([{ tipo, valor: valor.trim() }] as never);
     if (error) {
       if (error.message.includes("row-level security")) setErroRLS(true);
-      else alert("Erro ao adicionar: " + error.message);
+      else toast("Erro ao adicionar: " + error.message, "err");
       return;
     }
     if (tipo === "banco") setNovoBanco(""); else setNovaCat("");
@@ -789,7 +792,7 @@ export default function InvestimentosPage() {
     if (error) {
       if (error.message.includes("row-level security")) setErroRLS(true);
       else if (error.message.toLowerCase().includes("column") || error.message.toLowerCase().includes("parent")) setSemColSubcat(true);
-      else alert("Erro ao adicionar subcategoria: " + error.message);
+      else toast("Erro ao adicionar subcategoria: " + error.message, "err");
       return;
     }
     setNovaSubcat("");
@@ -798,7 +801,7 @@ export default function InvestimentosPage() {
 
   async function removeOpcao(id: number) {
     const { error } = await supabase.from("inv_opcoes").delete().eq("id", id);
-    if (error) { alert("Erro ao remover: " + error.message); return; }
+    if (error) { toast("Erro ao remover: " + error.message, "err"); return; }
     load();
   }
 

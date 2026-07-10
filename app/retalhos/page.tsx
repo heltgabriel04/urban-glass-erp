@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
+import { useToast } from "@/components/ui/toast";
 import { supabase } from "@/lib/supabase/client";
 import { formatDate, formatM2 } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
@@ -38,6 +39,7 @@ const FORM_VAZIO = {
 
 export default function RetalhoPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [retalhos, setRetalhos]     = useState<Retalho[]>([]);
   const [produtos, setProdutos]     = useState<{ id: number; nome: string }[]>([]);
   const [pedidos, setPedidos]       = useState<{ id: string }[]>([]);
@@ -119,8 +121,8 @@ export default function RetalhoPage() {
   }
 
   async function handleSalvar() {
-    if (!form.produto_nome.trim()) { alert("Selecione o produto."); return; }
-    if (!form.largura || !form.altura) { alert("Informe as dimensões."); return; }
+    if (!form.produto_nome.trim()) { toast("Selecione o produto.", "warn"); return; }
+    if (!form.largura || !form.altura) { toast("Informe as dimensões.", "warn"); return; }
 
     setSalvando(true);
 
@@ -150,7 +152,7 @@ export default function RetalhoPage() {
         .select()
         .single();
       setSalvando(false);
-      if (error) { alert("Erro ao salvar: " + error.message); return; }
+      if (error) { toast("Erro ao salvar: " + error.message, "err"); return; }
       setRetalhos(prev => prev.map(r => r.id === editandoId ? (data as Retalho) : r));
     } else {
       const qtd = Math.max(1, parseInt(form.quantidade) || 1);
@@ -161,7 +163,7 @@ export default function RetalhoPage() {
       }));
       const { data, error } = await supabase.from("retalhos").insert(rows).select();
       setSalvando(false);
-      if (error) { alert("Erro ao salvar: " + error.message); return; }
+      if (error) { toast("Erro ao salvar: " + error.message, "err"); return; }
       setRetalhos(prev => [...(data as Retalho[]), ...prev]);
     }
 
@@ -198,7 +200,7 @@ export default function RetalhoPage() {
 
     setImportando(false);
 
-    if (error) { alert("Erro ao importar: " + error.message); return; }
+    if (error) { toast("Erro ao importar: " + error.message, "err"); return; }
 
     setRetalhos(prev => [...(data as Retalho[]), ...prev]);
     setShowImport(false);

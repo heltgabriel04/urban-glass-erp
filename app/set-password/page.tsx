@@ -15,42 +15,44 @@ export default function SetPasswordPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<{ texto: string; tipo: "erro" | "ok" } | null>(null);
 
   async function salvarSenha() {
     if (!password) {
-      alert("Digite uma senha");
+      setMsg({ texto: "Digite uma senha", tipo: "erro" });
       return;
     }
 
     if (password.length < 6) {
-      alert("A senha precisa ter pelo menos 6 caracteres");
+      setMsg({ texto: "A senha precisa ter pelo menos 6 caracteres", tipo: "erro" });
       return;
     }
 
     if (password !== confirmPassword) {
-      alert("As senhas não conferem");
+      setMsg({ texto: "As senhas não conferem", tipo: "erro" });
       return;
     }
 
     try {
       setLoading(true);
+      setMsg(null);
 
       const { error } = await supabase.auth.updateUser({
         password,
       });
 
       if (error) {
-        alert(error.message);
+        setMsg({ texto: error.message, tipo: "erro" });
         setLoading(false);
         return;
       }
 
-      alert("Senha criada com sucesso!");
+      setMsg({ texto: "Senha criada com sucesso!", tipo: "ok" });
 
       router.push("/dashboard");
     } catch (err) {
       console.error(err);
-      alert("Erro ao salvar senha");
+      setMsg({ texto: "Erro ao salvar senha", tipo: "erro" });
     } finally {
       setLoading(false);
     }
@@ -126,6 +128,19 @@ export default function SetPasswordPage() {
             color: "white",
           }}
         />
+
+        {msg && (
+          <p
+            style={{
+              color: msg.tipo === "ok" ? "#39f38f" : "#f87171",
+              fontSize: "13px",
+              marginTop: "-10px",
+              marginBottom: "15px",
+            }}
+          >
+            {msg.texto}
+          </p>
+        )}
 
         <button
           onClick={salvarSenha}

@@ -1584,7 +1584,7 @@ export default function ProgramacaoPage() {
           modalAgendar.dt_retirada ? new Date(modalAgendar.dt_retirada) : null);
 
     if (!result.ok) {
-      alert(result.erro ?? "Erro ao agendar.");
+      showToast(result.erro ?? "Erro ao agendar.");
       return;
     }
     showToast("Pedido agendado com sucesso.");
