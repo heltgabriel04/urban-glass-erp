@@ -726,14 +726,32 @@ textarea.fc { resize: vertical; min-height: 64px; }
 }
 
 /* ─── LOADING ────────────────────────────────────────────── */
+/* Antes era só o texto "Carregando..." sem nenhum indicador visual —
+   uma classe compartilhada por ~40 telas, então o spinner via ::before
+   cobre todas de uma vez, sem precisar tocar em cada arquivo. */
 .loading {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   padding: 40px;
   color: var(--t3);
   font-size: 13px;
   font-family: 'DM Mono', monospace;
+}
+.loading::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--b2);
+  border-top-color: var(--acc);
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .loading::before { animation-duration: 2.2s; }
 }
 
 .skeleton {
