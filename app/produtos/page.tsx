@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
@@ -35,13 +36,18 @@ export default function ProdutosPage() {
   const [form, setForm]         = useState<ProdutoInsert>(VAZIO);
   const [editId, setEditId]     = useState<number | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [comConfigFiscal, setComConfigFiscal] = useState<Set<number>>(new Set());
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     setLoading(true);
-    const { data } = await supabase.from("produtos").select("*").order("nome");
+    const [{ data }, { data: configs }] = await Promise.all([
+      supabase.from("produtos").select("*").order("nome"),
+      supabase.from("config_fiscal_produtos").select("produto_id"),
+    ]);
     setProdutos(data as Produto[] || []);
+    setComConfigFiscal(new Set((configs ?? []).map((c: { produto_id: number }) => c.produto_id)));
     setLoading(false);
   }
 
@@ -158,12 +164,13 @@ export default function ProdutosPage() {
                 <tr>
                   <th>Código</th><th>Nome</th><th>Tipo</th><th>Espessura</th>
                   <th>Cor</th><th>Valor/m²</th><th>Unidade</th><th>Status</th>
+                  <th>Fiscal</th>
                   <th>Ações</th><th style={{ width:"40px" }}></th>
                 </tr>
               </thead>
               <tbody>
                 {filtrados.length === 0 && (
-                  <tr><td colSpan={10} style={{ textAlign:"center", color:"var(--t3)", padding:"32px" }}>Nenhum produto encontrado</td></tr>
+                  <tr><td colSpan={11} style={{ textAlign:"center", color:"var(--t3)", padding:"32px" }}>Nenhum produto encontrado</td></tr>
                 )}
                 {filtrados.map(p => (
                   <tr key={p.id} style={{ opacity: p.ativo ? 1 : 0.55 }}>
@@ -175,6 +182,13 @@ export default function ProdutosPage() {
                     <td className="mono" style={{ color:"var(--acc)" }}>{formatBRL(p.valor)}</td>
                     <td className="mono">{p.unidade}</td>
                     <td><span className={p.ativo ? "chip cg" : "chip cr"}>{p.ativo ? "Ativo" : "Inativo"}</span></td>
+                    <td>
+                      <Link href="/contabilidade/fiscal-produtos" title="Ver/editar na Configuração Fiscal" style={{ textDecoration: "none" }}>
+                        <span className={comConfigFiscal.has(p.id) ? "chip cg" : "chip cgr"} style={{ fontSize: "10px" }}>
+                          {comConfigFiscal.has(p.id) ? "Própria" : "Padrão"}
+                        </span>
+                      </Link>
+                    </td>
                     <td>
                       <div style={{ display:"flex", gap:"4px" }}>
                         <button className="btn bg xs" onClick={() => abrirEdit(p)}>Editar</button>
