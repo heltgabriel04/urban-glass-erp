@@ -1245,7 +1245,7 @@ export default function InvestimentosPage() {
           <div className="mod" style={{ width: "580px" }}>
             <div className="mhd">
               <div className="mtit">Gerenciar Listas</div>
-              <button className="mcl" onClick={() => setModalListas(false)}>✕</button>
+              <button className="mcl" onClick={() => setModalListas(false)} aria-label="Fechar">✕</button>
             </div>
 
             {semTabela && (

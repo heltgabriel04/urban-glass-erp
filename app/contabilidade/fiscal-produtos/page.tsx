@@ -96,7 +96,7 @@ function ModalProduto({ item, padrao, onSalvar, onRemover, onFechar, salvando }:
               {produto.cod} · {produto.nome}
             </div>
           </div>
-          <button className="mcl" onClick={onFechar}>✕</button>
+          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
         </div>
 
         <form

@@ -73,7 +73,7 @@ function ModalConsorcio({ editando, usuarioEmail, onSalvo, onFechar }: {
       <div className="mod" style={{ width: "560px" }}>
         <div className="mhd">
           <div className="mtit">{editando ? "Editar Consórcio" : "Novo Consórcio"}</div>
-          <button className="mcl" onClick={onFechar}>✕</button>
+          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
         </div>
         <form id="form-consorcio" onSubmit={handleSubmit} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
           <div className="fg">
@@ -174,7 +174,7 @@ function ModalLances({ consorcio, usuarioEmail, onFechar }: {
       <div className="mod" style={{ width: "620px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
         <div className="mhd">
           <div className="mtit">Lances — {consorcio.descricao}</div>
-          <button className="mcl" onClick={onFechar}>✕</button>
+          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
         </div>
         <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1 }}>
           <form onSubmit={handleAdd} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: "8px", marginBottom: "16px", alignItems: "end" }}>

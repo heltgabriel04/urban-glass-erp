@@ -215,7 +215,7 @@ export default function RecorrenciasPage() {
           <div className="mod" style={{ width: "560px" }}>
             <div className="mhd">
               <div className="mtit">{editId != null ? "Editar" : "Nova"} recorrência</div>
-              <button className="mcl" onClick={() => setModalAberto(false)}>✕</button>
+              <button className="mcl" onClick={() => setModalAberto(false)} aria-label="Fechar">✕</button>
             </div>
 
             <div style={{ padding: "20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
@@ -288,7 +288,7 @@ export default function RecorrenciasPage() {
           <div className="mod" style={{ width: "360px" }}>
             <div className="mhd">
               <div className="mtit">Gerar mais meses</div>
-              <button className="mcl" onClick={() => setGerarMaisId(null)}>✕</button>
+              <button className="mcl" onClick={() => setGerarMaisId(null)} aria-label="Fechar">✕</button>
             </div>
             <div style={{ padding: "20px" }}>
               <Campo label="Quantos meses gerar, a partir de onde parou *">

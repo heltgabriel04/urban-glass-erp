@@ -274,7 +274,7 @@ export default function OrcamentosPage() {
           <div className="mod" style={{ width:"420px" }}>
             <div className="mhd">
               <div className="mtit">Rejeitar orçamento <span style={{ color:"var(--acc)" }}>{modalRejeicao}</span></div>
-              <button className="mcl" onClick={() => setModalRejeicao(null)}>✕</button>
+              <button className="mcl" onClick={() => setModalRejeicao(null)} aria-label="Fechar">✕</button>
             </div>
 
             <div style={{ padding:"20px", display:"flex", flexDirection:"column", gap:"16px" }}>

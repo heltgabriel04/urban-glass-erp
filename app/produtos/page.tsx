@@ -219,7 +219,7 @@ export default function ProdutosPage() {
           <div className="mod" style={{ width:"560px" }}>
             <div className="mhd">
               <div className="mtit">{editId ? "Editar Produto" : "Novo Produto"}</div>
-              <button className="mcl" onClick={() => setModal(false)}>✕</button>
+              <button className="mcl" onClick={() => setModal(false)} aria-label="Fechar">✕</button>
             </div>
 
             <div className="fr">

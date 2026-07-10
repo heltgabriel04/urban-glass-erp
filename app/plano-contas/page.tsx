@@ -229,7 +229,7 @@ export default function PlanoContasPage() {
                   <div className="mod" style={{ width: "540px" }}>
                     <div className="mhd">
                       <div className="mtit">{planoEditId ? "Editar Plano de Contas" : "Novo Plano de Contas"}</div>
-                      <button className="mcl" onClick={cancelPlano}>✕</button>
+                      <button className="mcl" onClick={cancelPlano} aria-label="Fechar">✕</button>
                     </div>
                     <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
                       <div className="fr">
@@ -328,7 +328,7 @@ export default function PlanoContasPage() {
                   <div className="mod" style={{ width: "500px" }}>
                     <div className="mhd">
                       <div className="mtit">{catEditId ? "Editar Categoria" : "Nova Categoria"}</div>
-                      <button className="mcl" onClick={cancelCat}>✕</button>
+                      <button className="mcl" onClick={cancelCat} aria-label="Fechar">✕</button>
                     </div>
                     <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
                       <div className="fr">

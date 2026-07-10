@@ -59,7 +59,7 @@ export default function ImportarMedidasModal({ produtos, onImportar, onClose }: 
       <div className="mod" style={{ width: "440px" }}>
         <div className="mhd">
           <div className="mtit">Importar Medidas</div>
-          <button className="mcl" onClick={onClose}>✕</button>
+          <button className="mcl" onClick={onClose} aria-label="Fechar">✕</button>
         </div>
 
         <div className="fg" style={{ marginBottom: "12px" }}>

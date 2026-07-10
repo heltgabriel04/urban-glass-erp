@@ -85,7 +85,7 @@ export default function ImportarPdfModal({ produtos, onImportar, onClose }: Prop
       <div className="mod" style={{ width: "640px" }}>
         <div className="mhd">
           <div className="mtit">Importar PDF de Pedido/Orçamento</div>
-          <button className="mcl" onClick={onClose}>✕</button>
+          <button className="mcl" onClick={onClose} aria-label="Fechar">✕</button>
         </div>
 
         <div className="fg" style={{ marginBottom: "12px" }}>

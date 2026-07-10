@@ -42,7 +42,7 @@ export default function ImportarRetalhosModal({ onImportar, onClose, importando 
       <div className="mod" style={{ width: "560px" }}>
         <div className="mhd">
           <div className="mtit">Importar Planilha de Retalhos</div>
-          <button className="mcl" onClick={onClose}>✕</button>
+          <button className="mcl" onClick={onClose} aria-label="Fechar">✕</button>
         </div>
 
         <div className="fg" style={{ marginBottom: "12px" }}>

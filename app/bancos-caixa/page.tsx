@@ -236,7 +236,7 @@ export default function BancosCaixaPage() {
           <div className="mod" style={{ width: "480px" }}>
             <div className="mhd">
               <div className="mtit">{editId != null ? "Editar" : "Nova"} conta</div>
-              <button className="mcl" onClick={() => setModalAberto(false)}>✕</button>
+              <button className="mcl" onClick={() => setModalAberto(false)} aria-label="Fechar">✕</button>
             </div>
 
             <div style={{ padding: "20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
@@ -271,7 +271,7 @@ export default function BancosCaixaPage() {
           <div className="mod" style={{ width: "420px" }}>
             <div className="mhd">
               <div className="mtit">Nova Transferência</div>
-              <button className="mcl" onClick={() => setModalTransfAberto(false)}>✕</button>
+              <button className="mcl" onClick={() => setModalTransfAberto(false)} aria-label="Fechar">✕</button>
             </div>
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <Campo label="De (conta de origem) *">

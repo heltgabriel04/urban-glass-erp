@@ -159,7 +159,7 @@ export default function FornecedoresPage() {
           <div className="mod" style={{ width:"560px" }}>
             <div className="mhd">
               <div className="mtit">{editId != null ? "Editar" : "Novo"} fornecedor</div>
-              <button className="mcl" onClick={() => setModalAberto(false)}>✕</button>
+              <button className="mcl" onClick={() => setModalAberto(false)} aria-label="Fechar">✕</button>
             </div>
 
             <div style={{ padding:"20px", display:"grid", gridTemplateColumns:"1fr 1fr", gap:"14px" }}>

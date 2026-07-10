@@ -68,7 +68,7 @@ function ModalEmprestimo({ editando, contasBancarias, usuarioEmail, onSalvo, onF
       <div className="mod" style={{ width: "560px" }}>
         <div className="mhd">
           <div className="mtit">{editando ? "Editar Empréstimo" : "Novo Empréstimo"}</div>
-          <button className="mcl" onClick={onFechar}>✕</button>
+          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
         </div>
         <form id="form-emprestimo" onSubmit={handleSubmit} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
           <div className="fg">

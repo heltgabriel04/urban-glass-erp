@@ -734,7 +734,7 @@ function ContasPagarPageInner() {
           <div className="mod" style={{ width: "560px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
             <div className="mhd">
               <div className="mtit">{modal === "add" ? "Nova Conta a Pagar" : "Editar Conta a Pagar"}</div>
-              <button className="mcl" onClick={closeModal}>✕</button>
+              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
             </div>
 
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px", overflowY: "auto", flex: 1 }}>
@@ -859,7 +859,7 @@ function ContasPagarPageInner() {
           <div className="mod" style={{ width: "420px" }}>
             <div className="mhd">
               <div className="mtit">Registrar Baixa</div>
-              <button className="mcl" onClick={closeModal}>✕</button>
+              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
             </div>
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <div style={{ fontSize: "12px", color: "var(--t3)" }}>
@@ -940,7 +940,7 @@ function ContasPagarPageInner() {
           <div className="mod" style={{ width: "360px" }}>
             <div className="mhd">
               <div className="mtit">Marcar {selecionados.size} conta(s) como pagas</div>
-              <button className="mcl" onClick={closeModal}>✕</button>
+              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
             </div>
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <div className="fg">
@@ -967,7 +967,7 @@ function ContasPagarPageInner() {
           <div className="mod" style={{ width: "480px", maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
             <div className="mhd">
               <div className="mtit">Baixas · {contas.find(c => c.id === baixasVerId)?.descricao}</div>
-              <button className="mcl" onClick={closeModal}>✕</button>
+              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
             </div>
             <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "10px" }}>
               {(baixasMap.get(baixasVerId ?? -1) ?? []).length === 0 && (
@@ -1042,7 +1042,7 @@ function ContasPagarPageInner() {
           <div className="mod" style={{ width: "400px" }}>
             <div className="mhd">
               <div className="mtit">Excluir conta a pagar</div>
-              <button className="mcl" onClick={closeModal}>✕</button>
+              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
             </div>
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
               <div className="al al-w" style={{ fontSize: "12px" }}>
@@ -1069,7 +1069,7 @@ function ContasPagarPageInner() {
           <div className="mod" style={{ width: "480px" }}>
             <div className="mhd">
               <div className="mtit">Registrar Adiantamento (a fornecedor)</div>
-              <button className="mcl" onClick={closeModal}>✕</button>
+              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
             </div>
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <div className="fg">
@@ -1125,7 +1125,7 @@ function ContasPagarPageInner() {
           <div className="mod" style={{ width: "420px" }}>
             <div className="mhd">
               <div className="mtit">Registrar Reembolso</div>
-              <button className="mcl" onClick={closeModal}>✕</button>
+              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
             </div>
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <div style={{ fontSize: "12px", color: "var(--t3)" }}>

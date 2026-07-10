@@ -67,7 +67,7 @@ function ModalCartao({ editando, contasBancarias, usuarioEmail, onSalvo, onFecha
       <div className="mod" style={{ width: "520px" }}>
         <div className="mhd">
           <div className="mtit">{editando ? "Editar Cartão" : "Novo Cartão"}</div>
-          <button className="mcl" onClick={onFechar}>✕</button>
+          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
         </div>
         <form id="form-cartao" onSubmit={handleSubmit} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
@@ -181,7 +181,7 @@ function ModalFatura({ cartao, editando, onSalvo, onFechar }: {
       <div className="mod" style={{ width: "520px" }}>
         <div className="mhd">
           <div className="mtit">{editando ? `Editar Fatura — ${cartao.nome}` : `Nova Fatura — ${cartao.nome}`}</div>
-          <button className="mcl" onClick={onFechar}>✕</button>
+          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
         </div>
         <form id="form-fatura" onSubmit={handleSubmit} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -302,7 +302,7 @@ function ModalLancamentos({ cartao, fatura, fornecedores, planoContas, usuarioEm
           <div className="mtit">
             {fatura ? `Lançamentos — ${cartao.nome} (${String(fatura.competencia_mes).padStart(2, "0")}/${fatura.competencia_ano})` : `Lançamentos avulsos (débito) — ${cartao.nome}`}
           </div>
-          <button className="mcl" onClick={onFechar}>✕</button>
+          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
         </div>
 
         <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1 }}>

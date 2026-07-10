@@ -140,7 +140,7 @@ export default function FormasPagamentoPage() {
           <div className="mod" style={{ width: "400px" }}>
             <div className="mhd">
               <div className="mtit">{editId != null ? "Editar" : "Nova"} forma de pagamento</div>
-              <button className="mcl" onClick={() => setModalAberto(false)}>✕</button>
+              <button className="mcl" onClick={() => setModalAberto(false)} aria-label="Fechar">✕</button>
             </div>
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <div className="fg">

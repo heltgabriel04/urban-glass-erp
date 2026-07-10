@@ -223,7 +223,7 @@ export default function VendedoresPage() {
           <div className="mod" style={{ width: "520px" }}>
             <div className="mhd">
               <div className="mtit">{editId ? "Editar Vendedor" : "Novo Vendedor"}</div>
-              <button className="mcl" onClick={() => setModal(false)}>✕</button>
+              <button className="mcl" onClick={() => setModal(false)} aria-label="Fechar">✕</button>
             </div>
 
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>

@@ -86,7 +86,7 @@ function ModalAtivo({ editando, fornecedores, planoContas, usuarioEmail, onSalvo
       <div className="mod" style={{ width: "620px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
         <div className="mhd">
           <div className="mtit">{editando ? "Editar Ativo Imobilizado" : "Novo Ativo Imobilizado"}</div>
-          <button className="mcl" onClick={onFechar}>✕</button>
+          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
         </div>
 
         <form id="form-ativo-imobilizado" onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px", flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>

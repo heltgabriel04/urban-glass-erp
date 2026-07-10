@@ -734,7 +734,7 @@ function ContasReceberPageInner() {
           <div className="mod" style={{ width: "560px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
             <div className="mhd">
               <div className="mtit">{modal === "add" ? "Novo Recebível" : "Editar Recebível"}</div>
-              <button className="mcl" onClick={closeModal}>✕</button>
+              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
             </div>
 
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px", overflowY: "auto", flex: 1 }}>
@@ -844,7 +844,7 @@ function ContasReceberPageInner() {
           <div className="mod" style={{ width: "420px" }}>
             <div className="mhd">
               <div className="mtit">Registrar Baixa</div>
-              <button className="mcl" onClick={closeModal}>✕</button>
+              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
             </div>
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <div style={{ fontSize: "12px", color: "var(--t3)" }}>
@@ -925,7 +925,7 @@ function ContasReceberPageInner() {
           <div className="mod" style={{ width: "360px" }}>
             <div className="mhd">
               <div className="mtit">Marcar {selecionados.size} título(s) como recebidos</div>
-              <button className="mcl" onClick={closeModal}>✕</button>
+              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
             </div>
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <div className="fg">
@@ -952,7 +952,7 @@ function ContasReceberPageInner() {
           <div className="mod" style={{ width: "480px", maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
             <div className="mhd">
               <div className="mtit">Baixas · {recebiveis.find(r => r.id === baixasVerId)?.descricao}</div>
-              <button className="mcl" onClick={closeModal}>✕</button>
+              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
             </div>
             <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "10px" }}>
               {(baixasMap.get(baixasVerId ?? -1) ?? []).length === 0 && (
@@ -1027,7 +1027,7 @@ function ContasReceberPageInner() {
           <div className="mod" style={{ width: "400px" }}>
             <div className="mhd">
               <div className="mtit">Excluir recebível</div>
-              <button className="mcl" onClick={closeModal}>✕</button>
+              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
             </div>
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
               <div className="al al-w" style={{ fontSize: "12px" }}>
@@ -1054,7 +1054,7 @@ function ContasReceberPageInner() {
           <div className="mod" style={{ width: "480px" }}>
             <div className="mhd">
               <div className="mtit">Registrar Adiantamento (de cliente)</div>
-              <button className="mcl" onClick={closeModal}>✕</button>
+              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
             </div>
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <div className="fg">
@@ -1106,7 +1106,7 @@ function ContasReceberPageInner() {
           <div className="mod" style={{ width: "420px" }}>
             <div className="mhd">
               <div className="mtit">Registrar Reembolso</div>
-              <button className="mcl" onClick={closeModal}>✕</button>
+              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
             </div>
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <div style={{ fontSize: "12px", color: "var(--t3)" }}>

@@ -118,7 +118,7 @@ function ModalDocumento({ tipo, titulo, editando, ano, mes, fornecedores, notasV
       <div className="mod" style={{ width: "600px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
         <div className="mhd">
           <div className="mtit">{titulo}</div>
-          <button className="mcl" onClick={onFechar}>✕</button>
+          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
         </div>
 
         <form id={`form-doc-${tipo}`} onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px", flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>

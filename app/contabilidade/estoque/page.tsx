@@ -78,7 +78,7 @@ function ModalItem({ editando, fornecedores, usuarioEmail, onSalvo, onFechar }: 
       <div className="mod" style={{ width: "560px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
         <div className="mhd">
           <div className="mtit">{editando ? "Editar Item de Estoque" : "Novo Item de Estoque"}</div>
-          <button className="mcl" onClick={onFechar}>✕</button>
+          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
         </div>
 
         <form id="form-item-estoque" onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px", flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>
@@ -207,7 +207,7 @@ function ModalMovimentacao({ itens, documentosFiscais, usuarioEmail, onSalvo, on
       <div className="mod" style={{ width: "520px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
         <div className="mhd">
           <div className="mtit">Nova Movimentação</div>
-          <button className="mcl" onClick={onFechar}>✕</button>
+          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
         </div>
 
         <form id="form-movimentacao" onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px", flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>
