@@ -200,7 +200,7 @@ export default function QualidadeDashboardPage() {
           )}
 
           {/* ── NCs ABERTAS (principal) + GRAFICO ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 14 }}>
+          <div className="g32">
 
             {/* Lista de NCs abertas */}
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
@@ -320,7 +320,7 @@ export default function QualidadeDashboardPage() {
           </div>
 
           {/* ── CAUSAS + RETRABALHOS ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 14 }}>
+          <div className="g32">
 
             {/* Principais causas — barras horizontais */}
             <div className="card">

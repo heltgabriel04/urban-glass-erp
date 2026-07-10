@@ -76,11 +76,11 @@ function getStatusExibicao(c: Conta, valorPago: number): "Pago" | "Parcial" | "V
   return base;
 }
 
-const STATUS_STYLE: Record<string, React.CSSProperties> = {
-  "Pago":      { background: "rgba(61,255,160,.12)", color: "var(--ok)",   border: "1px solid rgba(61,255,160,.3)" },
-  "Parcial":   { background: "rgba(245,158,11,.12)", color: "var(--warn)", border: "1px solid rgba(245,158,11,.35)" },
-  "Vencido":   { background: "rgba(255,80,80,.12)",  color: "var(--err)",  border: "1px solid rgba(255,80,80,.3)" },
-  "Em aberto": { background: "rgba(45,95,166,.15)",  color: "#60a5fa",     border: "1px solid rgba(45,95,166,.35)" },
+// Mesmo padrão de chip usado no resto do sistema (ex.: Fluxo de Caixa) —
+// antes esta tela reimplementava as cores do zero com rgba solto, e
+// "Vencido" saía vermelho aqui e amarelo em /fluxo pro mesmo conceito.
+const STATUS_CHIP: Record<string, string> = {
+  "Pago": "cg", "Parcial": "cy", "Vencido": "cr", "Em aberto": "cb",
 };
 
 export default function ContasPagarPage() {
@@ -682,7 +682,7 @@ function ContasPagarPageInner() {
                         </td>
                         <td style={{ fontSize: "12px" }}>{fmtData(c.dt_pagamento)}</td>
                         <td>
-                          <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "99px", whiteSpace: "nowrap", ...STATUS_STYLE[stExibida] }}>
+                          <span className={`chip ${STATUS_CHIP[stExibida]}`} style={{ whiteSpace: "nowrap" }}>
                             {stExibida}
                           </span>
                         </td>
@@ -983,7 +983,7 @@ function ContasPagarPageInner() {
                       </div>
                     </div>
                     {b.estornado_em ? (
-                      <span style={{ fontSize: "10px", fontWeight: 700, padding: "3px 8px", borderRadius: "99px", ...STATUS_STYLE["Vencido"] }}>Estornada</span>
+                      <span className="chip cr">Estornada</span>
                     ) : (
                       estornandoBaixaId !== b.id && (
                         <div style={{ display: "flex", gap: "6px" }}>

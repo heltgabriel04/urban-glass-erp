@@ -491,7 +491,7 @@ function FluxoPageInner() {
         <div style={{ marginTop: "16px", display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap", fontSize: "11px", color: "var(--t3)" }}>
           <span><span className="chip cg">Realizado</span> já entrou ou saiu do caixa</span>
           <span><span className="chip cb">Previsto</span> vencimento ainda não chegou</span>
-          <span><span className="chip cy">Vencido</span> passou do vencimento e não foi pago</span>
+          <span><span className="chip cr">Vencido</span> passou do vencimento e não foi pago</span>
           <span><span className="chip cgr">Recorrência</span> ainda não virou lançamento — gere em /recorrencias</span>
         </div>
 
@@ -509,7 +509,7 @@ function situacaoLabel(l: LinhaBase): string {
 function situacaoClasse(l: LinhaBase): string {
   if (l.origem === "baixa" || l.origem === "pago-legado") return "cg";
   if (l.origem === "recorrencia-futura") return "cgr";
-  return l.data < hojeISO() ? "cy" : "cb";
+  return l.data < hojeISO() ? "cr" : "cb";
 }
 
 const thS: React.CSSProperties = {

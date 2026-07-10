@@ -330,6 +330,9 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
 .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
 .g4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+/* Painel assimétrico (gráfico + card lateral) repetido em Dashboard,
+   Dashboard Financeiro e Qualidade — empilha em telas pequenas. */
+.g32 { display: grid; grid-template-columns: 3fr 2fr; gap: 14px; }
 .g5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
 
 .mb12 { margin-bottom: 12px; }
@@ -573,6 +576,27 @@ tbody tr:hover td { background: rgba(255,255,255,.012); }
 .fc::placeholder { color: var(--t3); }
 select.fc option { background: var(--surf2); }
 textarea.fc { resize: vertical; min-height: 64px; }
+
+/* input[type=file] nativo do browser (botão cinza claro do sistema)
+   destoava de todo o resto do tema escuro — estiliza o botão embutido
+   pra combinar com .fc, mantém o "nenhum arquivo escolhido" no texto do tema. */
+.fc[type="file"] {
+  color: var(--t3);
+  padding: 6px 8px;
+}
+.fc[type="file"]::file-selector-button {
+  background: var(--surf3);
+  border: 1px solid var(--b2);
+  border-radius: 5px;
+  color: var(--t1);
+  font-size: 12px;
+  font-family: 'DM Mono', monospace;
+  padding: 5px 10px;
+  margin-right: 10px;
+  cursor: pointer;
+  transition: 0.1s;
+}
+.fc[type="file"]::file-selector-button:hover { background: var(--acc); color: #000; border-color: var(--acc); }
 
 /* ─── MODAL ─────────────────────────────────────────────── */
 .mov {
@@ -852,5 +876,21 @@ textarea.fc { resize: vertical; min-height: 64px; }
   .tb-search { width: 100%; order: 3; flex: 1 1 100%; }
 
   table { min-width: 560px; }
+
+  /* Grids de KPI/estatística viravam 4-5 colunas espremidas (rótulo
+     truncado tipo "FATU…") em qualquer tela de celular — colapsa antes
+     de virar ilegível. */
+  .g3, .g4 { grid-template-columns: repeat(2, 1fr); }
+  /* Painel gráfico+lateral (3fr 2fr) e listas em 2 colunas (ex.: Top
+     Clientes) empilham em vez de espremer/cortar conteúdo fora da tela. */
+  .g32, .g2 { grid-template-columns: 1fr; }
+
+  /* .mod já trava em max-width:95vw (bom o bastante pra não sair da tela),
+     só reduz o padding interno, que sobra pouco em telas pequenas. */
+  .mod { padding: 16px; }
+}
+
+@media (max-width: 420px) {
+  .g3, .g4 { grid-template-columns: 1fr; }
 }
 [data-theme="light"] .sr { border-bottom-color: var(--b2); }

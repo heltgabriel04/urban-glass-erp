@@ -183,7 +183,7 @@ function DashboardFinanceiroInner() {
 
             {/* Gráficos */}
             {visivel("graficos") && (
-            <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 14, marginBottom: 16 }}>
+            <div className="g32" style={{ marginBottom: 16 }}>
               <div className="card">
                 <div className="ct">Receita × Despesa · últimos 6 meses</div>
                 <ResponsiveContainer width="100%" height={280}>

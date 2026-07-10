@@ -314,7 +314,7 @@ export default function DashboardPage() {
             )}
 
             {/* ── GRAFICO (60%) + PIPELINE (40%) ── */}
-            <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 14, marginBottom: 14 }}>
+            <div className="g32" style={{ marginBottom: 14 }}>
 
               {/* Faturamento mensal */}
               <div className="card">
@@ -426,7 +426,7 @@ export default function DashboardPage() {
                   Nenhum pedido neste período.
                 </div>
               ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 40px" }}>
+                <div className="g2" style={{ gap: "0 40px" }}>
                   {topCli.map((f, i) => {
                     const pctTotal = Number(f.faturado) / maxTop * 100;
                     const pctRec   = Number(f.faturado) > 0 ? Number(f.recebido) / Number(f.faturado) * 100 : 0;
