@@ -89,8 +89,12 @@ export async function registrarMovimentacao(params: RegistrarMovimentacaoParams)
   const custoEfetivo = custoUnitarioM2 ?? (m2 < 0 ? Number(item.custo_m2) : null);
 
   // Custo médio ponderado: só recalcula em entrada com custo informado.
+  // Em 'ajuste' (correção manual de saldo), o custo informado substitui
+  // direto — não é uma compra real, não faz sentido diluir na média.
   let novoCustoM2 = Number(item.custo_m2 ?? 0);
-  if (m2 > 0 && custoUnitarioM2 != null) {
+  if (tipo === 'ajuste' && custoUnitarioM2 != null) {
+    novoCustoM2 = custoUnitarioM2;
+  } else if (m2 > 0 && custoUnitarioM2 != null) {
     const saldoAnteriorM2 = Number(item.m2_saldo);
     novoCustoM2 = saldoAnteriorM2 + m2 > 0
       ? parseFloat((((saldoAnteriorM2 * Number(item.custo_m2 ?? 0)) + (m2 * custoUnitarioM2)) / (saldoAnteriorM2 + m2)).toFixed(4))

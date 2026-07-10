@@ -190,15 +190,27 @@ export default function EstoquePage() {
     setSalvando(true);
 
     if (editItem) {
-      // Edição: substitui os valores do item pelo que o usuário digitou
+      // Edição: correção manual de saldo/custo — sempre pelo livro-razão
+      // (nunca sobrescreve chapas_saldo/m2_saldo/custo_m2 direto na tabela,
+      // senão a reconciliação com estoque_movimentacoes quebra em silêncio).
       const novoCusto = custoM2 > 0 ? custoM2 : Number(editItem.custo_m2);
+      const deltaChapas = chapasNum - Number(editItem.chapas_saldo);
+      const deltaM2 = parseFloat((m2Final - Number(editItem.m2_saldo)).toFixed(4));
+
+      const res = await registrarMovimentacao({
+        produtoId: editItem.produto_id, tipo: "ajuste", origemTipo: "manual",
+        chapas: deltaChapas, m2: deltaM2, custoUnitarioM2: novoCusto,
+        obs: "Correção manual de estoque (edição de item)",
+      });
+      if (!res.ok) { alert("Erro ao registrar ajuste no livro-razão: " + res.motivo); setSalvando(false); return; }
+      if (res.alertaMinimo) alert("⚠️ " + res.alertaMensagem);
+
+      // chapas_entrada/m2_entrada/m2_por_chapa são só estatística de exibição,
+      // fora do livro-razão — não fazem parte da reconciliação de saldo.
       const { error } = await supabase.from("estoque").update({
         chapas_entrada: chapasNum,
         m2_entrada:     m2Final,
-        chapas_saldo:   chapasNum,
-        m2_saldo:       m2Final,
         m2_por_chapa:   m2ChapFinal,
-        custo_m2:       novoCusto,
         updated_at:     new Date().toISOString(),
       }).eq("id", editItem.id);
 
