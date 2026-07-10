@@ -10,7 +10,7 @@ import { ordenarPorCodigoEstruturado } from "@/lib/planoContas";
 import {
   getCartoes, criarCartao, atualizarCartao, inativarCartao, reativarCartao,
   getFaturas, criarFatura, atualizarFatura,
-  getLancamentosFatura, getLancamentosCartao, criarLancamentoCartao, atualizarLancamentoCartao, excluirLancamentoCartao,
+  getLancamentosFatura, getLancamentosCartao, criarLancamentoCartao, atualizarLancamentoCartao, softDeleteLancamentoCartao,
   uploadAnexoCartao,
 } from "@/services/cartoes.service";
 import { getFornecedores } from "@/services/fornecedores.service";
@@ -281,8 +281,9 @@ function ModalLancamentos({ cartao, fatura, fornecedores, planoContas, usuarioEm
   }
 
   async function handleExcluir(id: number) {
-    if (!confirm("Excluir este lançamento?")) return;
-    const ok = await excluirLancamentoCartao(id);
+    const motivo = prompt("Motivo da exclusão (opcional):") ?? undefined;
+    if (!confirm("Excluir este lançamento? O registro fica no histórico, não é apagado de fato.")) return;
+    const ok = await softDeleteLancamentoCartao(id, usuarioEmail, motivo);
     toast(ok ? "Lançamento excluído" : "Erro ao excluir", ok ? "ok" : "err");
     if (ok) { load(); onMudou(); }
   }

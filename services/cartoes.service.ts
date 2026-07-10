@@ -82,7 +82,7 @@ export async function atualizarFatura(id: number, patch: CartaoFaturaUpdate): Pr
 }
 
 async function recalcularValorTotalFatura(faturaId: number): Promise<void> {
-  const { data } = await supabase.from("cartoes_lancamentos").select("valor").eq("fatura_id", faturaId);
+  const { data } = await supabase.from("cartoes_lancamentos").select("valor").eq("fatura_id", faturaId).is("deletado_em", null);
   const total = ((data ?? []) as Array<{ valor: number }>).reduce((s, l) => s + Number(l.valor), 0);
   await supabase.from("cartoes_faturas").update({ valor_total: parseFloat(total.toFixed(2)), updated_at: new Date().toISOString() } as never).eq("id", faturaId);
 }
@@ -90,13 +90,13 @@ async function recalcularValorTotalFatura(faturaId: number): Promise<void> {
 // ─── Lançamentos (detalhamento da fatura) ───────────────────
 
 export async function getLancamentosFatura(faturaId: number): Promise<CartaoLancamento[]> {
-  const { data, error } = await supabase.from("cartoes_lancamentos").select("*, fornecedores ( id, nome )").eq("fatura_id", faturaId).order("data");
+  const { data, error } = await supabase.from("cartoes_lancamentos").select("*, fornecedores ( id, nome )").eq("fatura_id", faturaId).is("deletado_em", null).order("data");
   if (error) { console.error("getLancamentosFatura:", error); return []; }
   return data as CartaoLancamento[];
 }
 
 export async function getLancamentosCartao(cartaoId: number, filtro: { semFatura?: boolean } = {}): Promise<CartaoLancamento[]> {
-  let query = supabase.from("cartoes_lancamentos").select("*, fornecedores ( id, nome )").eq("cartao_id", cartaoId).order("data", { ascending: false });
+  let query = supabase.from("cartoes_lancamentos").select("*, fornecedores ( id, nome )").eq("cartao_id", cartaoId).is("deletado_em", null).order("data", { ascending: false });
   if (filtro.semFatura) query = query.is("fatura_id", null);
   const { data, error } = await query;
   if (error) { console.error("getLancamentosCartao:", error); return []; }
@@ -122,13 +122,16 @@ export async function atualizarLancamentoCartao(id: number, patch: CartaoLancame
   return true;
 }
 
-export async function excluirLancamentoCartao(id: number): Promise<boolean> {
+// Nunca DELETE físico — só marca deletado_em/deletado_por/motivo_exclusao (mesmo padrão de documentos_fiscais).
+export async function softDeleteLancamentoCartao(id: number, usuarioEmail: string, motivo?: string): Promise<boolean> {
   const { data: lanc } = await supabase.from("cartoes_lancamentos").select("fatura_id").eq("id", id).maybeSingle();
-  const { error } = await supabase.from("cartoes_lancamentos").delete().eq("id", id);
-  if (error) { console.error("excluirLancamentoCartao:", error); return false; }
+  const { error } = await supabase.from("cartoes_lancamentos").update({
+    deletado_em: new Date().toISOString(), deletado_por: usuarioEmail, motivo_exclusao: motivo ?? null,
+  } as never).eq("id", id);
+  if (error) { console.error("softDeleteLancamentoCartao:", error); return false; }
   const faturaId = (lanc as { fatura_id: number | null } | null)?.fatura_id;
   if (faturaId) await recalcularValorTotalFatura(faturaId);
-  registrarLog({ acao: "excluiu", tabela: "cartoes_lancamentos", registro_id: String(id), descricao: `Excluiu lançamento de cartão #${id}` });
+  registrarLog({ acao: "excluiu", tabela: "cartoes_lancamentos", registro_id: String(id), descricao: `Excluiu lançamento de cartão #${id}${motivo ? ` — ${motivo}` : ""}` });
   return true;
 }
 

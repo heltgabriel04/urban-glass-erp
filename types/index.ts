@@ -874,11 +874,15 @@ export interface CartaoLancamento {
   conciliado: boolean;
   observacoes: string | null;
   criado_por: string | null;
+  deletado_em: string | null;
+  deletado_por: string | null;
+  motivo_exclusao: string | null;
   created_at: string;
   updated_at: string;
   fornecedores?: Pick<Fornecedor, 'id' | 'nome'>;
 }
-export type CartaoLancamentoInsert = Omit<CartaoLancamento, 'id' | 'created_at' | 'updated_at' | 'fornecedores'>;
+export type CartaoLancamentoInsert = Omit<CartaoLancamento,
+  'id' | 'deletado_em' | 'deletado_por' | 'motivo_exclusao' | 'created_at' | 'updated_at' | 'fornecedores'>;
 export type CartaoLancamentoUpdate = Partial<CartaoLancamentoInsert>;
 
 // ─── CONTABILIDADE — EMPRÉSTIMOS (Fase 4) ──────────────────
