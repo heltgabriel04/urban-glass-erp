@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { getPedidoById, updatePedido, recalcularRecebido } from "@/services/pedidos.service";
-import { getLancamentosPorPedido, deletarLancamento, createLancamento } from "@/services/financeiro.service";
+import { getLancamentosPorPedido } from "@/services/financeiro.service";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
@@ -392,12 +392,16 @@ export default function EditarPedidoPage() {
 
     if (!result) { toast("Erro ao salvar pedido", "err"); setSalvando(false); return; }
 
-    // Deletar itens removidos
-    for (const delId of itensDeletados) {
-      await supabase.from("itens_pedido").delete().eq("id", delId);
+    // Deletar itens removidos — 1 chamada em lote em vez de N sequenciais
+    if (itensDeletados.length > 0) {
+      await supabase.from("itens_pedido").delete().in("id", itensDeletados);
     }
 
-    // Salvar itens (update existentes, insert novos)
+    // Salvar itens: novos num insert em lote, existentes num upsert em lote
+    // (antes eram N updates/inserts sequenciais — um pedido com 40-50 peças
+    // travava a tela até completar tudo).
+    const itensNovos: Record<string, unknown>[] = [];
+    const itensExistentes: Record<string, unknown>[] = [];
     for (const item of itens) {
       const m2val  = modoPedido === "ml" ? calcMLItem(item) : calcM2Item(item);
       const subtot = calcSubtotal(item);
@@ -411,27 +415,30 @@ export default function EditarPedidoPage() {
         subtotal: parseFloat(subtot.toFixed(2)),
         codigo_adicional: item.codigo_adicional || null,
       };
-      if (item.id) {
-        await supabase.from("itens_pedido").update(payload).eq("id", item.id);
-      } else {
-        await supabase.from("itens_pedido").insert({ ...payload, pedido_id: id });
-      }
+      if (item.id) itensExistentes.push({ id: item.id, ...payload });
+      else itensNovos.push({ ...payload, pedido_id: id });
     }
+    if (itensNovos.length > 0) await supabase.from("itens_pedido").insert(itensNovos as never);
+    if (itensExistentes.length > 0) await supabase.from("itens_pedido").upsert(itensExistentes as never);
 
-    // Recriar lançamentos A Receber
+    // Recriar lançamentos A Receber — delete e insert em lote em vez de N+N
+    // chamadas individuais. recalcularRecebido(id) já roda uma vez no fim,
+    // cobrindo o mesmo efeito colateral que cada delete/create faria sozinho.
     const lancsAtual = await getLancamentosPorPedido(id);
-    for (const l of lancsAtual.filter(l => l.status === "A Receber")) {
-      await deletarLancamento(l.id);
+    const idsParaExcluir = lancsAtual.filter(l => l.status === "A Receber").map(l => l.id);
+    if (idsParaExcluir.length > 0) {
+      await supabase.from("lancamentos").delete().in("id", idsParaExcluir);
     }
-    for (let i = 0; i < parcelasForm.length; i++) {
-      const p = parcelasForm[i];
-      if (!p.data || p.valor <= 0) continue;
-      await createLancamento({
-        tipo: "Entrada",
+    const novasParcelas = parcelasForm
+      .map((p, i) => ({ p, i }))
+      .filter(({ p }) => p.data && p.valor > 0)
+      .map(({ p, i }) => ({
+        tipo: "Entrada", status: "A Receber", vencimento: p.data, valor: p.valor,
         descricao: parcelas === 1 ? `Recebimento · ${id}` : `Parcela ${i + 1}/${parcelas} · ${id}`,
-        valor: p.valor, status: "A Receber", vencimento: p.data,
         pedido_id: id, cliente_id: clienteId,
-      });
+      }));
+    if (novasParcelas.length > 0) {
+      await supabase.from("lancamentos").insert(novasParcelas as never);
     }
     await recalcularRecebido(id);
 
