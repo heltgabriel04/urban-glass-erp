@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireRole } from "@/lib/auth/api-guard";
 
 const BUCKETS = [
   { name: "romaneios-assinados", public: true },
@@ -8,6 +9,9 @@ const BUCKETS = [
 ];
 
 export async function POST() {
+  const denied = await requireRole(["admin"]);
+  if (denied) return denied;
+
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SECRET_KEY;
