@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth/api-guard";
+import { requireRole } from "@/lib/auth/api-guard";
 import { emitirNotaSchema } from "@/lib/validation/api";
 
 function getBaseUrl(): string {
@@ -13,7 +13,7 @@ function basicAuth(token: string): string {
 }
 
 export async function POST(req: NextRequest) {
-  const denied = await requireAuth();
+  const denied = await requireRole(["admin", "financeiro"]);
   if (denied) return denied;
 
   let raw: unknown;

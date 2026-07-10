@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth/api-guard";
+import { requireRole } from "@/lib/auth/api-guard";
 import { parseRelacaoVidrosPdf } from "@/lib/importPdfRelacaoVidros";
 
 // Roda no servidor porque o pdfjs (usado pra extrair o texto posicionado do
 // PDF) depende de um worker mais simples de rodar em Node do que empacotado
 // no bundle do navegador.
 export async function POST(req: NextRequest) {
-  const denied = await requireAuth();
+  const denied = await requireRole(["admin", "financeiro"]);
   if (denied) return denied;
 
   const form = await req.formData();

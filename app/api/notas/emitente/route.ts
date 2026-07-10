@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth/api-guard";
+import { requireRole } from "@/lib/auth/api-guard";
 
 export async function GET() {
-  const denied = await requireAuth();
+  const denied = await requireRole(["admin", "financeiro"]);
   if (denied) return denied;
 
   return NextResponse.json({

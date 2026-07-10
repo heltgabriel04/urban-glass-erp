@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { requireAuth } from "@/lib/auth/api-guard";
+import { requireRole } from "@/lib/auth/api-guard";
 
 function getBaseUrl(): string {
   return (process.env.FOCUSNFE_AMBIENTE ?? "homologacao") === "producao"
@@ -16,7 +16,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const denied = await requireAuth();
+  const denied = await requireRole(["admin", "financeiro"]);
   if (denied) return denied;
 
   const { id } = await params;
