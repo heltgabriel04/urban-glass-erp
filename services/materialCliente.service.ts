@@ -34,7 +34,3 @@ export async function getMovimentacoesPorPedido(pedidoId: string): Promise<Mater
   if (error) { console.error('getMovimentacoesPorPedido (material cliente):', error); return []; }
   return data as MaterialClienteMov[];
 }
-
-export async function deletarMovimentacoesPorPedido(pedidoId: string): Promise<void> {
-  await supabase.from('material_cliente_mov').delete().eq('pedido_id', pedidoId);
-}

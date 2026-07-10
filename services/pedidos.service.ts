@@ -2,9 +2,8 @@ import { supabase } from '@/lib/supabase/client';
 import type { Pedido, PedidoInsert, PedidoUpdate, ItemPedido, ItemPedidoInsert, StatusPedido } from '@/types';
 import { registrarLog } from './log.service';
 import { isChapaInteira } from '@/lib/chapas';
-import { registrarMovimentacao, reverterMovimentacao } from './estoqueMovimentacoes.service';
-import { registrarMovimentoCliente, deletarMovimentacoesPorPedido } from './materialCliente.service';
-import { deletarRetiradasPorPedido } from './retiradas.service';
+import { registrarMovimentacao } from './estoqueMovimentacoes.service';
+import { registrarMovimentoCliente } from './materialCliente.service';
 import { reconciliarProgramacaoComPedido } from './programacao.service';
 
 export async function getPedidos(filtroStatus?: StatusPedido) {
@@ -343,38 +342,12 @@ export async function retrocederStatusPedido(id: string, statusAtual: StatusPedi
   return res;
 }
 
+// Cascata inteira roda numa função Postgres só (delete_pedido_cascade,
+// sql/seguranca-02-deletar-pedido-atomico.sql) — uma transação atômica em
+// vez de 12+ chamadas sequenciais do client. Preserva soft-delete de
+// lançamentos já baixados (mesma regra de excluirLancamento).
 export async function deletarPedido(pedidoId: string): Promise<{ ok: boolean; erro?: string }> {
-  // 1. Revert stock consumed by this pedido: plano de corte (otimização) e
-  //    eventuais vendas de chapa inteira avulsa (uma movimentação por item).
-  await reverterMovimentacao('otimizacao', pedidoId);
-
-  const { data: itensDoPedido } = await supabase
-    .from('itens_pedido')
-    .select('id')
-    .eq('pedido_id', pedidoId);
-  for (const item of (itensDoPedido ?? []) as Array<{ id: number }>) {
-    await reverterMovimentacao('pedido_chapa', String(item.id));
-  }
-
-  // 2. Delete child records in FK-safe order
-  await deletarMovimentacoesPorPedido(pedidoId);
-  await supabase.from('lancamentos').delete().eq('pedido_id', pedidoId);
-  await supabase.from('retrabalhos').delete().eq('pedido_id', pedidoId);
-  await supabase.from('quebras').delete().eq('pedido_id', pedidoId);
-  await supabase.from('nao_conformidades').delete().eq('pedido_id', pedidoId);
-  await supabase.from('retalhos_uso').delete().eq('pedido_id', pedidoId);
-  // retalhos (sobras físicas em estoque) não são apagados — apenas desvinculados,
-  // pois continuam sendo inventário real disponível mesmo após o pedido ser excluído.
-  await supabase.from('retalhos').update({ pedido_origem: null } as never).eq('pedido_origem', pedidoId);
-  await deletarRetiradasPorPedido(pedidoId);
-  await supabase.from('itens_pedido').delete().eq('pedido_id', pedidoId);
-  await supabase.from('historico_otimizador').delete().eq('pedido_id', pedidoId);
-  await supabase.from('checklist_expedicao').delete().eq('pedido_id', pedidoId);
-  // notas_fiscais: nullify FK instead of deleting (NF may need to persist)
-  await supabase.from('notas_fiscais').update({ pedido_id: null } as never).eq('pedido_id', pedidoId);
-
-  // 3. Delete the pedido itself
-  const { error } = await supabase.from('pedidos').delete().eq('id', pedidoId);
+  const { error } = await supabase.rpc('delete_pedido_cascade', { p_pedido_id: pedidoId } as never);
   if (error) {
     console.error('deletarPedido:', error);
     return { ok: false, erro: error.message };

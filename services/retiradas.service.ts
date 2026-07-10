@@ -175,8 +175,3 @@ export async function deletarRetirada(retiradaId: string, pedidoId: string): Pro
   });
   return { ok: true };
 }
-
-/** Usado por deletarPedido em pedidos.service.ts — sem log próprio (operação em cascata interna). */
-export async function deletarRetiradasPorPedido(pedidoId: string): Promise<void> {
-  await supabase.from('retiradas_pedido').delete().eq('pedido_id', pedidoId);
-}
