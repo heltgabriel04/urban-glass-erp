@@ -96,8 +96,8 @@ export async function getCMVPeriodo(inicio: string, fim: string): Promise<CMVPer
   const fimFechamento = `${fim}T23:59:59.999`;
   const corteInicial = new Date(new Date(inicioAbertura).getTime() - 1).toISOString();
 
-  const [margens, entradasRes, ei, ef] = await Promise.all([
-    getMargemPorPedido(),
+  const [margensPeriodo, entradasRes, ei, ef] = await Promise.all([
+    getMargemPorPedido({ inicio, fim }),
     supabase
       .from("itens_estoque_movimentacoes")
       .select("quantidade, custo_unitario")
@@ -108,7 +108,6 @@ export async function getCMVPeriodo(inicio: string, fim: string): Promise<CMVPer
     getInventarioEm(fimFechamento),
   ]);
 
-  const margensPeriodo = margens.filter((m) => m.dt_pedido >= inicio && m.dt_pedido <= fim);
   const receita = margensPeriodo.reduce((s, m) => s + m.receita, 0);
   const cmvVidro = margensPeriodo.reduce((s, m) => s + m.custo, 0);
 

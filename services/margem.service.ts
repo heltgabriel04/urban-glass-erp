@@ -23,18 +23,43 @@ export interface MargemPedido {
  * pra pedidos antigos de antes do livro-razão existir.
  * Ainda NÃO inclui custo de lapidação/mão de obra.
  */
-export async function getMargemPorPedido(): Promise<MargemPedido[]> {
-  const [estoqueRes, pedidosRes, itensRes, movsRes] = await Promise.all([
-    supabase.from('estoque').select('produto_id, custo_m2'),
-    supabase.from('pedidos').select('id, dt_pedido, valor_total, status, clientes ( nome )').neq('status', 'Cancelado'),
-    supabase.from('itens_pedido').select('id, pedido_id, produto_id, m2, vidro_cliente'),
-    supabase.from('estoque_movimentacoes')
-      .select('origem_tipo, origem_id, produto_id, custo_unitario_m2')
-      .in('origem_tipo', ['otimizacao', 'pedido_chapa'])
-      .not('custo_unitario_m2', 'is', null),
-  ]);
+/**
+ * `filtro` (inicio/fim, 'YYYY-MM-DD') limita a busca a um período — sem ele,
+ * traz o histórico inteiro (uso legítimo do relatório de Margem geral).
+ * Sem o filtro, quem chama pra calcular UM mês (ex.: CMV) acaba varrendo
+ * toda a história de pedidos/itens/movimentações da empresa à toa.
+ */
+export async function getMargemPorPedido(filtro?: { inicio?: string; fim?: string }): Promise<MargemPedido[]> {
+  let pedidosQuery = supabase.from('pedidos').select('id, dt_pedido, valor_total, status, clientes ( nome )').neq('status', 'Cancelado');
+  if (filtro?.inicio) pedidosQuery = pedidosQuery.gte('dt_pedido', filtro.inicio);
+  if (filtro?.fim) pedidosQuery = pedidosQuery.lte('dt_pedido', filtro.fim);
 
+  const [estoqueRes, pedidosRes] = await Promise.all([
+    supabase.from('estoque').select('produto_id, custo_m2'),
+    pedidosQuery,
+  ]);
   if (pedidosRes.error) { console.error('getMargemPorPedido:', pedidosRes.error); return []; }
+
+  const pedidosData = (pedidosRes.data ?? []) as Array<{ id: string; dt_pedido: string; valor_total: number; clientes?: { nome?: string } }>;
+  if (pedidosData.length === 0) return [];
+  const pedidoIds = pedidosData.map(p => p.id);
+
+  const itensRes = await supabase
+    .from('itens_pedido').select('id, pedido_id, produto_id, m2, vidro_cliente')
+    .in('pedido_id', pedidoIds);
+  const itensData = (itensRes.data ?? []) as Array<{ id: number; pedido_id: string; produto_id: number | null; m2: number; vidro_cliente: boolean }>;
+
+  // origem_id de estoque_movimentacoes é pedido_id (tipo 'otimizacao') OU
+  // item_pedido.id (tipo 'pedido_chapa') — restringe às duas famílias de id
+  // que de fato pertencem ao recorte de pedidos já filtrado acima.
+  const origemIds = [...pedidoIds, ...itensData.map(it => String(it.id))];
+  const movsRes = origemIds.length > 0
+    ? await supabase.from('estoque_movimentacoes')
+        .select('origem_tipo, origem_id, produto_id, custo_unitario_m2')
+        .in('origem_tipo', ['otimizacao', 'pedido_chapa'])
+        .not('custo_unitario_m2', 'is', null)
+        .in('origem_id', origemIds)
+    : { data: [] as never[] };
 
   const custoM2PorProduto = new Map<number, number>();
   for (const e of (estoqueRes.data ?? []) as Array<{ produto_id: number | null; custo_m2: number }>) {
@@ -53,7 +78,7 @@ export async function getMargemPorPedido(): Promise<MargemPedido[]> {
 
   const custoPorPedido = new Map<string, number>();
   const temCustoPorPedido = new Map<string, boolean>();
-  for (const it of (itensRes.data ?? []) as Array<{ id: number; pedido_id: string; produto_id: number | null; m2: number; vidro_cliente: boolean }>) {
+  for (const it of itensData) {
     if (it.vidro_cliente) continue; // cliente trouxe o vidro → sem custo de chapa
     const custoM2 =
       custoPorItem.get(it.id) ??
@@ -64,7 +89,7 @@ export async function getMargemPorPedido(): Promise<MargemPedido[]> {
     if (custoM2 > 0) temCustoPorPedido.set(it.pedido_id, true);
   }
 
-  return ((pedidosRes.data ?? []) as Array<{ id: string; dt_pedido: string; valor_total: number; clientes?: { nome?: string } }>)
+  return pedidosData
     .map(p => {
       const receita = Number(p.valor_total) || 0;
       const custo   = parseFloat((custoPorPedido.get(p.id) ?? 0).toFixed(2));
