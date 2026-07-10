@@ -13,6 +13,7 @@ import { formatBRL, formatDate, formatDuracao, medidaReal } from "@/lib/formatte
 import { registrarRecente } from "@/lib/recentes";
 import PedidoTabs from "@/components/pedidos/PedidoTabs";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { useEscToClose } from "@/components/ui/useEscToClose";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
@@ -138,6 +139,7 @@ export default function PedidoDetalhe() {
   const searchParams = useSearchParams();
   const autoPrint = searchParams.get("print") === "1";
   const { toast } = useToast();
+  const confirm = useConfirm();
 
   const [pedido, setPedido]             = useState<Pedido | null>(null);
   const [lancamentos, setLancamentos]   = useState<Lancamento[]>([]);
@@ -484,7 +486,7 @@ export default function PedidoDetalhe() {
     // Lançamento já pago: desfaz o recebimento consolidando com eventuais
     // saldos parciais gerados automaticamente (mesma descrição, mesmo pedido)
     if (lanc.status === "Pago") {
-      if (!confirm("Desfazer este recebimento? O lançamento voltará ao valor original.")) return;
+      if (!(await confirm("Desfazer este recebimento? O lançamento voltará ao valor original."))) return;
       setSalvando(true);
 
       // Restos "A Receber" gerados pelo pagamento parcial (mesma descrição)
@@ -509,7 +511,7 @@ export default function PedidoDetalhe() {
       return;
     }
 
-    if (!confirm("Remover esta parcela?")) return;
+    if (!(await confirm("Remover esta parcela?", { perigo: true }))) return;
     setSalvando(true);
     const ok = await deletarLancamento(lancId);
     if (!ok) { toast("Erro ao remover lançamento", "err"); setSalvando(false); return; }
@@ -638,7 +640,7 @@ export default function PedidoDetalhe() {
   }
 
   async function handleExcluirObservacao(obsId: string) {
-    if (!confirm("Excluir esta observação?")) return;
+    if (!(await confirm("Excluir esta observação?", { perigo: true }))) return;
     const ok = await deletarObservacao(obsId, id);
     if (ok) setObservacoes(prev => prev.filter(o => o.id !== obsId));
     else toast("Erro ao excluir observação", "err");
@@ -703,7 +705,7 @@ export default function PedidoDetalhe() {
 
   async function handleRemoverRomaneioAssinado(url: string) {
     if (!pedido) return;
-    if (!confirm("Remover este romaneio assinado?")) return;
+    if (!(await confirm("Remover este romaneio assinado?", { perigo: true }))) return;
     await deleteRomaneioAssinado(url);
     const restantes = (pedido.romaneio_assinado_urls ?? []).filter(u => u !== url);
     await updatePedido(id, { romaneio_assinado_urls: restantes.length > 0 ? restantes : null } as any);
@@ -728,7 +730,7 @@ export default function PedidoDetalhe() {
 
   async function handleRemoverNfe(url: string) {
     if (!pedido) return;
-    if (!confirm("Remover esta NF-e?")) return;
+    if (!(await confirm("Remover esta NF-e?", { perigo: true }))) return;
     await deleteNfe(url);
     const restantes = (pedido.nfe_urls ?? []).filter(u => u !== url);
     await updatePedido(id, { nfe_urls: restantes.length > 0 ? restantes : null } as any);
@@ -753,7 +755,7 @@ export default function PedidoDetalhe() {
 
   async function handleRemoverBoleto(url: string) {
     if (!pedido) return;
-    if (!confirm("Remover este boleto?")) return;
+    if (!(await confirm("Remover este boleto?", { perigo: true }))) return;
     await deleteBoleto(url);
     const restantes = (pedido.boleto_urls ?? []).filter(u => u !== url);
     await updatePedido(id, { boleto_urls: restantes.length > 0 ? restantes : null } as any);

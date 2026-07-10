@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { getContasBancarias, createContaBancaria, updateContaBancaria, deletarContaBancaria } from "@/services/contasBancarias.service";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { formatBRL } from "@/lib/formatters";
 import SearchInput from "@/components/ui/SearchInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
@@ -26,6 +27,7 @@ function fmtData(s: string) {
 
 export default function BancosCaixaPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [contas, setContas] = useState<ContaBancaria[]>([]);
   const [transferencias, setTransferencias] = useState<Transferencia[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,7 +116,7 @@ export default function BancosCaixaPage() {
   }
 
   async function handleDeletar(c: ContaBancaria) {
-    if (!confirm(`Excluir a conta ${c.nome}?`)) return;
+    if (!(await confirm(`Excluir a conta ${c.nome}?`, { perigo: true }))) return;
     const ok = await deletarContaBancaria(c.id);
     if (ok) { toast("Conta excluída"); load(); }
     else toast("Erro ao excluir conta", "err");

@@ -6,6 +6,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { getOrcamentos, updateOrcamento, aprovarOrcamento, rejeitarOrcamento, deletarOrcamento } from "@/services/orcamentos.service";
 import { formatBRL, formatDate, formatPercent } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import SearchInput from "@/components/ui/SearchInput";
 
 const CHIP: Record<string, string> = {
@@ -20,6 +21,7 @@ const MOTIVOS = ["Preço", "Prazo de entrega", "Prazo de pagamento", "Transporte
 
 export default function OrcamentosPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const router = useRouter();
   const [orcamentos, setOrcamentos] = useState<any[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -66,7 +68,7 @@ export default function OrcamentosPage() {
   }
 
   async function handleDeletar(id: string) {
-    if (!confirm(`Excluir ${id} permanentemente? O pedido vinculado também será removido.`)) return;
+    if (!(await confirm(`Excluir ${id} permanentemente? O pedido vinculado também será removido.`, { perigo: true }))) return;
     const ok = await deletarOrcamento(id);
     if (ok) { toast(`${id} excluído`); load(); }
     else toast("Erro ao excluir orçamento", "err");

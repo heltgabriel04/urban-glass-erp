@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import SearchInput from "@/components/ui/SearchInput";
+import { useConfirm } from "@/components/ui/confirm";
 import type { Produto, TabelaPreco, TabelaPrecoItem } from "@/types";
 
 interface PrecoEdit {
@@ -14,6 +15,7 @@ interface PrecoEdit {
 }
 
 export default function TabelasPage() {
+  const confirm = useConfirm();
   const [produtos, setProdutos]       = useState<Produto[]>([]);
   const [tabelas, setTabelas]         = useState<TabelaPreco[]>([]);
   const [tabelaItens, setTabelaItens] = useState<TabelaPrecoItem[]>([]);
@@ -80,8 +82,8 @@ export default function TabelasPage() {
     return edit.valor !== saved.valor || edit.margem !== saved.margem;
   });
 
-  function mudarTabela(tab: TabelaPreco) {
-    if (modificados.length > 0 && !confirm("Há alterações não salvas. Deseja descartá-las?")) return;
+  async function mudarTabela(tab: TabelaPreco) {
+    if (modificados.length > 0 && !(await confirm("Há alterações não salvas. Deseja descartá-las?", { perigo: true }))) return;
     setTabelaAtiva(tab);
     setEdits({});
     setErroSalvar(null);

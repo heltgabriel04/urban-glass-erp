@@ -10,6 +10,7 @@ import CurrencyInput from "@/components/ui/CurrencyInput";
 import DateInput from "@/components/ui/DateInput";
 import SearchInput from "@/components/ui/SearchInput";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { getContasBancarias } from "@/services/contasBancarias.service";
 import { registrarBaixa, estornarBaixa, getBaixasPorLancamentos, calcularSaldo, excluirLancamento, editarLancamento, verificarDuplicadoCliente, criarAdiantamento, criarReembolso, getAdiantamentosDisponiveis, getHistorico, getUltimoPlanoContas, type LancamentoDuplicado, type AdiantamentoComSaldo, type VersaoLancamento } from "@/services/lancamentos.service";
 import { getFormasPagamento } from "@/services/formasPagamento.service";
@@ -92,6 +93,7 @@ export default function ContasReceberPage() {
 
 function ContasReceberPageInner() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [recebiveis, setRecebiveis] = useState<Recebivel[]>([]);
@@ -352,13 +354,12 @@ function ContasReceberPageInner() {
     setDtLote(hoje());
     setModal("lote-receber");
   }
-  function abrirExcluir(r: Recebivel) {
+  async function abrirExcluir(r: Recebivel) {
     const temBaixa = (baixasMap.get(r.id) ?? []).length > 0;
     if (!temBaixa) {
-      if (!confirm("Excluir este recebível?")) return;
-      excluirLancamento(r.id).then(ok => {
-        if (ok) { toast("Recebível excluído"); load(); } else toast("Erro ao excluir", "err");
-      });
+      if (!(await confirm("Excluir este recebível?", { perigo: true }))) return;
+      const ok = await excluirLancamento(r.id);
+      if (ok) { toast("Recebível excluído"); load(); } else toast("Erro ao excluir", "err");
       return;
     }
     setExcluirId(r.id);
@@ -477,7 +478,7 @@ function ContasReceberPageInner() {
 
   async function excluirLote() {
     const n = selecionados.size;
-    if (!confirm(`Excluir ${n} recebível(is) selecionado(s)?`)) return;
+    if (!(await confirm(`Excluir ${n} recebível(is) selecionado(s)?`, { perigo: true }))) return;
     setSalvando(true);
     for (const id of selecionados) {
       await excluirLancamento(id);

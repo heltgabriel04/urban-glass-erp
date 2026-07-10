@@ -7,6 +7,7 @@ import { getPedidosPaginado, getPedidosTotais, avancarStatusPedido, retrocederSt
 import { getClientes } from "@/services/clientes.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
 import type { Pedido, Cliente } from "@/types";
 
@@ -46,6 +47,7 @@ export default function PedidosPage() {
 
 function PedidosPageInner() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [pedidos, setPedidos]             = useState<Pedido[]>([]);
@@ -156,7 +158,7 @@ function PedidosPageInner() {
   }
 
   async function handleDeletar(id: string) {
-    if (!confirm(`Excluir pedido ${id} permanentemente? Esta ação não pode ser desfeita.`)) return;
+    if (!(await confirm(`Excluir pedido ${id} permanentemente? Esta ação não pode ser desfeita.`, { perigo: true }))) return;
     setDeletando(prev => new Set(prev).add(id));
     const { ok, erro } = await deletarPedido(id);
     setDeletando(prev => { const n = new Set(prev); n.delete(id); return n; });

@@ -11,6 +11,7 @@ import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import { formatBRL } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import type { Pedido, Cliente } from "@/types";
 
 const FORMAS_PGTO = [
@@ -72,6 +73,7 @@ function NovaNFeInner() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const { toast }    = useToast();
+  const confirm      = useConfirm();
 
   const [form, setForm]         = useState<FormNota>({ ...FORM_VAZIO });
   const [aba, setAba]           = useState<"cabecalho"|"itens"|"totais"|"pgto"|"transporte"|"detalhes">("cabecalho");
@@ -155,7 +157,7 @@ function NovaNFeInner() {
 
   async function handleSalvarEmitir() {
     if (!form.pedido_id || !form.cliente_id) { toast("Selecione um pedido","warn"); return; }
-    if (!confirm("Salvar e enviar NF-e para a SEFAZ?\nAmbiente: HOMOLOGAÇÃO")) return;
+    if (!(await confirm("Salvar e enviar NF-e para a SEFAZ?\nAmbiente: HOMOLOGAÇÃO"))) return;
     setEmitindo(true);
     const result = await emitirNFeCompleta({ form, valorProdutos, valorIcms, valorPis, valorCofins, valorIpi, valorNota });
     setEmitindo(false);

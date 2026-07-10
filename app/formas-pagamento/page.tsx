@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { getFormasPagamento, createFormaPagamento, updateFormaPagamento, deletarFormaPagamento } from "@/services/formasPagamento.service";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { useEscToClose } from "@/components/ui/useEscToClose";
 import SearchInput from "@/components/ui/SearchInput";
 import type { FormaPagamento, FormaPagamentoInsert } from "@/types";
@@ -12,6 +13,7 @@ const VAZIO: FormaPagamentoInsert = { nome: "", ativo: true, taxa_pct: null };
 
 export default function FormasPagamentoPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [formas, setFormas] = useState<FormaPagamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
@@ -58,7 +60,7 @@ export default function FormasPagamentoPage() {
   }
 
   async function handleDeletar(f: FormaPagamento) {
-    if (!confirm(`Excluir a forma de pagamento ${f.nome}?`)) return;
+    if (!(await confirm(`Excluir a forma de pagamento ${f.nome}?`, { perigo: true }))) return;
     const ok = await deletarFormaPagamento(f.id);
     if (ok) { toast("Forma de pagamento excluída"); load(); }
     else toast("Erro ao excluir forma de pagamento", "err");

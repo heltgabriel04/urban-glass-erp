@@ -8,6 +8,7 @@ import { getFinanceiroClientes } from "@/services/financeiro.service";
 import { formatBRL } from "@/lib/formatters";
 import SearchInput from "@/components/ui/SearchInput";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { useEscToClose } from "@/components/ui/useEscToClose";
 import type { Cliente, FinanceiroCliente, ClienteInsert, TipoPessoa, IndIE } from "@/types";
 
@@ -105,6 +106,7 @@ async function buscarCnpjApi(cnpj: string): Promise<{ data: any; notFound: boole
 export default function ClientesPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [clientes, setClientes]       = useState<Cliente[]>([]);
   const [financeiro, setFinanceiro]   = useState<FinanceiroCliente[]>([]);
   const [loading, setLoading]         = useState(true);
@@ -240,7 +242,7 @@ export default function ClientesPage() {
   }
 
   async function handleDeletar(c: Cliente) {
-    if (!confirm(`Excluir "${c.nome}" permanentemente?`)) return;
+    if (!(await confirm(`Excluir "${c.nome}" permanentemente?`, { perigo: true }))) return;
     const ok = await deletarCliente(c.id);
     if (ok) load();
   }

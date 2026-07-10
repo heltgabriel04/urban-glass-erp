@@ -12,6 +12,7 @@ import {
 } from "@/services/qualidade.service";
 import { formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import SearchInput from "@/components/ui/SearchInput";
 import type {
   NaoConformidade, NaoConformidadeInsert,
@@ -72,6 +73,7 @@ const BLANK_FORM: NaoConformidadeInsert = {
 
 export default function NaoConformidadesPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [ncs, setNcs]               = useState<NaoConformidade[]>([]);
   const [loading, setLoading]       = useState(true);
   const [salvando, setSalvando]     = useState(false);
@@ -162,7 +164,7 @@ export default function NaoConformidadesPage() {
   }
 
   async function handleDeletarFoto(nc: NaoConformidade, url: string) {
-    if (!confirm("Remover esta foto permanentemente?")) return;
+    if (!(await confirm("Remover esta foto permanentemente?", { perigo: true }))) return;
     setUploadando(true);
     await deleteFotoNC(url);
     const novas = (nc.fotos_urls ?? []).filter(u => u !== url);

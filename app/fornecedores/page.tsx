@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { getFornecedores, createFornecedor, updateFornecedor, deletarFornecedor } from "@/services/fornecedores.service";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import SearchInput from "@/components/ui/SearchInput";
 import type { Fornecedor, FornecedorInsert } from "@/types";
 
@@ -14,6 +15,7 @@ const VAZIO: FornecedorInsert = {
 
 export default function FornecedoresPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
@@ -66,7 +68,7 @@ export default function FornecedoresPage() {
   }
 
   async function handleDeletar(f: Fornecedor) {
-    if (!confirm(`Excluir o fornecedor ${f.nome}?`)) return;
+    if (!(await confirm(`Excluir o fornecedor ${f.nome}?`, { perigo: true }))) return;
     const ok = await deletarFornecedor(f.id);
     if (ok) { toast("Fornecedor excluído"); load(); }
     else toast("Erro ao excluir fornecedor", "err");

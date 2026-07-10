@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { formatBRL } from "@/lib/formatters";
 import type { Vendedor, VendedorInsert } from "@/types";
 
@@ -24,6 +25,7 @@ function mascTel(v: string) {
 
 export default function VendedoresPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [vendedores, setVendedores]             = useState<Vendedor[]>([]);
   const [comissoesPendentes, setComissoesPend]  = useState<Record<number, number>>({});
   const [loading, setLoading]                   = useState(true);
@@ -93,7 +95,7 @@ export default function VendedoresPage() {
   }
 
   async function excluir(v: Vendedor) {
-    if (!confirm(`Excluir "${v.nome}" permanentemente? Esta ação não pode ser desfeita.`)) return;
+    if (!(await confirm(`Excluir "${v.nome}" permanentemente? Esta ação não pode ser desfeita.`, { perigo: true }))) return;
     const { error } = await supabase.from("vendedores").delete().eq("id", v.id);
     if (error) { toast("Erro ao excluir: " + error.message, "err"); return; }
     toast(`${v.nome} excluído`);

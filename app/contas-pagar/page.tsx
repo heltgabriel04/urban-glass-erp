@@ -10,6 +10,7 @@ import CurrencyInput from "@/components/ui/CurrencyInput";
 import DateInput from "@/components/ui/DateInput";
 import SearchInput from "@/components/ui/SearchInput";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { getContasBancarias } from "@/services/contasBancarias.service";
 import { registrarBaixa, estornarBaixa, getBaixasPorLancamentos, calcularSaldo, excluirLancamento, editarLancamento, verificarDuplicado, criarAdiantamento, criarReembolso, getAdiantamentosDisponiveis, getHistorico, getUltimoPlanoContas, type LancamentoDuplicado, type AdiantamentoComSaldo, type VersaoLancamento } from "@/services/lancamentos.service";
 import { getFornecedores } from "@/services/fornecedores.service";
@@ -93,6 +94,7 @@ export default function ContasPagarPage() {
 
 function ContasPagarPageInner() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [contas, setContas]       = useState<Conta[]>([]);
@@ -352,13 +354,12 @@ function ContasPagarPageInner() {
     setDtLote(hoje());
     setModal("lote-pagar");
   }
-  function abrirExcluir(c: Conta) {
+  async function abrirExcluir(c: Conta) {
     const temBaixa = (baixasMap.get(c.id) ?? []).length > 0;
     if (!temBaixa) {
-      if (!confirm("Excluir esta conta a pagar?")) return;
-      excluirLancamento(c.id).then(ok => {
-        if (ok) { toast("Conta excluída"); load(); } else toast("Erro ao excluir", "err");
-      });
+      if (!(await confirm("Excluir esta conta a pagar?", { perigo: true }))) return;
+      const ok = await excluirLancamento(c.id);
+      if (ok) { toast("Conta excluída"); load(); } else toast("Erro ao excluir", "err");
       return;
     }
     setExcluirId(c.id);
@@ -480,7 +481,7 @@ function ContasPagarPageInner() {
 
   async function excluirLote() {
     const n = selecionados.size;
-    if (!confirm(`Excluir ${n} conta(s) selecionada(s)?`)) return;
+    if (!(await confirm(`Excluir ${n} conta(s) selecionada(s)?`, { perigo: true }))) return;
     setSalvando(true);
     for (const id of selecionados) {
       await excluirLancamento(id);

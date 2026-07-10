@@ -6,6 +6,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { getPedidoById } from "@/services/pedidos.service";
 import { getRetiradasPorPedido, createRetirada, updateRetirada, deletarRetirada, calcularSaldoItens } from "@/services/retiradas.service";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import DateInput from "@/components/ui/DateInput";
 import { formatDate } from "@/lib/formatters";
 import type { Pedido, RetiradaPedido, SaldoItemRetirada } from "@/types";
@@ -24,6 +25,7 @@ export default function RetiradasPedidoPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { toast } = useToast();
+  const confirm = useConfirm();
 
   const [pedido, setPedido]       = useState<Pedido | null>(null);
   const [retiradas, setRetiradas] = useState<RetiradaPedido[]>([]);
@@ -155,7 +157,7 @@ export default function RetiradasPedidoPage() {
   }
 
   async function handleExcluirRetirada(retiradaId: string) {
-    if (!confirm("Excluir esta retirada? O saldo dos itens voltará a ficar pendente.")) return;
+    if (!(await confirm("Excluir esta retirada? O saldo dos itens voltará a ficar pendente.", { perigo: true }))) return;
     const res = await deletarRetirada(retiradaId, id);
     if (!res.ok) { toast("Erro ao excluir retirada", "err"); return; }
     toast("Retirada excluída");

@@ -5,6 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { getQuebras, createQuebra, confirmarBaixaEstoqueQuebra } from "@/services/qualidade.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import SearchInput from "@/components/ui/SearchInput";
 import type { Quebra, QuebraInsert, SetorQualidade } from "@/types";
 import { supabase } from "@/lib/supabase/client";
@@ -29,6 +30,7 @@ const BLANK: QuebraInsert = {
 
 export default function QuebrasPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [quebras, setQuebras]   = useState<Quebra[]>([]);
   const [loading, setLoading]   = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -90,7 +92,7 @@ export default function QuebrasPage() {
   }
 
   async function handleBaixaEstoque(id: number) {
-    if (!confirm("Confirmar baixa no estoque e lançamento de custo no financeiro?")) return;
+    if (!(await confirm("Confirmar baixa no estoque e lançamento de custo no financeiro?"))) return;
     setSalvando(true);
     const ok = await confirmarBaixaEstoqueQuebra(id);
     toast(ok ? "Baixa executada" : "Erro ao executar baixa", ok ? undefined : "err");

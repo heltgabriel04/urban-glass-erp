@@ -8,6 +8,7 @@ import { ordenarPorCodigoEstruturado } from "@/lib/planoContas";
 import { getRecorrencias, createRecorrencia, updateRecorrencia, deletarRecorrencia, gerarProximosMeses } from "@/services/recorrencias.service";
 import { getContasBancarias } from "@/services/contasBancarias.service";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { useEscToClose } from "@/components/ui/useEscToClose";
 import ActionMenu from "@/components/ui/ActionMenu";
 import SearchInput from "@/components/ui/SearchInput";
@@ -31,6 +32,7 @@ function fmtData(s: string | null) {
 
 export default function RecorrenciasPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [regras, setRegras] = useState<LancamentoRecorrente[]>([]);
   const [planos, setPlanos] = useState<PlanoItem[]>([]);
   const [clientes, setClientes] = useState<ClienteItem[]>([]);
@@ -107,7 +109,7 @@ export default function RecorrenciasPage() {
   }
 
   async function handleDeletar(r: LancamentoRecorrente) {
-    if (!confirm(`Excluir a recorrência "${r.descricao}"? Os lançamentos já gerados não são apagados.`)) return;
+    if (!(await confirm(`Excluir a recorrência "${r.descricao}"? Os lançamentos já gerados não são apagados.`, { perigo: true }))) return;
     const ok = await deletarRecorrencia(r.id);
     if (ok) { toast("Recorrência excluída"); load(); }
     else toast("Erro ao excluir recorrência", "err");

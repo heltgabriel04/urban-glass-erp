@@ -6,6 +6,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { getOrcamentoById, updateOrcamento, aprovarOrcamento, rejeitarOrcamento, uploadArquivoAssinado, deleteArquivoAssinado } from "@/services/orcamentos.service";
 import { formatBRL, formatDate, formatM2 } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
 import { preverLeadTime } from "@/lib/producao-stats";
 import type { Pedido } from "@/types";
@@ -23,6 +24,7 @@ export default function OrcamentoDetalhe() {
   const searchParams = useSearchParams();
   const autoPrint = searchParams.get("print") === "1";
   const { toast } = useToast();
+  const confirm = useConfirm();
 
   const [orc, setOrc] = useState<any>(null);
   const [estoque, setEstoque] = useState<Map<number, { m2: number; chapas: number }>>(new Map());
@@ -101,7 +103,7 @@ export default function OrcamentoDetalhe() {
   }
 
   async function handleAprovar() {
-    if (!confirm("Aprovar orçamento e gerar pedido automaticamente?")) return;
+    if (!(await confirm("Aprovar orçamento e gerar pedido automaticamente?"))) return;
     setSalvando(true);
     const pedido = await aprovarOrcamento(id);
     setSalvando(false);
@@ -125,7 +127,7 @@ export default function OrcamentoDetalhe() {
   }
 
   async function handleVoltarRascunho() {
-    if (!confirm("Voltar para Rascunho? O pedido vinculado será removido.")) return;
+    if (!(await confirm("Voltar para Rascunho? O pedido vinculado será removido.", { perigo: true }))) return;
     setSalvando(true);
     const result = await rejeitarOrcamento(id);
     if (result) await updateOrcamento(id, { status: "Rascunho" } as any);
@@ -149,7 +151,7 @@ export default function OrcamentoDetalhe() {
 
   async function handleRemoverAssinado() {
     if (!orc.arquivo_assinado_url) return;
-    if (!confirm("Remover o arquivo assinado anexado?")) return;
+    if (!(await confirm("Remover o arquivo assinado anexado?", { perigo: true }))) return;
     await deleteArquivoAssinado(orc.arquivo_assinado_url);
     await updateOrcamento(id, { arquivo_assinado_url: null } as any);
     toast("Arquivo removido");

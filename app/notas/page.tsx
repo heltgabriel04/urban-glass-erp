@@ -7,6 +7,7 @@ import { getNotas, deletarNota, emitirNFe, consultarStatusNFe } from "@/services
 import { getPedidos } from "@/services/pedidos.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import type { NotaFiscal, Pedido } from "@/types";
 
 const STATUS_CHIP: Record<string, string> = {
@@ -20,6 +21,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function NotasPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const router    = useRouter();
   const [notas, setNotas]               = useState<NotaFiscal[]>([]);
   const [pedidos, setPedidos]           = useState<Pedido[]>([]);
@@ -38,7 +40,7 @@ export default function NotasPage() {
   async function handleEmitir(nota: NotaFiscal) {
     const pedido = pedidos.find(p => p.id === nota.pedido_id) ?? (await getPedidos()).find(p => p.id === nota.pedido_id);
     if (!pedido) { toast("Pedido não encontrado","err"); return; }
-    if (!confirm(`Emitir NF-e para ${pedido.id}?\nAmbiente: HOMOLOGAÇÃO`)) return;
+    if (!(await confirm(`Emitir NF-e para ${pedido.id}?\nAmbiente: HOMOLOGAÇÃO`))) return;
     setSalvando(true);
     const result = await emitirNFe(nota.id, pedido);
     setSalvando(false);
@@ -52,7 +54,7 @@ export default function NotasPage() {
   }
 
   async function handleDeletar(nota: NotaFiscal) {
-    if (!confirm(`Remover nota ${nota.id}?`)) return;
+    if (!(await confirm(`Remover nota ${nota.id}?`, { perigo: true }))) return;
     const ok = await deletarNota(nota.id);
     if (!ok) { toast("Erro ao remover","err"); return; }
     toast("Nota removida"); await load();
