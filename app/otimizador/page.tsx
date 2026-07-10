@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
@@ -60,6 +60,11 @@ function OtimizadorContent() {
   const chParam     = searchParams.get("ch");
 
   const [produtos, setProdutos]           = useState<Produto[]>([]);
+  const podeRotacionarPorNome = useMemo(() => {
+    const map = new Map<string, boolean>();
+    produtos.forEach(p => map.set(p.nome, p.pode_rotacionar));
+    return (nome: string) => map.get(nome) ?? true;
+  }, [produtos]);
   const [pecas, setPecas]                 = useState<Peca[]>([{ l: 0, a: 0, qtd: 1, prod: "" }]);
   const [chapaW, setChapaW]               = useState(cwParam ? Number(cwParam) : 3300);
   const [chapaH, setChapaH]               = useState(chParam ? Number(chParam) : 2250);
@@ -185,11 +190,11 @@ function OtimizadorContent() {
 
   // Monta flat de peças sem estado
   function montarFlat(pecasList: Peca[], pedidoId: string | null) {
-    const flat: Array<{ l: number; a: number; prod: string; pedidoId?: string }> = [];
+    const flat: Array<{ l: number; a: number; prod: string; pedidoId?: string; podeRotacionar?: boolean }> = [];
     pecasList.forEach(p => {
       if (p.l > 0 && p.a > 0)
         for (let q = 0; q < (p.qtd || 1); q++)
-          flat.push({ l: p.l, a: p.a, prod: p.prod, pedidoId: p.pedidoId ?? pedidoId ?? undefined });
+          flat.push({ l: p.l, a: p.a, prod: p.prod, pedidoId: p.pedidoId ?? pedidoId ?? undefined, podeRotacionar: podeRotacionarPorNome(p.prod) });
     });
     return flat;
   }
@@ -403,17 +408,17 @@ function OtimizadorContent() {
   }
 
   function rodar() {
-    const flat: Array<{ l: number; a: number; prod: string; pedidoId?: string }> = [];
+    const flat: Array<{ l: number; a: number; prod: string; pedidoId?: string; podeRotacionar?: boolean }> = [];
     pecas.forEach(p => {
       if (p.l > 0 && p.a > 0)
         for (let q = 0; q < (p.qtd || 1); q++)
-          flat.push({ l: p.l, a: p.a, prod: p.prod, pedidoId: p.pedidoId ?? pedidoRef ?? undefined });
+          flat.push({ l: p.l, a: p.a, prod: p.prod, pedidoId: p.pedidoId ?? pedidoRef ?? undefined, podeRotacionar: podeRotacionarPorNome(p.prod) });
     });
     pedidosSugeridos.filter(ps => pedidosSelecionados.has(ps.id)).forEach(ps =>
       ps.itens.forEach(p => {
         if (p.l > 0 && p.a > 0)
           for (let q = 0; q < (p.qtd || 1); q++)
-            flat.push({ l: p.l, a: p.a, prod: p.prod, pedidoId: ps.id });
+            flat.push({ l: p.l, a: p.a, prod: p.prod, pedidoId: ps.id, podeRotacionar: podeRotacionarPorNome(p.prod) });
       })
     );
     if (flat.length === 0) return;

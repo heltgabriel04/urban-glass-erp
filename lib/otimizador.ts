@@ -3,14 +3,33 @@
 // ============================================================
 import { CHAPAS_PADRAO, PRODUTO_CHAPA } from "@/lib/chapas";
 
-export interface Peca { l: number; a: number; qtd: number; prod: string; pedidoId?: string; }
-export interface PecaPlacada { x: number; y: number; l: number; a: number; idx: number; prod: string; rot: boolean; pedidoId?: string; }
+export interface Peca { l: number; a: number; qtd: number; prod: string; pedidoId?: string; podeRotacionar?: boolean; }
+export interface PecaPlacada { x: number; y: number; l: number; a: number; idx: number; prod: string; rot: boolean; pedidoId?: string; podeRotacionar?: boolean; }
 export interface EspacoLivre { x: number; y: number; l: number; a: number; }
 /** Um risco de corte guilhotina: "V" = vertical (linha em x=pos), "H" = horizontal (em y=pos).
  *  O segmento vai de `ini` a `fim` no eixo perpendicular. `seq` é a ordem de execução na mesa. */
 export interface CorteLinha { seq: number; dir: "V" | "H"; pos: number; ini: number; fim: number; }
 export interface ResultadoChapa { placed: PecaPlacada[]; free: EspacoLivre[]; W: number; H: number; prod: string; retalhoId?: string; cortes?: CorteLinha[]; }
 export interface RetalhoGerado extends EspacoLivre { chapaIdx: number; prod: string; m2: number; }
+
+interface Orientacao { pl: number; pa: number; rot: boolean; }
+
+// Orientações candidatas a partir das dimensões NATURAIS de uma peça ainda não
+// posicionada. `podeRotacionar === false` (vidro direcional/padrão/serigrafado)
+// corta a opção girada fora da busca — sem isso, comportamento idêntico ao
+// anterior (peça livre pra girar, como sempre foi).
+function orientacoes(l: number, a: number, podeRotacionar?: boolean): Orientacao[] {
+  if (podeRotacionar === false) return [{ pl: l, pa: a, rot: false }];
+  return [{ pl: l, pa: a, rot: false }, { pl: a, pa: l, rot: true }];
+}
+
+// Mesma ideia, mas para uma peça JÁ posicionada (PecaPlacada) — usada nos
+// estágios de remontagem (repack/reotimização/eliminação de chapa), que
+// partem da orientação atual (`piece.rot`) em vez das dimensões naturais.
+function orientacoesPlaced(piece: PecaPlacada): Orientacao[] {
+  if (piece.podeRotacionar === false) return [{ pl: piece.l, pa: piece.a, rot: piece.rot }];
+  return [{ pl: piece.l, pa: piece.a, rot: piece.rot }, { pl: piece.a, pa: piece.l, rot: !piece.rot }];
+}
 
 // ── Primitivas de posicionamento GUILHOTINA ────────────────────────────────────
 // Vidro só corta em guilhotina: cada risco atravessa o painel de ponta a ponta.
@@ -78,7 +97,7 @@ function mrPlace(freeRects: MRect[], fr: MRect, pl: number, pa: number, kerf: nu
 
 export function empacotarOrdem(
   W: number, H: number,
-  pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
+  pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string; podeRotacionar?: boolean }>,
   kerf: number,
   ordem: number[]
 ): { placed: PecaPlacada[]; usados: Set<number>; free: EspacoLivre[] } {
@@ -88,10 +107,7 @@ export function empacotarOrdem(
 
   for (const origIdx of ordem) {
     const peca = pecas[origIdx];
-    const oris = [
-      { pl: peca.l, pa: peca.a, rot: false as boolean },
-      { pl: peca.a, pa: peca.l, rot: true  as boolean },
-    ];
+    const oris = orientacoes(peca.l, peca.a, peca.podeRotacionar);
     let best: { fr: MRect; pl: number; pa: number; rot: boolean; score: number } | null = null;
     for (const ori of oris) {
       const fit = mrBestFit(freeRects, ori.pl, ori.pa);
@@ -101,7 +117,7 @@ export function empacotarOrdem(
     }
     if (!best) continue;
     placed.push({ x: best.fr.x, y: best.fr.y, l: best.pl, a: best.pa,
-      idx: origIdx, prod: peca.prod, rot: best.rot, pedidoId: peca.pedidoId });
+      idx: origIdx, prod: peca.prod, rot: best.rot, pedidoId: peca.pedidoId, podeRotacionar: peca.podeRotacionar });
     usados.add(origIdx);
     freeRects = mrPlace(freeRects, best.fr, best.pl, best.pa, kerf, W, H);
   }
@@ -111,7 +127,7 @@ export function empacotarOrdem(
 
 export function empacotar(
   W: number, H: number,
-  pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
+  pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string; podeRotacionar?: boolean }>,
   kerf: number
 ): { placed: PecaPlacada[]; usados: Set<number>; free: EspacoLivre[] } {
   const base = pecas.map((_, i) => i);
@@ -148,7 +164,7 @@ interface SheetState { freeRects: MRect[]; placed: PecaPlacada[]; }
 
 function bfdRun(
   W: number, H: number,
-  pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
+  pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string; podeRotacionar?: boolean }>,
   kerf: number,
   ordem: number[]
 ): SheetState[] {
@@ -156,10 +172,7 @@ function bfdRun(
 
   for (const origIdx of ordem) {
     const peca = pecas[origIdx];
-    const oris = [
-      { pl: peca.l, pa: peca.a, rot: false as boolean },
-      { pl: peca.a, pa: peca.l, rot: true  as boolean },
-    ];
+    const oris = orientacoes(peca.l, peca.a, peca.podeRotacionar);
 
     // Melhor encaixe entre TODAS as chapas abertas
     let bestScore = Infinity;
@@ -192,7 +205,7 @@ function bfdRun(
     const sheet = sheets[bestSi];
     sheet.placed.push({
       x: bestFr.x, y: bestFr.y, l: bestOri.pl, a: bestOri.pa,
-      idx: origIdx, prod: peca.prod, rot: bestOri.rot, pedidoId: peca.pedidoId,
+      idx: origIdx, prod: peca.prod, rot: bestOri.rot, pedidoId: peca.pedidoId, podeRotacionar: peca.podeRotacionar,
     });
     sheet.freeRects = mrPlace(sheet.freeRects, bestFr, bestOri.pl, bestOri.pa, kerf, W, H);
   }
@@ -230,10 +243,7 @@ function repackGroup(
     let failed = false;
 
     for (const piece of ordem) {
-      const oris = [
-        { pl: piece.l, pa: piece.a, rot: piece.rot },
-        { pl: piece.a, pa: piece.l, rot: !piece.rot },
-      ];
+      const oris = orientacoesPlaced(piece);
 
       let bestScore = Infinity, bestSi = -1, bestFr: MRect | null = null, bestOri = oris[0];
 
@@ -311,10 +321,7 @@ function reoptimizeSheet(W: number, H: number, sheet: SheetState, kerf: number):
     let ok = true;
 
     for (const piece of ordering) {
-      const oris = [
-        { pl: piece.l, pa: piece.a, rot: piece.rot },
-        { pl: piece.a, pa: piece.l, rot: !piece.rot },
-      ];
+      const oris = orientacoesPlaced(piece);
       let best: { fr: MRect; pl: number; pa: number; rot: boolean; score: number } | null = null;
       for (const ori of oris) {
         const fit = mrBestFit(frs, ori.pl, ori.pa);
@@ -465,10 +472,7 @@ function tryEliminateSheet(
   const remaining = cloneSheets(sheets.filter((_, i) => i !== targetSi));
 
   for (const piece of sortedPieces) {
-    const oris = [
-      { pl: piece.l, pa: piece.a, rot: piece.rot },
-      { pl: piece.a, pa: piece.l, rot: !piece.rot },
-    ];
+    const oris = orientacoesPlaced(piece);
 
     let bestScore = Infinity, bestSi = -1;
     let bestFr: MRect | null = null, bestOri = oris[0];
@@ -517,7 +521,7 @@ function mergeSheets(W: number, H: number, sheets: SheetState[], kerf: number): 
 
 function stripFFDH(
   W: number, H: number,
-  pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
+  pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string; podeRotacionar?: boolean }>,
   kerf: number,
   ordem: number[],
   mode: 'H' | 'V'
@@ -555,10 +559,7 @@ function stripFFDH(
 
   function tryPlace(origIdx: number): boolean {
     const p = pecas[origIdx];
-    const oris = [
-      { pl: p.l, pa: p.a, rot: false as boolean },
-      { pl: p.a, pa: p.l, rot: true  as boolean },
-    ];
+    const oris = orientacoes(p.l, p.a, p.podeRotacionar);
 
     // 1) Tenta encaixar em faixa/coluna já existente (First Fit)
     for (const ori of oris) {
@@ -568,7 +569,7 @@ function stripFFDH(
         if (pPrim <= strip.pieceDim && strip.fill + pSec + kerf <= maxS) {
           const x = mode === 'H' ? strip.fill : strip.primaryPos;
           const y = mode === 'H' ? strip.primaryPos : strip.fill;
-          placed.push({ x, y, l: ori.pl, a: ori.pa, idx: origIdx, prod: p.prod, rot: ori.rot, pedidoId: p.pedidoId });
+          placed.push({ x, y, l: ori.pl, a: ori.pa, idx: origIdx, prod: p.prod, rot: ori.rot, pedidoId: p.pedidoId, podeRotacionar: p.podeRotacionar });
           strip.fill += pSec + kerf;
           return true;
         }
@@ -585,7 +586,7 @@ function stripFFDH(
         totalPrimaryUsed += pPrim + kerf;
         const x = mode === 'H' ? 0 : s.primaryPos;
         const y = mode === 'H' ? s.primaryPos : 0;
-        placed.push({ x, y, l: ori.pl, a: ori.pa, idx: origIdx, prod: p.prod, rot: ori.rot, pedidoId: p.pedidoId });
+        placed.push({ x, y, l: ori.pl, a: ori.pa, idx: origIdx, prod: p.prod, rot: ori.rot, pedidoId: p.pedidoId, podeRotacionar: p.podeRotacionar });
         s.fill = pSec + kerf;
         return true;
       }
@@ -619,7 +620,7 @@ function stripFFDH(
 
 interface NivelHFF { hPeca: number; fill: number; items: Array<{ idx: number; w: number; h: number; rot: boolean }>; }
 
-type PecaIn = Array<{ l: number; a: number; prod: string; pedidoId?: string }>;
+type PecaIn = Array<{ l: number; a: number; prod: string; pedidoId?: string; podeRotacionar?: boolean }>;
 
 // Fase A: constrói níveis com best-fit por altura (menor desperdício de altura;
 // empate → menor sobra de largura). "novaAltura" define a orientação preferida
@@ -632,10 +633,9 @@ function hffBuildLevels(
 
   for (const idx of ordem) {
     const p = pecas[idx];
-    const oris = [
-      { w: p.l, h: p.a, rot: false },
-      { w: p.a, h: p.l, rot: true },
-    ].filter(o => o.w <= W && o.h <= H);
+    const oris = orientacoes(p.l, p.a, p.podeRotacionar)
+      .map(o => ({ w: o.pl, h: o.pa, rot: o.rot }))
+      .filter(o => o.w <= W && o.h <= H);
     if (oris.length === 0) continue; // peça maior que a chapa
 
     let best: { nv: NivelHFF; ori: typeof oris[0]; waste: number; sobra: number } | null = null;
@@ -691,7 +691,7 @@ function hffPackLevels(W: number, H: number, pecas: PecaIn, kerf: number, niveis
       let x = 0;
       for (const it of nv.items) {
         const p = pecas[it.idx];
-        placed.push({ x, y, l: it.w, a: it.h, idx: it.idx, prod: p.prod, rot: it.rot, pedidoId: p.pedidoId });
+        placed.push({ x, y, l: it.w, a: it.h, idx: it.idx, prod: p.prod, rot: it.rot, pedidoId: p.pedidoId, podeRotacionar: p.podeRotacionar });
         x += it.w + kerf;
       }
       if (W - nv.fill > 0) freeRects.push({ x: nv.fill, y, l: W - nv.fill, a: nv.hPeca });
@@ -746,7 +746,8 @@ function hffGreedyBestSheet(
     for (const idx of disponiveis) {
       const p = pecas[idx];
       let melhor: Cand | null = null;
-      for (const ori of [{ w: p.l, hh: p.a, rot: false }, { w: p.a, hh: p.l, rot: true }]) {
+      for (const o of orientacoes(p.l, p.a, p.podeRotacionar)) {
+        const ori = { w: o.pl, hh: o.pa, rot: o.rot };
         if (ori.hh > h || ori.w > W) continue;
         if (ori.hh < hMin) continue;
         if (!melhor || ori.hh > melhor.hh) melhor = { idx, ...ori }; // menor desperdício de altura
@@ -899,7 +900,7 @@ function hffGreedyBestSheet(
       let x = 0;
       for (const it of nv.items) {
         const p = pecas[it.idx];
-        placed.push({ x, y, l: it.w, a: it.h, idx: it.idx, prod: p.prod, rot: it.rot, pedidoId: p.pedidoId });
+        placed.push({ x, y, l: it.w, a: it.h, idx: it.idx, prod: p.prod, rot: it.rot, pedidoId: p.pedidoId, podeRotacionar: p.podeRotacionar });
         x += it.w + kerf;
         restante.delete(it.idx);
       }
@@ -935,7 +936,7 @@ function hffMistoRun(
 
 export function empacotarTodas(
   W: number, H: number,
-  pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
+  pecas: Array<{ l: number; a: number; prod: string; pedidoId?: string; podeRotacionar?: boolean }>,
   kerf: number,
   timeLimitMs = 500
 ): ResultadoChapa[] {
@@ -1332,7 +1333,7 @@ export function ehGuilhotinavel(placed: PecaPlacada[], W: number, H: number): bo
 // ── calcAproveitamento (usa FFD global para estimativa precisa) ────────────────
 
 export function calcAproveitamento(
-  pecasFlat: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
+  pecasFlat: Array<{ l: number; a: number; prod: string; pedidoId?: string; podeRotacionar?: boolean }>,
   bord: number, kerf: number,
   fallbackW = 3300, fallbackH = 2250
 ): number {

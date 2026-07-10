@@ -139,6 +139,8 @@ export interface Produto {
   chapas_por_colar?: number | null;   // ficha técnica de embalagem (ex.: 18, 24)
   chapa_largura_mm?: number | null;
   chapa_altura_mm?: number | null;
+  /** false = vidro direcional/padrão/serigrafado — otimizador nunca gira a peça. */
+  pode_rotacionar: boolean;
   created_at: string;
 }
 

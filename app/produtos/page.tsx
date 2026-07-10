@@ -24,6 +24,7 @@ const VAZIO: ProdutoInsert = {
   cod: "", nome: "", tipo: "", espessura: "", cor: "",
   categoria: "Chapas", valor: 0, margem: 0, unidade: "m²", ativo: true, obs: "",
   chapas_por_colar: null, chapa_largura_mm: null, chapa_altura_mm: null,
+  pode_rotacionar: true,
 };
 
 export default function ProdutosPage() {
@@ -80,6 +81,7 @@ export default function ProdutosPage() {
       chapas_por_colar: p.chapas_por_colar ?? null,
       chapa_largura_mm: p.chapa_largura_mm ?? null,
       chapa_altura_mm:  p.chapa_altura_mm  ?? null,
+      pode_rotacionar: p.pode_rotacionar,
     });
     setEditId(p.id);
     setModal(true);
@@ -119,6 +121,7 @@ export default function ProdutosPage() {
       chapas_por_colar: p.chapas_por_colar ?? null,
       chapa_largura_mm: p.chapa_largura_mm ?? null,
       chapa_altura_mm:  p.chapa_altura_mm  ?? null,
+      pode_rotacionar: p.pode_rotacionar,
     } as never]);
     load();
   }
@@ -310,6 +313,20 @@ export default function ProdutosPage() {
                   onChange={e => setForm(f => ({ ...f, chapa_altura_mm: e.target.value ? parseFloat(e.target.value) : null }))}
                   placeholder="Ex: 2250"
                 />
+              </div>
+            </div>
+
+            <div className="fg" style={{ marginBottom:"14px" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={form.pode_rotacionar}
+                  onChange={e => setForm(f => ({ ...f, pode_rotacionar: e.target.checked }))}
+                />
+                <span className="fl" style={{ margin: 0 }}>Pode rotacionar no otimizador de corte</span>
+              </label>
+              <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "4px" }}>
+                Desmarque para vidro direcional, com padrão ou serigrafado — o otimizador nunca vai girar a peça 90° ao montar o plano de corte.
               </div>
             </div>
 
