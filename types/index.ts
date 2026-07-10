@@ -818,6 +818,158 @@ export type AtivoImobilizadoInsert = Omit<AtivoImobilizado,
   'id' | 'created_at' | 'updated_at' | 'fornecedores' | 'plano_contas'>;
 export type AtivoImobilizadoUpdate = Partial<AtivoImobilizadoInsert>;
 
+// ─── CONTABILIDADE — CARTÕES (Fase 4) ──────────────────────
+export interface Cartao {
+  id: number;
+  nome: string;
+  tipo: 'credito' | 'debito';
+  bandeira: string | null;
+  banco_emissor: string | null;
+  final_numero: string | null;
+  conta_bancaria_id: number | null;
+  limite: number | null;
+  dia_fechamento: number | null;
+  dia_vencimento: number | null;
+  ativo: boolean;
+  criado_por: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export type CartaoInsert = Omit<Cartao, 'id' | 'created_at' | 'updated_at'>;
+export type CartaoUpdate = Partial<CartaoInsert>;
+
+export interface CartaoFatura {
+  id: number;
+  cartao_id: number;
+  competencia_ano: number;
+  competencia_mes: number;
+  valor_total: number;
+  status: 'aberta' | 'fechada' | 'paga';
+  data_fechamento: string | null;
+  data_vencimento: string | null;
+  data_pagamento: string | null;
+  pdf_url: string | null;
+  comprovante_pagamento_url: string | null;
+  observacoes: string | null;
+  criado_por: string | null;
+  created_at: string;
+  updated_at: string;
+  cartoes?: Pick<Cartao, 'id' | 'nome' | 'tipo'>;
+}
+export type CartaoFaturaInsert = Omit<CartaoFatura, 'id' | 'valor_total' | 'created_at' | 'updated_at' | 'cartoes'>;
+export type CartaoFaturaUpdate = Partial<CartaoFaturaInsert>;
+
+export interface CartaoLancamento {
+  id: number;
+  cartao_id: number;
+  fatura_id: number | null;
+  data: string;
+  descricao: string;
+  plano_contas_id: number | null;
+  fornecedor_id: number | null;
+  valor: number;
+  parcela_atual: number | null;
+  parcela_total: number | null;
+  comprovante_url: string | null;
+  conciliado: boolean;
+  observacoes: string | null;
+  criado_por: string | null;
+  created_at: string;
+  updated_at: string;
+  fornecedores?: Pick<Fornecedor, 'id' | 'nome'>;
+}
+export type CartaoLancamentoInsert = Omit<CartaoLancamento, 'id' | 'created_at' | 'updated_at' | 'fornecedores'>;
+export type CartaoLancamentoUpdate = Partial<CartaoLancamentoInsert>;
+
+// ─── CONTABILIDADE — EMPRÉSTIMOS (Fase 4) ──────────────────
+export interface Emprestimo {
+  id: number;
+  descricao: string;
+  banco: string | null;
+  conta_bancaria_id: number | null;
+  valor_contratado: number;
+  taxa_juros_pct_am: number;
+  numero_parcelas: number;
+  data_contratacao: string;
+  data_primeira_parcela: string;
+  contrato_pdf_url: string | null;
+  observacoes: string | null;
+  ativo: boolean;
+  criado_por: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export type EmprestimoInsert = Omit<Emprestimo, 'id' | 'created_at' | 'updated_at'>;
+export type EmprestimoUpdate = Partial<EmprestimoInsert>;
+
+export interface EmprestimoParcela {
+  id: number;
+  emprestimo_id: number;
+  numero_parcela: number;
+  vencimento: string;
+  valor_parcela: number;
+  valor_juros: number;
+  valor_amortizacao: number;
+  saldo_devedor_apos: number;
+  status: 'pendente' | 'pago';
+  data_pagamento: string | null;
+  comprovante_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── CONTABILIDADE — CONSÓRCIOS (Fase 4) ───────────────────
+export interface Consorcio {
+  id: number;
+  descricao: string;
+  administradora: string | null;
+  grupo: string | null;
+  cota: string | null;
+  valor_credito: number;
+  numero_parcelas: number;
+  valor_parcela: number;
+  data_adesao: string;
+  status: 'ativo' | 'contemplado' | 'encerrado';
+  contemplado_em: string | null;
+  carta_contemplacao_url: string | null;
+  contrato_pdf_url: string | null;
+  observacoes: string | null;
+  ativo: boolean;
+  criado_por: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export type ConsorcioInsert = Omit<Consorcio, 'id' | 'created_at' | 'updated_at'>;
+export type ConsorcioUpdate = Partial<ConsorcioInsert>;
+
+export interface ConsorcioParcela {
+  id: number;
+  consorcio_id: number;
+  numero_parcela: number;
+  vencimento: string;
+  valor: number;
+  status: 'pendente' | 'pago';
+  data_pagamento: string | null;
+  comprovante_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConsorcioLance {
+  id: number;
+  consorcio_id: number;
+  data: string;
+  valor: number;
+  tipo: 'livre' | 'embutido' | 'fixo';
+  resultado: 'pendente' | 'aprovado' | 'recusado';
+  observacoes: string | null;
+  criado_por: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export type ConsorcioLanceInsert = Omit<ConsorcioLance, 'id' | 'created_at' | 'updated_at'>;
+export type ConsorcioLanceUpdate = Partial<ConsorcioLanceInsert>;
+
 // ─── CONTABILIDADE — FECHAMENTO / CHECKLIST (Fase 1) ───────
 export interface ContabilidadeFechamento {
   id: number;
