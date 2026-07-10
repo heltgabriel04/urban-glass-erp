@@ -1,8 +1,12 @@
+import { supabase } from "@/lib/supabase/client";
 import { getNotas } from "./notas.service";
 import { getDocumentosFiscais } from "./contabilidadeDocumentos.service";
 import { getOrCreateFechamento } from "./contabilidadeChecklist.service";
 import { getItensEstoqueGerais } from "./itensEstoqueGerais.service";
 import { getAtivosImobilizados } from "./ativosImobilizados.service";
+import { getCartoes } from "./cartoes.service";
+import { getEmprestimos } from "./emprestimos.service";
+import { getConsorcios } from "./consorcios.service";
 import type { NotaFiscal } from "@/types";
 
 // ─── NF Saída — 100% derivado de notas_fiscais, sem cadastro duplicado ────
@@ -205,11 +209,34 @@ export async function getStatusAreas(ano: number, mes: number): Promise<StatusAr
       ? { area: "ativo_imobilizado", label: "Ativo Imobilizado", semaforo: "amarelo", detalhe: "Checklist de ativo imobilizado ainda pendente" }
       : { area: "ativo_imobilizado", label: "Ativo Imobilizado", semaforo: "verde", detalhe: "Completo" };
 
+  const [cartoes, emprestimos, consorcios] = await Promise.all([
+    getCartoes({ ativo: true }),
+    getEmprestimos({ ativo: true }),
+    getConsorcios({ ativo: true }),
+  ]);
+  const [{ count: faturasAtrasadas }, { count: parcelasEmprestimoAtrasadas }, { count: parcelasConsorcioAtrasadas }] = await Promise.all([
+    supabase.from("cartoes_faturas").select("id", { count: "exact", head: true }).neq("status", "paga").lt("data_vencimento", hojeStr),
+    supabase.from("emprestimos_parcelas").select("id", { count: "exact", head: true }).eq("status", "pendente").lt("vencimento", hojeStr),
+    supabase.from("consorcios_parcelas").select("id", { count: "exact", head: true }).eq("status", "pendente").lt("vencimento", hojeStr),
+  ]);
+  const totalAtrasadas = (faturasAtrasadas ?? 0) + (parcelasEmprestimoAtrasadas ?? 0) + (parcelasConsorcioAtrasadas ?? 0);
+  const itemChecklistCartoes = itens.find((i) => i.item_key === "cartoes_emprestimos");
+  const checklistCartoesPendente = itemChecklistCartoes?.status === "pendente" || itemChecklistCartoes?.status === "em_andamento";
+
+  const cartoesArea: StatusArea =
+    cartoes.length === 0 && emprestimos.length === 0 && consorcios.length === 0
+      ? { area: "cartoes", label: "Cartões / Empréstimos / Consórcios", semaforo: "amarelo", detalhe: "Nenhum cartão, empréstimo ou consórcio cadastrado ainda" }
+      : totalAtrasadas > 0
+      ? { area: "cartoes", label: "Cartões / Empréstimos / Consórcios", semaforo: "vermelho", detalhe: `${totalAtrasadas} fatura(s)/parcela(s) vencida(s) sem pagamento` }
+      : checklistCartoesPendente
+      ? { area: "cartoes", label: "Cartões / Empréstimos / Consórcios", semaforo: "amarelo", detalhe: "Checklist de cartões/empréstimos/consórcios ainda pendente" }
+      : { area: "cartoes", label: "Cartões / Empréstimos / Consórcios", semaforo: "verde", detalhe: "Completo" };
+
   return [
     documentosFiscais,
     estoque,
     ativoImobilizado,
-    { area: "cartoes", label: "Cartões / Empréstimos / Consórcios", semaforo: "indisponivel", detalhe: "Disponível na Fase 4" },
+    cartoesArea,
   ];
 }
 
