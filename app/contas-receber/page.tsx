@@ -11,6 +11,7 @@ import DateInput from "@/components/ui/DateInput";
 import SearchInput from "@/components/ui/SearchInput";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
+import { usePrompt } from "@/components/ui/prompt";
 import { getContasBancarias } from "@/services/contasBancarias.service";
 import { registrarBaixa, estornarBaixa, getBaixasPorLancamentos, calcularSaldo, excluirLancamento, editarLancamento, verificarDuplicadoCliente, criarAdiantamento, criarReembolso, getAdiantamentosDisponiveis, getHistorico, getUltimoPlanoContas, type LancamentoDuplicado, type AdiantamentoComSaldo, type VersaoLancamento } from "@/services/lancamentos.service";
 import { getFormasPagamento } from "@/services/formasPagamento.service";
@@ -94,6 +95,7 @@ export default function ContasReceberPage() {
 function ContasReceberPageInner() {
   const { toast } = useToast();
   const confirm = useConfirm();
+  const prompt = usePrompt();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [recebiveis, setRecebiveis] = useState<Recebivel[]>([]);
@@ -163,7 +165,7 @@ function ContasReceberPageInner() {
     setBusca(f.filtros.busca ?? "");
   }
   async function handleSalvarFiltro() {
-    const nome = window.prompt("Nome para este filtro (aba + busca atuais):");
+    const nome = await prompt("Nome para este filtro (aba + busca atuais):", { titulo: "Salvar filtro", obrigatorio: true });
     if (!nome?.trim()) return;
     const ok = await salvarFiltro("contas-receber", nome.trim(), { tab, busca });
     if (ok) { toast("Filtro salvo"); await loadFiltrosSalvos(); }

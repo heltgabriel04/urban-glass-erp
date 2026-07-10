@@ -5,6 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
+import { usePrompt } from "@/components/ui/prompt";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { ordenarPorCodigoEstruturado } from "@/lib/planoContas";
@@ -250,6 +251,7 @@ function ModalLancamentos({ cartao, fatura, fornecedores, planoContas, usuarioEm
 }) {
   const { toast } = useToast();
   const confirm = useConfirm();
+  const prompt = usePrompt();
   const [lancamentos, setLancamentos] = useState<CartaoLancamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<typeof LANC_VAZIO>({ ...LANC_VAZIO });
@@ -283,7 +285,7 @@ function ModalLancamentos({ cartao, fatura, fornecedores, planoContas, usuarioEm
   }
 
   async function handleExcluir(id: number) {
-    const motivo = prompt("Motivo da exclusão (opcional):") ?? undefined;
+    const motivo = (await prompt("Motivo da exclusão (opcional):", { titulo: "Excluir lançamento" })) ?? undefined;
     if (!(await confirm("Excluir este lançamento? O registro fica no histórico, não é apagado de fato.", { perigo: true }))) return;
     const ok = await softDeleteLancamentoCartao(id, usuarioEmail, motivo);
     toast(ok ? "Lançamento excluído" : "Erro ao excluir", ok ? "ok" : "err");

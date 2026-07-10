@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
+import { usePrompt } from "@/components/ui/prompt";
 import { supabase } from "@/lib/supabase/client";
 import { formatDate, formatM2 } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
@@ -42,6 +43,7 @@ export default function RetalhoPage() {
   const router = useRouter();
   const { toast } = useToast();
   const confirm = useConfirm();
+  const prompt = usePrompt();
   const [retalhos, setRetalhos]     = useState<Retalho[]>([]);
   const [produtos, setProdutos]     = useState<{ id: number; nome: string }[]>([]);
   const [pedidos, setPedidos]       = useState<{ id: string }[]>([]);
@@ -210,8 +212,9 @@ export default function RetalhoPage() {
 
   async function zerarTudo() {
     if (retalhos.length === 0) return;
-    const resp = prompt(
-      `Isso vai excluir PERMANENTEMENTE os ${retalhos.length} retalhos cadastrados e o histórico de uso deles. Digite ZERAR para confirmar:`
+    const resp = await prompt(
+      `Isso vai excluir PERMANENTEMENTE os ${retalhos.length} retalhos cadastrados e o histórico de uso deles.`,
+      { titulo: "Zerar tudo", placeholder: "Digite ZERAR para confirmar", matchExato: "ZERAR", perigo: true, confirmarLabel: "Zerar tudo" }
     );
     if (resp !== "ZERAR") return;
 
