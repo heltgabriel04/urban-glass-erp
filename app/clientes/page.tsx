@@ -7,6 +7,7 @@ import { getClientes, createCliente, updateCliente, deletarCliente } from "@/ser
 import { getFinanceiroClientes } from "@/services/financeiro.service";
 import { formatBRL } from "@/lib/formatters";
 import SearchInput from "@/components/ui/SearchInput";
+import { useToast } from "@/components/ui/toast";
 import type { Cliente, FinanceiroCliente, ClienteInsert, TipoPessoa, IndIE } from "@/types";
 
 type ClienteForm = ClienteInsert & { responsavel?: string; tel_responsavel?: string };
@@ -102,6 +103,7 @@ async function buscarCnpjApi(cnpj: string): Promise<{ data: any; notFound: boole
 
 export default function ClientesPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [clientes, setClientes]       = useState<Cliente[]>([]);
   const [financeiro, setFinanceiro]   = useState<FinanceiroCliente[]>([]);
   const [loading, setLoading]         = useState(true);
@@ -224,7 +226,12 @@ export default function ClientesPage() {
   }
 
   async function salvar() {
-    if (!form.nome.trim()) return;
+    if (!form.nome.trim()) { toast("Preencha o nome", "err"); return; }
+    const doc = form.tipo_pessoa === "PF" ? form.cpf : form.cnpj;
+    if (!doc || doc.replace(/\D/g, "").length === 0) {
+      toast(`Preencha o ${form.tipo_pessoa === "PF" ? "CPF" : "CNPJ"}`, "err");
+      return;
+    }
     setSalvando(true);
     if (editId) { await updateCliente(editId, form); } else { await createCliente(form); }
     setSalvando(false); setModal(false); load();
@@ -428,7 +435,7 @@ export default function ClientesPage() {
                     {form.tipo_pessoa === "PJ" ? (
                       <div className="fg">
                         <label className="fl" style={{ display:"flex", alignItems:"center", gap:"6px" }}>
-                          CNPJ
+                          CNPJ *
                           {buscandoCnpj && <span style={{ fontSize:"10px", color:"var(--acc)", fontWeight:500 }}>buscando...</span>}
                           {!buscandoCnpj && cnpjStatus === "ok"      && <span style={{ fontSize:"10px", color:"var(--ok)",   fontWeight:600 }}>✓ dados preenchidos</span>}
                           {!buscandoCnpj && cnpjStatus === "err"     && <span style={{ fontSize:"10px", color:"var(--warn)", fontWeight:600 }}>CNPJ não encontrado</span>}
@@ -438,7 +445,7 @@ export default function ClientesPage() {
                       </div>
                     ) : (
                       <div className="fg">
-                        <label className="fl">CPF</label>
+                        <label className="fl">CPF *</label>
                         <input className="fc" value={form.cpf} onChange={e => F("cpf", maskCPF(e.target.value))} placeholder="000.000.000-00" maxLength={14} inputMode="numeric" autoFocus />
                       </div>
                     )}
@@ -598,7 +605,7 @@ export default function ClientesPage() {
               </div>
               <div style={{ display:"flex", gap:"8px" }}>
                 <button className="btn bg" onClick={() => setModal(false)}>Cancelar</button>
-                <button className="btn bp" onClick={salvar} disabled={salvando || !form.nome.trim()}>
+                <button className="btn bp" onClick={salvar} disabled={salvando || !form.nome.trim() || !(form.tipo_pessoa === "PF" ? form.cpf : form.cnpj)?.replace(/\D/g, "")}>
                   {salvando ? "Salvando..." : "Salvar Cliente"}
                 </button>
               </div>
