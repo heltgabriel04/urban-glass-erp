@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import AppLayout from "@/components/layout/AppLayout";
+import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
 import CurrencyInput from "@/components/ui/CurrencyInput";
@@ -29,6 +30,7 @@ const VAZIO: ProdutoInsert = {
 };
 
 export default function ProdutosPage() {
+  const confirm = useConfirm();
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [loading, setLoading]   = useState(true);
   const [filtro, setFiltro]     = useState("");
@@ -133,7 +135,7 @@ export default function ProdutosPage() {
   }
 
   async function excluir(p: Produto) {
-    if (!confirm(`Excluir "${p.nome}" permanentemente? Esta ação não pode ser desfeita.`)) return;
+    if (!(await confirm(`Excluir "${p.nome}" permanentemente? Esta ação não pode ser desfeita.`, { perigo: true }))) return;
     await supabase.from("produtos").delete().eq("id", p.id);
     load();
   }

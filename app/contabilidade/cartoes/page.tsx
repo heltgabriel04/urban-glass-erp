@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { ordenarPorCodigoEstruturado } from "@/lib/planoContas";
@@ -248,6 +249,7 @@ function ModalLancamentos({ cartao, fatura, fornecedores, planoContas, usuarioEm
   onFechar: () => void; onMudou: () => void;
 }) {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [lancamentos, setLancamentos] = useState<CartaoLancamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<typeof LANC_VAZIO>({ ...LANC_VAZIO });
@@ -282,7 +284,7 @@ function ModalLancamentos({ cartao, fatura, fornecedores, planoContas, usuarioEm
 
   async function handleExcluir(id: number) {
     const motivo = prompt("Motivo da exclusão (opcional):") ?? undefined;
-    if (!confirm("Excluir este lançamento? O registro fica no histórico, não é apagado de fato.")) return;
+    if (!(await confirm("Excluir este lançamento? O registro fica no histórico, não é apagado de fato.", { perigo: true }))) return;
     const ok = await softDeleteLancamentoCartao(id, usuarioEmail, motivo);
     toast(ok ? "Lançamento excluído" : "Erro ao excluir", ok ? "ok" : "err");
     if (ok) { load(); onMudou(); }
@@ -382,6 +384,7 @@ function ModalLancamentos({ cartao, fatura, fornecedores, planoContas, usuarioEm
 // ─── Página principal ───────────────────────────────────────
 export default function CartoesPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [cartoes, setCartoes] = useState<Cartao[]>([]);
   const [faturas, setFaturas] = useState<CartaoFatura[]>([]);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
@@ -425,7 +428,7 @@ export default function CartoesPage() {
   }
 
   async function handleInativar(c: Cartao) {
-    if (!confirm(`${c.ativo ? "Inativar" : "Reativar"} o cartão "${c.nome}"?`)) return;
+    if (!(await confirm(`${c.ativo ? "Inativar" : "Reativar"} o cartão "${c.nome}"?`))) return;
     const ok = c.ativo ? await inativarCartao(c.id) : await reativarCartao(c.id);
     toast(ok ? "Cartão atualizado" : "Erro ao atualizar", ok ? "ok" : "err");
     if (ok) loadCartoes();

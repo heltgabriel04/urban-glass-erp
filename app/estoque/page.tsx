@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import { registrarMovimentacao } from "@/services/estoqueMovimentacoes.service";
@@ -29,6 +30,7 @@ const FORM_VAZIO: FormState = { produto_id: "", chapas: "", larg_chapa: "", alt_
 
 export default function EstoquePage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [estoque, setEstoque]   = useState<EstoqueItem[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [comprometidoPorProduto, setComprometidoPorProduto] = useState<Record<number, number>>({});
@@ -177,7 +179,7 @@ export default function EstoquePage() {
 
   async function excluir(item: EstoqueItem) {
     const nome = item.produtos?.nome ?? item.cod;
-    if (!confirm(`Excluir "${nome}" do estoque permanentemente? Esta ação não pode ser desfeita.`)) return;
+    if (!(await confirm(`Excluir "${nome}" do estoque permanentemente? Esta ação não pode ser desfeita.`, { perigo: true }))) return;
     await supabase.from("estoque").delete().eq("id", item.id);
     load();
   }

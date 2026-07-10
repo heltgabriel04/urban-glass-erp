@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import {
@@ -318,6 +319,7 @@ function ModalDocumento({ tipo, titulo, editando, ano, mes, fornecedores, notasV
 // ─── Página principal ───────────────────────────────────────
 export default function DocumentosFiscaisPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const agora = new Date();
   const [ano, setAno] = useState(agora.getFullYear());
   const [mes, setMes] = useState(agora.getMonth() + 1);
@@ -362,7 +364,7 @@ export default function DocumentosFiscaisPage() {
 
   async function handleExcluir(id: number) {
     const motivo = prompt("Motivo da exclusão (opcional):") ?? undefined;
-    if (!confirm("Excluir este documento? O registro fica no histórico, não é apagado de fato.")) return;
+    if (!(await confirm("Excluir este documento? O registro fica no histórico, não é apagado de fato.", { perigo: true }))) return;
     const ok = await softDeleteDocumentoFiscal(id, usuarioEmail, motivo);
     toast(ok ? "Documento excluído" : "Erro ao excluir", ok ? "ok" : "err");
     if (ok) load();

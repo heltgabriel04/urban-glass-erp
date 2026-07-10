@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
 import { formatDate, formatM2 } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
@@ -40,6 +41,7 @@ const FORM_VAZIO = {
 export default function RetalhoPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [retalhos, setRetalhos]     = useState<Retalho[]>([]);
   const [produtos, setProdutos]     = useState<{ id: number; nome: string }[]>([]);
   const [pedidos, setPedidos]       = useState<{ id: string }[]>([]);
@@ -84,7 +86,7 @@ export default function RetalhoPage() {
   }
 
   async function deletar(id: string) {
-    if (!confirm(`Excluir retalho ${id} permanentemente?`)) return;
+    if (!(await confirm(`Excluir retalho ${id} permanentemente?`, { perigo: true }))) return;
     setRetalhos(prev => prev.filter(r => r.id !== id));
     await supabase.from("retalhos").delete().eq("id", id);
   }

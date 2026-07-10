@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import SearchInput from "@/components/ui/SearchInput";
 import {
   getConfigPadrao,
@@ -396,6 +397,7 @@ interface Emitente {
 
 export default function ConfiguracaoFiscalPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [aba, setAba] = useState<"fiscal" | "emitente">("fiscal");
   const [dados, setDados] = useState<ProdutoComConfig[]>([]);
   const [padrao, setPadrao] = useState<ConfigFiscalPadrao>({ ...PADRAO_FALLBACK });
@@ -438,7 +440,7 @@ export default function ConfiguracaoFiscalPage() {
 
   async function handleRemoverProduto() {
     if (!editando) return;
-    if (!confirm(`Remover configuração específica de "${editando.produto.nome}"?\nO produto passará a usar os parâmetros padrão.`)) return;
+    if (!(await confirm(`Remover configuração específica de "${editando.produto.nome}"?\nO produto passará a usar os parâmetros padrão.`, { perigo: true }))) return;
     setSalvandoProduto(true);
     await removerConfigFiscalProduto(editando.produto.id);
     setSalvandoProduto(false);
@@ -450,7 +452,7 @@ export default function ConfiguracaoFiscalPage() {
   async function handleAplicarTodos() {
     const semConfig = dados.filter((d) => d.config === null);
     if (semConfig.length === 0) { toast("Todos os produtos já estão configurados"); return; }
-    if (!confirm(`Aplicar parâmetros padrão nos ${semConfig.length} produto(s) sem configuração?`)) return;
+    if (!(await confirm(`Aplicar parâmetros padrão nos ${semConfig.length} produto(s) sem configuração?`))) return;
     setSalvandoPadrao(true);
     const { ok, erro } = await aplicarPadraoATodos(semConfig.map((d) => d.produto), padrao);
     setSalvandoPadrao(false);

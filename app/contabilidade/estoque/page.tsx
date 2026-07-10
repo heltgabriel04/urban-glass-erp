@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { GRUPOS_ITEM_ESTOQUE, labelGrupoItem } from "@/lib/itensEstoqueGeraisConstants";
@@ -285,6 +286,7 @@ function ModalMovimentacao({ itens, documentosFiscais, usuarioEmail, onSalvo, on
 // ─── Página principal ───────────────────────────────────────
 export default function EstoqueGeralPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const agora = new Date();
   const [aba, setAba] = useState<AbaEstoque>("itens");
   const [usuarioEmail, setUsuarioEmail] = useState("");
@@ -366,14 +368,14 @@ export default function EstoqueGeralPage() {
   }, [movs]);
 
   async function handleInativar(item: ItemEstoqueGeral) {
-    if (!confirm(`${item.ativo ? "Inativar" : "Reativar"} o item "${item.descricao}"?`)) return;
+    if (!(await confirm(`${item.ativo ? "Inativar" : "Reativar"} o item "${item.descricao}"?`))) return;
     const ok = item.ativo ? await inativarItemEstoqueGeral(item.id) : await reativarItemEstoqueGeral(item.id);
     toast(ok ? "Item atualizado" : "Erro ao atualizar", ok ? "ok" : "err");
     if (ok) load();
   }
 
   async function handleExcluirMov(mov: ItemEstoqueMovimentacao) {
-    if (!confirm("Excluir esta movimentação? O saldo do item será restaurado ao estado anterior.")) return;
+    if (!(await confirm("Excluir esta movimentação? O saldo do item será restaurado ao estado anterior.", { perigo: true }))) return;
     const res = await reverterMovimentacaoItem({ movimentacaoId: mov.id });
     toast(res.ok ? "Movimentação revertida" : (res.motivo ?? "Erro ao reverter"), res.ok ? "ok" : "err");
     if (res.ok) load();

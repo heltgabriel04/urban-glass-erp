@@ -6,6 +6,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
 import { salvarOtimizacao } from "@/services/otimizador.service";
 import { updatePedido } from "@/services/pedidos.service";
@@ -55,6 +56,7 @@ function OtimizadorContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const pedidoParam = searchParams.get("pedido");
   const pecasParam  = searchParams.get("pecas");
   const prodParam   = searchParams.get("prod");
@@ -774,7 +776,7 @@ function OtimizadorContent() {
 
   async function handleZerar() {
     if (!pedidoRef) return;
-    if (!confirm("Apagar completamente a otimização deste pedido?")) return;
+    if (!(await confirm("Apagar completamente a otimização deste pedido?", { perigo: true }))) return;
     setZerando(true);
     // O plano é salvo em historico_otimizador (o delete apontava pra tabela
     // "otimizacoes", que não existe/não é usada — o plano nunca era apagado).

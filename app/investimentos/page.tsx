@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
@@ -74,6 +75,7 @@ interface PosFinProps {
 
 function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permuta, setPermuta, lancamentos, setLancamentos }: PosFinProps) {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [adicionando,     setAdicionando]     = useState(false);
   const [novoBanco,       setNovoBanco]       = useState<Omit<SaldoBanco, "id">>({ banco: "", agencia: "", conta: "", saldo: 0 });
   const [pedidosAbertos,  setPedidosAbertos]  = useState<Set<string>>(new Set());
@@ -100,13 +102,13 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
     setNovoBanco({ banco: "", agencia: "", conta: "", saldo: 0 });
     setAdicionando(false);
   }
-  function removerBanco(id: string) {
-    if (!confirm("Remover este banco?")) return;
+  async function removerBanco(id: string) {
+    if (!(await confirm("Remover este banco?", { perigo: true }))) return;
     setBancos(p => p.filter(b => b.id !== id));
   }
   function togglePedido(id: string) { setPedidosAbertos(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; }); }
   function addPedido() { setPermuta(p => ({ ...p, pedidos: [...p.pedidos, { id: Date.now().toString(), material: "", quantidadeTon: 0, valor: 0, movimentacoes: [] }] })); setSalvoPermuta(false); }
-  function removePedido(id: string) { if (!confirm("Remover este pedido?")) return; setPermuta(p => ({ ...p, pedidos: p.pedidos.filter(pd => pd.id !== id) })); setSalvoPermuta(false); }
+  async function removePedido(id: string) { if (!(await confirm("Remover este pedido?", { perigo: true }))) return; setPermuta(p => ({ ...p, pedidos: p.pedidos.filter(pd => pd.id !== id) })); setSalvoPermuta(false); }
   function patchPedido(pid: string, patch: Partial<PedidoPermuta>) { setPermuta(p => ({ ...p, pedidos: p.pedidos.map(pd => pd.id === pid ? { ...pd, ...patch } : pd) })); setSalvoPermuta(false); }
   function addMov(pid: string) { setPermuta(p => ({ ...p, pedidos: p.pedidos.map(pd => pd.id === pid ? { ...pd, movimentacoes: [...pd.movimentacoes, { id: Date.now().toString(), data: new Date().toISOString().split("T")[0], valor: 0, numeroPedido: "", tipo: "PERMUTA" as const, empresa: "" }] } : pd) })); setSalvoPermuta(false); }
   function removeMov(pid: string, mid: string) { setPermuta(p => ({ ...p, pedidos: p.pedidos.map(pd => pd.id === pid ? { ...pd, movimentacoes: pd.movimentacoes.filter(m => m.id !== mid) } : pd) })); setSalvoPermuta(false); }
@@ -595,6 +597,7 @@ const SQL_MIGRACAO_COLUNAS = `-- Adiciona suporte a subcategorias em tabelas exi
 
 export default function InvestimentosPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [investimentos, setInvestimentos] = useState<Investimento[]>([]);
   const [loading, setLoading]             = useState(true);
   const [editingId, setEditingId]         = useState<string | null>(null);
@@ -751,7 +754,7 @@ export default function InvestimentosPage() {
   }
 
   async function excluir(inv: Investimento) {
-    if (!confirm(`Excluir aporte de ${formatBRL(Number(inv.valor))} de "${inv.empresa}"?\nEsta ação não pode ser desfeita.`)) return;
+    if (!(await confirm(`Excluir aporte de ${formatBRL(Number(inv.valor))} de "${inv.empresa}"?\nEsta ação não pode ser desfeita.`, { perigo: true }))) return;
     await supabase.from("investimentos").delete().eq("id", inv.id);
     registrarLog({ acao: "excluiu", tabela: "investimentos", registro_id: inv.id, descricao: `Excluiu aporte de ${inv.empresa}` });
     if (editingId === inv.id) setEditingId(null);

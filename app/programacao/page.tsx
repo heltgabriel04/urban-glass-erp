@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import HoverCard from "@/components/ui/HoverCard";
+import { useConfirm } from "@/components/ui/confirm";
 import {
   getLinhas, getConfigTempo, getProgramacao, getPedidosSemProgramacao,
   getPedidosExpedicao, getCalendario,
@@ -1362,6 +1363,7 @@ function AbaExpedicao({ pedidos }: { pedidos: Pedido[] }) {
 // ─── PÁGINA PRINCIPAL ─────────────────────────────────────────
 
 export default function ProgramacaoPage() {
+  const confirm = useConfirm();
   const [aba,          setAba]          = useState<"gantt" | "dashboard" | "expedicao">("gantt");
   const [zoom,         setZoom]         = useState<"hora" | "dia" | "semana" | "mes">("semana");
   const [modoVisao,    setModoVisao]    = useState<"linha" | "pedido">("linha");
@@ -1461,7 +1463,7 @@ export default function ProgramacaoPage() {
     if (relevantes.length === 0) { showToast("Nenhuma etapa com amostra e desvio suficientes pra recalibrar."); return; }
 
     const resumo = relevantes.map(c => `${c.etapa}: ${c.fator_ajuste}× (${c.count} amostras)`).join("\n");
-    const confirmar = window.confirm(
+    const confirmar = await confirm(
       `Aplicar calibração automática?\n\nEtapas afetadas:\n${resumo}\n\n` +
       `Isso multiplica TODAS as taxas da etapa (min_por_m2, min_por_peça, min_por_lapidação, setup) ` +
       `pelo mesmo fator agregado acima — é uma aproximação simples (não sabemos qual das taxas ` +
@@ -1629,7 +1631,7 @@ export default function ProgramacaoPage() {
   }
   async function handleDeletar() {
     if (!modalBloco) return;
-    if (!confirm(`Remover o agendamento de ${modalBloco.pedido_id}?`)) return;
+    if (!(await confirm(`Remover o agendamento de ${modalBloco.pedido_id}?`, { perigo: true }))) return;
     await deletarProgramacao(modalBloco.id);
     showToast("Agendamento removido.");
     setModalBloco(null); await load();
@@ -1799,7 +1801,7 @@ export default function ProgramacaoPage() {
     const linhasCorte = linhas.filter(l => l.tipo === "Corte");
     if (linhasCorte.length === 0) { showToast("Nenhuma linha de corte configurada."); return; }
 
-    const confirmar = window.confirm(
+    const confirmar = await confirm(
       `Auto-agendar ${semProg.length} pedido${semProg.length > 1 ? "s" : ""}?\n\n` +
       `Critério: prioridade por folga real até o prazo (atrasados primeiro) + distribuição entre linhas.\n` +
       `Lapidação não é incluída automaticamente.`

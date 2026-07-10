@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { ordenarPorCodigoEstruturado } from "@/lib/planoContas";
@@ -226,6 +227,7 @@ function ModalAtivo({ editando, fornecedores, planoContas, usuarioEmail, onSalvo
 // ─── Página principal ───────────────────────────────────────
 export default function AtivoImobilizadoPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [ativos, setAtivos] = useState<AtivoImobilizado[]>([]);
   const [busca, setBusca] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState<CategoriaAtivoImobilizado | "">("");
@@ -263,7 +265,7 @@ export default function AtivoImobilizadoPage() {
   }, [ativos, busca]);
 
   async function handleInativar(a: AtivoImobilizado) {
-    if (!confirm(`${a.ativo ? "Inativar" : "Reativar"} o ativo "${a.descricao}"?`)) return;
+    if (!(await confirm(`${a.ativo ? "Inativar" : "Reativar"} o ativo "${a.descricao}"?`))) return;
     const ok = a.ativo ? await inativarAtivoImobilizado(a.id) : await reativarAtivoImobilizado(a.id);
     toast(ok ? "Ativo atualizado" : "Erro ao atualizar", ok ? "ok" : "err");
     if (ok) load();

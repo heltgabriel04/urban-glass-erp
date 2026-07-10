@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
 import { ordenarPorCodigoEstruturado } from "@/lib/planoContas";
 import SearchInput from "@/components/ui/SearchInput";
@@ -52,6 +53,7 @@ const emptyPlano = (): Omit<PlanoConta, "id" | "ativo" | "pc_categorias"> => ({
 
 export default function PlanoContasPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [aba, setAba] = useState<"categorias" | "plano">("plano");
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [planos, setPlanos] = useState<PlanoConta[]>([]);
@@ -113,7 +115,7 @@ export default function PlanoContasPage() {
   async function deleteCat(id: number) {
     const temPlanos = planos.some(p => p.categoria_id === id);
     if (temPlanos) { toast("Esta categoria possui planos vinculados. Remova-os primeiro.", "warn"); return; }
-    if (!confirm("Excluir esta categoria?")) return;
+    if (!(await confirm("Excluir esta categoria?", { perigo: true }))) return;
     await supabase.from("pc_categorias").delete().eq("id", id);
     load();
   }
@@ -145,7 +147,7 @@ export default function PlanoContasPage() {
   }
 
   async function deletePlano(id: number) {
-    if (!confirm("Excluir este plano de contas?")) return;
+    if (!(await confirm("Excluir este plano de contas?", { perigo: true }))) return;
     await supabase.from("plano_contas").delete().eq("id", id);
     load();
   }

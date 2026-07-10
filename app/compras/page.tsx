@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import CurrencyInput from "@/components/ui/CurrencyInput";
@@ -41,6 +42,7 @@ const FORM_VAZIO = {
 
 export default function ComprasPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [compras, setCompras]       = useState<Compra[]>([]);
   const [fornecedores, setFornecedores] = useState<{ id: number; nome: string }[]>([]);
   const [produtos, setProdutos]     = useState<Produto[]>([]);
@@ -144,7 +146,7 @@ export default function ComprasPage() {
   }
 
   async function handleConfirmarRecebimento(id: string) {
-    if (!confirm(`Confirmar recebimento de ${id}? Isso vai dar entrada nos itens no estoque.`)) return;
+    if (!(await confirm(`Confirmar recebimento de ${id}? Isso vai dar entrada nos itens no estoque.`))) return;
     setProcessando(id);
     const res = await confirmarRecebimento(id);
     setProcessando(null);
@@ -156,7 +158,7 @@ export default function ComprasPage() {
     const aviso = status === "recebido"
       ? `Excluir ${id} permanentemente? Como já foi recebida, isso vai reverter a entrada de estoque dela.`
       : `Excluir ${id} permanentemente?`;
-    if (!confirm(aviso)) return;
+    if (!(await confirm(aviso, { perigo: true }))) return;
     setProcessando(id);
     await deletarCompra(id);
     setProcessando(null);

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import DatePromptModal from "@/components/ui/DatePromptModal";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
@@ -138,6 +139,7 @@ function ModalEmprestimo({ editando, contasBancarias, usuarioEmail, onSalvo, onF
 // ─── Página principal ───────────────────────────────────────
 export default function EmprestimosPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [emprestimos, setEmprestimos] = useState<Emprestimo[]>([]);
   const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>([]);
   const [usuarioEmail, setUsuarioEmail] = useState("");
@@ -171,7 +173,7 @@ export default function EmprestimosPage() {
   }
 
   async function handleInativar(e: Emprestimo) {
-    if (!confirm(`${e.ativo ? "Inativar" : "Reativar"} o empréstimo "${e.descricao}"?`)) return;
+    if (!(await confirm(`${e.ativo ? "Inativar" : "Reativar"} o empréstimo "${e.descricao}"?`))) return;
     const ok = e.ativo ? await inativarEmprestimo(e.id) : await reativarEmprestimo(e.id);
     toast(ok ? "Empréstimo atualizado" : "Erro ao atualizar", ok ? "ok" : "err");
     if (ok) load();
@@ -179,7 +181,7 @@ export default function EmprestimosPage() {
 
   async function handleGerarParcelas() {
     if (!selecionado) return;
-    if (!confirm(`Gerar ${selecionado.numero_parcelas} parcela(s) pela Tabela Price para "${selecionado.descricao}"? Isso só pode ser feito uma vez.`)) return;
+    if (!(await confirm(`Gerar ${selecionado.numero_parcelas} parcela(s) pela Tabela Price para "${selecionado.descricao}"? Isso só pode ser feito uma vez.`))) return;
     setGerando(true);
     const res = await gerarParcelasEmprestimo(selecionado.id);
     setGerando(false);
@@ -189,7 +191,7 @@ export default function EmprestimosPage() {
 
   async function handleMarcarPaga(p: EmprestimoParcela) {
     if (p.status === "pago") {
-      if (!confirm("Reabrir esta parcela?")) return;
+      if (!(await confirm("Reabrir esta parcela?"))) return;
       const ok = await reabrirParcelaEmprestimo(p.id);
       toast(ok ? "Parcela reaberta" : "Erro", ok ? "ok" : "err");
       if (ok && selecionado) loadParcelas(selecionado.id);

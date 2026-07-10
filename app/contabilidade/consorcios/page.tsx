@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import DatePromptModal from "@/components/ui/DatePromptModal";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
@@ -232,6 +233,7 @@ function ModalLances({ consorcio, usuarioEmail, onFechar }: {
 // ─── Página principal ───────────────────────────────────────
 export default function ConsorciosPage() {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [consorcios, setConsorcios] = useState<Consorcio[]>([]);
   const [usuarioEmail, setUsuarioEmail] = useState("");
   const [filtroAtivo, setFiltroAtivo] = useState<"ativos" | "inativos" | "todos">("ativos");
@@ -265,7 +267,7 @@ export default function ConsorciosPage() {
   }
 
   async function handleInativar(c: Consorcio) {
-    if (!confirm(`${c.ativo ? "Inativar" : "Reativar"} o consórcio "${c.descricao}"?`)) return;
+    if (!(await confirm(`${c.ativo ? "Inativar" : "Reativar"} o consórcio "${c.descricao}"?`))) return;
     const ok = c.ativo ? await inativarConsorcio(c.id) : await reativarConsorcio(c.id);
     toast(ok ? "Consórcio atualizado" : "Erro ao atualizar", ok ? "ok" : "err");
     if (ok) load();
@@ -285,7 +287,7 @@ export default function ConsorciosPage() {
 
   async function handleGerarParcelas() {
     if (!selecionado) return;
-    if (!confirm(`Gerar ${selecionado.numero_parcelas} parcela(s) fixa(s) para "${selecionado.descricao}"? Isso só pode ser feito uma vez.`)) return;
+    if (!(await confirm(`Gerar ${selecionado.numero_parcelas} parcela(s) fixa(s) para "${selecionado.descricao}"? Isso só pode ser feito uma vez.`))) return;
     setGerando(true);
     const res = await gerarParcelasConsorcio(selecionado.id);
     setGerando(false);
@@ -295,7 +297,7 @@ export default function ConsorciosPage() {
 
   async function handleMarcarPaga(p: ConsorcioParcela) {
     if (p.status === "pago") {
-      if (!confirm("Reabrir esta parcela?")) return;
+      if (!(await confirm("Reabrir esta parcela?"))) return;
       const ok = await reabrirParcelaConsorcio(p.id);
       toast(ok ? "Parcela reaberta" : "Erro", ok ? "ok" : "err");
       if (ok && selecionado) loadParcelas(selecionado.id);
