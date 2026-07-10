@@ -144,6 +144,18 @@ export async function getAlertas(ano: number, mes: number): Promise<Alerta[]> {
   const chavesDuplicadas = chaves.filter((c, i) => chaves.indexOf(c) !== i);
   if (chavesDuplicadas.length > 0) alertas.push({ severidade: "critico", mensagem: "Documento fiscal com chave de acesso duplicada", quantidade: new Set(chavesDuplicadas).size });
 
+  const agora = new Date();
+  const ehCompetenciaAtual = agora.getFullYear() === ano && agora.getMonth() + 1 === mes;
+  if (ehCompetenciaAtual && agora.getDate() >= 3) {
+    const { fechamento, itens } = await getOrCreateFechamento(ano, mes);
+    if (fechamento.status !== "concluido") {
+      const pendentes = itens.filter((i) => i.status === "pendente" || i.status === "em_andamento").length;
+      if (pendentes > 0) {
+        alertas.push({ severidade: "critico", mensagem: `Checklist de fechamento do mês ainda incompleto (dia ${agora.getDate()})`, quantidade: pendentes });
+      }
+    }
+  }
+
   return alertas;
 }
 

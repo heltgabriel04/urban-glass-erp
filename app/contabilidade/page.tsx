@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import AppLayout from "@/components/layout/AppLayout";
 import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
+import { useToast } from "@/components/ui/toast";
 import { formatBRL } from "@/lib/formatters";
 import {
   getResumoNotasSaida, getAlertas, getStatusAreas, getPercentualFechamento,
   type Alerta, type StatusArea,
 } from "@/services/contabilidadeDashboard.service";
 import { getDocumentosFiscais } from "@/services/contabilidadeDocumentos.service";
+import { exportarPacoteMensal } from "@/lib/exportacaoContabilidade";
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -18,10 +20,12 @@ const DOT: Record<StatusArea["semaforo"], string> = {
 };
 
 export default function ContabilidadeDashboardPage() {
+  const { toast } = useToast();
   const agora = new Date();
   const [ano, setAno] = useState(agora.getFullYear());
   const [mes, setMes] = useState(agora.getMonth() + 1);
   const [loading, setLoading] = useState(true);
+  const [exportando, setExportando] = useState(false);
   const [areas, setAreas] = useState<StatusArea[]>([]);
   const [alertas, setAlertas] = useState<Alerta[]>([]);
   const [percentual, setPercentual] = useState(0);
@@ -54,6 +58,13 @@ export default function ContabilidadeDashboardPage() {
 
   const alertasCriticos = alertas.filter((a) => a.severidade === "critico").reduce((s, a) => s + a.quantidade, 0);
 
+  async function handleExportar() {
+    setExportando(true);
+    const res = await exportarPacoteMensal(ano, mes);
+    setExportando(false);
+    toast(res.ok ? "Pacote exportado" : (res.motivo ?? "Erro ao exportar"), res.ok ? "ok" : "err");
+  }
+
   return (
     <AppLayout>
       <div className="tb">
@@ -75,6 +86,10 @@ export default function ContabilidadeDashboardPage() {
               <input className="fc" type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} style={{ width: "90px" }} />
             </div>
           </div>
+
+          <button className="btn bg sm" onClick={handleExportar} disabled={exportando} style={{ alignSelf: "flex-end" }}>
+            {exportando ? "Exportando..." : "Exportar Pacote Mensal"}
+          </button>
 
           <Link href="/contabilidade/checklist" style={{ textDecoration: "none" }}>
             <div style={{
