@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
+import DatePromptModal from "@/components/ui/DatePromptModal";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import {
@@ -241,6 +242,8 @@ export default function ConsorciosPage() {
   const [modalLances, setModalLances] = useState<Consorcio | null>(null);
   const [loading, setLoading] = useState(true);
   const [gerando, setGerando] = useState(false);
+  const [consorcioParaContemplar, setConsorcioParaContemplar] = useState<Consorcio | null>(null);
+  const [parcelaParaPagar, setParcelaParaPagar] = useState<ConsorcioParcela | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUsuarioEmail(data.user?.email ?? "sistema"));
@@ -268,11 +271,15 @@ export default function ConsorciosPage() {
     if (ok) load();
   }
 
-  async function handleContemplar(c: Consorcio) {
-    const data = prompt("Data da contemplação (AAAA-MM-DD):", hoje());
-    if (!data) return;
-    const ok = await marcarContemplado(c.id, data);
+  function handleContemplar(c: Consorcio) {
+    setConsorcioParaContemplar(c);
+  }
+
+  async function confirmarContemplacao(data: string) {
+    if (!consorcioParaContemplar) return;
+    const ok = await marcarContemplado(consorcioParaContemplar.id, data);
     toast(ok ? "Consórcio marcado como contemplado" : "Erro", ok ? "ok" : "err");
+    setConsorcioParaContemplar(null);
     if (ok) load();
   }
 
@@ -294,10 +301,14 @@ export default function ConsorciosPage() {
       if (ok && selecionado) loadParcelas(selecionado.id);
       return;
     }
-    const data = prompt("Data do pagamento (AAAA-MM-DD):", hoje());
-    if (!data) return;
-    const ok = await marcarParcelaConsorcioPaga(p.id, data);
+    setParcelaParaPagar(p);
+  }
+
+  async function confirmarPagamento(data: string) {
+    if (!parcelaParaPagar) return;
+    const ok = await marcarParcelaConsorcioPaga(parcelaParaPagar.id, data);
     toast(ok ? "Parcela marcada como paga" : "Erro", ok ? "ok" : "err");
+    setParcelaParaPagar(null);
     if (ok && selecionado) loadParcelas(selecionado.id);
   }
 
@@ -327,6 +338,22 @@ export default function ConsorciosPage() {
 
       {modalLances && (
         <ModalLances consorcio={modalLances} usuarioEmail={usuarioEmail} onFechar={() => setModalLances(null)} />
+      )}
+
+      {consorcioParaContemplar && (
+        <DatePromptModal
+          titulo="Data da Contemplação"
+          onConfirmar={confirmarContemplacao}
+          onFechar={() => setConsorcioParaContemplar(null)}
+        />
+      )}
+
+      {parcelaParaPagar && (
+        <DatePromptModal
+          titulo="Data do Pagamento"
+          onConfirmar={confirmarPagamento}
+          onFechar={() => setParcelaParaPagar(null)}
+        />
       )}
 
       <div className="con">

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
+import DatePromptModal from "@/components/ui/DatePromptModal";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import {
@@ -147,6 +148,7 @@ export default function EmprestimosPage() {
   const [modalAberto, setModalAberto] = useState(false);
   const [loading, setLoading] = useState(true);
   const [gerando, setGerando] = useState(false);
+  const [parcelaParaPagar, setParcelaParaPagar] = useState<EmprestimoParcela | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUsuarioEmail(data.user?.email ?? "sistema"));
@@ -193,10 +195,14 @@ export default function EmprestimosPage() {
       if (ok && selecionado) loadParcelas(selecionado.id);
       return;
     }
-    const data = prompt("Data do pagamento (AAAA-MM-DD):", hoje());
-    if (!data) return;
-    const ok = await marcarParcelaEmprestimoPaga(p.id, data);
+    setParcelaParaPagar(p);
+  }
+
+  async function confirmarPagamento(data: string) {
+    if (!parcelaParaPagar) return;
+    const ok = await marcarParcelaEmprestimoPaga(parcelaParaPagar.id, data);
     toast(ok ? "Parcela marcada como paga" : "Erro", ok ? "ok" : "err");
+    setParcelaParaPagar(null);
     if (ok && selecionado) loadParcelas(selecionado.id);
   }
 
@@ -222,6 +228,14 @@ export default function EmprestimosPage() {
           usuarioEmail={usuarioEmail}
           onSalvo={() => { setModalAberto(false); setEditando(null); load(); }}
           onFechar={() => { setModalAberto(false); setEditando(null); }}
+        />
+      )}
+
+      {parcelaParaPagar && (
+        <DatePromptModal
+          titulo="Data do Pagamento"
+          onConfirmar={confirmarPagamento}
+          onFechar={() => setParcelaParaPagar(null)}
         />
       )}
 
