@@ -35,6 +35,7 @@ const BLANK: RetrabalhoInsert = {
   tempo_adicional_min: null, custo_adicional: null,
   quantidade: 1, status: "Pendente",
   dt_retrabalho: new Date().toISOString(), dt_conclusao: null,
+  lancamento_gerado: false,
 };
 
 export default function RetrabalhosPage() {
@@ -82,7 +83,8 @@ export default function RetrabalhosPage() {
       ...(novoStatus === "Concluído" ? { dt_conclusao: new Date().toISOString() } : {}),
     };
     const ok = await updateRetrabalho(id, updates);
-    toast(ok ? `→ ${novoStatus}` : "Erro ao atualizar", ok ? undefined : "err");
+    const gerouLancamento = novoStatus === "Concluído" && ok?.lancamento_gerado;
+    toast(ok ? `→ ${novoStatus}${gerouLancamento ? " (custo lançado no financeiro)" : ""}` : "Erro ao atualizar", ok ? undefined : "err");
     await load();
     setSalvando(false);
   }

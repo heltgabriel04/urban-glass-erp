@@ -1178,6 +1178,8 @@ export interface Retrabalho {
   status: StatusRetrabalho;
   dt_retrabalho: string;
   dt_conclusao: string | null;
+  /** true depois que custo_adicional já virou lançamento financeiro — evita duplicar se reabrir/concluir de novo. */
+  lancamento_gerado: boolean;
   created_at: string;
   // joins
   pedidos?: Pick<Pedido, 'id'>;

@@ -137,15 +137,25 @@ export async function getQuebras(filtros?: {
   return (data ?? []) as Quebra[];
 }
 
-export async function createQuebra(payload: QuebraInsert): Promise<Quebra | null> {
+// A baixa de estoque/lançamento de custo roda automaticamente ao registrar —
+// antes era um botão separado ("Confirmar baixa"), e na prática ficava
+// esquecido (o próprio dashboard de Qualidade chegou a expor um card de
+// pendências acumuladas). Se a baixa falhar (ex.: nome do produto não bate
+// com o cadastro de estoque), a quebra continua salva — a perda aconteceu e
+// precisa ficar registrada mesmo que a reconciliação de estoque precise de
+// ajuste manual depois (botão "Confirmar baixa" continua disponível pra isso).
+export async function createQuebra(payload: QuebraInsert): Promise<{ quebra: Quebra | null; baixaOk: boolean; baixaMotivo?: string }> {
   const { data, error } = await supabase
     .from('quebras')
     .insert([payload as never])
     .select()
     .single();
-  if (error) { console.error('createQuebra:', error); return null; }
+  if (error) { console.error('createQuebra:', error); return { quebra: null, baixaOk: false, baixaMotivo: error.message }; }
   registrarLog({ acao: 'criar_quebra', tabela: 'quebras', descricao: `Quebra registrada — ${payload.produto_nome} ${payload.m2_perdido}m²`, registro_id: String(data.id) });
-  return data as Quebra;
+
+  const quebra = data as Quebra;
+  const baixa = await confirmarBaixaEstoqueQuebra(quebra.id);
+  return { quebra, baixaOk: baixa };
 }
 
 export async function confirmarBaixaEstoqueQuebra(quebraId: number): Promise<boolean> {
@@ -211,6 +221,9 @@ export async function createRetrabalho(payload: RetrabalhoInsert): Promise<Retra
   return data as Retrabalho;
 }
 
+// Conclusão de retrabalho com custo já lança a saída financeira automaticamente
+// (antes o custo_adicional era só um número digitado, sem efeito real no CMV).
+// `lancamento_gerado` evita duplicar se o retrabalho for reaberto e concluído de novo.
 export async function updateRetrabalho(id: number, updates: RetrabalhoUpdate): Promise<Retrabalho | null> {
   const { data, error } = await supabase
     .from('retrabalhos')
@@ -219,7 +232,24 @@ export async function updateRetrabalho(id: number, updates: RetrabalhoUpdate): P
     .select()
     .single();
   if (error) { console.error('updateRetrabalho:', error); return null; }
-  return data as Retrabalho;
+  const retrabalho = data as Retrabalho;
+
+  if (updates.status === 'Concluído' && !retrabalho.lancamento_gerado && Number(retrabalho.custo_adicional ?? 0) > 0) {
+    await createLancamento({
+      tipo: 'Saída',
+      descricao: `Custo de retrabalho #${id} — ${retrabalho.motivo}`,
+      valor: Number(retrabalho.custo_adicional),
+      status: 'Pago',
+      vencimento: (retrabalho.dt_conclusao ?? retrabalho.dt_retrabalho).substring(0, 10),
+      pedido_id: retrabalho.pedido_id ?? null,
+      cliente_id: retrabalho.cliente_id ?? null,
+    } as never);
+    await supabase.from('retrabalhos').update({ lancamento_gerado: true } as never).eq('id', id);
+    retrabalho.lancamento_gerado = true;
+    registrarLog({ acao: 'lancamento_retrabalho', tabela: 'retrabalhos', descricao: `Gerou lançamento de custo do retrabalho #${id}`, registro_id: String(id) });
+  }
+
+  return retrabalho;
 }
 
 // ─── Indicadores ──────────────────────────────────────────

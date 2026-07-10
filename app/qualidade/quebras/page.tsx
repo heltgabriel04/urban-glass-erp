@@ -77,9 +77,9 @@ export default function QuebrasPage() {
     if (m2 <= 0) { toast("Informe as dimensões ou m² perdido", "warn"); return; }
     setSalvando(true);
     const payload: QuebraInsert = { ...form, m2_perdido: m2 };
-    const result = await createQuebra(payload);
-    if (result) {
-      toast("Quebra registrada");
+    const { quebra, baixaOk } = await createQuebra(payload);
+    if (quebra) {
+      toast(baixaOk ? "Quebra registrada — baixa de estoque e lançamento feitos" : "Quebra registrada, mas a baixa automática falhou — confirme manualmente", baixaOk ? undefined : "warn");
       setModal(false);
       setForm(BLANK);
       await load();
