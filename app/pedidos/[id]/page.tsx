@@ -13,6 +13,7 @@ import { formatBRL, formatDate, formatDuracao, medidaReal } from "@/lib/formatte
 import { registrarRecente } from "@/lib/recentes";
 import PedidoTabs from "@/components/pedidos/PedidoTabs";
 import { useToast } from "@/components/ui/toast";
+import { useEscToClose } from "@/components/ui/useEscToClose";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import type { Pedido, Lancamento, Vendedor, NaoConformidade, NaoConformidadeInsert, TipoNC, GravidadeNC, StatusNaoConformidade, RetiradaPedido, PedidoObservacao } from "@/types";
@@ -167,6 +168,7 @@ export default function PedidoDetalhe() {
   const [fotosNC, setFotosNC]       = useState<File[]>([]);
 
   const [editando, setEditando]         = useState(false);
+  useEscToClose(editando, () => setEditando(false));
   const [editForm, setEditForm]         = useState({
     cliente_id: 0, vendedor_id: null as number | null,
     dt_pedido: "", dt_retirada: "",
@@ -1568,11 +1570,11 @@ export default function PedidoDetalhe() {
 
         {/* ── MODAL EDIÇÃO ── */}
         {editando && (
-          <div className="mov open" >
+          <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) setEditando(false); }}>
             <div className="mod" style={{ width:"780px", maxHeight:"90vh", overflowY:"auto" }}>
               <div className="mhd">
                 <div className="mtit">Editar Pedido · {pedido.id}</div>
-                <button className="mcl" onClick={() => setEditando(false)}>✕</button>
+                <button className="mcl" onClick={() => setEditando(false)} aria-label="Fechar">✕</button>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
                 <div className="fg">

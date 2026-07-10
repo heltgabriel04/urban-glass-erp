@@ -602,7 +602,7 @@ function ModalAgendar({
   const dtValida = !!parseBR(dtDisplay);
 
   return (
-    <div className="mov open">
+    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
       <div className="mod" style={{ width: 480 }}>
         <div className="mhd">
           <span>Agendar — Pedido {pedido.id}</span>
@@ -785,7 +785,7 @@ function ModalAgendamentoLote({
   }
 
   return (
-    <div className="mov open">
+    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
       <div className="mod" style={{ width: 480 }}>
         <div className="mhd">
           <span>Agendar em Lote — {pedidos.length} pedidos</span>
@@ -911,7 +911,7 @@ function ModalBloco({
   const linhaNome = linhas.find(l => l.id === prog.linha_id)?.nome ?? prog.etapa;
 
   return (
-    <div className="mov open">
+    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
       <div className="mod" style={{ width: 480 }}>
         <div className="mhd" style={{ borderLeft: `4px solid ${borda}`, paddingLeft: 14 }}>
           <div>
@@ -1103,7 +1103,7 @@ function ModalRetrabalho({
   }
 
   return (
-    <div className="mov open">
+    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
       <div className="mod" style={{ width: 420 }}>
         <div className="mhd">
           <span style={{ color: "var(--warn)" }}>⚠ Registrar Retrabalho</span>
@@ -1196,7 +1196,7 @@ function ModalBloqueioLinha({
   };
 
   return (
-    <div className="mov open">
+    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
       <div className="mod" style={{ width: 480 }}>
         <div className="mhd">
           <span>Bloqueios — {nomeDisplay}</span>
@@ -2760,7 +2760,7 @@ function ModalRecalculo({
   const piorou   = proposta.resumo.atrasadosDepois > proposta.resumo.atrasadosAntes;
 
   return (
-    <div className="mov open">
+    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
       <div className="mod" style={{ width: 640, maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
         <div className="mhd">
           <span>Prévia do Recálculo Automático</span>

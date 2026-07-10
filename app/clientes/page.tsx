@@ -8,6 +8,7 @@ import { getFinanceiroClientes } from "@/services/financeiro.service";
 import { formatBRL } from "@/lib/formatters";
 import SearchInput from "@/components/ui/SearchInput";
 import { useToast } from "@/components/ui/toast";
+import { useEscToClose } from "@/components/ui/useEscToClose";
 import type { Cliente, FinanceiroCliente, ClienteInsert, TipoPessoa, IndIE } from "@/types";
 
 type ClienteForm = ClienteInsert & { responsavel?: string; tel_responsavel?: string };
@@ -109,6 +110,7 @@ export default function ClientesPage() {
   const [loading, setLoading]         = useState(true);
   const [filtro, setFiltro]           = useState("");
   const [modal, setModal]             = useState(false);
+  useEscToClose(modal, () => setModal(false));
   const [aba, setAba]                 = useState<"geral" | "endereco" | "fiscal">("geral");
   const [form, setForm]               = useState<any>(VAZIO);
   const [editId, setEditId]           = useState<number | null>(null);
@@ -388,11 +390,11 @@ export default function ClientesPage() {
       </div>
 
       {modal && (
-        <div className="mov open">
+        <div className="mov open" onClick={e => e.target === e.currentTarget && setModal(false)}>
           <div className="mod" style={{ width:"600px", maxHeight:"90vh", display:"flex", flexDirection:"column" }}>
             <div className="mhd">
               <div className="mtit">{editId ? "Editar Cliente" : "Novo Cliente"}</div>
-              <button className="mcl" onClick={() => setModal(false)}>✕</button>
+              <button className="mcl" onClick={() => setModal(false)} aria-label="Fechar">✕</button>
             </div>
 
             <div style={{ display:"flex", gap:"2px", padding:"0 20px", borderBottom:"1px solid var(--b1)", flexShrink:0 }}>
