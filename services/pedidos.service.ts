@@ -171,13 +171,14 @@ export async function createPedido(pedido: PedidoInsert, itens: ItemPedidoInsert
 
 // Transições válidas de status:
 //  • De qualquer status ativo → 'Cancelado'
-//  • Avanço/retrocesso de 1 passo no fluxo principal
-//  • Nunca sair de 'Entregue' ou 'Cancelado'
-const STATUS_FINAIS: StatusPedido[] = ['Entregue', 'Cancelado'];
-
+//  • Avanço/retrocesso de 1 passo no fluxo principal (inclui recuar de
+//    'Entregue' pra 'Finalizado', ex.: marcado como entregue por engano)
+//  • Nunca sair de 'Cancelado' — esse sim é terminal de verdade
+// Edição completa do pedido em Entregue/Cancelado continua bloqueada por
+// uma regra separada (ver pedidos/[id]/page.tsx).
 function transicaoValida(de: StatusPedido, para: StatusPedido): boolean {
   if (de === para) return true;
-  if (STATUS_FINAIS.includes(de)) return false;
+  if (de === 'Cancelado') return false;
   if (para === 'Cancelado') return true;
   const idxDe   = FLUXO.indexOf(de);
   const idxPara = FLUXO.indexOf(para);
