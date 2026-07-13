@@ -92,6 +92,9 @@ export interface Fornecedor {
   obs: string;
   ativo: boolean;
   created_at: string;
+  ie: string;
+  ind_ie: IndIE;
+  regime_tributario: '' | 'mei' | 'simples' | 'presumido' | 'real';
 }
 
 export type FornecedorInsert = Omit<Fornecedor, 'id' | 'created_at'>;
