@@ -19,6 +19,7 @@ import {
 } from "@/services/contabilidade.service";
 import type { ConfigFiscalPadrao } from "@/types";
 import ModalClassificacaoFiscal, { CFOP_DENTRO, CFOP_FORA, CST_NORMAL, CSOSN } from "@/components/produtos/ModalClassificacaoFiscal";
+import { Campo } from "@/components/ui/Campo";
 
 // ─── Seção: Parâmetros Padrão ─────────────────────────────
 interface SecaoPadraoProps {
@@ -116,8 +117,7 @@ function SecaoPadrao({ padrao, onChange, onSalvar, salvando }: SecaoPadraoProps)
               { key: "aliq_cofins",      label: "COFINS",                     hint: "ex: 7.60" },
               { key: "aliq_ipi",         label: "IPI",                        hint: "ex: 0" },
             ] as const).map(({ key, label, hint }) => (
-              <div key={key} className="fg">
-                <label className="fl" style={{ fontSize: "10px" }}>{label}</label>
+              <Campo key={key} labelStyle={{ fontSize: "10px" }} label={label}>
                 <input
                   className="fc"
                   type="number"
@@ -129,7 +129,7 @@ function SecaoPadrao({ padrao, onChange, onSalvar, salvando }: SecaoPadraoProps)
                   placeholder={hint}
                   style={{ fontFamily: "'DM Mono', monospace", fontWeight: 700 }}
                 />
-              </div>
+              </Campo>
             ))}
           </div>
         </div>
@@ -140,8 +140,7 @@ function SecaoPadrao({ padrao, onChange, onSalvar, salvando }: SecaoPadraoProps)
             CLASSIFICAÇÃO PADRÃO (pré-preenchida ao configurar produtos)
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">NCM Padrão</label>
+            <Campo label="NCM Padrão">
               <input
                 className="fc"
                 value={padrao.ncm_padrao}
@@ -149,25 +148,22 @@ function SecaoPadrao({ padrao, onChange, onSalvar, salvando }: SecaoPadraoProps)
                 maxLength={8}
                 style={{ fontFamily: "'DM Mono', monospace" }}
               />
-            </div>
-            <div className="fg">
-              <label className="fl">{padrao.regime === "simples" ? "CSOSN" : "CST ICMS"} Padrão</label>
+            </Campo>
+            <Campo label={`${padrao.regime === "simples" ? "CSOSN" : "CST ICMS"} Padrão`}>
               <select className="fc" value={padrao.cst_icms_padrao} onChange={(e) => set("cst_icms_padrao", e.target.value)}>
                 {cstOpcoes.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
-            </div>
-            <div className="fg">
-              <label className="fl">CFOP Dentro (MG)</label>
+            </Campo>
+            <Campo label="CFOP Dentro (MG)">
               <select className="fc" value={padrao.cfop_dentro_padrao} onChange={(e) => set("cfop_dentro_padrao", e.target.value)}>
                 {CFOP_DENTRO.map((o) => <option key={o.value} value={o.value}>{o.value.replace(/(\d)(\d{3})/, "$1.$2")}</option>)}
               </select>
-            </div>
-            <div className="fg">
-              <label className="fl">CFOP Fora</label>
+            </Campo>
+            <Campo label="CFOP Fora">
               <select className="fc" value={padrao.cfop_fora_padrao} onChange={(e) => set("cfop_fora_padrao", e.target.value)}>
                 {CFOP_FORA.map((o) => <option key={o.value} value={o.value}>{o.value.replace(/(\d)(\d{3})/, "$1.$2")}</option>)}
               </select>
-            </div>
+            </Campo>
           </div>
         </div>
 
