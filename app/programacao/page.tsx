@@ -5,6 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import HoverCard from "@/components/ui/HoverCard";
 import { useConfirm } from "@/components/ui/confirm";
 import { Modal } from "@/components/ui/Modal";
+import { Campo } from "@/components/ui/Campo";
 import {
   getLinhas, getConfigTempo, getProgramacao, getPedidosSemProgramacao,
   getPedidosExpedicao, getCalendario,
@@ -675,33 +676,32 @@ function ModalAgendar({
           </div>
 
           {/* Campos */}
-          <div className="fg">
-            <label className="fl" style={{ display: "flex", justifyContent: "space-between" }}>
+          <Campo label={
+            <span style={{ display: "flex", justifyContent: "space-between" }}>
               <span>Data de Início</span>
               {dtDisplay.length === 10 && !dtValida && (
                 <span style={{ color: "var(--err)", fontSize: 11, fontWeight: 400 }}>data inválida</span>
               )}
-            </label>
+            </span>
+          }>
             <input className="fc" value={dtDisplay} onChange={e => setDtDisplay(maskData(e.target.value))}
               placeholder="dd/mm/aaaa" maxLength={10} inputMode="numeric"
               style={{ fontSize: 15, borderColor: dtDisplay.length === 10 && !dtValida ? "var(--err)" : undefined }} />
-          </div>
+          </Campo>
 
           {!eChapa && (
-            <div className="fg">
-              <label className="fl">Linha de Corte</label>
+            <Campo label="Linha de Corte">
               {linhasCorte.length === 0
                 ? <div className="fc" style={{ color: "var(--t3)", pointerEvents: "none" }}>Nenhuma linha configurada</div>
                 : <select className="fc" value={linhaCorteId} onChange={e => setLinhaCorteId(Number(e.target.value))}>
                     {linhasCorte.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
                   </select>
               }
-            </div>
+            </Campo>
           )}
 
           {!eChapa && tempos.tem_lapidacao && (
-            <div className="fg">
-              <label className="fl">Linha de Lapidação</label>
+            <Campo label="Linha de Lapidação">
               {linhasLap.length === 0
                 ? <div className="fc" style={{ color: "var(--t3)", pointerEvents: "none" }}>Nenhuma linha configurada</div>
                 : <select className="fc" value={linhaLapId ?? ""} onChange={e => setLinhaLapId(Number(e.target.value) || undefined)}>
@@ -709,7 +709,7 @@ function ModalAgendar({
                     {linhasLap.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
                   </select>
               }
-            </div>
+            </Campo>
           )}
 
           {erro && (
@@ -805,22 +805,22 @@ function ModalAgendamentoLote({
             Os pedidos serão agendados sequencialmente a partir da data informada, sem sobreposição entre eles.
           </div>
 
-          <div className="fg">
-            <label className="fl" style={{ display: "flex", justifyContent: "space-between" }}>
+          <Campo label={
+            <span style={{ display: "flex", justifyContent: "space-between" }}>
               <span>Data de Início (1º pedido)</span>
               {dtDisplay.length === 10 && !dtValida && <span style={{ color: "var(--err)", fontSize: 11, fontWeight: 400 }}>inválida</span>}
-            </label>
+            </span>
+          }>
             <input className="fc" value={dtDisplay} onChange={e => setDtDisplay(maskData(e.target.value))}
               placeholder="dd/mm/aaaa" maxLength={10} inputMode="numeric"
               style={{ fontSize: 15, borderColor: dtDisplay.length === 10 && !dtValida ? "var(--err)" : undefined }} />
-          </div>
+          </Campo>
 
-          <div className="fg">
-            <label className="fl">Linha de Corte</label>
+          <Campo label="Linha de Corte">
             <select className="fc" value={linhaCorteId} onChange={e => setLinhaCorteId(Number(e.target.value))}>
               {linhasCorte.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
             </select>
-          </div>
+          </Campo>
 
           {erro && (
             <div style={{ color: "var(--err)", fontSize: 12, background: "rgba(244,63,94,.08)", borderRadius: 8, padding: "8px 12px" }}>⚠ {erro}</div>
@@ -1096,16 +1096,14 @@ function ModalRetrabalho({
           <div style={{ background: "rgba(245,158,11,.07)", border: "1px solid var(--warn)", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "var(--t2)" }}>
             Pedido <strong style={{ color: "var(--t1)" }}>{prog.pedido_id}</strong> · Etapa: {prog.etapa}
           </div>
-          <div className="fg">
-            <label className="fl">Motivo / descrição do problema</label>
+          <Campo label="Motivo / descrição do problema">
             <textarea className="fc" rows={3} value={motivo} onChange={e => setMotivo(e.target.value)}
               placeholder="Ex: Peças fora de esquadro, precisa reprocessar..." />
-          </div>
-          <div className="fg">
-            <label className="fl">Dias de retrabalho estimados</label>
+          </Campo>
+          <Campo label="Dias de retrabalho estimados">
             <input className="fc" type="number" min={1} max={30} value={dias}
               onChange={e => setDias(e.target.value)} style={{ width: 100 }} />
-          </div>
+          </Campo>
           {erro && <div style={{ color: "var(--err)", fontSize: 12 }}>⚠ {erro}</div>}
         </div>
         <div className="mft">
@@ -1207,27 +1205,23 @@ function ModalBloqueioLinha({
           <div style={{ borderTop: bloqueiosFiltrados.length > 0 ? "1px solid var(--b2)" : "none", paddingTop: bloqueiosFiltrados.length > 0 ? 14 : 0 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "var(--t3)", marginBottom: 10 }}>NOVO BLOQUEIO</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-              <div className="fg">
-                <label className="fl">Data Início</label>
+              <Campo label="Data Início">
                 <input className="fc" value={dtIni} onChange={e => setDtIni(maskData(e.target.value))} placeholder="dd/mm/aaaa" maxLength={10} inputMode="numeric" />
-              </div>
-              <div className="fg">
-                <label className="fl">Data Fim</label>
+              </Campo>
+              <Campo label="Data Fim">
                 <input className="fc" value={dtFim} onChange={e => setDtFim(maskData(e.target.value))} placeholder="dd/mm/aaaa" maxLength={10} inputMode="numeric" />
-              </div>
+              </Campo>
             </div>
-            <div className="fg" style={{ marginBottom: 10 }}>
-              <label className="fl">Tipo</label>
+            <Campo style={{ marginBottom: 10 }} label="Tipo">
               <select className="fc" value={tipo} onChange={e => setTipo(e.target.value as BloqueioLinha['tipo'])}>
                 <option value="manutencao">Manutenção</option>
                 <option value="recesso">Recesso</option>
                 <option value="outro">Outro</option>
               </select>
-            </div>
-            <div className="fg">
-              <label className="fl">Motivo (opcional)</label>
+            </Campo>
+            <Campo label="Motivo (opcional)">
               <input className="fc" value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Ex: Revisão preventiva da máquina" />
-            </div>
+            </Campo>
           </div>
 
           {erro && <div style={{ color: "var(--err)", fontSize: 12 }}>⚠ {erro}</div>}
