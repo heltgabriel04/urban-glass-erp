@@ -6,6 +6,7 @@ import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import DatePromptModal from "@/components/ui/DatePromptModal";
+import { Modal } from "@/components/ui/Modal";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import {
@@ -65,12 +66,7 @@ function ModalEmprestimo({ editando, contasBancarias, usuarioEmail, onSalvo, onF
   }
 
   return (
-    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
-      <div className="mod" style={{ width: "560px" }}>
-        <div className="mhd">
-          <div className="mtit">{editando ? "Editar Empréstimo" : "Novo Empréstimo"}</div>
-          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
-        </div>
+    <Modal open onClose={onFechar} title={editando ? "Editar Empréstimo" : "Novo Empréstimo"} width="560px">
         <form id="form-emprestimo" onSubmit={handleSubmit} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
           <div className="fg">
             <label className="fl">Descrição *</label>
@@ -131,8 +127,7 @@ function ModalEmprestimo({ editando, contasBancarias, usuarioEmail, onSalvo, onF
           <button type="button" className="btn bg" onClick={onFechar} disabled={salvando}>Cancelar</button>
           <button type="submit" form="form-emprestimo" className="btn bp" disabled={salvando}>{salvando ? "Salvando..." : "Salvar"}</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
