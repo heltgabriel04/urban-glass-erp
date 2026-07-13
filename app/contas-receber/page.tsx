@@ -16,6 +16,7 @@ import { getContasBancarias } from "@/services/contasBancarias.service";
 import { registrarBaixa, estornarBaixa, getBaixasPorLancamentos, calcularSaldo, excluirLancamento, editarLancamento, verificarDuplicadoCliente, criarAdiantamento, criarReembolso, getAdiantamentosDisponiveis, getHistorico, getUltimoPlanoContas, type LancamentoDuplicado, type AdiantamentoComSaldo, type VersaoLancamento } from "@/services/lancamentos.service";
 import { getFormasPagamento } from "@/services/formasPagamento.service";
 import { Modal } from "@/components/ui/Modal";
+import { Campo } from "@/components/ui/Campo";
 import { useGlobalShortcut } from "@/components/ui/useGlobalShortcut";
 import { exportarExcel } from "@/lib/exportExcel";
 import { getFiltrosSalvos, salvarFiltro, excluirFiltroSalvo, type FiltroSalvo } from "@/services/filtrosSalvos.service";
@@ -727,8 +728,7 @@ function ContasReceberPageInner() {
       <Modal open={modal === "add" || modal === "edit"} onClose={closeModal} title={modal === "add" ? "Novo Recebível" : "Editar Recebível"} width="560px" style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px", overflowY: "auto", flex: 1 }}>
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Cliente</label>
+                <Campo label="Cliente">
                   <select className="fc" value={form.cliente_id}
                     onChange={async e => {
                       const clienteId = e.target.value;
@@ -747,13 +747,12 @@ function ContasReceberPageInner() {
                     <option value="">Selecione...</option>
                     {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                   </select>
-                </div>
-                <div className="fg">
-                  <label className="fl">Documento</label>
+                </Campo>
+                <Campo label="Documento">
                   <input className="fc" placeholder="NF, recibo..." value={form.documento as string}
                     onChange={e => setForm(f => ({ ...f, documento: e.target.value }))}
                     onBlur={() => checarDuplicado(form.cliente_id, form.documento as string)} />
-                </div>
+                </Campo>
               </div>
 
               {duplicados.length > 0 && (
@@ -762,11 +761,10 @@ function ContasReceberPageInner() {
                 </div>
               )}
 
-              <div className="fg">
-                <label className="fl">Descrição *</label>
+              <Campo label="Descrição *">
                 <input className="fc" placeholder="Descrição do recebível" value={form.descricao}
                   onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} />
-              </div>
+              </Campo>
 
               {precisaMotivoRenegociacao && (
                 <div className="al al-w" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -776,44 +774,38 @@ function ContasReceberPageInner() {
                 </div>
               )}
 
-              <div className="fg">
-                <label className="fl">Plano de Contas</label>
+              <Campo label="Plano de Contas">
                 <select className="fc" value={form.plano_contas_id}
                   onChange={e => setForm(f => ({ ...f, plano_contas_id: e.target.value }))}>
                   <option value="">Selecione...</option>
                   {planos.map(p => <option key={p.id} value={p.id}>{p.codigo_estruturado} · {p.descricao}</option>)}
                 </select>
-              </div>
+              </Campo>
 
-              <div className="fg">
-                <label className="fl">Conta Bancária (previsão de recebimento)</label>
+              <Campo label="Conta Bancária (previsão de recebimento)">
                 <select className="fc" value={form.conta_id}
                   onChange={e => setForm(f => ({ ...f, conta_id: e.target.value }))}>
                   <option value="">Selecione...</option>
                   {contasBancarias.map(cb => <option key={cb.id} value={cb.id}>{cb.nome}</option>)}
                 </select>
-              </div>
+              </Campo>
 
               <div className="fr3">
-                <div className="fg">
-                  <label className="fl">Valor *</label>
+                <Campo label="Valor *">
                   <CurrencyInput value={form.valor} onChange={v => setForm(f => ({ ...f, valor: v }))} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Emissão</label>
+                </Campo>
+                <Campo label="Emissão">
                   <DateInput value={form.dt_emissao as string} onChange={v => setForm(f => ({ ...f, dt_emissao: v }))} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Vencimento</label>
+                </Campo>
+                <Campo label="Vencimento">
                   <DateInput value={form.vencimento as string} onChange={v => setForm(f => ({ ...f, vencimento: v }))} />
-                </div>
+                </Campo>
               </div>
 
-              <div className="fg">
-                <label className="fl">Observação</label>
+              <Campo label="Observação">
                 <input className="fc" placeholder="Observações..." value={form.obs as string}
                   onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} />
-              </div>
+              </Campo>
             </div>
 
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)", flexShrink: 0 }}>
@@ -831,42 +823,36 @@ function ContasReceberPageInner() {
                 {recebiveis.find(r => r.id === receberId)?.descricao}
               </div>
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Valor da Baixa</label>
+                <Campo label="Valor da Baixa">
                   <CurrencyInput value={valorBaixa} onChange={setValorBaixa} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Data</label>
+                </Campo>
+                <Campo label="Data">
                   <DateInput value={dtRec} onChange={setDtRec} />
-                </div>
+                </Campo>
               </div>
               {adiantamentosDisponiveis.length > 0 && (
-                <div className="fg">
-                  <label className="fl">Usar saldo de adiantamento</label>
+                <Campo label="Usar saldo de adiantamento">
                   <select className="fc" value={adiantamentoUsadoId} onChange={e => setAdiantamentoUsadoId(e.target.value)}>
                     <option value="">Não usar — receber em conta bancária</option>
                     {adiantamentosDisponiveis.map(a => <option key={a.id} value={a.id}>{a.descricao} · saldo {formatBRL(a.saldo)}</option>)}
                   </select>
-                </div>
+                </Campo>
               )}
-              <div className="fg" style={{ display: adiantamentoUsadoId ? "none" : undefined }}>
-                <label className="fl">Conta Bancária</label>
+              <Campo style={{ display: adiantamentoUsadoId ? "none" : undefined }} label="Conta Bancária">
                 <select className="fc" value={contaBaixaId} onChange={e => setContaBaixaId(e.target.value)}>
                   <option value="">Não informado</option>
                   {contasBancarias.map(cb => <option key={cb.id} value={cb.id}>{cb.nome}</option>)}
                 </select>
-              </div>
-              <div className="fg">
-                <label className="fl">Forma de Pagamento</label>
+              </Campo>
+              <Campo label="Forma de Pagamento">
                 <select className="fc" value={formaPgtoBaixa} onChange={e => setFormaPgtoBaixa(e.target.value)}>
                   <option value="">Não informado</option>
                   {formasPagamento.map(fp => <option key={fp.id} value={fp.nome}>{fp.nome}</option>)}
                 </select>
-              </div>
-              <div className="fg">
-                <label className="fl">Observação</label>
+              </Campo>
+              <Campo label="Observação">
                 <input className="fc" value={obsBaixa} onChange={e => setObsBaixa(e.target.value)} />
-              </div>
+              </Campo>
 
               {!mostrarExtrasBaixa ? (
                 <button type="button" className="btn bg xs" style={{ alignSelf: "flex-start" }} onClick={() => setMostrarExtrasBaixa(true)}>
@@ -874,18 +860,15 @@ function ContasReceberPageInner() {
                 </button>
               ) : (
                 <div className="fr3">
-                  <div className="fg">
-                    <label className="fl">Juros</label>
+                  <Campo label="Juros">
                     <CurrencyInput value={valorJurosBaixa} onChange={setValorJurosBaixa} />
-                  </div>
-                  <div className="fg">
-                    <label className="fl">Multa</label>
+                  </Campo>
+                  <Campo label="Multa">
                     <CurrencyInput value={valorMultaBaixa} onChange={setValorMultaBaixa} />
-                  </div>
-                  <div className="fg">
-                    <label className="fl">Desconto</label>
+                  </Campo>
+                  <Campo label="Desconto">
                     <CurrencyInput value={valorDescontoBaixa} onChange={setValorDescontoBaixa} />
-                  </div>
+                  </Campo>
                 </div>
               )}
             </div>
@@ -900,10 +883,9 @@ function ContasReceberPageInner() {
       {/* ── MODAL BAIXA EM LOTE ── */}
       <Modal open={modal === "lote-receber"} onClose={closeModal} title={`Marcar ${selecionados.size} título(s) como recebidos`} width="360px">
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div className="fg">
-                <label className="fl">Data do Recebimento</label>
+              <Campo label="Data do Recebimento">
                 <DateInput value={dtLote} onChange={setDtLote} />
-              </div>
+              </Campo>
               <div style={{ fontSize: "11px", color: "var(--t3)" }}>
                 Cada título é baixado pelo saldo em aberto integral (sem parcial).
               </div>
@@ -989,10 +971,9 @@ function ContasReceberPageInner() {
               <div className="al al-w" style={{ fontSize: "12px" }}>
                 ⚠ Este título já tem baixa registrada. A conta não é apagada — fica marcada como excluída, com o histórico preservado.
               </div>
-              <div className="fg">
-                <label className="fl">Motivo da exclusão *</label>
+              <Campo label="Motivo da exclusão *">
                 <textarea className="fc" rows={3} value={motivoExclusao} onChange={e => setMotivoExclusao(e.target.value)} style={{ margin: 0, resize: "vertical" }} />
-              </div>
+              </Campo>
             </div>
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
               <button className="btn bg" onClick={closeModal}>Cancelar</button>
@@ -1005,35 +986,30 @@ function ContasReceberPageInner() {
       {/* ── MODAL ADIANTAMENTO ── */}
       <Modal open={modal === "adiantamento"} onClose={closeModal} title="Registrar Adiantamento (de cliente)" width="480px">
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div className="fg">
-                <label className="fl">Cliente</label>
+              <Campo label="Cliente">
                 <select className="fc" value={formAdiant.clienteId} onChange={e => setFormAdiant(f => ({ ...f, clienteId: e.target.value }))} style={{ margin: 0 }}>
                   <option value="">Selecione...</option>
                   {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                 </select>
-              </div>
-              <div className="fg">
-                <label className="fl">Descrição *</label>
+              </Campo>
+              <Campo label="Descrição *">
                 <input className="fc" placeholder="Adiantamento p/ pedido futuro..." value={formAdiant.descricao}
                   onChange={e => setFormAdiant(f => ({ ...f, descricao: e.target.value }))} style={{ margin: 0 }} />
-              </div>
+              </Campo>
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Valor *</label>
+                <Campo label="Valor *">
                   <CurrencyInput value={formAdiant.valor} onChange={v => setFormAdiant(f => ({ ...f, valor: v }))} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Data</label>
+                </Campo>
+                <Campo label="Data">
                   <DateInput value={formAdiant.data} onChange={v => setFormAdiant(f => ({ ...f, data: v }))} />
-                </div>
+                </Campo>
               </div>
-              <div className="fg">
-                <label className="fl">Conta Bancária (onde entrou)</label>
+              <Campo label="Conta Bancária (onde entrou)">
                 <select className="fc" value={formAdiant.contaId} onChange={e => setFormAdiant(f => ({ ...f, contaId: e.target.value }))} style={{ margin: 0 }}>
                   <option value="">Não informado</option>
                   {contasBancarias.map(cb => <option key={cb.id} value={cb.id}>{cb.nome}</option>)}
                 </select>
-              </div>
+              </Campo>
               <div style={{ fontSize: "11px", color: "var(--t3)" }}>
                 Fica disponível pra abater de um recebível futuro desse cliente.
               </div>
@@ -1053,19 +1029,16 @@ function ContasReceberPageInner() {
                 Referente a: {recebiveis.find(r => r.id === reembolsarId)?.descricao} — vira um lançamento novo em Contas a Pagar, sem reabrir este título.
               </div>
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Valor do Reembolso *</label>
+                <Campo label="Valor do Reembolso *">
                   <CurrencyInput value={formReembolso.valor} onChange={v => setFormReembolso(f => ({ ...f, valor: v }))} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Data</label>
+                </Campo>
+                <Campo label="Data">
                   <DateInput value={formReembolso.data} onChange={v => setFormReembolso(f => ({ ...f, data: v }))} />
-                </div>
+                </Campo>
               </div>
-              <div className="fg">
-                <label className="fl">Observação</label>
+              <Campo label="Observação">
                 <input className="fc" value={formReembolso.obs} onChange={e => setFormReembolso(f => ({ ...f, obs: e.target.value }))} style={{ margin: 0 }} />
-              </div>
+              </Campo>
             </div>
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
               <button className="btn bg" onClick={closeModal}>Cancelar</button>
