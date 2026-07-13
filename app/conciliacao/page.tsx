@@ -8,6 +8,7 @@ import {
   type ExtratoImportado, type ExtratoLinha, type BaixaCandidata,
 } from "@/services/conciliacao.service";
 import { useToast } from "@/components/ui/toast";
+import { Campo } from "@/components/ui/Campo";
 import { formatBRL } from "@/lib/formatters";
 import type { ContaBancaria } from "@/types";
 import {
@@ -118,17 +119,15 @@ export default function ConciliacaoPage() {
         <div className="card" style={{ marginBottom: "20px" }}>
           <div className="ct">Importar extrato (CSV)</div>
           <div style={{ display: "flex", gap: "10px", alignItems: "flex-end", flexWrap: "wrap" }}>
-            <div className="fg" style={{ minWidth: "220px" }}>
-              <label className="fl">Conta Bancária</label>
+            <Campo style={{ minWidth: "220px" }} label="Conta Bancária">
               <select className="fc" value={contaId} onChange={e => setContaId(e.target.value)} style={{ margin: 0 }}>
                 <option value="">Selecione...</option>
                 {contas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
               </select>
-            </div>
-            <div className="fg">
-              <label className="fl">Arquivo CSV</label>
+            </Campo>
+            <Campo label="Arquivo CSV">
               <input ref={fileRef} type="file" accept=".csv" className="fc" style={{ margin: 0 }} />
-            </div>
+            </Campo>
             <button className="btn bp sm" onClick={handleImportar} disabled={importando}>
               {importando ? "Importando..." : "Importar"}
             </button>
