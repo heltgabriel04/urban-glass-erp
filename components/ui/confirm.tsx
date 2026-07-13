@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useState } from "react";
-import { useEscToClose } from "./useEscToClose";
+import { Modal } from "./Modal";
 
 interface ConfirmOptions {
   titulo?: string;
@@ -35,21 +35,12 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     setState(null);
   }
 
-  useEscToClose(!!state, () => responder(false));
-
   return (
     <ConfirmContext.Provider value={{ confirm }}>
       {children}
-      <div
-        className={`mov ${state ? "open" : ""}`}
-        onClick={(e) => { if (e.target === e.currentTarget) responder(false); }}
-      >
+      <Modal open={!!state} onClose={() => responder(false)} title={state?.titulo ?? "Confirmar"} width={380}>
         {state && (
-          <div className="mod" style={{ width: 380 }}>
-            <div className="mhd">
-              <span className="mtit">{state.titulo ?? "Confirmar"}</span>
-              <button className="mcl" aria-label="Fechar" onClick={() => responder(false)}>✕</button>
-            </div>
+          <>
             <p style={{ color: "var(--t2)", fontSize: "13.5px", lineHeight: 1.5, whiteSpace: "pre-line", margin: "0 0 20px" }}>
               {state.mensagem}
             </p>
@@ -61,9 +52,9 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 {state.confirmarLabel ?? "Confirmar"}
               </button>
             </div>
-          </div>
+          </>
         )}
-      </div>
+      </Modal>
     </ConfirmContext.Provider>
   );
 }

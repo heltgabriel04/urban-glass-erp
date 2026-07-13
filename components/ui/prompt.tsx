@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useState } from "react";
-import { useEscToClose } from "./useEscToClose";
+import { Modal } from "./Modal";
 
 interface PromptOptions {
   titulo?: string;
@@ -41,8 +41,6 @@ export function PromptProvider({ children }: { children: React.ReactNode }) {
     setState(null);
   }
 
-  useEscToClose(!!state, () => responder(null));
-
   const podeConfirmar = state
     ? (state.matchExato ? valor === state.matchExato : (!state.obrigatorio || valor.trim().length > 0))
     : false;
@@ -50,16 +48,9 @@ export function PromptProvider({ children }: { children: React.ReactNode }) {
   return (
     <PromptContext.Provider value={{ prompt }}>
       {children}
-      <div
-        className={`mov ${state ? "open" : ""}`}
-        onClick={(e) => { if (e.target === e.currentTarget) responder(null); }}
-      >
+      <Modal open={!!state} onClose={() => responder(null)} title={state?.titulo ?? "Confirmar"} width={400}>
         {state && (
-          <div className="mod" style={{ width: 400 }}>
-            <div className="mhd">
-              <span className="mtit">{state.titulo ?? "Confirmar"}</span>
-              <button className="mcl" aria-label="Fechar" onClick={() => responder(null)}>✕</button>
-            </div>
+          <>
             <p style={{ color: "var(--t2)", fontSize: "13.5px", lineHeight: 1.5, whiteSpace: "pre-line", margin: "0 0 14px" }}>
               {state.mensagem}
             </p>
@@ -84,9 +75,9 @@ export function PromptProvider({ children }: { children: React.ReactNode }) {
                 {state.confirmarLabel ?? "Confirmar"}
               </button>
             </div>
-          </div>
+          </>
         )}
-      </div>
+      </Modal>
     </PromptContext.Provider>
   );
 }
