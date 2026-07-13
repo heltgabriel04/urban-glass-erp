@@ -40,6 +40,17 @@ export async function getDocumentoFiscalById(id: number): Promise<DocumentoFisca
   return data as DocumentoFiscal | null;
 }
 
+export async function getDocumentoFiscalPorChaveAcesso(chaveAcesso: string): Promise<DocumentoFiscal | null> {
+  const { data, error } = await supabase
+    .from("documentos_fiscais")
+    .select("*, fornecedores ( id, nome, cnpj )")
+    .eq("chave_acesso", chaveAcesso)
+    .is("deletado_em", null)
+    .maybeSingle();
+  if (error) { console.error("getDocumentoFiscalPorChaveAcesso:", error); return null; }
+  return data as DocumentoFiscal | null;
+}
+
 export async function criarDocumentoFiscal(input: DocumentoFiscalInsert): Promise<DocumentoFiscal | null> {
   const { data, error } = await supabase
     .from("documentos_fiscais")
