@@ -6,6 +6,7 @@ import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import { usePrompt } from "@/components/ui/prompt";
+import { Modal } from "@/components/ui/Modal";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import {
@@ -116,13 +117,7 @@ function ModalDocumento({ tipo, titulo, editando, ano, mes, fornecedores, notasV
   }
 
   return (
-    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
-      <div className="mod" style={{ width: "600px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
-        <div className="mhd">
-          <div className="mtit">{titulo}</div>
-          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
-        </div>
-
+    <Modal open onClose={onFechar} title={titulo} width="600px" style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
         <form id={`form-doc-${tipo}`} onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px", flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>
 
           {/* Competência */}
@@ -312,8 +307,7 @@ function ModalDocumento({ tipo, titulo, editando, ano, mes, fornecedores, notasV
             {salvando ? "Salvando..." : "Salvar"}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
