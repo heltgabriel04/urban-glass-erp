@@ -17,6 +17,7 @@ import { registrarBaixa, estornarBaixa, getBaixasPorLancamentos, calcularSaldo, 
 import { getFornecedores } from "@/services/fornecedores.service";
 import { getFormasPagamento } from "@/services/formasPagamento.service";
 import { Modal } from "@/components/ui/Modal";
+import { Campo } from "@/components/ui/Campo";
 import { useGlobalShortcut } from "@/components/ui/useGlobalShortcut";
 import { exportarExcel } from "@/lib/exportExcel";
 import { parseLinhaDigitavel } from "@/lib/boleto";
@@ -727,8 +728,7 @@ function ContasPagarPageInner() {
       <Modal open={modal === "add" || modal === "edit"} onClose={closeModal} title={modal === "add" ? "Nova Conta a Pagar" : "Editar Conta a Pagar"} width="560px" style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px", overflowY: "auto", flex: 1 }}>
               {modal === "add" && (
-                <div className="fg">
-                  <label className="fl">Colar linha digitável do boleto (opcional)</label>
+                <Campo label="Colar linha digitável do boleto (opcional)">
                   <input className="fc" placeholder="00190.00009 01234.567890 12345.678901 1 23456789012345"
                     onChange={e => {
                       const dados = parseLinhaDigitavel(e.target.value);
@@ -737,11 +737,10 @@ function ContasPagarPageInner() {
                         toast(`Valor ${formatBRL(dados.valor)} e vencimento preenchidos a partir do boleto`);
                       }
                     }} />
-                </div>
+                </Campo>
               )}
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Fornecedor</label>
+                <Campo label="Fornecedor">
                   <AutocompleteInput
                     options={fornecedores.map(f => ({ id: f.id, label: f.nome, sub: f.categoria || undefined }))}
                     value={form.fornecedor_id}
@@ -762,13 +761,12 @@ function ContasPagarPageInner() {
                       }
                     }}
                   />
-                </div>
-                <div className="fg">
-                  <label className="fl">Documento</label>
+                </Campo>
+                <Campo label="Documento">
                   <input className="fc" placeholder="NF 001, Boleto..." value={form.documento}
                     onChange={e => setForm(f => ({ ...f, documento: e.target.value }))}
                     onBlur={() => checarDuplicado(form.fornecedor_id, form.documento)} />
-                </div>
+                </Campo>
               </div>
 
               {duplicados.length > 0 && (
@@ -777,11 +775,10 @@ function ContasPagarPageInner() {
                 </div>
               )}
 
-              <div className="fg">
-                <label className="fl">Descrição *</label>
+              <Campo label="Descrição *">
                 <input className="fc" placeholder="Descrição da conta" value={form.descricao}
                   onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} />
-              </div>
+              </Campo>
 
               {precisaMotivoRenegociacao && (
                 <div className="al al-w" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -791,44 +788,38 @@ function ContasPagarPageInner() {
                 </div>
               )}
 
-              <div className="fg">
-                <label className="fl">Plano de Contas</label>
+              <Campo label="Plano de Contas">
                 <select className="fc" value={form.plano_contas_id}
                   onChange={e => setForm(f => ({ ...f, plano_contas_id: e.target.value }))}>
                   <option value="">Selecione...</option>
                   {planos.map(p => <option key={p.id} value={p.id}>{p.codigo_estruturado} · {p.descricao}</option>)}
                 </select>
-              </div>
+              </Campo>
 
-              <div className="fg">
-                <label className="fl">Conta Bancária (previsão de pagamento)</label>
+              <Campo label="Conta Bancária (previsão de pagamento)">
                 <select className="fc" value={form.conta_id}
                   onChange={e => setForm(f => ({ ...f, conta_id: e.target.value }))}>
                   <option value="">Selecione...</option>
                   {contasBancarias.map(cb => <option key={cb.id} value={cb.id}>{cb.nome}</option>)}
                 </select>
-              </div>
+              </Campo>
 
               <div className="fr3">
-                <div className="fg">
-                  <label className="fl">Valor *</label>
+                <Campo label="Valor *">
                   <CurrencyInput value={form.valor} onChange={v => setForm(f => ({ ...f, valor: v }))} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Emissão</label>
+                </Campo>
+                <Campo label="Emissão">
                   <DateInput value={form.dt_emissao} onChange={v => setForm(f => ({ ...f, dt_emissao: v }))} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Vencimento</label>
+                </Campo>
+                <Campo label="Vencimento">
                   <DateInput value={form.vencimento} onChange={v => setForm(f => ({ ...f, vencimento: v }))} />
-                </div>
+                </Campo>
               </div>
 
-              <div className="fg">
-                <label className="fl">Observação</label>
+              <Campo label="Observação">
                 <input className="fc" placeholder="Observações..." value={form.obs}
                   onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} />
-              </div>
+              </Campo>
             </div>
 
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)", flexShrink: 0 }}>
@@ -846,42 +837,36 @@ function ContasPagarPageInner() {
                 {contas.find(c => c.id === pagarId)?.descricao}
               </div>
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Valor da Baixa</label>
+                <Campo label="Valor da Baixa">
                   <CurrencyInput value={valorBaixa} onChange={setValorBaixa} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Data</label>
+                </Campo>
+                <Campo label="Data">
                   <DateInput value={dtPgto} onChange={setDtPgto} />
-                </div>
+                </Campo>
               </div>
               {adiantamentosDisponiveis.length > 0 && (
-                <div className="fg">
-                  <label className="fl">Usar saldo de adiantamento</label>
+                <Campo label="Usar saldo de adiantamento">
                   <select className="fc" value={adiantamentoUsadoId} onChange={e => setAdiantamentoUsadoId(e.target.value)}>
                     <option value="">Não usar — pagar de conta bancária</option>
                     {adiantamentosDisponiveis.map(a => <option key={a.id} value={a.id}>{a.descricao} · saldo {formatBRL(a.saldo)}</option>)}
                   </select>
-                </div>
+                </Campo>
               )}
-              <div className="fg" style={{ display: adiantamentoUsadoId ? "none" : undefined }}>
-                <label className="fl">Conta Bancária</label>
+              <Campo style={{ display: adiantamentoUsadoId ? "none" : undefined }} label="Conta Bancária">
                 <select className="fc" value={contaBaixaId} onChange={e => setContaBaixaId(e.target.value)}>
                   <option value="">Não informado</option>
                   {contasBancarias.map(cb => <option key={cb.id} value={cb.id}>{cb.nome}</option>)}
                 </select>
-              </div>
-              <div className="fg">
-                <label className="fl">Forma de Pagamento</label>
+              </Campo>
+              <Campo label="Forma de Pagamento">
                 <select className="fc" value={formaPgtoBaixa} onChange={e => setFormaPgtoBaixa(e.target.value)}>
                   <option value="">Não informado</option>
                   {formasPagamento.map(fp => <option key={fp.id} value={fp.nome}>{fp.nome}</option>)}
                 </select>
-              </div>
-              <div className="fg">
-                <label className="fl">Observação</label>
+              </Campo>
+              <Campo label="Observação">
                 <input className="fc" value={obsBaixa} onChange={e => setObsBaixa(e.target.value)} />
-              </div>
+              </Campo>
 
               {!mostrarExtrasBaixa ? (
                 <button type="button" className="btn bg xs" style={{ alignSelf: "flex-start" }} onClick={() => setMostrarExtrasBaixa(true)}>
@@ -889,18 +874,15 @@ function ContasPagarPageInner() {
                 </button>
               ) : (
                 <div className="fr3">
-                  <div className="fg">
-                    <label className="fl">Juros</label>
+                  <Campo label="Juros">
                     <CurrencyInput value={valorJurosBaixa} onChange={setValorJurosBaixa} />
-                  </div>
-                  <div className="fg">
-                    <label className="fl">Multa</label>
+                  </Campo>
+                  <Campo label="Multa">
                     <CurrencyInput value={valorMultaBaixa} onChange={setValorMultaBaixa} />
-                  </div>
-                  <div className="fg">
-                    <label className="fl">Desconto</label>
+                  </Campo>
+                  <Campo label="Desconto">
                     <CurrencyInput value={valorDescontoBaixa} onChange={setValorDescontoBaixa} />
-                  </div>
+                  </Campo>
                 </div>
               )}
             </div>
@@ -915,10 +897,9 @@ function ContasPagarPageInner() {
       {/* ── MODAL BAIXA EM LOTE ── */}
       <Modal open={modal === "lote-pagar"} onClose={closeModal} title={`Marcar ${selecionados.size} conta(s) como pagas`} width="360px">
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div className="fg">
-                <label className="fl">Data do Pagamento</label>
+              <Campo label="Data do Pagamento">
                 <DateInput value={dtLote} onChange={setDtLote} />
-              </div>
+              </Campo>
               <div style={{ fontSize: "11px", color: "var(--t3)" }}>
                 Cada título é baixado pelo saldo em aberto integral (sem parcial).
               </div>
@@ -1004,10 +985,9 @@ function ContasPagarPageInner() {
               <div className="al al-w" style={{ fontSize: "12px" }}>
                 ⚠ Este título já tem baixa registrada. A conta não é apagada — fica marcada como excluída, com o histórico preservado.
               </div>
-              <div className="fg">
-                <label className="fl">Motivo da exclusão *</label>
+              <Campo label="Motivo da exclusão *">
                 <textarea className="fc" rows={3} value={motivoExclusao} onChange={e => setMotivoExclusao(e.target.value)} style={{ margin: 0, resize: "vertical" }} />
-              </div>
+              </Campo>
             </div>
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
               <button className="btn bg" onClick={closeModal}>Cancelar</button>
@@ -1020,8 +1000,7 @@ function ContasPagarPageInner() {
       {/* ── MODAL ADIANTAMENTO ── */}
       <Modal open={modal === "adiantamento"} onClose={closeModal} title="Registrar Adiantamento (a fornecedor)" width="480px">
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div className="fg">
-                <label className="fl">Fornecedor</label>
+              <Campo label="Fornecedor">
                 <AutocompleteInput
                   options={fornecedores.map(f => ({ id: f.id, label: f.nome }))}
                   value={formAdiant.fornecedorId}
@@ -1030,29 +1009,25 @@ function ContasPagarPageInner() {
                   placeholder="Nome do fornecedor"
                   onChange={(id, label) => setFormAdiant(f => ({ ...f, fornecedorId: id, fornecedorNome: label }))}
                 />
-              </div>
-              <div className="fg">
-                <label className="fl">Descrição *</label>
+              </Campo>
+              <Campo label="Descrição *">
                 <input className="fc" placeholder="Adiantamento p/ compra de material..." value={formAdiant.descricao}
                   onChange={e => setFormAdiant(f => ({ ...f, descricao: e.target.value }))} style={{ margin: 0 }} />
-              </div>
+              </Campo>
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Valor *</label>
+                <Campo label="Valor *">
                   <CurrencyInput value={formAdiant.valor} onChange={v => setFormAdiant(f => ({ ...f, valor: v }))} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Data</label>
+                </Campo>
+                <Campo label="Data">
                   <DateInput value={formAdiant.data} onChange={v => setFormAdiant(f => ({ ...f, data: v }))} />
-                </div>
+                </Campo>
               </div>
-              <div className="fg">
-                <label className="fl">Conta Bancária (de onde saiu)</label>
+              <Campo label="Conta Bancária (de onde saiu)">
                 <select className="fc" value={formAdiant.contaId} onChange={e => setFormAdiant(f => ({ ...f, contaId: e.target.value }))} style={{ margin: 0 }}>
                   <option value="">Não informado</option>
                   {contasBancarias.map(cb => <option key={cb.id} value={cb.id}>{cb.nome}</option>)}
                 </select>
-              </div>
+              </Campo>
               <div style={{ fontSize: "11px", color: "var(--t3)" }}>
                 Fica disponível pra abater de uma conta a pagar futura desse fornecedor.
               </div>
@@ -1072,19 +1047,16 @@ function ContasPagarPageInner() {
                 Referente a: {contas.find(c => c.id === reembolsarId)?.descricao} — vira um lançamento novo em Contas a Receber, sem reabrir este título.
               </div>
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Valor do Reembolso *</label>
+                <Campo label="Valor do Reembolso *">
                   <CurrencyInput value={formReembolso.valor} onChange={v => setFormReembolso(f => ({ ...f, valor: v }))} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Data</label>
+                </Campo>
+                <Campo label="Data">
                   <DateInput value={formReembolso.data} onChange={v => setFormReembolso(f => ({ ...f, data: v }))} />
-                </div>
+                </Campo>
               </div>
-              <div className="fg">
-                <label className="fl">Observação</label>
+              <Campo label="Observação">
                 <input className="fc" value={formReembolso.obs} onChange={e => setFormReembolso(f => ({ ...f, obs: e.target.value }))} style={{ margin: 0 }} />
-              </div>
+              </Campo>
             </div>
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
               <button className="btn bg" onClick={closeModal}>Cancelar</button>
