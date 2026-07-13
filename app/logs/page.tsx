@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 
 import DateInput from "@/components/ui/DateInput";
+import { Campo } from "@/components/ui/Campo";
 
 interface LogAtividade {
   id: string;
@@ -147,28 +148,24 @@ export default function LogsPage() {
       <div className="con">
         {/* Filtros */}
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "18px", alignItems: "flex-end" }}>
-          <div className="fg" style={{ margin: 0, minWidth: "220px" }}>
-            <label className="fl">Buscar</label>
+          <Campo style={{ margin: 0, minWidth: "220px" }} label="Buscar">
             <input className="fc" placeholder="pedido, usuário, descrição..." value={busca} onChange={e => setBusca(e.target.value)} />
-          </div>
-          <div className="fg" style={{ margin: 0, minWidth: "200px" }}>
-            <label className="fl">Usuário</label>
+          </Campo>
+          <Campo style={{ margin: 0, minWidth: "200px" }} label="Usuário">
             <select className="fc" value={filtroUsuario} onChange={e => setFiltroUsuario(e.target.value)}>
               <option value="">Todos</option>
               {usuarios.map(u => <option key={u} value={u}>{u}</option>)}
             </select>
-          </div>
-          <div className="fg" style={{ margin: 0, minWidth: "160px" }}>
-            <label className="fl">Módulo</label>
+          </Campo>
+          <Campo style={{ margin: 0, minWidth: "160px" }} label="Módulo">
             <select className="fc" value={filtroTabela} onChange={e => setFiltroTabela(e.target.value)}>
               <option value="">Todos</option>
               {tabelas.map(t => <option key={t} value={t}>{TABELAS_LABEL[t] ?? t}</option>)}
             </select>
-          </div>
-          <div className="fg" style={{ margin: 0 }}>
-            <label className="fl">Data</label>
+          </Campo>
+          <Campo style={{ margin: 0 }} label="Data">
             <DateInput className="fc" value={filtroData} onChange={v => setFiltroData(v)} />
-          </div>
+          </Campo>
           {(filtroUsuario || filtroTabela || filtroData || busca) && (
             <button className="btn bg sm" onClick={() => { setFiltroUsuario(""); setFiltroTabela(""); setFiltroData(""); setBusca(""); }}>
               ✕ Limpar filtros
