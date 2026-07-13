@@ -6,6 +6,7 @@ import { getFormasPagamento, createFormaPagamento, updateFormaPagamento, deletar
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import { Modal } from "@/components/ui/Modal";
+import { Campo } from "@/components/ui/Campo";
 import SearchInput from "@/components/ui/SearchInput";
 import type { FormaPagamento, FormaPagamentoInsert } from "@/types";
 
@@ -137,16 +138,14 @@ export default function FormasPagamentoPage() {
 
       <Modal open={modalAberto} onClose={() => setModalAberto(false)} title={`${editId != null ? "Editar" : "Nova"} forma de pagamento`} width="400px">
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div className="fg">
-                <label className="fl">Nome *</label>
+              <Campo label="Nome *">
                 <input className="fc" placeholder="PIX, Boleto, Cartão..." value={form.nome}
                   onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} style={{ margin: 0 }} />
-              </div>
-              <div className="fg">
-                <label className="fl">Taxa (%) — opcional</label>
+              </Campo>
+              <Campo label="Taxa (%) — opcional">
                 <input className="fc" type="number" step="0.01" placeholder="Ex: 2.5 (maquininha)" value={form.taxa_pct ?? ""}
                   onChange={e => setForm(f => ({ ...f, taxa_pct: e.target.value ? Number(e.target.value) : null }))} style={{ margin: 0 }} />
-              </div>
+              </Campo>
             </div>
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
               <button className="btn bg" onClick={() => setModalAberto(false)}>Cancelar</button>
