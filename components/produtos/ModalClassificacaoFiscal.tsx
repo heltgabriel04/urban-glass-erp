@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
+import { Campo } from "@/components/ui/Campo";
 import type { ConfigFiscalPadrao } from "@/types";
 import type { ProdutoComConfig, ConfigFiscalProdutoInput } from "@/services/contabilidade.service";
 
@@ -52,6 +53,7 @@ export default function ModalClassificacaoFiscal({
 }: ModalClassificacaoFiscalProps) {
   const { produto, config } = item;
   const cstOpcoes = padrao.regime === "simples" ? CSOSN : CST_NORMAL;
+  const ncmFieldId = useId();
 
   const [ncm, setNcm]     = useState(config?.ncm         ?? padrao.ncm_padrao);
   const [cfopD, setCfopD] = useState(config?.cfop_dentro ?? padrao.cfop_dentro_padrao);
@@ -97,8 +99,9 @@ export default function ModalClassificacaoFiscal({
 
           {/* NCM */}
           <div className="fg">
-            <label className="fl">NCM *</label>
+            <label className="fl" htmlFor={ncmFieldId}>NCM *</label>
             <input
+              id={ncmFieldId}
               className="fc"
               value={ncm}
               onChange={(e) => setNcm(e.target.value.replace(/\D/g, "").slice(0, 8))}
@@ -114,27 +117,24 @@ export default function ModalClassificacaoFiscal({
 
           {/* CFOP */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">CFOP Dentro do Estado (MG)</label>
+            <Campo label="CFOP Dentro do Estado (MG)">
               <select className="fc" value={cfopD} onChange={(e) => setCfopD(e.target.value)} required>
                 {CFOP_DENTRO.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
-            </div>
-            <div className="fg">
-              <label className="fl">CFOP Fora do Estado</label>
+            </Campo>
+            <Campo label="CFOP Fora do Estado">
               <select className="fc" value={cfopF} onChange={(e) => setCfopF(e.target.value)} required>
                 {CFOP_FORA.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
-            </div>
+            </Campo>
           </div>
 
           {/* CST */}
-          <div className="fg">
-            <label className="fl">{padrao.regime === "simples" ? "CSOSN" : "CST ICMS"}</label>
+          <Campo label={padrao.regime === "simples" ? "CSOSN" : "CST ICMS"}>
             <select className="fc" value={cst} onChange={(e) => setCst(e.target.value)} required>
               {cstOpcoes.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-          </div>
+          </Campo>
 
           {/* Info alíquotas */}
           <div style={{ background: "var(--surf2)", border: "1px solid var(--b1)", borderRadius: "8px", padding: "12px 14px" }}>
