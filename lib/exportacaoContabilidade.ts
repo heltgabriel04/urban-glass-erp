@@ -170,6 +170,56 @@ export async function exportarPacoteMensal(ano: number, mes: number): Promise<{ 
     );
     zip.file("04-Cartoes-Emprestimos-Consorcios/consorcios/resumo-lances.xlsx", bufConsLances);
 
+    // ── 05-Financeiro ───────────────────────────────────────────
+    const { data: contasPagarData } = await supabase
+      .from("lancamentos").select("descricao, valor, vencimento, status, fornecedor")
+      .eq("tipo", "Saída").gte("vencimento", primeiroDia).lte("vencimento", ultimoDia).is("deletado_em", null)
+      .order("vencimento");
+    const bufContasPagar = await construirPlanilha(
+      ["Descrição", "Fornecedor", "Vencimento", "Valor", "Status"],
+      (contasPagarData ?? []).map((l: any) => [l.descricao, l.fornecedor ?? "", l.vencimento, Number(l.valor), l.status])
+    );
+    zip.file("05-Financeiro/contas-a-pagar.xlsx", bufContasPagar);
+
+    const { data: contasReceberData } = await supabase
+      .from("lancamentos").select("descricao, valor, vencimento, status, cliente_id, clientes(nome)")
+      .eq("tipo", "Entrada").gte("vencimento", primeiroDia).lte("vencimento", ultimoDia).is("deletado_em", null)
+      .order("vencimento");
+    const bufContasReceber = await construirPlanilha(
+      ["Descrição", "Cliente", "Vencimento", "Valor", "Status"],
+      (contasReceberData ?? []).map((l: any) => [l.descricao, l.clientes?.nome ?? "", l.vencimento, Number(l.valor), l.status])
+    );
+    zip.file("05-Financeiro/contas-a-receber.xlsx", bufContasReceber);
+
+    const { data: baixasData } = await supabase
+      .from("baixas_lancamento").select("data, valor, lancamentos(descricao, tipo)")
+      .gte("data", primeiroDia).lte("data", ultimoDia).is("estornado_em", null)
+      .order("data");
+    const bufBaixas = await construirPlanilha(
+      ["Data", "Descrição", "Tipo", "Valor"],
+      (baixasData ?? []).map((b: any) => [b.data, b.lancamentos?.descricao ?? "", b.lancamentos?.tipo ?? "", Number(b.valor)])
+    );
+    zip.file("05-Financeiro/extrato-baixas.xlsx", bufBaixas);
+
+    const { data: contasBancData } = await supabase
+      .from("contas_bancarias").select("id, nome, tipo, saldo_inicial").eq("ativo", true).order("nome");
+    const { data: baixasAteFimData } = await supabase
+      .from("baixas_lancamento").select("conta_id, valor, lancamentos(tipo)")
+      .is("estornado_em", null).not("conta_id", "is", null).lte("data", ultimoDia);
+    const saldoPorConta = new Map<number, number>();
+    for (const b of (baixasAteFimData ?? []) as unknown as { conta_id: number; valor: number; lancamentos: { tipo: string } | null }[]) {
+      if (!b.lancamentos) continue;
+      const delta = b.lancamentos.tipo === "Entrada" ? Number(b.valor) : -Number(b.valor);
+      saldoPorConta.set(b.conta_id, (saldoPorConta.get(b.conta_id) ?? 0) + delta);
+    }
+    const bufSaldos = await construirPlanilha(
+      ["Conta", "Tipo", `Saldo em ${ultimoDia}`],
+      ((contasBancData ?? []) as { id: number; nome: string; tipo: string; saldo_inicial: number }[]).map((c) => [
+        c.nome, c.tipo, Number(c.saldo_inicial) + (saldoPorConta.get(c.id) ?? 0),
+      ])
+    );
+    zip.file("05-Financeiro/saldo-contas-bancarias.xlsx", bufSaldos);
+
     // ── Manifest (por último — já sabe quais anexos falharam) ───
     const linhasChecklist = itens.map((i) => {
       const label = getChecklistItemDef(i.item_key)?.label ?? i.item_key;
