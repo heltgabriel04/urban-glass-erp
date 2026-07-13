@@ -5,7 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { getFormasPagamento, createFormaPagamento, updateFormaPagamento, deletarFormaPagamento } from "@/services/formasPagamento.service";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
-import { useEscToClose } from "@/components/ui/useEscToClose";
+import { Modal } from "@/components/ui/Modal";
 import SearchInput from "@/components/ui/SearchInput";
 import type { FormaPagamento, FormaPagamentoInsert } from "@/types";
 
@@ -21,8 +21,6 @@ export default function FormasPagamentoPage() {
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState<FormaPagamentoInsert>(VAZIO);
   const [salvando, setSalvando] = useState(false);
-
-  useEscToClose(modalAberto, () => setModalAberto(false));
 
   useEffect(() => { load(); }, []);
 
@@ -137,13 +135,7 @@ export default function FormasPagamentoPage() {
         <div style={{ marginTop: "10px", fontSize: "12px", color: "var(--t3)" }}>{totalAtivas} forma(s) ativa(s)</div>
       </div>
 
-      {modalAberto && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && setModalAberto(false)}>
-          <div className="mod" style={{ width: "400px" }}>
-            <div className="mhd">
-              <div className="mtit">{editId != null ? "Editar" : "Nova"} forma de pagamento</div>
-              <button className="mcl" onClick={() => setModalAberto(false)} aria-label="Fechar">✕</button>
-            </div>
+      <Modal open={modalAberto} onClose={() => setModalAberto(false)} title={`${editId != null ? "Editar" : "Nova"} forma de pagamento`} width="400px">
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <div className="fg">
                 <label className="fl">Nome *</label>
@@ -162,9 +154,7 @@ export default function FormasPagamentoPage() {
                 {salvando ? "Salvando..." : editId != null ? "Salvar alterações" : "Criar forma de pagamento"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </AppLayout>
   );
 }
