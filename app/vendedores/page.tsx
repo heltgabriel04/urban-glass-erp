@@ -5,6 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
+import { Modal } from "@/components/ui/Modal";
 import { formatBRL } from "@/lib/formatters";
 import type { Vendedor, VendedorInsert } from "@/types";
 
@@ -220,14 +221,7 @@ export default function VendedoresPage() {
       </div>
 
       {/* ── MODAL ── */}
-      {modal && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && setModal(false)}>
-          <div className="mod" style={{ width: "520px" }}>
-            <div className="mhd">
-              <div className="mtit">{editId ? "Editar Vendedor" : "Novo Vendedor"}</div>
-              <button className="mcl" onClick={() => setModal(false)} aria-label="Fechar">✕</button>
-            </div>
-
+      <Modal open={modal} onClose={() => setModal(false)} title={editId ? "Editar Vendedor" : "Novo Vendedor"} width="520px">
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
 
               <div className="fr">
@@ -310,9 +304,7 @@ export default function VendedoresPage() {
                 {salvando ? "Salvando..." : editId ? "Salvar Vendedor" : "Cadastrar Vendedor"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </AppLayout>
   );
 }
