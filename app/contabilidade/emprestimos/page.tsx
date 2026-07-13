@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import DatePromptModal from "@/components/ui/DatePromptModal";
 import { Modal } from "@/components/ui/Modal";
+import { Campo } from "@/components/ui/Campo";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import {
@@ -68,60 +69,50 @@ function ModalEmprestimo({ editando, contasBancarias, usuarioEmail, onSalvo, onF
   return (
     <Modal open onClose={onFechar} title={editando ? "Editar Empréstimo" : "Novo Empréstimo"} width="560px">
         <form id="form-emprestimo" onSubmit={handleSubmit} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
-          <div className="fg">
-            <label className="fl">Descrição *</label>
+          <Campo label="Descrição *">
             <input className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} required />
-          </div>
+          </Campo>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">Banco</label>
+            <Campo label="Banco">
               <input className="fc" value={form.banco ?? ""} onChange={(e) => set("banco", e.target.value || null)} />
-            </div>
-            <div className="fg">
-              <label className="fl">Conta Bancária (recebimento)</label>
+            </Campo>
+            <Campo label="Conta Bancária (recebimento)">
               <select className="fc" value={form.conta_bancaria_id ?? ""} onChange={(e) => set("conta_bancaria_id", e.target.value ? Number(e.target.value) : null)}>
                 <option value="">—</option>
                 {contasBancarias.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
               </select>
-            </div>
+            </Campo>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">Valor Contratado</label>
+            <Campo label="Valor Contratado">
               <input className="fc" type="number" step="0.01" value={form.valor_contratado} onChange={(e) => set("valor_contratado", Number(e.target.value))} required disabled={!!editando} style={{ fontFamily: "'DM Mono', monospace" }} />
-            </div>
-            <div className="fg">
-              <label className="fl">Taxa de Juros (% a.m.)</label>
+            </Campo>
+            <Campo label="Taxa de Juros (% a.m.)">
               <input className="fc" type="number" step="0.0001" value={form.taxa_juros_pct_am} onChange={(e) => set("taxa_juros_pct_am", Number(e.target.value))} required disabled={!!editando} style={{ fontFamily: "'DM Mono', monospace" }} />
-            </div>
-            <div className="fg">
-              <label className="fl">Nº de Parcelas</label>
+            </Campo>
+            <Campo label="Nº de Parcelas">
               <input className="fc" type="number" value={form.numero_parcelas} onChange={(e) => set("numero_parcelas", Number(e.target.value))} required disabled={!!editando} />
-            </div>
+            </Campo>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">Data de Contratação</label>
+            <Campo label="Data de Contratação">
               <input className="fc" type="date" value={form.data_contratacao} onChange={(e) => set("data_contratacao", e.target.value)} required disabled={!!editando} />
-            </div>
-            <div className="fg">
-              <label className="fl">Data da 1ª Parcela</label>
+            </Campo>
+            <Campo label="Data da 1ª Parcela">
               <input className="fc" type="date" value={form.data_primeira_parcela} onChange={(e) => set("data_primeira_parcela", e.target.value)} required disabled={!!editando} />
-            </div>
+            </Campo>
           </div>
           {editando && (
             <div style={{ fontSize: "11px", color: "var(--t3)" }}>
               Valor, taxa, nº de parcelas e datas ficam travados após a criação — eles definem a tabela de amortização já gerada.
             </div>
           )}
-          <div className="fg">
-            <label className="fl">Contrato (PDF)</label>
+          <Campo label="Contrato (PDF)">
             <input className="fc" type="file" accept=".pdf" onChange={(e) => setContratoFile(e.target.files?.[0] ?? null)} />
-          </div>
-          <div className="fg">
-            <label className="fl">Observações</label>
+          </Campo>
+          <Campo label="Observações">
             <textarea className="fc" rows={2} value={form.observacoes ?? ""} onChange={(e) => set("observacoes", e.target.value || null)} />
-          </div>
+          </Campo>
         </form>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
           <button type="button" className="btn bg" onClick={onFechar} disabled={salvando}>Cancelar</button>
