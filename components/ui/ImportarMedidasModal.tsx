@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { lerPlanilhaMedidas, type MedidaImportada } from "@/lib/importPlanilhaMedidas";
 import { Modal } from "./Modal";
+import { Campo } from "./Campo";
 
 interface ProdutoOpt {
   id: number;
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export default function ImportarMedidasModal({ produtos, onImportar, onClose }: Props) {
+  const arquivoFieldId = useId();
   const [itens, setItens]           = useState<MedidaImportada[] | null>(null);
   const [produtoId, setProdutoId]   = useState<number | null>(null);
   const [erro, setErro]             = useState("");
@@ -58,8 +60,9 @@ export default function ImportarMedidasModal({ produtos, onImportar, onClose }: 
   return (
     <Modal open onClose={onClose} title="Importar Medidas" width="440px">
         <div className="fg" style={{ marginBottom: "12px" }}>
-          <label className="fl">Arquivo (.xlsx, .xls, .csv ou .pdf)</label>
+          <label className="fl" htmlFor={arquivoFieldId}>Arquivo (.xlsx, .xls, .csv ou .pdf)</label>
           <input
+            id={arquivoFieldId}
             className="fc"
             type="file"
             accept=".xlsx,.xls,.csv,.pdf"
@@ -82,13 +85,12 @@ export default function ImportarMedidasModal({ produtos, onImportar, onClose }: 
               {totalComCodigo > 0 && ` · ${totalComCodigo} com código`}
             </div>
 
-            <div className="fg" style={{ marginBottom: "16px" }}>
-              <label className="fl">Vidro para todos os itens importados (opcional)</label>
+            <Campo style={{ marginBottom: "16px" }} label="Vidro para todos os itens importados (opcional)">
               <select className="fc" value={produtoId ?? ""} onChange={e => setProdutoId(e.target.value ? Number(e.target.value) : null)}>
                 <option value="">— Deixar em branco, selecionar depois —</option>
                 {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
               </select>
-            </div>
+            </Campo>
           </>
         )}
 
