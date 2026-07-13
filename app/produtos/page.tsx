@@ -5,6 +5,7 @@ import Link from "next/link";
 import AppLayout from "@/components/layout/AppLayout";
 import { useConfirm } from "@/components/ui/confirm";
 import { Modal } from "@/components/ui/Modal";
+import { Campo } from "@/components/ui/Campo";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
 import CurrencyInput from "@/components/ui/CurrencyInput";
@@ -250,8 +251,7 @@ export default function ProdutosPage() {
       <Modal open={modal} onClose={() => setModal(false)} title={editId ? "Editar Produto" : "Novo Produto"} width="560px">
             <div className="fr">
               {/* Código — gerado automaticamente, bloqueado em novo; editável em edição */}
-              <div className="fg">
-                <label className="fl">Código</label>
+              <Campo label="Código">
                 <div style={{ position: "relative" }}>
                   <input
                     className="fc"
@@ -266,47 +266,41 @@ export default function ProdutosPage() {
                     }}
                   />
                 </div>
-              </div>
-              <div className="fg">
-                <label className="fl">Nome *</label>
+              </Campo>
+              <Campo label="Nome *">
                 <input
                   className="fc"
                   value={form.nome}
                   onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
                   placeholder="Ex: Vidro Laminado 4+4 Incolor"
                 />
-              </div>
+              </Campo>
             </div>
 
             <div className="fr3">
-              <div className="fg">
-                <label className="fl">Tipo</label>
+              <Campo label="Tipo">
                 <select className="fc" value={form.tipo} onChange={e => handleTipo(e.target.value)}>
                   <option value="">Selecione...</option>
                   {TIPOS.map(t => <option key={t}>{t}</option>)}
                 </select>
-              </div>
-              <div className="fg">
-                <label className="fl">Espessura</label>
+              </Campo>
+              <Campo label="Espessura">
                 <input className="fc" value={form.espessura} onChange={e => setForm(f => ({ ...f, espessura: e.target.value }))} placeholder="4+4" />
-              </div>
-              <div className="fg">
-                <label className="fl">Cor</label>
+              </Campo>
+              <Campo label="Cor">
                 <input className="fc" value={form.cor} onChange={e => setForm(f => ({ ...f, cor: e.target.value }))} placeholder="Incolor" />
-              </div>
+              </Campo>
             </div>
 
             <div className="fr3">
-              <div className="fg">
-                <label className="fl">Valor (R$/m²) *</label>
+              <Campo label="Valor (R$/m²) *">
                 <CurrencyInput
                   value={form.valor}
                   onChange={v => setForm(f => ({ ...f, valor: v }))}
                   placeholder="R$ 0,00"
                 />
-              </div>
-              <div className="fg">
-                <label className="fl">Margem negociação (%)</label>
+              </Campo>
+              <Campo label="Margem negociação (%)">
                 <input
                   className="fc"
                   type="number"
@@ -317,43 +311,39 @@ export default function ProdutosPage() {
                   onChange={e => setForm(f => ({ ...f, margem: parseFloat(e.target.value) || 0 }))}
                   placeholder="0"
                 />
-              </div>
-              <div className="fg">
-                <label className="fl">Unidade</label>
+              </Campo>
+              <Campo label="Unidade">
                 <select className="fc" value={form.unidade} onChange={e => setForm(f => ({ ...f, unidade: e.target.value }))}>
                   <option>m²</option><option>un</option><option>ml</option>
                 </select>
-              </div>
+              </Campo>
             </div>
 
             <div className="fr3">
-              <div className="fg">
-                <label className="fl">Chapas por colar</label>
+              <Campo label="Chapas por colar">
                 <input
                   className="fc" type="number" min="0" step="1"
                   value={form.chapas_por_colar ?? ""}
                   onChange={e => setForm(f => ({ ...f, chapas_por_colar: e.target.value ? parseInt(e.target.value, 10) : null }))}
                   placeholder="Ex: 18"
                 />
-              </div>
-              <div className="fg">
-                <label className="fl">Chapa — largura (mm)</label>
+              </Campo>
+              <Campo label="Chapa — largura (mm)">
                 <input
                   className="fc" type="number" min="0" step="1"
                   value={form.chapa_largura_mm ?? ""}
                   onChange={e => setForm(f => ({ ...f, chapa_largura_mm: e.target.value ? parseFloat(e.target.value) : null }))}
                   placeholder="Ex: 3300"
                 />
-              </div>
-              <div className="fg">
-                <label className="fl">Chapa — altura (mm)</label>
+              </Campo>
+              <Campo label="Chapa — altura (mm)">
                 <input
                   className="fc" type="number" min="0" step="1"
                   value={form.chapa_altura_mm ?? ""}
                   onChange={e => setForm(f => ({ ...f, chapa_altura_mm: e.target.value ? parseFloat(e.target.value) : null }))}
                   placeholder="Ex: 2250"
                 />
-              </div>
+              </Campo>
             </div>
 
             <div className="fg" style={{ marginBottom:"14px" }}>
@@ -370,10 +360,9 @@ export default function ProdutosPage() {
               </div>
             </div>
 
-            <div className="fg" style={{ marginBottom:"14px" }}>
-              <label className="fl">Observação</label>
+            <Campo style={{ marginBottom:"14px" }} label="Observação">
               <input className="fc" value={form.obs} onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} placeholder="Observações opcionais" />
-            </div>
+            </Campo>
 
             {/* Aviso se tipo não selecionado em novo produto */}
             {!editId && !form.cod && (
