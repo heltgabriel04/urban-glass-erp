@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { buscaGlobal, type BuscaGlobalResultado } from "@/services/buscaGlobal.service";
 import { getRecentes } from "@/lib/recentes";
-import { useEscToClose } from "./useEscToClose";
+import { Modal } from "./Modal";
 
 const VAZIO: BuscaGlobalResultado = { rotas: [], pedidos: [], clientes: [], lancamentos: [] };
 
@@ -22,8 +22,6 @@ export default function CommandPalette() {
   const [loading, setLoading] = useState(false);
   const [ativo, setAtivo] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEscToClose(open, () => setOpen(false));
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -90,8 +88,11 @@ export default function CommandPalette() {
   }
 
   return (
-    <div className="mov open" onClick={e => e.target === e.currentTarget && setOpen(false)} style={{ alignItems: "flex-start", paddingTop: "10vh" }}>
-      <div className="mod" style={{ width: "560px", maxWidth: "92vw", maxHeight: "70vh", display: "flex", flexDirection: "column" }}>
+    <Modal
+      open onClose={() => setOpen(false)} width="560px"
+      style={{ maxWidth: "92vw", maxHeight: "70vh", display: "flex", flexDirection: "column" }}
+      backdropStyle={{ alignItems: "flex-start", paddingTop: "10vh" }}
+    >
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--b1)" }}>
           <input
             ref={inputRef} value={query} onChange={e => setQuery(e.target.value)} onKeyDown={onKeyDown}
@@ -135,7 +136,6 @@ export default function CommandPalette() {
         <div style={{ padding: "8px 16px", borderTop: "1px solid var(--b1)", fontSize: "10px", color: "var(--t3)", display: "flex", gap: "12px" }}>
           <span>↑↓ navegar</span><span>Enter abrir</span><span>Esc fechar</span>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

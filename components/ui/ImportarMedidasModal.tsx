@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { lerPlanilhaMedidas, type MedidaImportada } from "@/lib/importPlanilhaMedidas";
+import { Modal } from "./Modal";
 
 interface ProdutoOpt {
   id: number;
@@ -55,13 +56,7 @@ export default function ImportarMedidasModal({ produtos, onImportar, onClose }: 
   const totalComCodigo = itens?.filter(i => i.codigo).length ?? 0;
 
   return (
-    <div className="mov open" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="mod" style={{ width: "440px" }}>
-        <div className="mhd">
-          <div className="mtit">Importar Medidas</div>
-          <button className="mcl" onClick={onClose} aria-label="Fechar">✕</button>
-        </div>
-
+    <Modal open onClose={onClose} title="Importar Medidas" width="440px">
         <div className="fg" style={{ marginBottom: "12px" }}>
           <label className="fl">Arquivo (.xlsx, .xls, .csv ou .pdf)</label>
           <input
@@ -107,7 +102,6 @@ export default function ImportarMedidasModal({ produtos, onImportar, onClose }: 
             Importar{itens ? ` (${itens.length})` : ""}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

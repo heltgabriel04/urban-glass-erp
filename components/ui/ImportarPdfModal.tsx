@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ItemPdfImportado } from "@/lib/importPdfOrcamento";
 import { parsePdfOrcamentoText } from "@/lib/importPdfOrcamento";
+import { Modal } from "./Modal";
 
 interface ProdutoOpt {
   id: number;
@@ -81,13 +82,7 @@ export default function ImportarPdfModal({ produtos, onImportar, onClose }: Prop
     : [];
 
   return (
-    <div className="mov open" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="mod" style={{ width: "640px" }}>
-        <div className="mhd">
-          <div className="mtit">Importar PDF de Pedido/Orçamento</div>
-          <button className="mcl" onClick={onClose} aria-label="Fechar">✕</button>
-        </div>
-
+    <Modal open onClose={onClose} title="Importar PDF de Pedido/Orçamento" width="640px">
         <div className="fg" style={{ marginBottom: "12px" }}>
           <label className="fl">Arquivo PDF</label>
           <input
@@ -170,7 +165,6 @@ export default function ImportarPdfModal({ produtos, onImportar, onClose }: Prop
             Importar{itens ? ` (${itens.length} itens)` : ""}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

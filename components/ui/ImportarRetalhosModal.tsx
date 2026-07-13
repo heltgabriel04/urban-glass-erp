@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { lerPlanilhaRetalhos, type RetalhoImportado } from "@/lib/importPlanilhaRetalhos";
+import { Modal } from "./Modal";
 
 interface Props {
   onImportar: (itens: RetalhoImportado[]) => void;
@@ -38,13 +39,7 @@ export default function ImportarRetalhosModal({ onImportar, onClose, importando 
   const deCliente   = (itens ?? []).filter(i => i.observacao).reduce((a, i) => a + i.quantidade, 0);
 
   return (
-    <div className="mov open" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="mod" style={{ width: "560px" }}>
-        <div className="mhd">
-          <div className="mtit">Importar Planilha de Retalhos</div>
-          <button className="mcl" onClick={onClose} aria-label="Fechar">✕</button>
-        </div>
-
+    <Modal open onClose={onClose} title="Importar Planilha de Retalhos" width="560px">
         <div className="fg" style={{ marginBottom: "12px" }}>
           <label className="fl">Arquivo (.xlsx, .xls ou .csv)</label>
           <input
@@ -135,7 +130,6 @@ export default function ImportarRetalhosModal({ onImportar, onClose, importando 
             {importando ? "Importando..." : `Importar${itens ? ` (${totalQtd})` : ""}`}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

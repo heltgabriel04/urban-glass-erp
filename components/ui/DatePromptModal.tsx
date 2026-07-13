@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Modal } from "./Modal";
 
 interface DatePromptModalProps {
   titulo: string;
@@ -15,12 +16,7 @@ export default function DatePromptModal({ titulo, valorInicial, onConfirmar, onF
   const [data, setData] = useState(valorInicial ?? new Date().toISOString().split("T")[0]);
 
   return (
-    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
-      <div className="mod" style={{ width: "360px" }}>
-        <div className="mhd">
-          <div className="mtit">{titulo}</div>
-          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
-        </div>
+    <Modal open onClose={onFechar} title={titulo} width="360px">
         <form onSubmit={(e) => { e.preventDefault(); if (data) onConfirmar(data); }} style={{ padding: "20px" }}>
           <div className="fg" style={{ margin: 0 }}>
             <label className="fl">Data</label>
@@ -31,7 +27,6 @@ export default function DatePromptModal({ titulo, valorInicial, onConfirmar, onF
           <button type="button" className="btn bg" onClick={onFechar}>Cancelar</button>
           <button type="button" className="btn bp" onClick={() => data && onConfirmar(data)} disabled={!data}>Confirmar</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
