@@ -105,7 +105,7 @@ que é a ordem real em que foram escritos e (presumivelmente) rodados.
 | 2026-07-10 | `sql/contabilidade-fase4-01-cartoes.sql` | Contabilidade Fase 4 — Cartões corporativos | ✅ |
 | 2026-07-10 | `sql/contabilidade-fase4-02-emprestimos.sql` | Contabilidade Fase 4 — Empréstimos | ✅ |
 | 2026-07-10 | `sql/contabilidade-fase4-03-consorcios.sql` | Contabilidade Fase 4 — Consórcios | ✅ |
-| 2026-07-10 | `sql/contabilidade-fase4-04-checklist-ativa-cartoes.sql` | Contabilidade Fase 4 — Ativa item "Cartões/Empréstimos/Consórcios" no checklist de fechamentos antigos | ⚠ |
+| 2026-07-10 | `sql/contabilidade-fase4-04-checklist-ativa-cartoes.sql` | Contabilidade Fase 4 — Ativa item "Cartões/Empréstimos/Consórcios" no checklist de fechamentos antigos | ✅ |
 | 2026-07-10 | `sql/contabilidade-fase4-05-cartoes-lancamentos-soft-delete.sql` | Contabilidade Fase 4 — Correção: soft-delete em `cartoes_lancamentos` | ✅ |
 | 2026-07-10 | `sql/seguranca-01-reabilita-rls.sql` | Correção de segurança — reabilita RLS em tabelas expostas | ✅ |
 | 2026-07-10 | `sql/seguranca-02-deletar-pedido-atomico.sql` | Correção de integridade — `delete_pedido_cascade` atômica | ✅ |
@@ -114,4 +114,4 @@ que é a ordem real em que foram escritos e (presumivelmente) rodados.
 | 2026-07-13 | `sql/fornecedores-ie-regime.sql` | Fornecedores — Inscrição Estadual + Regime Tributário | ✅ |
 | 2026-07-13 | `sql/seguranca-05-restringe-select-financeiro.sql` | Restringe SELECT de 40 tabelas financeiras a admin/financeiro | ✅ |
 | 2026-07-13 | `sql/seguranca-06-rpc-cliente-nome-publico.sql` | RPC `get_cliente_nome_publico` (tela de produção) | ✅ |
-| 2026-07-13 | `sql/contabilidade-fase6-checklist-ativa-financeiro.sql` | Contabilidade Fase 6 — Ativa item "Financeiro" no checklist de fechamentos antigos | ⏳ |
+| 2026-07-13 | `sql/contabilidade-fase6-checklist-ativa-financeiro.sql` | Contabilidade Fase 6 — Ativa item "Financeiro" no checklist de fechamentos antigos | ✅ |
