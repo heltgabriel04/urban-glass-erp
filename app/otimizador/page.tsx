@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
+import { Campo } from "@/components/ui/Campo";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
@@ -1043,12 +1044,12 @@ function OtimizadorContent() {
                     </div>
                   </div>
                   <div className="fr">
-                    <div className="fg"><label className="fl">Largura Chapa (mm)</label><input type="number" className="fc" value={chapaW} onChange={e => setChapaW(Number(e.target.value))} /></div>
-                    <div className="fg"><label className="fl">Altura Chapa (mm)</label><input type="number" className="fc" value={chapaH} onChange={e => setChapaH(Number(e.target.value))} /></div>
+                    <Campo label="Largura Chapa (mm)"><input type="number" className="fc" value={chapaW} onChange={e => setChapaW(Number(e.target.value))} /></Campo>
+                    <Campo label="Altura Chapa (mm)"><input type="number" className="fc" value={chapaH} onChange={e => setChapaH(Number(e.target.value))} /></Campo>
                   </div>
                   <div className="fr">
-                    <div className="fg"><label className="fl">Folga / Diamante (mm)</label><input type="number" className="fc" value={kerf} min={0} max={20} onChange={e => setKerf(Number(e.target.value))} /></div>
-                    <div className="fg"><label className="fl">Borda Lapidação (mm)</label><input type="number" className="fc" value={bord} min={0} max={30} onChange={e => setBord(Number(e.target.value))} /></div>
+                    <Campo label="Folga / Diamante (mm)"><input type="number" className="fc" value={kerf} min={0} max={20} onChange={e => setKerf(Number(e.target.value))} /></Campo>
+                    <Campo label="Borda Lapidação (mm)"><input type="number" className="fc" value={bord} min={0} max={30} onChange={e => setBord(Number(e.target.value))} /></Campo>
                   </div>
                 </div>
               )}
@@ -1114,15 +1115,15 @@ function OtimizadorContent() {
                     <button className="btn bw xs" onClick={() => remPeca(i)}>✕</button>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 80px", gap: "7px" }}>
-                    <div className="fg" style={{ margin: 0 }}><label className="fl" style={{ fontSize: "9px" }}>Produto</label>
+                    <Campo style={{ margin: 0 }} labelStyle={{ fontSize: "9px" }} label="Produto">
                       <select className="fc" style={{ fontSize: "11px" }} value={p.prod} onChange={e => updPeca(i, "prod", e.target.value)}>
                         <option value="">Selecionar produto...</option>
                         {produtos.map(pr => <option key={pr.id} value={pr.nome}>{pr.nome}</option>)}
                       </select>
-                    </div>
-                    <div className="fg" style={{ margin: 0 }}><label className="fl" style={{ fontSize: "9px" }}>Largura (mm)</label><input type="number" className="fc" style={{ fontSize: "12px" }} value={p.l || ""} placeholder="1200" onChange={e => updPeca(i, "l", Number(e.target.value))} /></div>
-                    <div className="fg" style={{ margin: 0 }}><label className="fl" style={{ fontSize: "9px" }}>Altura (mm)</label><input type="number" className="fc" style={{ fontSize: "12px" }} value={p.a || ""} placeholder="800" onChange={e => updPeca(i, "a", Number(e.target.value))} /></div>
-                    <div className="fg" style={{ margin: 0 }}><label className="fl" style={{ fontSize: "9px" }}>Quantidade</label><input type="number" className="fc" style={{ fontSize: "12px" }} value={p.qtd} min={1} onChange={e => updPeca(i, "qtd", Number(e.target.value))} /></div>
+                    </Campo>
+                    <Campo style={{ margin: 0 }} labelStyle={{ fontSize: "9px" }} label="Largura (mm)"><input type="number" className="fc" style={{ fontSize: "12px" }} value={p.l || ""} placeholder="1200" onChange={e => updPeca(i, "l", Number(e.target.value))} /></Campo>
+                    <Campo style={{ margin: 0 }} labelStyle={{ fontSize: "9px" }} label="Altura (mm)"><input type="number" className="fc" style={{ fontSize: "12px" }} value={p.a || ""} placeholder="800" onChange={e => updPeca(i, "a", Number(e.target.value))} /></Campo>
+                    <Campo style={{ margin: 0 }} labelStyle={{ fontSize: "9px" }} label="Quantidade"><input type="number" className="fc" style={{ fontSize: "12px" }} value={p.qtd} min={1} onChange={e => updPeca(i, "qtd", Number(e.target.value))} /></Campo>
                   </div>
                 </div>
               ))}
