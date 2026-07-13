@@ -6,6 +6,7 @@ import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import DatePromptModal from "@/components/ui/DatePromptModal";
+import { Modal } from "@/components/ui/Modal";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import {
@@ -70,12 +71,7 @@ function ModalConsorcio({ editando, usuarioEmail, onSalvo, onFechar }: {
   }
 
   return (
-    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
-      <div className="mod" style={{ width: "560px" }}>
-        <div className="mhd">
-          <div className="mtit">{editando ? "Editar Consórcio" : "Novo Consórcio"}</div>
-          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
-        </div>
+    <Modal open onClose={onFechar} title={editando ? "Editar Consórcio" : "Novo Consórcio"} width="560px">
         <form id="form-consorcio" onSubmit={handleSubmit} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
           <div className="fg">
             <label className="fl">Descrição *</label>
@@ -131,8 +127,7 @@ function ModalConsorcio({ editando, usuarioEmail, onSalvo, onFechar }: {
           <button type="button" className="btn bg" onClick={onFechar} disabled={salvando}>Cancelar</button>
           <button type="submit" form="form-consorcio" className="btn bp" disabled={salvando}>{salvando ? "Salvando..." : "Salvar"}</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -171,12 +166,7 @@ function ModalLances({ consorcio, usuarioEmail, onFechar }: {
   }
 
   return (
-    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
-      <div className="mod" style={{ width: "620px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
-        <div className="mhd">
-          <div className="mtit">Lances — {consorcio.descricao}</div>
-          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
-        </div>
+    <Modal open onClose={onFechar} title={`Lances — ${consorcio.descricao}`} width="620px" style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1 }}>
           <form onSubmit={handleAdd} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: "8px", marginBottom: "16px", alignItems: "end" }}>
             <div className="fg" style={{ margin: 0 }}>
@@ -225,8 +215,7 @@ function ModalLances({ consorcio, usuarioEmail, onFechar }: {
         <div style={{ display: "flex", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
           <button type="button" className="btn bg" onClick={onFechar}>Fechar</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
