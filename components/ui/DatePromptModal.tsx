@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Modal } from "./Modal";
+import { Campo } from "./Campo";
 
 interface DatePromptModalProps {
   titulo: string;
@@ -18,10 +19,9 @@ export default function DatePromptModal({ titulo, valorInicial, onConfirmar, onF
   return (
     <Modal open onClose={onFechar} title={titulo} width="360px">
         <form onSubmit={(e) => { e.preventDefault(); if (data) onConfirmar(data); }} style={{ padding: "20px" }}>
-          <div className="fg" style={{ margin: 0 }}>
-            <label className="fl">Data</label>
+          <Campo style={{ margin: 0 }} label="Data">
             <input className="fc" type="date" value={data} onChange={(e) => setData(e.target.value)} autoFocus required />
-          </div>
+          </Campo>
         </form>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
           <button type="button" className="btn bg" onClick={onFechar}>Cancelar</button>
