@@ -14,7 +14,7 @@ import { registrarRecente } from "@/lib/recentes";
 import PedidoTabs from "@/components/pedidos/PedidoTabs";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
-import { useEscToClose } from "@/components/ui/useEscToClose";
+import { Modal } from "@/components/ui/Modal";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import type { Pedido, Lancamento, Vendedor, NaoConformidade, NaoConformidadeInsert, TipoNC, GravidadeNC, StatusNaoConformidade, RetiradaPedido, PedidoObservacao } from "@/types";
@@ -170,7 +170,6 @@ export default function PedidoDetalhe() {
   const [fotosNC, setFotosNC]       = useState<File[]>([]);
 
   const [editando, setEditando]         = useState(false);
-  useEscToClose(editando, () => setEditando(false));
   const [editForm, setEditForm]         = useState({
     cliente_id: 0, vendedor_id: null as number | null,
     dt_pedido: "", dt_retirada: "",
@@ -1571,13 +1570,7 @@ export default function PedidoDetalhe() {
         </div>
 
         {/* ── MODAL EDIÇÃO ── */}
-        {editando && (
-          <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) setEditando(false); }}>
-            <div className="mod" style={{ width:"780px", maxHeight:"90vh", overflowY:"auto" }}>
-              <div className="mhd">
-                <div className="mtit">Editar Pedido · {pedido.id}</div>
-                <button className="mcl" onClick={() => setEditando(false)} aria-label="Fechar">✕</button>
-              </div>
+        <Modal open={editando} onClose={() => setEditando(false)} title={`Editar Pedido · ${pedido.id}`} width="780px" style={{ maxHeight:"90vh", overflowY:"auto" }}>
               <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
                 <div className="fg">
                   <label className="fl">Cliente</label>
@@ -1709,9 +1702,7 @@ export default function PedidoDetalhe() {
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
+        </Modal>
 
         {/* ─── MODAL NC ─── */}
         {modalNC && (
