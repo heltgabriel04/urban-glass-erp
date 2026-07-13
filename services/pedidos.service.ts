@@ -115,6 +115,12 @@ export async function getPedidoById(id: string) {
   return data as Pedido;
 }
 
+export async function getClienteNomePublico(clienteId: number): Promise<string | null> {
+  const { data, error } = await supabase.rpc('get_cliente_nome_publico', { p_cliente_id: clienteId });
+  if (error) { console.error('getClienteNomePublico:', error); return null; }
+  return data as string | null;
+}
+
 export async function createPedido(pedido: PedidoInsert, itens: ItemPedidoInsert[] = []) {
   const payload = {
     ...pedido,

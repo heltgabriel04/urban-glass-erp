@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { getPedidoById, avancarStatusPedido } from "@/services/pedidos.service";
+import { getPedidoById, getClienteNomePublico, avancarStatusPedido } from "@/services/pedidos.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import type { Pedido } from "@/types";
 import type { HistoricoOtimizador } from "@/services/otimizador.service";
@@ -38,6 +38,7 @@ export default function ProducaoView() {
   const { id } = useParams<{ id: string }>();
 
   const [pedido, setPedido]         = useState<Pedido | null>(null);
+  const [clienteNome, setClienteNome] = useState<string | null>(null);
   const [otims, setOtims]           = useState<HistoricoOtimizador[]>([]);
   const [loading, setLoading]       = useState(true);
   const [salvando, setSalvando]     = useState(false);
@@ -54,6 +55,7 @@ export default function ProducaoView() {
     ]);
     setPedido(data);
     setOtims(o);
+    if (data?.cliente_id) setClienteNome(await getClienteNomePublico(data.cliente_id));
     setLoading(false);
   }
 
@@ -147,7 +149,7 @@ export default function ProducaoView() {
         <div style={styles.logoMark}>UG</div>
         <div style={{ flex: 1 }}>
           <div style={styles.pedidoId}>{pedido.id}</div>
-          <div style={styles.clienteNome}>{pedido.clientes?.nome ?? "—"}</div>
+          <div style={styles.clienteNome}>{clienteNome ?? "—"}</div>
         </div>
         <div style={{ ...styles.statusChip, background: corStatus + "22", borderColor: corStatus, color: corStatus }}>
           {statusAtual}
