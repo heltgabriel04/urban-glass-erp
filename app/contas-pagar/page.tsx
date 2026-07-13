@@ -16,7 +16,7 @@ import { getContasBancarias } from "@/services/contasBancarias.service";
 import { registrarBaixa, estornarBaixa, getBaixasPorLancamentos, calcularSaldo, excluirLancamento, editarLancamento, verificarDuplicado, criarAdiantamento, criarReembolso, getAdiantamentosDisponiveis, getHistorico, getUltimoPlanoContas, type LancamentoDuplicado, type AdiantamentoComSaldo, type VersaoLancamento } from "@/services/lancamentos.service";
 import { getFornecedores } from "@/services/fornecedores.service";
 import { getFormasPagamento } from "@/services/formasPagamento.service";
-import { useEscToClose } from "@/components/ui/useEscToClose";
+import { Modal } from "@/components/ui/Modal";
 import { useGlobalShortcut } from "@/components/ui/useGlobalShortcut";
 import { exportarExcel } from "@/lib/exportExcel";
 import { parseLinhaDigitavel } from "@/lib/boleto";
@@ -192,14 +192,6 @@ function ContasPagarPageInner() {
   }, [tab, busca]);
 
   useEffect(() => { setSelecionados(new Set()); }, [tab, busca]);
-
-  useEscToClose(modal === "add" || modal === "edit", closeModal);
-  useEscToClose(modal === "pagar", closeModal);
-  useEscToClose(modal === "baixas", closeModal);
-  useEscToClose(modal === "lote-pagar", closeModal);
-  useEscToClose(modal === "excluir", closeModal);
-  useEscToClose(modal === "adiantamento", closeModal);
-  useEscToClose(modal === "reembolso", closeModal);
 
   useGlobalShortcut("/", () => document.getElementById("busca-contas-pagar")?.focus(), modal === null);
   useGlobalShortcut("n", openAdd, modal === null);
@@ -732,14 +724,7 @@ function ContasPagarPageInner() {
       </div>
 
       {/* ── MODAL ADD/EDIT ── */}
-      {(modal === "add" || modal === "edit") && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && closeModal()}>
-          <div className="mod" style={{ width: "560px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
-            <div className="mhd">
-              <div className="mtit">{modal === "add" ? "Nova Conta a Pagar" : "Editar Conta a Pagar"}</div>
-              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
-            </div>
-
+      <Modal open={modal === "add" || modal === "edit"} onClose={closeModal} title={modal === "add" ? "Nova Conta a Pagar" : "Editar Conta a Pagar"} width="560px" style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px", overflowY: "auto", flex: 1 }}>
               {modal === "add" && (
                 <div className="fg">
@@ -852,18 +837,10 @@ function ContasPagarPageInner() {
                 {salvando ? "Salvando..." : modal === "add" ? "Adicionar" : "Salvar alterações"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* ── MODAL BAIXA (pagamento total ou parcial) ── */}
-      {modal === "pagar" && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && closeModal()}>
-          <div className="mod" style={{ width: "420px" }}>
-            <div className="mhd">
-              <div className="mtit">Registrar Baixa</div>
-              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
-            </div>
+      <Modal open={modal === "pagar"} onClose={closeModal} title="Registrar Baixa" width="420px">
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <div style={{ fontSize: "12px", color: "var(--t3)" }}>
                 {contas.find(c => c.id === pagarId)?.descricao}
@@ -933,18 +910,10 @@ function ContasPagarPageInner() {
                 {salvando ? "Salvando..." : "Confirmar"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* ── MODAL BAIXA EM LOTE ── */}
-      {modal === "lote-pagar" && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && closeModal()}>
-          <div className="mod" style={{ width: "360px" }}>
-            <div className="mhd">
-              <div className="mtit">Marcar {selecionados.size} conta(s) como pagas</div>
-              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
-            </div>
+      <Modal open={modal === "lote-pagar"} onClose={closeModal} title={`Marcar ${selecionados.size} conta(s) como pagas`} width="360px">
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <div className="fg">
                 <label className="fl">Data do Pagamento</label>
@@ -960,18 +929,10 @@ function ContasPagarPageInner() {
                 {salvando ? "Processando..." : "Confirmar"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* ── MODAL HISTÓRICO DE BAIXAS / ESTORNO ── */}
-      {modal === "baixas" && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && closeModal()}>
-          <div className="mod" style={{ width: "480px", maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
-            <div className="mhd">
-              <div className="mtit">Baixas · {contas.find(c => c.id === baixasVerId)?.descricao}</div>
-              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
-            </div>
+      <Modal open={modal === "baixas"} onClose={closeModal} title={`Baixas · ${contas.find(c => c.id === baixasVerId)?.descricao}`} width="480px" style={{ maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "10px" }}>
               {(baixasMap.get(baixasVerId ?? -1) ?? []).length === 0 && (
                 <div style={{ fontSize: "12px", color: "var(--t3)" }}>Nenhuma baixa registrada.</div>
@@ -1035,18 +996,10 @@ function ContasPagarPageInner() {
             <div style={{ display: "flex", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
               <button className="btn bg" onClick={closeModal}>Fechar</button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* ── MODAL EXCLUSÃO (título já tem baixa — exige motivo) ── */}
-      {modal === "excluir" && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && closeModal()}>
-          <div className="mod" style={{ width: "400px" }}>
-            <div className="mhd">
-              <div className="mtit">Excluir conta a pagar</div>
-              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
-            </div>
+      <Modal open={modal === "excluir"} onClose={closeModal} title="Excluir conta a pagar" width="400px">
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
               <div className="al al-w" style={{ fontSize: "12px" }}>
                 ⚠ Este título já tem baixa registrada. A conta não é apagada — fica marcada como excluída, com o histórico preservado.
@@ -1062,18 +1015,10 @@ function ContasPagarPageInner() {
                 {salvando ? "Excluindo..." : "Confirmar exclusão"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* ── MODAL ADIANTAMENTO ── */}
-      {modal === "adiantamento" && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && closeModal()}>
-          <div className="mod" style={{ width: "480px" }}>
-            <div className="mhd">
-              <div className="mtit">Registrar Adiantamento (a fornecedor)</div>
-              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
-            </div>
+      <Modal open={modal === "adiantamento"} onClose={closeModal} title="Registrar Adiantamento (a fornecedor)" width="480px">
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <div className="fg">
                 <label className="fl">Fornecedor</label>
@@ -1118,18 +1063,10 @@ function ContasPagarPageInner() {
                 {salvando ? "Salvando..." : "Registrar"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* ── MODAL REEMBOLSO ── */}
-      {modal === "reembolso" && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && closeModal()}>
-          <div className="mod" style={{ width: "420px" }}>
-            <div className="mhd">
-              <div className="mtit">Registrar Reembolso</div>
-              <button className="mcl" onClick={closeModal} aria-label="Fechar">✕</button>
-            </div>
+      <Modal open={modal === "reembolso"} onClose={closeModal} title="Registrar Reembolso" width="420px">
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <div style={{ fontSize: "12px", color: "var(--t3)" }}>
                 Referente a: {contas.find(c => c.id === reembolsarId)?.descricao} — vira um lançamento novo em Contas a Receber, sem reabrir este título.
@@ -1155,9 +1092,7 @@ function ContasPagarPageInner() {
                 {salvando ? "Salvando..." : "Registrar reembolso"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </AppLayout>
   );
 }
