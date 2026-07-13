@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import { Modal } from "@/components/ui/Modal";
+import { Campo } from "@/components/ui/Campo";
 import { formatBRL } from "@/lib/formatters";
 import type { Vendedor, VendedorInsert } from "@/types";
 
@@ -27,6 +28,7 @@ function mascTel(v: string) {
 export default function VendedoresPage() {
   const { toast } = useToast();
   const confirm = useConfirm();
+  const comissaoFieldId = useId();
   const [vendedores, setVendedores]             = useState<Vendedor[]>([]);
   const [comissoesPendentes, setComissoesPend]  = useState<Record<number, number>>({});
   const [loading, setLoading]                   = useState(true);
@@ -225,46 +227,41 @@ export default function VendedoresPage() {
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
 
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Status</label>
+                <Campo label="Status">
                   <select className="fc" value={form.ativo ? "1" : "0"} onChange={e => F("ativo", e.target.value === "1")}>
                     <option value="1">Ativo</option>
                     <option value="0">Inativo</option>
                   </select>
-                </div>
+                </Campo>
               </div>
 
-              <div className="fg">
-                <label className="fl">Nome completo *</label>
+              <Campo label="Nome completo *">
                 <input className="fc" value={form.nome} onChange={e => F("nome", e.target.value)} placeholder="Nome do vendedor" autoFocus />
-              </div>
+              </Campo>
 
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Telefone</label>
+                <Campo label="Telefone">
                   <input className="fc" value={form.telefone ? mascTel(form.telefone) : ""}
                     onChange={e => F("telefone", e.target.value.replace(/\D/g, ""))}
                     placeholder="(32) 99999-9999" maxLength={15} inputMode="numeric" />
-                </div>
-                <div className="fg">
-                  <label className="fl">CPF</label>
+                </Campo>
+                <Campo label="CPF">
                   <input className="fc" value={form.cpf ? mascCpf(form.cpf) : ""}
                     onChange={e => F("cpf", e.target.value.replace(/\D/g, ""))}
                     placeholder="000.000.000-00" maxLength={14} inputMode="numeric" />
-                </div>
+                </Campo>
               </div>
 
-              <div className="fg">
-                <label className="fl">E-mail</label>
+              <Campo label="E-mail">
                 <input className="fc" type="email" value={form.email ?? ""}
                   onChange={e => F("email", e.target.value || null)}
                   placeholder="vendedor@email.com" inputMode="email" />
-              </div>
+              </Campo>
 
               <div className="fg">
-                <label className="fl">% de Comissão por Venda</label>
+                <label className="fl" htmlFor={comissaoFieldId}>% de Comissão por Venda</label>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <input className="fc" type="number" min={0} max={100} step={0.5}
+                  <input id={comissaoFieldId} className="fc" type="number" min={0} max={100} step={0.5}
                     value={form.comissao_pct}
                     onChange={e => F("comissao_pct", parseFloat(e.target.value) || 0)}
                     style={{ maxWidth: "120px" }} />
@@ -290,12 +287,11 @@ export default function VendedoresPage() {
                 )}
               </div>
 
-              <div className="fg">
-                <label className="fl">Observações</label>
+              <Campo label="Observações">
                 <textarea className="fc" rows={2} style={{ resize: "vertical" }}
                   value={form.obs ?? ""} onChange={e => F("obs", e.target.value || null)}
                   placeholder="Informações adicionais..." />
-              </div>
+              </Campo>
             </div>
 
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
