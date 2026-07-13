@@ -5,6 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
+import { Modal } from "@/components/ui/Modal";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { GRUPOS_ITEM_ESTOQUE, labelGrupoItem } from "@/lib/itensEstoqueGeraisConstants";
@@ -75,13 +76,7 @@ function ModalItem({ editando, fornecedores, usuarioEmail, onSalvo, onFechar }: 
   }
 
   return (
-    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
-      <div className="mod" style={{ width: "560px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
-        <div className="mhd">
-          <div className="mtit">{editando ? "Editar Item de Estoque" : "Novo Item de Estoque"}</div>
-          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
-        </div>
-
+    <Modal open onClose={onFechar} title={editando ? "Editar Item de Estoque" : "Novo Item de Estoque"} width="560px" style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
         <form id="form-item-estoque" onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px", flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "12px" }}>
             <div className="fg">
@@ -156,8 +151,7 @@ function ModalItem({ editando, fornecedores, usuarioEmail, onSalvo, onFechar }: 
           <button type="button" className="btn bg" onClick={onFechar} disabled={salvando}>Cancelar</button>
           <button type="submit" form="form-item-estoque" className="btn bp" disabled={salvando}>{salvando ? "Salvando..." : "Salvar"}</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -204,13 +198,7 @@ function ModalMovimentacao({ itens, documentosFiscais, usuarioEmail, onSalvo, on
   }
 
   return (
-    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
-      <div className="mod" style={{ width: "520px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
-        <div className="mhd">
-          <div className="mtit">Nova Movimentação</div>
-          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
-        </div>
-
+    <Modal open onClose={onFechar} title="Nova Movimentação" width="520px" style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
         <form id="form-movimentacao" onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px", flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>
           <div className="fg">
             <label className="fl">Item</label>
@@ -278,8 +266,7 @@ function ModalMovimentacao({ itens, documentosFiscais, usuarioEmail, onSalvo, on
           <button type="button" className="btn bg" onClick={onFechar} disabled={salvando}>Cancelar</button>
           <button type="submit" form="form-movimentacao" className="btn bp" disabled={salvando}>{salvando ? "Salvando..." : "Salvar"}</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
