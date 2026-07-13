@@ -5,6 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
+import { Modal } from "@/components/ui/Modal";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { ordenarPorCodigoEstruturado } from "@/lib/planoContas";
@@ -83,13 +84,7 @@ function ModalAtivo({ editando, fornecedores, planoContas, usuarioEmail, onSalvo
   }
 
   return (
-    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
-      <div className="mod" style={{ width: "620px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
-        <div className="mhd">
-          <div className="mtit">{editando ? "Editar Ativo Imobilizado" : "Novo Ativo Imobilizado"}</div>
-          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
-        </div>
-
+    <Modal open onClose={onFechar} title={editando ? "Editar Ativo Imobilizado" : "Novo Ativo Imobilizado"} width="620px" style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
         <form id="form-ativo-imobilizado" onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px", flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "12px" }}>
             <div className="fg">
@@ -219,8 +214,7 @@ function ModalAtivo({ editando, fornecedores, planoContas, usuarioEmail, onSalvo
           <button type="button" className="btn bg" onClick={onFechar} disabled={salvando}>Cancelar</button>
           <button type="submit" form="form-ativo-imobilizado" className="btn bp" disabled={salvando}>{salvando ? "Salvando..." : "Salvar"}</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
