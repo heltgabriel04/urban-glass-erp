@@ -8,6 +8,7 @@ import { getRetiradasPorPedido, createRetirada, updateRetirada, deletarRetirada,
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import DateInput from "@/components/ui/DateInput";
+import { Campo } from "@/components/ui/Campo";
 import { formatDate } from "@/lib/formatters";
 import type { Pedido, RetiradaPedido, SaldoItemRetirada } from "@/types";
 
@@ -224,18 +225,15 @@ export default function RetiradasPedidoPage() {
             </div>
 
             <div className="fr3" style={{ marginBottom: 14 }}>
-              <div className="fg">
-                <label className="fl">Data da retirada</label>
+              <Campo label="Data da retirada">
                 <DateInput value={novaData} onChange={setNovaData} className="fc" />
-              </div>
-              <div className="fg">
-                <label className="fl">Motorista (opcional)</label>
+              </Campo>
+              <Campo label="Motorista (opcional)">
                 <input className="fc" value={novoMotorista} onChange={e => setNovoMotorista(e.target.value)} placeholder="Nome do motorista" />
-              </div>
-              <div className="fg">
-                <label className="fl">Veículo (opcional)</label>
+              </Campo>
+              <Campo label="Veículo (opcional)">
                 <input className="fc" value={novoVeiculo} onChange={e => setNovoVeiculo(e.target.value)} placeholder="Placa / modelo" />
-              </div>
+              </Campo>
             </div>
 
             {saldoForm.length === 0 ? (
