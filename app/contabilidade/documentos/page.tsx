@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import { usePrompt } from "@/components/ui/prompt";
 import { Modal } from "@/components/ui/Modal";
+import { Campo } from "@/components/ui/Campo";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import {
@@ -122,82 +123,71 @@ function ModalDocumento({ tipo, titulo, editando, ano, mes, fornecedores, notasV
 
           {/* Competência */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">Competência — Mês</label>
+            <Campo label="Competência — Mês">
               <select className="fc" value={form.competencia_mes} onChange={(e) => set("competencia_mes", Number(e.target.value))}>
                 {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
               </select>
-            </div>
-            <div className="fg">
-              <label className="fl">Competência — Ano</label>
+            </Campo>
+            <Campo label="Competência — Ano">
               <input className="fc" type="number" value={form.competencia_ano} onChange={(e) => set("competencia_ano", Number(e.target.value))} />
-            </div>
+            </Campo>
           </div>
 
           {(tipo === "compra" || tipo === "cancelamento") && (
-            <div className="fg">
-              <label className="fl">Fornecedor</label>
+            <Campo label="Fornecedor">
               <select className="fc" value={form.fornecedor_id ?? ""} onChange={(e) => set("fornecedor_id", e.target.value ? Number(e.target.value) : null)}>
                 <option value="">Selecione...</option>
                 {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}{f.cnpj ? ` — ${f.cnpj}` : ""}</option>)}
               </select>
-            </div>
+            </Campo>
           )}
 
           {(tipo === "compra" || tipo === "cancelamento" || tipo === "inutilizacao") && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-              <div className="fg">
-                <label className="fl">Nº do Documento</label>
+              <Campo label="Nº do Documento">
                 <input className="fc" value={form.numero_documento ?? ""} onChange={(e) => set("numero_documento", e.target.value || null)} />
-              </div>
-              <div className="fg">
-                <label className="fl">Série</label>
+              </Campo>
+              <Campo label="Série">
                 <input className="fc" value={form.serie ?? ""} onChange={(e) => set("serie", e.target.value || null)} />
-              </div>
+              </Campo>
             </div>
           )}
 
           {tipo === "compra" && (
             <>
-              <div className="fg">
-                <label className="fl">Chave de Acesso (44 dígitos)</label>
+              <Campo label="Chave de Acesso (44 dígitos)">
                 <input className="fc" value={form.chave_acesso ?? ""} maxLength={44} style={{ fontFamily: "'DM Mono', monospace" }}
                   onChange={(e) => set("chave_acesso", e.target.value.replace(/\D/g, "").slice(0, 44) || null)} />
-              </div>
+              </Campo>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-                <div className="fg">
-                  <label className="fl">NCM</label>
+                <Campo label="NCM">
                   <input className="fc" value={form.ncm ?? ""} maxLength={8} style={{ fontFamily: "'DM Mono', monospace" }}
                     onChange={(e) => set("ncm", e.target.value.replace(/\D/g, "").slice(0, 8) || null)} />
-                </div>
-                <div className="fg">
-                  <label className="fl">CFOP</label>
+                </Campo>
+                <Campo label="CFOP">
                   <input className="fc" value={form.cfop ?? ""} maxLength={4} style={{ fontFamily: "'DM Mono', monospace" }}
                     onChange={(e) => set("cfop", e.target.value.replace(/\D/g, "").slice(0, 4) || null)} />
-                </div>
-                <div className="fg">
-                  <label className="fl">CST</label>
+                </Campo>
+                <Campo label="CST">
                   <input className="fc" value={form.cst ?? ""} style={{ fontFamily: "'DM Mono', monospace" }}
                     onChange={(e) => set("cst", e.target.value || null)} />
-                </div>
+                </Campo>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "10px" }}>
                 {([
                   ["valor_produtos", "Produtos"], ["valor_icms", "ICMS"], ["valor_pis", "PIS"],
                   ["valor_cofins", "COFINS"], ["valor_ipi", "IPI"],
                 ] as const).map(([key, label]) => (
-                  <div key={key} className="fg">
-                    <label className="fl" style={{ fontSize: "10px" }}>{label}</label>
+                  <Campo key={key} labelStyle={{ fontSize: "10px" }} label={label}>
                     <input className="fc" type="number" step="0.01" style={{ fontFamily: "'DM Mono', monospace" }}
                       value={form[key] ?? ""} onChange={(e) => set(key, e.target.value ? Number(e.target.value) : null)} />
-                  </div>
+                  </Campo>
                 ))}
               </div>
-              <div className="fg">
-                <label className="fl">Valor Total</label>
+              <Campo label="Valor Total">
                 <input className="fc" type="number" step="0.01" style={{ fontFamily: "'DM Mono', monospace", fontWeight: 700 }}
                   value={form.valor_total ?? ""} onChange={(e) => set("valor_total", e.target.value ? Number(e.target.value) : null)} />
-              </div>
+              </Campo>
               <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "var(--t2)", cursor: "pointer" }}>
                 <input type="checkbox" checked={form.entrada} onChange={(e) => set("entrada", e.target.checked)} />
                 Também classificar como &quot;NF Entrada&quot;
@@ -207,98 +197,82 @@ function ModalDocumento({ tipo, titulo, editando, ano, mes, fornecedores, notasV
 
           {tipo === "perda" && (
             <>
-              <div className="fg">
-                <label className="fl">Motivo</label>
+              <Campo label="Motivo">
                 <input className="fc" value={form.motivo ?? ""} onChange={(e) => set("motivo", e.target.value || null)} required />
-              </div>
+              </Campo>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <div className="fg">
-                  <label className="fl">Material</label>
+                <Campo label="Material">
                   <input className="fc" value={form.material ?? ""} onChange={(e) => set("material", e.target.value || null)} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Quantidade</label>
+                </Campo>
+                <Campo label="Quantidade">
                   <input className="fc" type="number" step="0.001" value={form.quantidade ?? ""} onChange={(e) => set("quantidade", e.target.value ? Number(e.target.value) : null)} />
-                </div>
+                </Campo>
               </div>
-              <div className="fg">
-                <label className="fl">Valor</label>
+              <Campo label="Valor">
                 <input className="fc" type="number" step="0.01" value={form.valor_total ?? ""} onChange={(e) => set("valor_total", e.target.value ? Number(e.target.value) : null)} />
-              </div>
-              <div className="fg">
-                <label className="fl">Responsável</label>
+              </Campo>
+              <Campo label="Responsável">
                 <input className="fc" value={form.responsavel ?? ""} onChange={(e) => set("responsavel", e.target.value || null)} />
-              </div>
-              <div className="fg">
-                <label className="fl">Fotos (opcional)</label>
+              </Campo>
+              <Campo label="Fotos (opcional)">
                 <input className="fc" type="file" accept="image/*" multiple onChange={(e) => setFotos(Array.from(e.target.files ?? []))} />
-              </div>
+              </Campo>
             </>
           )}
 
           {tipo === "cancelamento" && (
             <>
-              <div className="fg">
-                <label className="fl">Motivo</label>
+              <Campo label="Motivo">
                 <input className="fc" value={form.motivo ?? ""} onChange={(e) => set("motivo", e.target.value || null)} required />
-              </div>
-              <div className="fg">
-                <label className="fl">Responsável</label>
+              </Campo>
+              <Campo label="Responsável">
                 <input className="fc" value={form.responsavel ?? ""} onChange={(e) => set("responsavel", e.target.value || null)} />
-              </div>
+              </Campo>
             </>
           )}
 
           {tipo === "carta_correcao" && (
             <>
-              <div className="fg">
-                <label className="fl">Nota Fiscal relacionada</label>
+              <Campo label="Nota Fiscal relacionada">
                 <select className="fc" value={form.nota_fiscal_id ?? ""} onChange={(e) => set("nota_fiscal_id", e.target.value ? Number(e.target.value) : null)} required>
                   <option value="">Selecione...</option>
                   {notasVenda.map((n) => <option key={n.id} value={n.id}>{n.numero ?? `#${n.id}`} — {n.clientes?.nome ?? "—"}</option>)}
                 </select>
-              </div>
-              <div className="fg">
-                <label className="fl">Sequência do Evento</label>
+              </Campo>
+              <Campo label="Sequência do Evento">
                 <input className="fc" type="number" value={form.sequencia_evento ?? ""} onChange={(e) => set("sequencia_evento", e.target.value ? Number(e.target.value) : null)} />
-              </div>
-              <div className="fg">
-                <label className="fl">Texto da Correção</label>
+              </Campo>
+              <Campo label="Texto da Correção">
                 <textarea className="fc" rows={3} value={form.texto_correcao ?? ""} onChange={(e) => set("texto_correcao", e.target.value || null)} required />
-              </div>
+              </Campo>
             </>
           )}
 
           {tipo === "inutilizacao" && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-              <div className="fg">
-                <label className="fl">Número Inicial</label>
+              <Campo label="Número Inicial">
                 <input className="fc" type="number" value={form.numero_inicial ?? ""} onChange={(e) => set("numero_inicial", e.target.value ? Number(e.target.value) : null)} required />
-              </div>
-              <div className="fg">
-                <label className="fl">Número Final</label>
+              </Campo>
+              <Campo label="Número Final">
                 <input className="fc" type="number" value={form.numero_final ?? ""} onChange={(e) => set("numero_final", e.target.value ? Number(e.target.value) : null)} required />
-              </div>
+              </Campo>
             </div>
           )}
 
           {tipo === "compra" && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-              <div className="fg">
-                <label className="fl">Anexar XML</label>
+              <Campo label="Anexar XML">
                 <input className="fc" type="file" accept=".xml" onChange={(e) => setXmlFile(e.target.files?.[0] ?? null)} />
-              </div>
-              <div className="fg">
-                <label className="fl">Anexar PDF</label>
+              </Campo>
+              <Campo label="Anexar PDF">
                 <input className="fc" type="file" accept=".pdf" onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)} />
-              </div>
+              </Campo>
             </div>
           )}
 
-          <div className="fg">
-            <label className="fl">Observações</label>
+          <Campo label="Observações">
             <textarea className="fc" rows={2} value={form.observacoes ?? ""} onChange={(e) => set("observacoes", e.target.value || null)} />
-          </div>
+          </Campo>
         </form>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "16px 20px", borderTop: "1px solid var(--b1)", flexShrink: 0 }}>
