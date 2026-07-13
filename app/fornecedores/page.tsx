@@ -5,6 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { getFornecedores, createFornecedor, updateFornecedor, deletarFornecedor } from "@/services/fornecedores.service";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
+import { Modal } from "@/components/ui/Modal";
 import SearchInput from "@/components/ui/SearchInput";
 import type { Fornecedor, FornecedorInsert, IndIE } from "@/types";
 
@@ -167,14 +168,7 @@ export default function FornecedoresPage() {
         )}
       </div>
 
-      {modalAberto && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && setModalAberto(false)}>
-          <div className="mod" style={{ width:"560px" }}>
-            <div className="mhd">
-              <div className="mtit">{editId != null ? "Editar" : "Novo"} fornecedor</div>
-              <button className="mcl" onClick={() => setModalAberto(false)} aria-label="Fechar">✕</button>
-            </div>
-
+      <Modal open={modalAberto} onClose={() => setModalAberto(false)} title={`${editId != null ? "Editar" : "Novo"} fornecedor`} width="560px">
             <div style={{ padding:"20px", display:"grid", gridTemplateColumns:"1fr 1fr", gap:"14px" }}>
               <Campo label="Nome *" span2>
                 <input className="fc" value={form.nome} onChange={e => upd("nome", e.target.value)} style={{ margin:0 }} />
@@ -230,9 +224,7 @@ export default function FornecedoresPage() {
                 {salvando ? "Salvando..." : editId != null ? "Salvar alterações" : "Criar fornecedor"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </AppLayout>
   );
 }
