@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode, type Dispatch, type SetSta
 import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
+import { Modal } from "@/components/ui/Modal";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
@@ -1246,14 +1247,7 @@ export default function InvestimentosPage() {
       </div>
 
       {/* ── Modal Gerenciar Listas ── */}
-      {modalListas && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && setModalListas(false)}>
-          <div className="mod" style={{ width: "580px" }}>
-            <div className="mhd">
-              <div className="mtit">Gerenciar Listas</div>
-              <button className="mcl" onClick={() => setModalListas(false)} aria-label="Fechar">✕</button>
-            </div>
-
+      <Modal open={modalListas} onClose={() => setModalListas(false)} title="Gerenciar Listas" width="580px">
             {semTabela && (
               <div style={{ background: "rgba(245,158,11,.12)", border: "1px solid var(--warn)", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", fontSize: "12px", color: "var(--warn)" }}>
                 ⚠ A tabela <code style={{ fontFamily: "'DM Mono',monospace" }}>inv_opcoes</code> não existe ainda. Execute o SQL de migração mostrado na página.
@@ -1371,9 +1365,7 @@ export default function InvestimentosPage() {
               </div>
 
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* ── PDF / Print area ── */}
       <div className="inv-print" style={{ fontFamily: "Arial, sans-serif", color: "#111", background: "white", padding: "0" }}>
