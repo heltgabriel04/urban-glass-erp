@@ -5,6 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import { Modal } from "@/components/ui/Modal";
+import { Campo } from "@/components/ui/Campo";
 import { supabase } from "@/lib/supabase/client";
 import { ordenarPorCodigoEstruturado } from "@/lib/planoContas";
 import SearchInput from "@/components/ui/SearchInput";
@@ -232,30 +233,26 @@ export default function PlanoContasPage() {
               <Modal open={planoAdding || planoEditId !== null} onClose={cancelPlano} title={planoEditId ? "Editar Plano de Contas" : "Novo Plano de Contas"} width="540px">
                     <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
                       <div className="fr">
-                        <div className="fg" style={{ maxWidth: "90px" }}>
-                          <label className="fl">Código</label>
+                        <Campo style={{ maxWidth: "90px" }} label="Código">
                           <input type="number" className="fc" value={planoForm.codigo || ""}
                             onChange={e => setPlanoForm(f => ({ ...f, codigo: Number(e.target.value) }))} placeholder="69" />
-                        </div>
-                        <div className="fg" style={{ maxWidth: "140px" }}>
-                          <label className="fl">Cód. Estruturado</label>
+                        </Campo>
+                        <Campo style={{ maxWidth: "140px" }} label="Cód. Estruturado">
                           <input className="fc" style={{ fontFamily: "'DM Mono', monospace" }} value={planoForm.codigo_estruturado}
                             onChange={e => setPlanoForm(f => ({ ...f, codigo_estruturado: e.target.value }))} placeholder="7.13" />
-                        </div>
+                        </Campo>
                       </div>
-                      <div className="fg">
-                        <label className="fl">Descrição</label>
+                      <Campo label="Descrição">
                         <input className="fc" value={planoForm.descricao}
                           onChange={e => setPlanoForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Nome do plano de contas" />
-                      </div>
-                      <div className="fg">
-                        <label className="fl">Categoria</label>
+                      </Campo>
+                      <Campo label="Categoria">
                         <select className="fc" value={planoForm.categoria_id ?? ""}
                           onChange={e => setPlanoForm(f => ({ ...f, categoria_id: e.target.value ? Number(e.target.value) : null }))}>
                           <option value="">Selecione...</option>
                           {categorias.map(c => <option key={c.id} value={c.id}>{c.codigo} · {c.descricao}</option>)}
                         </select>
-                      </div>
+                      </Campo>
                     </div>
                     <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
                       <button className="btn bg" onClick={cancelPlano}>Cancelar</button>
@@ -323,32 +320,28 @@ export default function PlanoContasPage() {
               <Modal open={catAdding || catEditId !== null} onClose={cancelCat} title={catEditId ? "Editar Categoria" : "Nova Categoria"} width="500px">
                     <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
                       <div className="fr">
-                        <div className="fg" style={{ maxWidth: "90px" }}>
-                          <label className="fl">Código</label>
+                        <Campo style={{ maxWidth: "90px" }} label="Código">
                           <input type="number" className="fc" value={catForm.codigo || ""}
                             onChange={e => setCatForm(f => ({ ...f, codigo: Number(e.target.value) }))} placeholder="19" />
-                        </div>
-                        <div className="fg">
-                          <label className="fl">Indicador</label>
+                        </Campo>
+                        <Campo label="Indicador">
                           <select className="fc" value={catForm.indicador}
                             onChange={e => setCatForm(f => ({ ...f, indicador: e.target.value as "Crédito" | "Débito" }))}>
                             <option value="Crédito">Crédito</option>
                             <option value="Débito">Débito</option>
                           </select>
-                        </div>
+                        </Campo>
                       </div>
-                      <div className="fg">
-                        <label className="fl">Descrição</label>
+                      <Campo label="Descrição">
                         <input className="fc" value={catForm.descricao}
                           onChange={e => setCatForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Nome da categoria" />
-                      </div>
-                      <div className="fg">
-                        <label className="fl">Faixa no DRE</label>
+                      </Campo>
+                      <Campo label="Faixa no DRE">
                         <select className="fc" value={catForm.faixa_dre}
                           onChange={e => setCatForm(f => ({ ...f, faixa_dre: e.target.value }))}>
                           {FAIXAS_DRE.map(f => <option key={f} value={f}>{f}</option>)}
                         </select>
-                      </div>
+                      </Campo>
                     </div>
                     <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
                       <button className="btn bg" onClick={cancelCat}>Cancelar</button>
