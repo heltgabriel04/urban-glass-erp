@@ -3,6 +3,10 @@ import type { Compra, CompraInsert, CompraItemInsert } from '@/types';
 import { registrarMovimentacao, reverterMovimentacao } from './estoqueMovimentacoes.service';
 import { getUltimoPlanoContas } from './lancamentos.service';
 import { registrarLog } from './log.service';
+import {
+  criarDocumentoFiscal, uploadAnexoDocumentoFiscal, atualizarDocumentoFiscal,
+  getDocumentoFiscalPorChaveAcesso,
+} from './contabilidadeDocumentos.service';
 
 export async function getProximoIdCompra(): Promise<string> {
   const { data } = await supabase
@@ -132,4 +136,66 @@ async function gerarContaAPagarDaCompra(compra: { id: string; fornecedor_id: num
     descricao: `Gerou conta a pagar automaticamente da compra ${compra.id} · R$ ${compra.valor_total.toFixed(2)}`,
     campos_alterados: { compra_id: compra.id, valor: compra.valor_total },
   });
+}
+
+export interface DadosXmlParaDocumento {
+  chaveAcesso: string | null;
+  numeroNF: string | null;
+  serie: string | null;
+  ncm: string | null;
+  cfop: string | null;
+  valorTotal: number;
+  fornecedorId: number | null;
+  competenciaAno: number;
+  competenciaMes: number;
+}
+
+export interface ResultadoAnexarXml {
+  ok: boolean;
+  aviso?: string;
+}
+
+/** Cria o documento fiscal (tipo compra, entrada) linkado a uma compra já
+ *  criada e anexa o XML original. Não reverte a compra em caso de falha
+ *  aqui — a compra já existe e é válida por si só; só avisa o usuário pra
+ *  completar manualmente em Documentos Fiscais se algo falhar. */
+export async function anexarXmlNaCompra(
+  compraId: string,
+  dados: DadosXmlParaDocumento,
+  xmlFile: File
+): Promise<ResultadoAnexarXml> {
+  if (dados.chaveAcesso) {
+    const existente = await getDocumentoFiscalPorChaveAcesso(dados.chaveAcesso);
+    if (existente) {
+      return { ok: false, aviso: `Esta nota já tinha sido importada antes (documento fiscal #${existente.id}). A compra foi criada, mas não dupliquei o documento fiscal.` };
+    }
+  }
+
+  const doc = await criarDocumentoFiscal({
+    tipo: 'compra', entrada: true,
+    competencia_ano: dados.competenciaAno, competencia_mes: dados.competenciaMes,
+    numero_documento: dados.numeroNF, serie: dados.serie, chave_acesso: dados.chaveAcesso,
+    fornecedor_id: dados.fornecedorId, compra_id: compraId, nota_fiscal_id: null,
+    ncm: dados.ncm, cfop: dados.cfop, cst: null,
+    valor_produtos: null, valor_icms: null, valor_pis: null, valor_cofins: null, valor_ipi: null,
+    valor_total: dados.valorTotal,
+    motivo: null, material: null, quantidade: null,
+    numero_inicial: null, numero_final: null,
+    sequencia_evento: null, texto_correcao: null,
+    responsavel: null, observacoes: 'Importado automaticamente via XML.',
+    xml_url: null, pdf_url: null, fotos_urls: null,
+    criado_por: null,
+  });
+
+  if (!doc) {
+    return { ok: false, aviso: 'A compra foi criada, mas não consegui registrar o documento fiscal. Registre manualmente em Documentos Fiscais.' };
+  }
+
+  const url = await uploadAnexoDocumentoFiscal(doc.id, xmlFile, 'xml');
+  if (!url) {
+    return { ok: false, aviso: 'A compra e o documento fiscal foram criados, mas o upload do XML falhou. Anexe manualmente em Documentos Fiscais.' };
+  }
+  await atualizarDocumentoFiscal(doc.id, { xml_url: url });
+
+  return { ok: true };
 }
