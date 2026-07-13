@@ -6,6 +6,7 @@ import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import { Modal } from "@/components/ui/Modal";
+import { Campo } from "@/components/ui/Campo";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { GRUPOS_ITEM_ESTOQUE, labelGrupoItem } from "@/lib/itensEstoqueGeraisConstants";
@@ -79,57 +80,48 @@ function ModalItem({ editando, fornecedores, usuarioEmail, onSalvo, onFechar }: 
     <Modal open onClose={onFechar} title={editando ? "Editar Item de Estoque" : "Novo Item de Estoque"} width="560px" style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
         <form id="form-item-estoque" onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px", flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">Código *</label>
+            <Campo label="Código *">
               <input className="fc" value={form.codigo} onChange={(e) => set("codigo", e.target.value)} required />
-            </div>
-            <div className="fg">
-              <label className="fl">Descrição *</label>
+            </Campo>
+            <Campo label="Descrição *">
               <input className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} required />
-            </div>
+            </Campo>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">Grupo</label>
+            <Campo label="Grupo">
               <select className="fc" value={form.grupo} onChange={(e) => set("grupo", e.target.value as GrupoItemEstoqueGeral)}>
                 {GRUPOS_ITEM_ESTOQUE.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
               </select>
-            </div>
-            <div className="fg">
-              <label className="fl">Subgrupo</label>
+            </Campo>
+            <Campo label="Subgrupo">
               <input className="fc" value={form.subgrupo ?? ""} onChange={(e) => set("subgrupo", e.target.value || null)} />
-            </div>
+            </Campo>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">Localização</label>
+            <Campo label="Localização">
               <input className="fc" value={form.localizacao ?? ""} onChange={(e) => set("localizacao", e.target.value || null)} />
-            </div>
-            <div className="fg">
-              <label className="fl">Unidade</label>
+            </Campo>
+            <Campo label="Unidade">
               <input className="fc" value={form.unidade} onChange={(e) => set("unidade", e.target.value)} placeholder="un, kg, m, cx..." />
-            </div>
-            <div className="fg">
-              <label className="fl">NCM</label>
+            </Campo>
+            <Campo label="NCM">
               <input className="fc" value={form.ncm ?? ""} maxLength={8} style={{ fontFamily: "'DM Mono', monospace" }}
                 onChange={(e) => set("ncm", e.target.value.replace(/\D/g, "").slice(0, 8) || null)} />
-            </div>
+            </Campo>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">Fornecedor Principal</label>
+            <Campo label="Fornecedor Principal">
               <select className="fc" value={form.fornecedor_principal_id ?? ""} onChange={(e) => set("fornecedor_principal_id", e.target.value ? Number(e.target.value) : null)}>
                 <option value="">—</option>
                 {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
               </select>
-            </div>
-            <div className="fg">
-              <label className="fl">Estoque Mínimo</label>
+            </Campo>
+            <Campo label="Estoque Mínimo">
               <input className="fc" type="number" step="0.001" value={form.estoque_minimo} onChange={(e) => set("estoque_minimo", Number(e.target.value))} />
-            </div>
+            </Campo>
           </div>
 
           {editando && (
@@ -200,20 +192,18 @@ function ModalMovimentacao({ itens, documentosFiscais, usuarioEmail, onSalvo, on
   return (
     <Modal open onClose={onFechar} title="Nova Movimentação" width="520px" style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
         <form id="form-movimentacao" onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px", flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>
-          <div className="fg">
-            <label className="fl">Item</label>
+          <Campo label="Item">
             <select className="fc" value={itemId} onChange={(e) => setItemId(e.target.value ? Number(e.target.value) : "")} required>
               <option value="">Selecione...</option>
               {itens.map((i) => <option key={i.id} value={i.id}>{i.codigo} — {i.descricao} (saldo: {i.saldo_qtd} {i.unidade})</option>)}
             </select>
-          </div>
+          </Campo>
 
-          <div className="fg">
-            <label className="fl">Tipo</label>
+          <Campo label="Tipo">
             <select className="fc" value={tipo} onChange={(e) => setTipo(e.target.value as TipoMovimentacaoItemEstoque)}>
               {(Object.keys(TIPO_LABEL) as TipoMovimentacaoItemEstoque[]).map((t) => <option key={t} value={t}>{TIPO_LABEL[t]}</option>)}
             </select>
-          </div>
+          </Campo>
 
           {tipo === "ajuste" && (
             <div style={{ display: "flex", gap: "8px" }}>
@@ -230,36 +220,31 @@ function ModalMovimentacao({ itens, documentosFiscais, usuarioEmail, onSalvo, on
 
           {tipo !== "transferencia" && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-              <div className="fg">
-                <label className="fl">Quantidade</label>
+              <Campo label="Quantidade">
                 <input className="fc" type="number" step="0.001" value={quantidade} onChange={(e) => setQuantidade(e.target.value)} required style={{ fontFamily: "'DM Mono', monospace" }} />
-              </div>
-              <div className="fg">
-                <label className="fl">Custo Unitário</label>
+              </Campo>
+              <Campo label="Custo Unitário">
                 <input className="fc" type="number" step="0.0001" value={custoUnitario} onChange={(e) => setCustoUnitario(e.target.value)} placeholder="opcional" style={{ fontFamily: "'DM Mono', monospace" }} />
-              </div>
+              </Campo>
             </div>
           )}
 
           {tipo === "transferencia" && (
-            <div className="fg">
-              <label className="fl">Localização de Destino</label>
+            <Campo label="Localização de Destino">
               <input className="fc" value={localizacaoDestino} onChange={(e) => setLocalizacaoDestino(e.target.value)} required />
-            </div>
+            </Campo>
           )}
 
-          <div className="fg">
-            <label className="fl">Documento Fiscal (opcional)</label>
+          <Campo label="Documento Fiscal (opcional)">
             <select className="fc" value={documentoFiscalId} onChange={(e) => setDocumentoFiscalId(e.target.value ? Number(e.target.value) : "")}>
               <option value="">—</option>
               {documentosFiscais.map((d) => <option key={d.id} value={d.id}>{d.numero_documento ?? `#${d.id}`} ({d.tipo})</option>)}
             </select>
-          </div>
+          </Campo>
 
-          <div className="fg">
-            <label className="fl">Observações</label>
+          <Campo label="Observações">
             <textarea className="fc" rows={2} value={obs} onChange={(e) => setObs(e.target.value)} />
-          </div>
+          </Campo>
         </form>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "16px 20px", borderTop: "1px solid var(--b1)", flexShrink: 0 }}>
