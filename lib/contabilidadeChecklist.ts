@@ -7,8 +7,8 @@
 export interface ChecklistItemDef {
   key: string;
   label: string;
-  area: "documentos_fiscais" | "estoque" | "ativo_imobilizado" | "cartoes";
-  faseDisponivel: 1 | 2 | 3 | 4;
+  area: "documentos_fiscais" | "estoque" | "ativo_imobilizado" | "cartoes" | "financeiro";
+  faseDisponivel: 1 | 2 | 3 | 4 | 6;
 }
 
 export const CHECKLIST_ITENS: ChecklistItemDef[] = [
@@ -22,9 +22,10 @@ export const CHECKLIST_ITENS: ChecklistItemDef[] = [
   { key: "estoque",            label: "Estoque / CMV",                      area: "estoque",            faseDisponivel: 2 },
   { key: "ativo_imobilizado",  label: "Ativo Imobilizado",                  area: "ativo_imobilizado",  faseDisponivel: 3 },
   { key: "cartoes_emprestimos", label: "Cartões / Empréstimos / Consórcios", area: "cartoes",           faseDisponivel: 4 },
+  { key: "financeiro",         label: "Financeiro (Contas a Pagar/Receber)", area: "financeiro",        faseDisponivel: 6 },
 ];
 
-export const FASE_ATUAL = 4;
+export const FASE_ATUAL = 6;
 
 export function itemDisponivel(item: ChecklistItemDef): boolean {
   return item.faseDisponivel <= FASE_ATUAL;
