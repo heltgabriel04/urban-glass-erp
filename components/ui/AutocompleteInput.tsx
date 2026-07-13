@@ -22,9 +22,10 @@ interface Props {
   placeholder?: string;
   disabled?: boolean;
   tabIndex?: number;
+  id?: string;
 }
 
-export default function AutocompleteInput({ options, value, valueLabel, onChange, allowFreeText, placeholder = "Buscar...", disabled, tabIndex }: Props) {
+export default function AutocompleteInput({ options, value, valueLabel, onChange, allowFreeText, placeholder = "Buscar...", disabled, tabIndex, id }: Props) {
   const [query, setQuery]             = useState("");
   const [aberto, setAberto]           = useState(false);
   const [highlighted, setHighlighted] = useState(0);
@@ -78,6 +79,7 @@ export default function AutocompleteInput({ options, value, valueLabel, onChange
     <div style={{ position: "relative" }}>
       <input
         ref={inputRef}
+        id={id}
         type="text"
         className="fc"
         value={query}

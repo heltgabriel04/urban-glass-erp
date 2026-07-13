@@ -6,9 +6,10 @@ interface DateInputProps {
   className?: string;
   style?: React.CSSProperties;
   tabIndex?: number;
+  id?: string;
 }
 
-export default function DateInput({ value, onChange, className = "fc", style, tabIndex }: DateInputProps) {
+export default function DateInput({ value, onChange, className = "fc", style, tabIndex, id }: DateInputProps) {
   const toDisplay = (v: string) => {
     if (!v || !v.includes("-")) return v;
     const parts = v.split("-");
@@ -38,6 +39,7 @@ export default function DateInput({ value, onChange, className = "fc", style, ta
 
   return (
     <input
+      id={id}
       className={className}
       style={style}
       type="text"

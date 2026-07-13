@@ -11,6 +11,7 @@ interface CurrencyInputProps {
   className?: string;
   disabled?: boolean;
   tabIndex?: number;
+  id?: string;
   onFocus?: React.FocusEventHandler<HTMLInputElement>;
   onBlur?: React.FocusEventHandler<HTMLInputElement>;
 }
@@ -24,7 +25,7 @@ function fmt(cents: number): string {
 export default function CurrencyInput({
   value, onChange,
   placeholder = "R$ 0,00",
-  title, style, className = "fc", disabled, tabIndex,
+  title, style, className = "fc", disabled, tabIndex, id,
   onFocus: onFocusProp, onBlur: onBlurProp,
 }: CurrencyInputProps) {
   const [cents, setCents] = useState(Math.round((value ?? 0) * 100));
@@ -90,6 +91,7 @@ export default function CurrencyInput({
   return (
     <input
       ref={ref}
+      id={id}
       className={className}
       type="text"
       inputMode="numeric"
