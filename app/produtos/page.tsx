@@ -9,7 +9,10 @@ import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import SearchInput from "@/components/ui/SearchInput";
-import type { Produto, ProdutoInsert } from "@/types";
+import ModalClassificacaoFiscal from "@/components/produtos/ModalClassificacaoFiscal";
+import { getConfigPadrao, salvarConfigFiscalProduto, PADRAO_FALLBACK } from "@/services/contabilidade.service";
+import type { ConfigFiscalProdutoInput } from "@/services/contabilidade.service";
+import type { Produto, ProdutoInsert, ConfigFiscalPadrao } from "@/types";
 
 // "Chapa" não é um tipo de vidro — é só um estado de venda (inteira vs.
 // cortada), já tratado por isChapaInteira() a partir das medidas do item.
@@ -40,8 +43,11 @@ export default function ProdutosPage() {
   const [editId, setEditId]     = useState<number | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [comConfigFiscal, setComConfigFiscal] = useState<Set<number>>(new Set());
+  const [padrao, setPadrao] = useState<ConfigFiscalPadrao>({ ...PADRAO_FALLBACK });
+  const [produtoPendenteFiscal, setProdutoPendenteFiscal] = useState<Produto | null>(null);
+  const [salvandoFiscal, setSalvandoFiscal] = useState(false);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); getConfigPadrao().then(setPadrao); }, []);
 
   async function load() {
     setLoading(true);
@@ -111,11 +117,35 @@ export default function ProdutosPage() {
     setSalvando(true);
     if (editId) {
       await supabase.from("produtos").update(form as never).eq("id", editId);
-    } else {
-      await supabase.from("produtos").insert([form as never]);
+      setSalvando(false);
+      setModal(false);
+      load();
+      return;
     }
+    const { data, error } = await supabase.from("produtos").insert([form as never]).select().single();
     setSalvando(false);
     setModal(false);
+    if (error || !data) { load(); return; }
+    setProdutoPendenteFiscal(data as Produto);
+    load();
+  }
+
+  async function handleSalvarFiscalObrigatoria(input: ConfigFiscalProdutoInput) {
+    setSalvandoFiscal(true);
+    const ok = await salvarConfigFiscalProduto(input);
+    setSalvandoFiscal(false);
+    if (!ok) return;
+    setProdutoPendenteFiscal(null);
+    load();
+  }
+
+  async function handleCancelarFiscalObrigatoria() {
+    if (!produtoPendenteFiscal) return;
+    if (!(await confirm(`Excluir o produto "${produtoPendenteFiscal.nome}"? A classificação fiscal é obrigatória para produtos novos.`, { perigo: true }))) return;
+    setSalvandoFiscal(true);
+    await supabase.from("produtos").delete().eq("id", produtoPendenteFiscal.id);
+    setSalvandoFiscal(false);
+    setProdutoPendenteFiscal(null);
     load();
   }
 
@@ -363,6 +393,18 @@ export default function ProdutosPage() {
               </button>
             </div>
       </Modal>
+
+      {produtoPendenteFiscal && (
+        <ModalClassificacaoFiscal
+          item={{ produto: produtoPendenteFiscal, config: null }}
+          padrao={padrao}
+          onSalvar={handleSalvarFiscalObrigatoria}
+          onFechar={() => {}}
+          obrigatorio
+          onCancelarObrigatorio={handleCancelarFiscalObrigatoria}
+          salvando={salvandoFiscal}
+        />
+      )}
     </AppLayout>
   );
 }
