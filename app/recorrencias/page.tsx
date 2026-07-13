@@ -9,7 +9,7 @@ import { getRecorrencias, createRecorrencia, updateRecorrencia, deletarRecorrenc
 import { getContasBancarias } from "@/services/contasBancarias.service";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
-import { useEscToClose } from "@/components/ui/useEscToClose";
+import { Modal } from "@/components/ui/Modal";
 import ActionMenu from "@/components/ui/ActionMenu";
 import SearchInput from "@/components/ui/SearchInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
@@ -47,9 +47,6 @@ export default function RecorrenciasPage() {
   const [gerarMaisId, setGerarMaisId] = useState<number | null>(null);
   const [mesesGerarMais, setMesesGerarMais] = useState(12);
   const [gerandoMais, setGerandoMais] = useState(false);
-
-  useEscToClose(modalAberto, () => setModalAberto(false));
-  useEscToClose(gerarMaisId != null, () => setGerarMaisId(null));
 
   useEffect(() => { load(); }, []);
 
@@ -212,14 +209,7 @@ export default function RecorrenciasPage() {
         <div style={{ marginTop: "10px", fontSize: "12px", color: "var(--t3)" }}>{totalAtivas} recorrência(s) ativa(s)</div>
       </div>
 
-      {modalAberto && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && setModalAberto(false)}>
-          <div className="mod" style={{ width: "560px" }}>
-            <div className="mhd">
-              <div className="mtit">{editId != null ? "Editar" : "Nova"} recorrência</div>
-              <button className="mcl" onClick={() => setModalAberto(false)} aria-label="Fechar">✕</button>
-            </div>
-
+      <Modal open={modalAberto} onClose={() => setModalAberto(false)} title={`${editId != null ? "Editar" : "Nova"} recorrência`} width="560px">
             <div style={{ padding: "20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
               <Campo label="Tipo *">
                 <select className="fc" value={form.tipo} onChange={e => upd("tipo", e.target.value as "Entrada" | "Saída")} style={{ margin: 0 }}>
@@ -281,17 +271,9 @@ export default function RecorrenciasPage() {
                 {salvando ? "Salvando..." : editId != null ? "Salvar alterações" : `Criar e gerar ${mesesGerar || 0} meses`}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {gerarMaisId != null && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && setGerarMaisId(null)}>
-          <div className="mod" style={{ width: "360px" }}>
-            <div className="mhd">
-              <div className="mtit">Gerar mais meses</div>
-              <button className="mcl" onClick={() => setGerarMaisId(null)} aria-label="Fechar">✕</button>
-            </div>
+      <Modal open={gerarMaisId != null} onClose={() => setGerarMaisId(null)} title="Gerar mais meses" width="360px">
             <div style={{ padding: "20px" }}>
               <Campo label="Quantos meses gerar, a partir de onde parou *">
                 <input className="fc" type="number" min={1} max={60} autoFocus value={mesesGerarMais}
@@ -304,9 +286,7 @@ export default function RecorrenciasPage() {
                 {gerandoMais ? "Gerando..." : `Gerar ${mesesGerarMais || 0} meses`}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </AppLayout>
   );
 }
