@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode } fro
 import AppLayout from "@/components/layout/AppLayout";
 import HoverCard from "@/components/ui/HoverCard";
 import { useConfirm } from "@/components/ui/confirm";
+import { Modal } from "@/components/ui/Modal";
 import {
   getLinhas, getConfigTempo, getProgramacao, getPedidosSemProgramacao,
   getPedidosExpedicao, getCalendario,
@@ -603,12 +604,7 @@ function ModalAgendar({
   const dtValida = !!parseBR(dtDisplay);
 
   return (
-    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
-      <div className="mod" style={{ width: 480 }}>
-        <div className="mhd">
-          <span>Agendar — Pedido {pedido.id}</span>
-          <button className="btn icon" onClick={onFechar}>✕</button>
-        </div>
+    <Modal open onClose={onFechar} title={`Agendar — Pedido ${pedido.id}`} width={480}>
         <div className="mbd" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
           {eChapa && (
@@ -729,8 +725,7 @@ function ModalAgendar({
             {salvando ? "Agendando…" : "Confirmar Agendamento"}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -786,12 +781,7 @@ function ModalAgendamentoLote({
   }
 
   return (
-    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
-      <div className="mod" style={{ width: 480 }}>
-        <div className="mhd">
-          <span>Agendar em Lote — {pedidos.length} pedidos</span>
-          <button className="btn icon" onClick={onFechar}>✕</button>
-        </div>
+    <Modal open onClose={onFechar} title={`Agendar em Lote — ${pedidos.length} pedidos`} width={480}>
         <div className="mbd" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
           <div style={{ background: "var(--surf2)", borderRadius: 10, padding: "12px 16px" }}>
@@ -843,8 +833,7 @@ function ModalAgendamentoLote({
             {salvando ? "Agendando…" : `Agendar ${pedidos.length} Pedidos`}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -912,15 +901,14 @@ function ModalBloco({
   const linhaNome = linhas.find(l => l.id === prog.linha_id)?.nome ?? prog.etapa;
 
   return (
-    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
-      <div className="mod" style={{ width: 480 }}>
-        <div className="mhd" style={{ borderLeft: `4px solid ${borda}`, paddingLeft: 14 }}>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>{prog.pedido_id}</div>
-            <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 1 }}>{prog.etapa} · {linhaNome}</div>
-          </div>
-          <button className="btn icon" onClick={onFechar}>✕</button>
-        </div>
+    <Modal
+      open onClose={onFechar} width={480}
+      headerStyle={{ borderLeft: `4px solid ${borda}`, paddingLeft: 14 }}
+      title={<>
+        <div>{prog.pedido_id}</div>
+        <div style={{ fontSize: 11, fontWeight: 400, color: "var(--t3)", marginTop: 1 }}>{prog.etapa} · {linhaNome}</div>
+      </>}
+    >
         <div className="mbd" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
           {/* Status */}
@@ -1073,8 +1061,7 @@ function ModalBloco({
             <button className="btn bg" onClick={onFechar}>Fechar</button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -1104,12 +1091,7 @@ function ModalRetrabalho({
   }
 
   return (
-    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
-      <div className="mod" style={{ width: 420 }}>
-        <div className="mhd">
-          <span style={{ color: "var(--warn)" }}>⚠ Registrar Retrabalho</span>
-          <button className="btn icon" onClick={onFechar}>✕</button>
-        </div>
+    <Modal open onClose={onFechar} title={<span style={{ color: "var(--warn)" }}>⚠ Registrar Retrabalho</span>} width={420}>
         <div className="mbd" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ background: "rgba(245,158,11,.07)", border: "1px solid var(--warn)", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "var(--t2)" }}>
             Pedido <strong style={{ color: "var(--t1)" }}>{prog.pedido_id}</strong> · Etapa: {prog.etapa}
@@ -1133,8 +1115,7 @@ function ModalRetrabalho({
             {salvando ? "Salvando…" : "Registrar Retrabalho"}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -1197,12 +1178,7 @@ function ModalBloqueioLinha({
   };
 
   return (
-    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
-      <div className="mod" style={{ width: 480 }}>
-        <div className="mhd">
-          <span>Bloqueios — {nomeDisplay}</span>
-          <button className="btn icon" onClick={onFechar}>✕</button>
-        </div>
+    <Modal open onClose={onFechar} title={`Bloqueios — ${nomeDisplay}`} width={480}>
         <div className="mbd" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
           {/* Bloqueios existentes */}
@@ -1262,8 +1238,7 @@ function ModalBloqueioLinha({
             {salvando ? "Salvando…" : "Adicionar Bloqueio"}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -2762,12 +2737,7 @@ function ModalRecalculo({
   const piorou   = proposta.resumo.atrasadosDepois > proposta.resumo.atrasadosAntes;
 
   return (
-    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
-      <div className="mod" style={{ width: 640, maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
-        <div className="mhd">
-          <span>Prévia do Recálculo Automático</span>
-          <button className="btn icon" onClick={onFechar}>✕</button>
-        </div>
+    <Modal open onClose={onFechar} title="Prévia do Recálculo Automático" width={640} style={{ maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
         <div className="mbd" style={{ display: "flex", flexDirection: "column", gap: 14, overflow: "hidden" }}>
 
           {/* Resumo */}
@@ -2840,8 +2810,7 @@ function ModalRecalculo({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
