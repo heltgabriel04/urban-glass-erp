@@ -11,6 +11,7 @@ import { useToast } from "@/components/ui/toast";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
+import { Campo } from "@/components/ui/Campo";
 import ImportarMedidasModal from "@/components/ui/ImportarMedidasModal";
 import ImportarPdfModal from "@/components/ui/ImportarPdfModal";
 import type { MedidaImportada } from "@/lib/importPlanilhaMedidas";
@@ -512,8 +513,7 @@ function NovoOrcamentoPageInner() {
           <div className="card">
             <div className="ct">Dados do Orçamento</div>
 
-            <div className="fg" style={{ marginBottom: "10px" }}>
-              <label className="fl">Cliente *</label>
+            <Campo style={{ marginBottom: "10px" }} label="Cliente *">
               <AutocompleteInput
                 options={clienteOptions}
                 value={clienteId}
@@ -521,7 +521,7 @@ function NovoOrcamentoPageInner() {
                 placeholder="Digite o nome do cliente..."
                 tabIndex={-1}
               />
-            </div>
+            </Campo>
 
             {clienteId && tab && (
               <div className="al al-i" style={{ marginBottom: "10px" }}>
@@ -530,17 +530,16 @@ function NovoOrcamentoPageInner() {
             )}
 
             <div className="fr">
-              <div className="fg"><label className="fl">Data do Orçamento</label><DateInput value={dtOrcamento} onChange={setDtOrcamento} /></div>
-              <div className="fg"><label className="fl">Validade do Orçamento</label><DateInput value={dtValidade} onChange={setDtValidade} /></div>
+              <Campo label="Data do Orçamento"><DateInput value={dtOrcamento} onChange={setDtOrcamento} /></Campo>
+              <Campo label="Validade do Orçamento"><DateInput value={dtValidade} onChange={setDtValidade} /></Campo>
             </div>
             <div className="fr">
-              <div className="fg"><label className="fl">Previsão de Entrega</label><DateInput value={dtEntrega} onChange={setDtEntrega} /></div>
-              <div className="fg">
-                <label className="fl">Frete</label>
+              <Campo label="Previsão de Entrega"><DateInput value={dtEntrega} onChange={setDtEntrega} /></Campo>
+              <Campo label="Frete">
                 <select tabIndex={-1} className="fc" value={frete} onChange={e => setFrete(e.target.value)}>
                   {["Retirada","Fretado"].map(f => <option key={f}>{f}</option>)}
                 </select>
-              </div>
+              </Campo>
             </div>
             {/* ── FINANCEIRO ── */}
             <div style={{ marginTop: "14px", borderTop: "1px solid var(--b1)", paddingTop: "14px" }}>
@@ -621,10 +620,9 @@ function NovoOrcamentoPageInner() {
                 )}
               </div>
             </div>
-            <div className="fg" style={{ marginTop: "10px" }}>
-              <label className="fl">Observações</label>
+            <Campo style={{ marginTop: "10px" }} label="Observações">
               <textarea tabIndex={-1} className="fc" value={obs} onChange={e => setObs(e.target.value)} placeholder="Observações do orçamento..." />
-            </div>
+            </Campo>
           </div>
 
           <div className="card">
