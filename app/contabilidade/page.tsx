@@ -125,7 +125,7 @@ export default function ContabilidadeDashboardPage() {
 
             {/* Semáforo por área */}
             <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)", marginBottom: "10px" }}>Status por Área</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "24px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "12px", marginBottom: "24px" }}>
               {areas.map((a) => (
                 <div key={a.area} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "14px 16px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>

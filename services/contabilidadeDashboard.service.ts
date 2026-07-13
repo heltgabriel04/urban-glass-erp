@@ -244,11 +244,28 @@ export async function getStatusAreas(ano: number, mes: number): Promise<StatusAr
       ? { area: "cartoes", label: "Cartões / Empréstimos / Consórcios", semaforo: "amarelo", detalhe: "Checklist de cartões/empréstimos/consórcios ainda pendente" }
       : { area: "cartoes", label: "Cartões / Empréstimos / Consórcios", semaforo: "verde", detalhe: "Completo" };
 
+  const hojeStrFin = new Date().toISOString().split("T")[0];
+  const [{ count: pagarVencidas }, { count: receberVencidas }] = await Promise.all([
+    supabase.from("lancamentos").select("id", { count: "exact", head: true }).eq("tipo", "Saída").neq("status", "Pago").lt("vencimento", hojeStrFin).is("deletado_em", null),
+    supabase.from("lancamentos").select("id", { count: "exact", head: true }).eq("tipo", "Entrada").neq("status", "Pago").lt("vencimento", hojeStrFin).is("deletado_em", null),
+  ]);
+  const totalVencidasFin = (pagarVencidas ?? 0) + (receberVencidas ?? 0);
+  const itemChecklistFinanceiro = itens.find((i) => i.item_key === "financeiro");
+  const checklistFinanceiroPendente = itemChecklistFinanceiro?.status === "pendente" || itemChecklistFinanceiro?.status === "em_andamento";
+
+  const financeiroArea: StatusArea =
+    totalVencidasFin > 0
+      ? { area: "financeiro", label: "Financeiro", semaforo: "vermelho", detalhe: `${totalVencidasFin} conta(s) vencida(s) sem pagamento` }
+      : checklistFinanceiroPendente
+      ? { area: "financeiro", label: "Financeiro", semaforo: "amarelo", detalhe: "Checklist financeiro ainda pendente" }
+      : { area: "financeiro", label: "Financeiro", semaforo: "verde", detalhe: "Completo" };
+
   return [
     documentosFiscais,
     estoque,
     ativoImobilizado,
     cartoesArea,
+    financeiroArea,
   ];
 }
 
