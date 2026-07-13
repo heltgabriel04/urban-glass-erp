@@ -6,6 +6,7 @@ import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import { Modal } from "@/components/ui/Modal";
+import { Campo } from "@/components/ui/Campo";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { ordenarPorCodigoEstruturado } from "@/lib/planoContas";
@@ -87,107 +88,89 @@ function ModalAtivo({ editando, fornecedores, planoContas, usuarioEmail, onSalvo
     <Modal open onClose={onFechar} title={editando ? "Editar Ativo Imobilizado" : "Novo Ativo Imobilizado"} width="620px" style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
         <form id="form-ativo-imobilizado" onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px", flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">Nº Patrimônio *</label>
+            <Campo label="Nº Patrimônio *">
               <input className="fc" value={form.numero_patrimonio} onChange={(e) => set("numero_patrimonio", e.target.value)} required />
-            </div>
-            <div className="fg">
-              <label className="fl">Descrição *</label>
+            </Campo>
+            <Campo label="Descrição *">
               <input className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} required />
-            </div>
+            </Campo>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">Categoria</label>
+            <Campo label="Categoria">
               <select className="fc" value={form.categoria} onChange={(e) => set("categoria", e.target.value as CategoriaAtivoImobilizado)}>
                 {CATEGORIAS_ATIVO.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
-            </div>
-            <div className="fg">
-              <label className="fl">Fornecedor</label>
+            </Campo>
+            <Campo label="Fornecedor">
               <select className="fc" value={form.fornecedor_id ?? ""} onChange={(e) => set("fornecedor_id", e.target.value ? Number(e.target.value) : null)}>
                 <option value="">—</option>
                 {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
               </select>
-            </div>
+            </Campo>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">Nº da Nota</label>
+            <Campo label="Nº da Nota">
               <input className="fc" value={form.numero_nota ?? ""} onChange={(e) => set("numero_nota", e.target.value || null)} />
-            </div>
-            <div className="fg">
-              <label className="fl">Conta Contábil</label>
+            </Campo>
+            <Campo label="Conta Contábil">
               <select className="fc" value={form.plano_contas_id ?? ""} onChange={(e) => set("plano_contas_id", e.target.value ? Number(e.target.value) : null)}>
                 <option value="">—</option>
                 {planoContas.map((p) => <option key={p.id} value={p.id}>{p.codigo_estruturado} — {p.descricao}</option>)}
               </select>
-            </div>
+            </Campo>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">Valor de Aquisição</label>
+            <Campo label="Valor de Aquisição">
               <input className="fc" type="number" step="0.01" value={form.valor_aquisicao} onChange={(e) => set("valor_aquisicao", Number(e.target.value))} required style={{ fontFamily: "'DM Mono', monospace" }} />
-            </div>
-            <div className="fg">
-              <label className="fl">Valor Residual</label>
+            </Campo>
+            <Campo label="Valor Residual">
               <input className="fc" type="number" step="0.01" value={form.valor_residual} onChange={(e) => set("valor_residual", Number(e.target.value))} style={{ fontFamily: "'DM Mono', monospace" }} />
-            </div>
-            <div className="fg">
-              <label className="fl">Vida Útil (meses)</label>
+            </Campo>
+            <Campo label="Vida Útil (meses)">
               <input className="fc" type="number" value={form.vida_util_meses} onChange={(e) => set("vida_util_meses", Number(e.target.value))} required style={{ fontFamily: "'DM Mono', monospace" }} />
-            </div>
+            </Campo>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">Data de Aquisição</label>
+            <Campo label="Data de Aquisição">
               <input className="fc" type="date" value={form.data_aquisicao} onChange={(e) => set("data_aquisicao", e.target.value)} required />
-            </div>
-            <div className="fg">
-              <label className="fl">Garantia Até</label>
+            </Campo>
+            <Campo label="Garantia Até">
               <input className="fc" type="date" value={form.garantia_ate ?? ""} onChange={(e) => set("garantia_ate", e.target.value || null)} />
-            </div>
+            </Campo>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">Localização</label>
+            <Campo label="Localização">
               <input className="fc" value={form.localizacao ?? ""} onChange={(e) => set("localizacao", e.target.value || null)} />
-            </div>
-            <div className="fg">
-              <label className="fl">Responsável</label>
+            </Campo>
+            <Campo label="Responsável">
               <input className="fc" value={form.responsavel ?? ""} onChange={(e) => set("responsavel", e.target.value || null)} />
-            </div>
+            </Campo>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">XML</label>
+            <Campo label="XML">
               <input className="fc" type="file" accept=".xml" onChange={(e) => setXmlFile(e.target.files?.[0] ?? null)} />
-            </div>
-            <div className="fg">
-              <label className="fl">PDF (nota)</label>
+            </Campo>
+            <Campo label="PDF (nota)">
               <input className="fc" type="file" accept=".pdf" onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)} />
-            </div>
-            <div className="fg">
-              <label className="fl">Manual (PDF)</label>
+            </Campo>
+            <Campo label="Manual (PDF)">
               <input className="fc" type="file" accept=".pdf" onChange={(e) => setManualFile(e.target.files?.[0] ?? null)} />
-            </div>
+            </Campo>
           </div>
 
-          <div className="fg">
-            <label className="fl">Fotos</label>
+          <Campo label="Fotos">
             <input className="fc" type="file" accept="image/*" multiple onChange={(e) => setFotos(Array.from(e.target.files ?? []))} />
-          </div>
+          </Campo>
 
-          <div className="fg">
-            <label className="fl">Observações</label>
+          <Campo label="Observações">
             <textarea className="fc" rows={2} value={form.observacoes ?? ""} onChange={(e) => set("observacoes", e.target.value || null)} />
-          </div>
+          </Campo>
 
           {editando && (
             <div style={{ background: "var(--surf2)", border: "1px solid var(--b1)", borderRadius: "8px", padding: "12px 14px" }}>
