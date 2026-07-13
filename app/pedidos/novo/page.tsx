@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useId, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
@@ -13,6 +13,7 @@ import { useToast } from "@/components/ui/toast";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
+import { Campo } from "@/components/ui/Campo";
 import ImportarMedidasModal from "@/components/ui/ImportarMedidasModal";
 import type { MedidaImportada } from "@/lib/importPlanilhaMedidas";
 import type { Cliente, Produto, TabelaPreco, TabelaPrecoItem, ItemPedidoInsert, PedidoInsert, Vendedor } from "@/types";
@@ -112,6 +113,7 @@ function NovoPedidoPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const vendedorFieldId = useId();
 
   const [clientes, setClientes]       = useState<Cliente[]>([]);
   const [produtos, setProdutos]       = useState<Produto[]>([]);
@@ -502,10 +504,9 @@ function NovoPedidoPageInner() {
           <div className="card">
             <div className="ct">Dados do Pedido</div>
 
-            <div className="fg" style={{ marginBottom: "10px" }}>
-              <label className="fl">Cliente *</label>
+            <Campo style={{ marginBottom: "10px" }} label="Cliente *">
               <AutocompleteInput options={clienteOpts} value={clienteId} onChange={(id) => setClienteId(id)} placeholder="Buscar cliente..." />
-            </div>
+            </Campo>
 
             {clienteId && clientes.find(c => c.id === clienteId)?.bloqueado_credito && (
               <div className="al al-w" style={{ marginBottom: "10px", fontSize: "12px" }}>
@@ -514,9 +515,9 @@ function NovoPedidoPageInner() {
             )}
 
             <div className="fg" style={{ marginBottom: "10px" }}>
-              <label className="fl">Vendedor / Comissão</label>
+              <label className="fl" htmlFor={vendedorFieldId}>Vendedor / Comissão</label>
               <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                <select className="fc" style={{ flex: 1 }} value={vendedorId ?? ""} onChange={e => setVendedorId(e.target.value ? Number(e.target.value) : null)}>
+                <select id={vendedorFieldId} className="fc" style={{ flex: 1 }} value={vendedorId ?? ""} onChange={e => setVendedorId(e.target.value ? Number(e.target.value) : null)}>
                   <option value="">— Sem vendedor —</option>
                   {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome} ({v.comissao_pct}%)</option>)}
                 </select>
@@ -539,14 +540,13 @@ function NovoPedidoPageInner() {
             )}
 
             <div className="fr3">
-              <div className="fg"><label className="fl">Data do Pedido</label><DateInput value={dtPedido} onChange={setDtPedido} /></div>
-              <div className="fg"><label className="fl">Previsão Retirada</label><DateInput value={dtRetirada} onChange={setDtRetirada} /></div>
-              <div className="fg">
-                <label className="fl">Frete</label>
+              <Campo label="Data do Pedido"><DateInput value={dtPedido} onChange={setDtPedido} /></Campo>
+              <Campo label="Previsão Retirada"><DateInput value={dtRetirada} onChange={setDtRetirada} /></Campo>
+              <Campo label="Frete">
                 <select className="fc" value={frete} onChange={e => setFrete(e.target.value)}>
                   {["Retirada","Fretado"].map(f => <option key={f}>{f}</option>)}
                 </select>
-              </div>
+              </Campo>
             </div>
             {/* ── FINANCEIRO ── */}
             <div style={{ marginTop: "14px", borderTop: "1px solid var(--b1)", paddingTop: "14px" }}>
@@ -624,10 +624,9 @@ function NovoPedidoPageInner() {
               </div>
             </div>
 
-            <div className="fg" style={{ marginTop: "10px" }}>
-              <label className="fl">Observações</label>
+            <Campo style={{ marginTop: "10px" }} label="Observações">
               <textarea className="fc" value={obs} onChange={e => setObs(e.target.value)} placeholder="Observações do pedido..." />
-            </div>
+            </Campo>
           </div>
 
           <div className="card">
