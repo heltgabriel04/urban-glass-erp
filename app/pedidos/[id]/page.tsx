@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido, uploadRomaneioAssinado, deleteRomaneioAssinado, uploadNfe, deleteNfe, uploadBoleto, deleteBoleto } from "@/services/pedidos.service";
@@ -15,6 +15,7 @@ import PedidoTabs from "@/components/pedidos/PedidoTabs";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import { Modal } from "@/components/ui/Modal";
+import { Campo } from "@/components/ui/Campo";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import type { Pedido, Lancamento, Vendedor, NaoConformidade, NaoConformidadeInsert, TipoNC, GravidadeNC, StatusNaoConformidade, RetiradaPedido, PedidoObservacao } from "@/types";
@@ -140,6 +141,7 @@ export default function PedidoDetalhe() {
   const autoPrint = searchParams.get("print") === "1";
   const { toast } = useToast();
   const confirm = useConfirm();
+  const vendedorFieldId = useId();
 
   const [pedido, setPedido]             = useState<Pedido | null>(null);
   const [lancamentos, setLancamentos]   = useState<Lancamento[]>([]);
@@ -1572,16 +1574,15 @@ export default function PedidoDetalhe() {
         {/* ── MODAL EDIÇÃO ── */}
         <Modal open={editando} onClose={() => setEditando(false)} title={`Editar Pedido · ${pedido.id}`} width="780px" style={{ maxHeight:"90vh", overflowY:"auto" }}>
               <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
-                <div className="fg">
-                  <label className="fl">Cliente</label>
+                <Campo label="Cliente">
                   <select style={fc} value={editForm.cliente_id} onChange={e => setEditForm(f => ({ ...f, cliente_id: Number(e.target.value) }))}>
                     {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                   </select>
-                </div>
+                </Campo>
                 <div className="fg">
-                  <label className="fl">Vendedor / Comissão</label>
+                  <label className="fl" htmlFor={vendedorFieldId}>Vendedor / Comissão</label>
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <select style={{ ...fc, flex: 1 }} value={editForm.vendedor_id ?? ""} onChange={e => setEditForm(f => ({ ...f, vendedor_id: e.target.value ? Number(e.target.value) : null }))}>
+                    <select id={vendedorFieldId} style={{ ...fc, flex: 1 }} value={editForm.vendedor_id ?? ""} onChange={e => setEditForm(f => ({ ...f, vendedor_id: e.target.value ? Number(e.target.value) : null }))}>
                       <option value="">— Sem vendedor —</option>
                       {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome} ({v.comissao_pct}%)</option>)}
                     </select>
@@ -1597,31 +1598,28 @@ export default function PedidoDetalhe() {
                   </div>
                 </div>
                 <div className="fr">
-                  <div className="fg"><label className="fl">Data do Pedido</label><DateInput value={editForm.dt_pedido} onChange={v => setEditForm(f => ({ ...f, dt_pedido: v }))} /></div>
-                  <div className="fg"><label className="fl">Previsão Retirada</label><DateInput value={editForm.dt_retirada} onChange={v => setEditForm(f => ({ ...f, dt_retirada: v }))} /></div>
+                  <Campo label="Data do Pedido"><DateInput value={editForm.dt_pedido} onChange={v => setEditForm(f => ({ ...f, dt_pedido: v }))} /></Campo>
+                  <Campo label="Previsão Retirada"><DateInput value={editForm.dt_retirada} onChange={v => setEditForm(f => ({ ...f, dt_retirada: v }))} /></Campo>
                 </div>
                 <div className="fr">
-                  <div className="fg">
-                    <label className="fl">Forma de Pagamento</label>
+                  <Campo label="Forma de Pagamento">
                     <select style={fc} value={editForm.forma_pgto} onChange={e => setEditForm(f => ({ ...f, forma_pgto: e.target.value }))}>
                       <option value="">Selecione...</option>
                       {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(o => <option key={o}>{o}</option>)}
                     </select>
-                  </div>
-                  <div className="fg">
-                    <label className="fl">Conta</label>
+                  </Campo>
+                  <Campo label="Conta">
                     <select style={fc} value={editForm.conta} onChange={e => setEditForm(f => ({ ...f, conta: e.target.value }))}>
                       <option value="">Selecione...</option>
                       {CONTAS.map(o => <option key={o}>{o}</option>)}
                     </select>
-                  </div>
+                  </Campo>
                 </div>
-                <div className="fg">
-                  <label className="fl">Parcelas</label>
+                <Campo label="Parcelas">
                   <select style={fc} value={editForm.parcelas} onChange={e => handleEditParcelas(Number(e.target.value))}>
                     {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
                   </select>
-                </div>
+                </Campo>
                 <div style={{ padding:"12px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)" }}>
                   <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"10px", textTransform:"uppercase" }}>
                     {editForm.parcelas === 1 ? "Pagamento" : `Parcelas (${editForm.parcelas}x)`}
@@ -1689,12 +1687,11 @@ export default function PedidoDetalhe() {
                   </div>
                 </div>
 
-                <div className="fg">
-                  <label className="fl">Observações</label>
+                <Campo label="Observações">
                   <textarea style={{ ...fc, minHeight:"80px", resize:"vertical", fontFamily:"'Inter',sans-serif" }}
                     value={editForm.obs} onChange={e => setEditForm(f => ({ ...f, obs: e.target.value }))}
                     placeholder="Observações do pedido..." />
-                </div>
+                </Campo>
                 <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end", paddingTop:"4px" }}>
                   <button className="btn bg" onClick={() => setEditando(false)}>Cancelar</button>
                   <button className="btn bp" onClick={salvarEdicao} disabled={salvando}>
