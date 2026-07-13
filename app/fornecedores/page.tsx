@@ -6,11 +6,20 @@ import { getFornecedores, createFornecedor, updateFornecedor, deletarFornecedor 
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import SearchInput from "@/components/ui/SearchInput";
-import type { Fornecedor, FornecedorInsert } from "@/types";
+import type { Fornecedor, FornecedorInsert, IndIE } from "@/types";
+
+function maskIE(v: string) {
+  const d = v.replace(/\D/g, "").slice(0, 13);
+  return d
+    .replace(/^(\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4");
+}
 
 const VAZIO: FornecedorInsert = {
   nome: "", cnpj: "", tel: "", email: "", contato: "",
   cidade: "", uf: "", categoria: "", obs: "", ativo: true,
+  ie: "", ind_ie: "9", regime_tributario: "",
 };
 
 export default function FornecedoresPage() {
@@ -43,6 +52,8 @@ export default function FornecedoresPage() {
     setForm({
       nome: f.nome, cnpj: f.cnpj, tel: f.tel, email: f.email, contato: f.contato,
       cidade: f.cidade, uf: f.uf, categoria: f.categoria, obs: f.obs, ativo: f.ativo,
+      ie: f.ie ?? "", ind_ie: (f.ind_ie ?? "9") as IndIE,
+      regime_tributario: f.regime_tributario ?? "",
     });
     setModalAberto(true);
   }
@@ -191,6 +202,25 @@ export default function FornecedoresPage() {
               </Campo>
               <Campo label="Observações" span2>
                 <textarea className="fc" rows={2} value={form.obs} onChange={e => upd("obs", e.target.value)} style={{ margin:0, resize:"vertical" }} />
+              </Campo>
+              <Campo label="Inscrição Estadual (IE)">
+                <input className="fc" value={form.ie} onChange={e => upd("ie", maskIE(e.target.value))} placeholder="000.000.000/0000" maxLength={17} inputMode="numeric" style={{ margin:0 }} />
+              </Campo>
+              <Campo label="Indicador IE">
+                <select className="fc" value={form.ind_ie} onChange={e => upd("ind_ie", e.target.value as IndIE)} style={{ margin:0 }}>
+                  <option value="1">1 — Contribuinte ICMS</option>
+                  <option value="2">2 — Contribuinte Isento</option>
+                  <option value="9">9 — Não Contribuinte</option>
+                </select>
+              </Campo>
+              <Campo label="Regime Tributário" span2>
+                <select className="fc" value={form.regime_tributario} onChange={e => upd("regime_tributario", e.target.value as FornecedorInsert["regime_tributario"])} style={{ margin:0 }}>
+                  <option value="">Não informado</option>
+                  <option value="mei">MEI</option>
+                  <option value="simples">Simples Nacional</option>
+                  <option value="presumido">Lucro Presumido</option>
+                  <option value="real">Lucro Real</option>
+                </select>
               </Campo>
             </div>
 
