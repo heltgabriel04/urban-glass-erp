@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import DatePromptModal from "@/components/ui/DatePromptModal";
 import { Modal } from "@/components/ui/Modal";
+import { Campo } from "@/components/ui/Campo";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import {
@@ -73,55 +74,45 @@ function ModalConsorcio({ editando, usuarioEmail, onSalvo, onFechar }: {
   return (
     <Modal open onClose={onFechar} title={editando ? "Editar Consórcio" : "Novo Consórcio"} width="560px">
         <form id="form-consorcio" onSubmit={handleSubmit} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
-          <div className="fg">
-            <label className="fl">Descrição *</label>
+          <Campo label="Descrição *">
             <input className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} required />
-          </div>
+          </Campo>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">Administradora</label>
+            <Campo label="Administradora">
               <input className="fc" value={form.administradora ?? ""} onChange={(e) => set("administradora", e.target.value || null)} />
-            </div>
-            <div className="fg">
-              <label className="fl">Grupo</label>
+            </Campo>
+            <Campo label="Grupo">
               <input className="fc" value={form.grupo ?? ""} onChange={(e) => set("grupo", e.target.value || null)} />
-            </div>
-            <div className="fg">
-              <label className="fl">Cota</label>
+            </Campo>
+            <Campo label="Cota">
               <input className="fc" value={form.cota ?? ""} onChange={(e) => set("cota", e.target.value || null)} />
-            </div>
+            </Campo>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-            <div className="fg">
-              <label className="fl">Valor do Crédito</label>
+            <Campo label="Valor do Crédito">
               <input className="fc" type="number" step="0.01" value={form.valor_credito} onChange={(e) => set("valor_credito", Number(e.target.value))} required style={{ fontFamily: "'DM Mono', monospace" }} />
-            </div>
-            <div className="fg">
-              <label className="fl">Nº de Parcelas</label>
+            </Campo>
+            <Campo label="Nº de Parcelas">
               <input className="fc" type="number" value={form.numero_parcelas} onChange={(e) => set("numero_parcelas", Number(e.target.value))} required disabled={!!editando} />
-            </div>
-            <div className="fg">
-              <label className="fl">Valor da Parcela</label>
+            </Campo>
+            <Campo label="Valor da Parcela">
               <input className="fc" type="number" step="0.01" value={form.valor_parcela} onChange={(e) => set("valor_parcela", Number(e.target.value))} required disabled={!!editando} style={{ fontFamily: "'DM Mono', monospace" }} />
-            </div>
+            </Campo>
           </div>
-          <div className="fg">
-            <label className="fl">Data de Adesão</label>
+          <Campo label="Data de Adesão">
             <input className="fc" type="date" value={form.data_adesao} onChange={(e) => set("data_adesao", e.target.value)} required disabled={!!editando} />
-          </div>
+          </Campo>
           {editando && (
             <div style={{ fontSize: "11px", color: "var(--t3)" }}>
               Nº de parcelas, valor da parcela e data de adesão ficam travados após a criação — eles definem o plano de parcelas já gerado.
             </div>
           )}
-          <div className="fg">
-            <label className="fl">Contrato (PDF)</label>
+          <Campo label="Contrato (PDF)">
             <input className="fc" type="file" accept=".pdf" onChange={(e) => setContratoFile(e.target.files?.[0] ?? null)} />
-          </div>
-          <div className="fg">
-            <label className="fl">Observações</label>
+          </Campo>
+          <Campo label="Observações">
             <textarea className="fc" rows={2} value={form.observacoes ?? ""} onChange={(e) => set("observacoes", e.target.value || null)} />
-          </div>
+          </Campo>
         </form>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
           <button type="button" className="btn bg" onClick={onFechar} disabled={salvando}>Cancelar</button>
@@ -169,22 +160,19 @@ function ModalLances({ consorcio, usuarioEmail, onFechar }: {
     <Modal open onClose={onFechar} title={`Lances — ${consorcio.descricao}`} width="620px" style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1 }}>
           <form onSubmit={handleAdd} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: "8px", marginBottom: "16px", alignItems: "end" }}>
-            <div className="fg" style={{ margin: 0 }}>
-              <label className="fl">Data</label>
+            <Campo style={{ margin: 0 }} label="Data">
               <input className="fc" type="date" value={form.data} onChange={(e) => set("data", e.target.value)} required />
-            </div>
-            <div className="fg" style={{ margin: 0 }}>
-              <label className="fl">Valor</label>
+            </Campo>
+            <Campo style={{ margin: 0 }} label="Valor">
               <input className="fc" type="number" step="0.01" value={form.valor} onChange={(e) => set("valor", Number(e.target.value))} required style={{ fontFamily: "'DM Mono', monospace" }} />
-            </div>
-            <div className="fg" style={{ margin: 0 }}>
-              <label className="fl">Tipo</label>
+            </Campo>
+            <Campo style={{ margin: 0 }} label="Tipo">
               <select className="fc" value={form.tipo} onChange={(e) => set("tipo", e.target.value as ConsorcioLance["tipo"])}>
                 <option value="livre">Livre</option>
                 <option value="embutido">Embutido</option>
                 <option value="fixo">Fixo</option>
               </select>
-            </div>
+            </Campo>
             <button type="submit" className="btn bp sm" disabled={salvando}>+ Add</button>
           </form>
 
