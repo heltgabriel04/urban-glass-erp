@@ -8,7 +8,7 @@ import { useConfirm } from "@/components/ui/confirm";
 import { formatBRL } from "@/lib/formatters";
 import SearchInput from "@/components/ui/SearchInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
-import { useEscToClose } from "@/components/ui/useEscToClose";
+import { Modal } from "@/components/ui/Modal";
 import DateInput from "@/components/ui/DateInput";
 import { getTransferencias, registrarTransferencia, type Transferencia } from "@/services/transferencias.service";
 import type { ContaBancaria, ContaBancariaInsert, TipoContaBancaria } from "@/types";
@@ -42,9 +42,6 @@ export default function BancosCaixaPage() {
   const [valorTransf, setValorTransf] = useState(0);
   const [dataTransf, setDataTransf] = useState(hoje());
   const [obsTransf, setObsTransf] = useState("");
-
-  useEscToClose(modalAberto, () => setModalAberto(false));
-  useEscToClose(modalTransfAberto, () => setModalTransfAberto(false));
 
   useEffect(() => { load(); }, []);
 
@@ -233,14 +230,7 @@ export default function BancosCaixaPage() {
         )}
       </div>
 
-      {modalAberto && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && setModalAberto(false)}>
-          <div className="mod" style={{ width: "480px" }}>
-            <div className="mhd">
-              <div className="mtit">{editId != null ? "Editar" : "Nova"} conta</div>
-              <button className="mcl" onClick={() => setModalAberto(false)} aria-label="Fechar">✕</button>
-            </div>
-
+      <Modal open={modalAberto} onClose={() => setModalAberto(false)} title={`${editId != null ? "Editar" : "Nova"} conta`} width="480px">
             <div style={{ padding: "20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
               <Campo label="Nome *" span2>
                 <input className="fc" placeholder="Caixa loja, Itaú CC, Aplicação XP..." value={form.nome} onChange={e => upd("nome", e.target.value)} style={{ margin: 0 }} />
@@ -264,17 +254,9 @@ export default function BancosCaixaPage() {
                 {salvando ? "Salvando..." : editId != null ? "Salvar alterações" : "Criar conta"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {modalTransfAberto && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && setModalTransfAberto(false)}>
-          <div className="mod" style={{ width: "420px" }}>
-            <div className="mhd">
-              <div className="mtit">Nova Transferência</div>
-              <button className="mcl" onClick={() => setModalTransfAberto(false)} aria-label="Fechar">✕</button>
-            </div>
+      <Modal open={modalTransfAberto} onClose={() => setModalTransfAberto(false)} title="Nova Transferência" width="420px">
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <Campo label="De (conta de origem) *">
                 <select className="fc" value={contaOrigemId} onChange={e => setContaOrigemId(e.target.value)} style={{ margin: 0 }}>
@@ -306,9 +288,7 @@ export default function BancosCaixaPage() {
                 {salvando ? "Salvando..." : "Confirmar transferência"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </AppLayout>
   );
 }
