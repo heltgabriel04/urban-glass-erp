@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { lerPlanilhaRetalhos, type RetalhoImportado } from "@/lib/importPlanilhaRetalhos";
 import { Modal } from "./Modal";
 
@@ -11,6 +11,7 @@ interface Props {
 }
 
 export default function ImportarRetalhosModal({ onImportar, onClose, importando }: Props) {
+  const arquivoFieldId = useId();
   const [itens, setItens]             = useState<RetalhoImportado[] | null>(null);
   const [erro, setErro]               = useState("");
   const [nomeArquivo, setNomeArquivo] = useState("");
@@ -41,8 +42,9 @@ export default function ImportarRetalhosModal({ onImportar, onClose, importando 
   return (
     <Modal open onClose={onClose} title="Importar Planilha de Retalhos" width="560px">
         <div className="fg" style={{ marginBottom: "12px" }}>
-          <label className="fl">Arquivo (.xlsx, .xls ou .csv)</label>
+          <label className="fl" htmlFor={arquivoFieldId}>Arquivo (.xlsx, .xls ou .csv)</label>
           <input
+            id={arquivoFieldId}
             className="fc"
             type="file"
             accept=".xlsx,.xls,.csv"
