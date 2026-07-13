@@ -265,29 +265,37 @@ export async function getIndicadoresMensais(): Promise<IndicadorQualidadeMensal[
 export async function getResumoQualidade(): Promise<{
   ncsAbertas: number;
   ncsCriticas: number;
+  ncsAntigas: number;
   m2PerdidoMes: number;
   valorPerdidoMes: number;
   retrabalhosAbertos: number;
+  retrabalhosAntigos: number;
 }> {
   const mesAtual = new Date().toISOString().substring(0, 7); // 2026-06
+  const LIMITE_DIAS_ANTIGO = 15;
+  const diasAberto = (iso: string) => (Date.now() - new Date(iso).getTime()) / 86400000;
 
-  const [{ count: abertas }, { count: criticas }, quebrasRes, { count: retrabAtivos }] =
+  const [ncsAbertasRes, ncsCriticasRes, quebrasRes, retrabAtivosRes] =
     await Promise.all([
-      supabase.from('nao_conformidades').select('id', { count: 'exact', head: true }).in('status', ['Aberta', 'Em Análise', 'Aguardando Correção']),
+      supabase.from('nao_conformidades').select('id, dt_ocorrencia').in('status', ['Aberta', 'Em Análise', 'Aguardando Correção']),
       supabase.from('nao_conformidades').select('id', { count: 'exact', head: true }).eq('gravidade', 'Crítica').in('status', ['Aberta', 'Em Análise', 'Aguardando Correção']),
       supabase.from('quebras').select('m2_perdido, valor_perda').gte('dt_quebra', mesAtual + '-01'),
-      supabase.from('retrabalhos').select('id', { count: 'exact', head: true }).in('status', ['Pendente', 'Em Execução']),
+      supabase.from('retrabalhos').select('id, dt_retrabalho').in('status', ['Pendente', 'Em Execução']),
     ]);
 
+  const ncsAbertasRows   = (ncsAbertasRes.data ?? []) as { id: number; dt_ocorrencia: string }[];
+  const retrabAtivosRows = (retrabAtivosRes.data ?? []) as { id: number; dt_retrabalho: string }[];
   const m2Mes    = (quebrasRes.data ?? []).reduce((a: number, q: any) => a + Number(q.m2_perdido), 0);
   const valorMes = (quebrasRes.data ?? []).reduce((a: number, q: any) => a + Number(q.valor_perda ?? 0), 0);
 
   return {
-    ncsAbertas:        abertas ?? 0,
-    ncsCriticas:       criticas ?? 0,
+    ncsAbertas:        ncsAbertasRows.length,
+    ncsCriticas:       ncsCriticasRes.count ?? 0,
+    ncsAntigas:        ncsAbertasRows.filter(n => diasAberto(n.dt_ocorrencia) > LIMITE_DIAS_ANTIGO).length,
     m2PerdidoMes:      m2Mes,
     valorPerdidoMes:   valorMes,
-    retrabalhosAbertos: retrabAtivos ?? 0,
+    retrabalhosAbertos: retrabAtivosRows.length,
+    retrabalhosAntigos: retrabAtivosRows.filter(r => diasAberto(r.dt_retrabalho) > LIMITE_DIAS_ANTIGO).length,
   };
 }
 

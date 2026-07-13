@@ -49,7 +49,7 @@ const STATUS_CHIP: Record<StatusNaoConformidade, string> = {
 
 export default function QualidadeDashboardPage() {
   const [loading, setLoading]                       = useState(true);
-  const [resumo, setResumo]                         = useState({ ncsAbertas: 0, ncsCriticas: 0, m2PerdidoMes: 0, valorPerdidoMes: 0, retrabalhosAbertos: 0 });
+  const [resumo, setResumo]                         = useState({ ncsAbertas: 0, ncsCriticas: 0, ncsAntigas: 0, m2PerdidoMes: 0, valorPerdidoMes: 0, retrabalhosAbertos: 0, retrabalhosAntigos: 0 });
   const [mensais, setMensais]                       = useState<IndicadorQualidadeMensal[]>([]);
   const [ncsRecentes, setNcsRecentes]               = useState<NaoConformidade[]>([]);
   const [retrabalhosAbertos, setRetrabalhosAbertos] = useState<Retrabalho[]>([]);
@@ -196,6 +196,25 @@ export default function QualidadeDashboardPage() {
               >
                 Ver criticas
               </Link>
+            </div>
+          )}
+
+          {/* ── BANNER NC/RETRABALHO ANTIGO ── */}
+          {(resumo.ncsAntigas > 0 || resumo.retrabalhosAntigos > 0) && (
+            <div className="item-card warn" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: "14px 20px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--warn)", flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--warn)" }}>
+                    {resumo.ncsAntigas > 0 && `${resumo.ncsAntigas} NC${resumo.ncsAntigas > 1 ? "s" : ""} aberta${resumo.ncsAntigas > 1 ? "s" : ""} há mais de 15 dias`}
+                    {resumo.ncsAntigas > 0 && resumo.retrabalhosAntigos > 0 && " · "}
+                    {resumo.retrabalhosAntigos > 0 && `${resumo.retrabalhosAntigos} retrabalho${resumo.retrabalhosAntigos > 1 ? "s" : ""} parado${resumo.retrabalhosAntigos > 1 ? "s" : ""} há mais de 15 dias`}
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 1 }}>
+                    parado há muito tempo — vale revisar
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
