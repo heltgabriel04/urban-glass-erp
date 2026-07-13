@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
@@ -10,6 +10,7 @@ import { formatBRL, formatM2 } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
+import { Campo } from "@/components/ui/Campo";
 import { useToast } from "@/components/ui/toast";
 import type { Cliente, Produto, TabelaPreco, TabelaPrecoItem, Vendedor } from "@/types";
 
@@ -93,6 +94,7 @@ export default function EditarPedidoPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { toast } = useToast();
+  const vendedorFieldId = useId();
 
   const [clientes, setClientes]       = useState<Cliente[]>([]);
   const [produtos, setProdutos]       = useState<Produto[]>([]);
@@ -512,15 +514,14 @@ export default function EditarPedidoPage() {
           <div className="card">
             <div className="ct">Dados do Pedido</div>
 
-            <div className="fg" style={{ marginBottom:"10px" }}>
-              <label className="fl">Cliente *</label>
+            <Campo style={{ marginBottom:"10px" }} label="Cliente *">
               <AutocompleteInput options={clienteOpts} value={clienteId} onChange={id => setClienteId(id)} placeholder="Buscar cliente..." />
-            </div>
+            </Campo>
 
             <div className="fg" style={{ marginBottom:"10px" }}>
-              <label className="fl">Vendedor / Comissão</label>
+              <label className="fl" htmlFor={vendedorFieldId}>Vendedor / Comissão</label>
               <div style={{ display:"flex", gap:"8px", alignItems:"center" }}>
-                <select className="fc" style={{ flex:1 }} value={vendedorId ?? ""} onChange={e => setVendedorId(e.target.value ? Number(e.target.value) : null)}>
+                <select id={vendedorFieldId} className="fc" style={{ flex:1 }} value={vendedorId ?? ""} onChange={e => setVendedorId(e.target.value ? Number(e.target.value) : null)}>
                   <option value="">— Sem vendedor —</option>
                   {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome} ({v.comissao_pct}%)</option>)}
                 </select>
@@ -543,39 +544,35 @@ export default function EditarPedidoPage() {
             )}
 
             <div className="fr3">
-              <div className="fg"><label className="fl">Data do Pedido</label><DateInput value={dtPedido} onChange={setDtPedido} /></div>
-              <div className="fg"><label className="fl">Previsão Retirada</label><DateInput value={dtRetirada} onChange={setDtRetirada} /></div>
-              <div className="fg">
-                <label className="fl">Frete</label>
+              <Campo label="Data do Pedido"><DateInput value={dtPedido} onChange={setDtPedido} /></Campo>
+              <Campo label="Previsão Retirada"><DateInput value={dtRetirada} onChange={setDtRetirada} /></Campo>
+              <Campo label="Frete">
                 <select className="fc" value={frete} onChange={e => setFrete(e.target.value)}>
                   {["Retirada","Fretado"].map(f => <option key={f}>{f}</option>)}
                 </select>
-              </div>
+              </Campo>
             </div>
             <div className="fr">
-              <div className="fg">
-                <label className="fl">Forma de Pagamento</label>
+              <Campo label="Forma de Pagamento">
                 <select className="fc" value={formaPgto} onChange={e => setFormaPgto(e.target.value)}>
                   <option value="">Selecione...</option>
                   {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
                 </select>
-              </div>
-              <div className="fg">
-                <label className="fl">Conta</label>
+              </Campo>
+              <Campo label="Conta">
                 <select className="fc" value={conta} onChange={e => setConta(e.target.value)}>
                   <option value="">Selecione...</option>
                   {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => <option key={c}>{c}</option>)}
                 </select>
-              </div>
+              </Campo>
             </div>
 
             <div className="fr">
-              <div className="fg">
-                <label className="fl">Parcelas</label>
+              <Campo label="Parcelas">
                 <select className="fc" value={parcelas} onChange={e => handleNParcelas(Number(e.target.value))}>
                   {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
                 </select>
-              </div>
+              </Campo>
             </div>
 
             <div style={{ marginTop:"10px", padding:"12px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)" }}>
@@ -598,10 +595,9 @@ export default function EditarPedidoPage() {
               )}
             </div>
 
-            <div className="fg" style={{ marginTop:"10px" }}>
-              <label className="fl">Observações</label>
+            <Campo style={{ marginTop:"10px" }} label="Observações">
               <textarea className="fc" value={obs} onChange={e => setObs(e.target.value)} placeholder="Observações do pedido..." />
-            </div>
+            </Campo>
           </div>
 
           {/* ── Resumo ── */}
