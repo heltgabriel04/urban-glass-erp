@@ -7,6 +7,7 @@ import { getOrcamentos, updateOrcamento, aprovarOrcamento, rejeitarOrcamento, de
 import { formatBRL, formatDate, formatPercent } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
+import { Modal } from "@/components/ui/Modal";
 import SearchInput from "@/components/ui/SearchInput";
 
 const CHIP: Record<string, string> = {
@@ -271,14 +272,7 @@ export default function OrcamentosPage() {
       </div>
 
       {/* Modal de Rejeição */}
-      {modalRejeicao && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && setModalRejeicao(null)}>
-          <div className="mod" style={{ width:"420px" }}>
-            <div className="mhd">
-              <div className="mtit">Rejeitar orçamento <span style={{ color:"var(--acc)" }}>{modalRejeicao}</span></div>
-              <button className="mcl" onClick={() => setModalRejeicao(null)} aria-label="Fechar">✕</button>
-            </div>
-
+      <Modal open={!!modalRejeicao} onClose={() => setModalRejeicao(null)} title={<>Rejeitar orçamento <span style={{ color:"var(--acc)" }}>{modalRejeicao}</span></>} width="420px">
             <div style={{ padding:"20px", display:"flex", flexDirection:"column", gap:"16px" }}>
               <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
                 <label style={{ fontSize:"12px", color:"var(--t3)", fontWeight:600 }}>Motivo</label>
@@ -305,9 +299,7 @@ export default function OrcamentosPage() {
               <button className="btn bg" onClick={() => setModalRejeicao(null)}>Cancelar</button>
               <button className="btn bw" onClick={confirmarRejeicao}>✕ Confirmar Rejeição</button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </AppLayout>
   );
 }
