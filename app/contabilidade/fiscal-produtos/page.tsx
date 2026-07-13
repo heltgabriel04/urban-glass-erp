@@ -5,6 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
+import { Modal } from "@/components/ui/Modal";
 import SearchInput from "@/components/ui/SearchInput";
 import {
   getConfigPadrao,
@@ -87,19 +88,15 @@ function ModalProduto({ item, padrao, onSalvar, onRemover, onFechar, salvando }:
   }
 
   return (
-    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
-      <div className="mod" style={{ width: "560px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
-
-        <div className="mhd">
-          <div>
-            <div className="mtit">Classificação Fiscal</div>
-            <div style={{ fontSize: "12px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", marginTop: "2px" }}>
-              {produto.cod} · {produto.nome}
-            </div>
-          </div>
-          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
+    <Modal
+      open onClose={onFechar} width="560px" style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}
+      title={<>
+        Classificação Fiscal
+        <div style={{ fontSize: "12px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", marginTop: "2px", fontWeight: 400 }}>
+          {produto.cod} · {produto.nome}
         </div>
-
+      </>}
+    >
         <form
           id="form-fiscal-produto"
           onSubmit={handleSubmit}
@@ -194,8 +191,7 @@ function ModalProduto({ item, padrao, onSalvar, onRemover, onFechar, salvando }:
           </div>
         </div>
 
-      </div>
-    </div>
+    </Modal>
   );
 }
 
