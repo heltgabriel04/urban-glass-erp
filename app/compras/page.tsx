@@ -10,8 +10,10 @@ import CurrencyInput from "@/components/ui/CurrencyInput";
 import DateInput from "@/components/ui/DateInput";
 import { Campo } from "@/components/ui/Campo";
 import {
-  getCompras, createCompra, confirmarRecebimento, deletarCompra,
+  getCompras, createCompra, confirmarRecebimento, deletarCompra, anexarXmlNaCompra,
 } from "@/services/compras.service";
+import ImportarXmlCompraModal, { type DadosImportadosXml } from "@/components/ui/ImportarXmlCompraModal";
+import type { XmlCompraParseado } from "@/lib/importXmlCompra";
 import type { Compra, Produto, StatusCompra } from "@/types";
 
 const CHIP: Record<StatusCompra, string> = {
@@ -45,7 +47,7 @@ export default function ComprasPage() {
   const { toast } = useToast();
   const confirm = useConfirm();
   const [compras, setCompras]       = useState<Compra[]>([]);
-  const [fornecedores, setFornecedores] = useState<{ id: number; nome: string }[]>([]);
+  const [fornecedores, setFornecedores] = useState<{ id: number; nome: string; cnpj: string }[]>([]);
   const [produtos, setProdutos]     = useState<Produto[]>([]);
   const [loading, setLoading]       = useState(true);
   const [filtro, setFiltro]         = useState<StatusCompra | "">("");
@@ -55,6 +57,8 @@ export default function ComprasPage() {
   const [salvando, setSalvando]     = useState(false);
   const [expandido, setExpandido]   = useState<string | null>(null);
   const [processando, setProcessando] = useState<string | null>(null);
+  const [modalXmlAberto, setModalXmlAberto] = useState(false);
+  const [xmlPendente, setXmlPendente] = useState<{ dados: XmlCompraParseado; xmlFile: File } | null>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -62,7 +66,7 @@ export default function ComprasPage() {
     setLoading(true);
     const [comprasData, { data: forn }, { data: prod }] = await Promise.all([
       getCompras(),
-      supabase.from("fornecedores").select("id, nome").eq("ativo", true).order("nome"),
+      supabase.from("fornecedores").select("id, nome, cnpj").eq("ativo", true).order("nome"),
       supabase.from("produtos").select("*").eq("ativo", true).order("nome"),
     ]);
     setCompras(comprasData);
@@ -105,7 +109,39 @@ export default function ComprasPage() {
   function resetForm() {
     setForm(FORM_VAZIO);
     setItens([{ ...ITEM_VAZIO }]);
+    setXmlPendente(null);
     setShowForm(false);
+  }
+
+  function handleImportarXml(dados: DadosImportadosXml) {
+    setModalXmlAberto(false);
+    setForm({
+      fornecedor_id: dados.fornecedorId ? String(dados.fornecedorId) : "",
+      nf: dados.xmlDados.numeroNF ?? "",
+      dt_compra: dados.xmlDados.dataEmissao ?? hoje(),
+      condicao_pgto: "",
+      obs: "",
+    });
+    setItens(dados.xmlDados.itens.map((item, i) => {
+      const produtoId = dados.produtoIdsPorItem[i];
+      const produto = produtoId ? produtos.find(p => p.id === produtoId) : undefined;
+      const m2PorChapa = produto?.chapa_largura_mm && produto?.chapa_altura_mm
+        ? ((Number(produto.chapa_largura_mm) / 1000) * (Number(produto.chapa_altura_mm) / 1000)).toFixed(4)
+        : "";
+      return {
+        produto_id: produtoId ? String(produtoId) : "",
+        colares: "",
+        chapas: "",
+        m2_por_chapa: m2PorChapa,
+        custo_unitario_m2: item.unidade.toUpperCase() === "M2" ? item.valorUnitario : 0,
+      };
+    }));
+    setXmlPendente({ dados: dados.xmlDados, xmlFile: dados.xmlFile });
+    setShowForm(true);
+  }
+
+  function handleFornecedorCriado(f: { id: number; nome: string; cnpj: string }) {
+    setFornecedores(prev => [...prev, f].sort((a, b) => a.nome.localeCompare(b.nome)));
   }
 
   async function handleSalvar() {
@@ -139,9 +175,26 @@ export default function ComprasPage() {
       obs: form.obs.trim() || null,
     }, itensPayload);
 
-    setSalvando(false);
-    if (!res) { toast("Erro ao salvar compra.", "err"); return; }
+    if (!res) { setSalvando(false); toast("Erro ao salvar compra.", "err"); return; }
 
+    if (xmlPendente) {
+      const dt = form.dt_compra || hoje();
+      const primeiroItem = xmlPendente.dados.itens[0];
+      const anexo = await anexarXmlNaCompra(res.id, {
+        chaveAcesso: xmlPendente.dados.chaveAcesso,
+        numeroNF: xmlPendente.dados.numeroNF,
+        serie: xmlPendente.dados.serie,
+        ncm: primeiroItem?.ncm ?? null,
+        cfop: primeiroItem?.cfop ?? null,
+        valorTotal: xmlPendente.dados.valorTotalNota,
+        fornecedorId: Number(form.fornecedor_id),
+        competenciaAno: Number(dt.slice(0, 4)),
+        competenciaMes: Number(dt.slice(5, 7)),
+      }, xmlPendente.xmlFile);
+      if (!anexo.ok && anexo.aviso) toast(anexo.aviso, "warn");
+    }
+
+    setSalvando(false);
     resetForm();
     load();
   }
@@ -204,10 +257,23 @@ export default function ComprasPage() {
             </button>
           ))}
         </div>
+        <button className="btn bg sm" onClick={() => setModalXmlAberto(true)}>
+          Importar XML
+        </button>
         <button className="btn bp sm" onClick={() => { setShowForm(v => !v); if (showForm) resetForm(); }}>
           {showForm ? "✕ Cancelar" : "+ Nova Compra"}
         </button>
       </div>
+
+      {modalXmlAberto && (
+        <ImportarXmlCompraModal
+          produtos={produtos.map(p => ({ id: p.id, nome: p.nome }))}
+          fornecedores={fornecedores}
+          onImportar={handleImportarXml}
+          onFornecedorCriado={handleFornecedorCriado}
+          onClose={() => setModalXmlAberto(false)}
+        />
+      )}
 
       <div className="con">
         {/* Cards */}
