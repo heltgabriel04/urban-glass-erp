@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useId, cloneElement, isValidElement } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
@@ -291,11 +291,13 @@ export default function RecorrenciasPage() {
   );
 }
 
-function Campo({ label, span2, children }: { label: string; span2?: boolean; children: React.ReactNode }) {
+function Campo({ label, span2, children }: { label: string; span2?: boolean; children: React.ReactElement }) {
+  const id = useId();
+  const campo = isValidElement(children) ? cloneElement(children, { id } as Record<string, unknown>) : children;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "6px", gridColumn: span2 ? "1 / -1" : undefined }}>
-      <label style={{ fontSize: "12px", color: "var(--t3)", fontWeight: 600 }}>{label}</label>
-      {children}
+      <label style={{ fontSize: "12px", color: "var(--t3)", fontWeight: 600 }} htmlFor={id}>{label}</label>
+      {campo}
     </div>
   );
 }
