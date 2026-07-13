@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
+import { Modal } from "@/components/ui/Modal";
 import { supabase } from "@/lib/supabase/client";
 import { ordenarPorCodigoEstruturado } from "@/lib/planoContas";
 import SearchInput from "@/components/ui/SearchInput";
@@ -228,13 +229,7 @@ export default function PlanoContasPage() {
               </div>
 
               {/* Modal plano add/edit */}
-              {(planoAdding || planoEditId !== null) && (
-                <div className="mov open" onClick={e => e.target === e.currentTarget && cancelPlano()}>
-                  <div className="mod" style={{ width: "540px" }}>
-                    <div className="mhd">
-                      <div className="mtit">{planoEditId ? "Editar Plano de Contas" : "Novo Plano de Contas"}</div>
-                      <button className="mcl" onClick={cancelPlano} aria-label="Fechar">✕</button>
-                    </div>
+              <Modal open={planoAdding || planoEditId !== null} onClose={cancelPlano} title={planoEditId ? "Editar Plano de Contas" : "Novo Plano de Contas"} width="540px">
                     <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
                       <div className="fr">
                         <div className="fg" style={{ maxWidth: "90px" }}>
@@ -268,9 +263,7 @@ export default function PlanoContasPage() {
                         {planoSalvando ? "Salvando..." : planoEditId ? "Salvar alterações" : "Adicionar"}
                       </button>
                     </div>
-                  </div>
-                </div>
-              )}
+              </Modal>
 
               {/* Tabela */}
               <div className="tw">
@@ -327,13 +320,7 @@ export default function PlanoContasPage() {
           // ══════════════════════════════════════════════════════
             <div>
               {/* Modal categoria add/edit */}
-              {(catAdding || catEditId !== null) && (
-                <div className="mov open" onClick={e => e.target === e.currentTarget && cancelCat()}>
-                  <div className="mod" style={{ width: "500px" }}>
-                    <div className="mhd">
-                      <div className="mtit">{catEditId ? "Editar Categoria" : "Nova Categoria"}</div>
-                      <button className="mcl" onClick={cancelCat} aria-label="Fechar">✕</button>
-                    </div>
+              <Modal open={catAdding || catEditId !== null} onClose={cancelCat} title={catEditId ? "Editar Categoria" : "Nova Categoria"} width="500px">
                     <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
                       <div className="fr">
                         <div className="fg" style={{ maxWidth: "90px" }}>
@@ -369,9 +356,7 @@ export default function PlanoContasPage() {
                         {catSalvando ? "Salvando..." : catEditId ? "Salvar alterações" : "Adicionar"}
                       </button>
                     </div>
-                  </div>
-                </div>
-              )}
+              </Modal>
 
               {/* Tabela */}
               <div className="tw">
