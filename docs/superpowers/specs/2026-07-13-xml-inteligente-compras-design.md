@@ -80,6 +80,8 @@ interface Props {
 
 Tela de revisão mostra, por item: descrição do XML (somente leitura) + `<select>` de produto (pré-selecionado se achou nome igual, case-insensitive) + NCM/CFOP extraídos + valor. Se o CNPJ do fornecedor não bater com nenhum cadastrado, mostra um aviso com nome/CNPJ extraídos do XML e um botão "Cadastrar fornecedor" que abre o modal de fornecedor (reaproveita o existente em `/fornecedores`) sem perder os dados já lidos do XML.
 
+Comparação de CNPJ: `fornecedores.cnpj` pode estar salvo com pontuação (`00.000.000/0001-00`) ou só dígitos, dependendo de como foi cadastrado — a comparação sempre remove tudo que não é dígito de **ambos os lados** (`replace(/\D/g, "")`) antes de comparar.
+
 ### 3. Integração em `app/compras/page.tsx` (modifica)
 
 - Novo botão "Importar XML" ao lado do botão que abre o formulário manual.
