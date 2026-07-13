@@ -7,9 +7,10 @@ import { getFinanceiroClientes, getFaturamentoMensal } from "@/services/financei
 import { getResumoQualidade } from "@/services/qualidade.service";
 import { getCompras } from "@/services/compras.service";
 import { getEstoque } from "@/services/estoque.service";
+import { getPedidosSemProgramacao } from "@/services/programacao.service";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatPercent } from "@/lib/formatters";
-import type { Pedido, FinanceiroCliente, FaturamentoMensal, EstoqueItem } from "@/types";
+import type { Pedido, FinanceiroCliente, FaturamentoMensal, EstoqueItem, Compra } from "@/types";
 
 interface ContaPagarMin { valor: number; vencimento: string | null; }
 
@@ -35,6 +36,8 @@ export default function DashboardPage() {
   const [ncsCriticas, setNcsCriticas] = useState(0);
   const [comprasPend, setComprasPend] = useState(0);
   const [contasPagarAbertas, setContasPagarAbertas] = useState<ContaPagarMin[]>([]);
+  const [compras, setCompras]       = useState<Compra[]>([]);
+  const [semProgramacao, setSemProgramacao] = useState<Pedido[]>([]);
   const [loading, setLoading]       = useState(true);
   const [mesSel, setMesSel]         = useState<number | null>(null);
 
@@ -42,7 +45,7 @@ export default function DashboardPage() {
 
   async function load() {
     setLoading(true);
-    const [peds, fin, fat, est, qualidade, compras, { data: cp }] = await Promise.all([
+    const [peds, fin, fat, est, qualidade, comprasRes, { data: cp }, semProg] = await Promise.all([
       getPedidos(),
       getFinanceiroClientes(),
       getFaturamentoMensal(new Date().getFullYear()),
@@ -50,6 +53,7 @@ export default function DashboardPage() {
       getResumoQualidade(),
       getCompras(),
       supabase.from("lancamentos").select("valor, vencimento").eq("tipo", "Saída").neq("status", "Pago").is("deletado_em", null),
+      getPedidosSemProgramacao(),
     ]);
     setPedidos(peds);
     setFinanceiro(fin);
@@ -57,8 +61,10 @@ export default function DashboardPage() {
     setEstoque(est as unknown as EstoqueItem[]);
     setNcsAbertas(qualidade.ncsAbertas);
     setNcsCriticas(qualidade.ncsCriticas);
-    setComprasPend(compras.filter(c => c.status !== 'recebido').length);
+    setComprasPend(comprasRes.filter(c => c.status !== 'recebido').length);
     setContasPagarAbertas((cp ?? []) as ContaPagarMin[]);
+    setCompras(comprasRes);
+    setSemProgramacao(semProg);
     setLoading(false);
   }
 
@@ -120,9 +126,15 @@ export default function DashboardPage() {
   const contasPagarVencidas  = contasPagarAbertas.filter(c => c.vencimento && c.vencimento < hojeStr);
   const contasPagarVenceHoje = contasPagarAbertas.filter(c => c.vencimento === hojeStr);
 
+  const seteDiasAtras = new Date(); seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
+  const comprasParadas = compras.filter(c => c.status === "rascunho" && new Date(c.dt_compra) < seteDiasAtras);
+
+  const semProgramacaoReal = semProgramacao.filter(p => p.status !== "Aguardando otimização");
+
   const alertTotal = inadimplentes.length + parciais.length + aguardandoOtim.length
     + itensRuptura.length + ncsAbertas + comprasPend + retiradas3d.length
-    + contasPagarVencidas.length + contasPagarVenceHoje.length;
+    + contasPagarVencidas.length + contasPagarVenceHoje.length
+    + comprasParadas.length + semProgramacaoReal.length;
 
   const topCli = useMemo(() => {
     if (!mesSel) {
@@ -306,6 +318,20 @@ export default function DashboardPage() {
                     <a href="/otimizador" style={{ textDecoration: "none" }}>
                       <span className="chip cb" style={{ cursor: "pointer" }}>
                         {aguardandoOtim.length} pedido{aguardandoOtim.length > 1 ? "s" : ""} aguardando otimização
+                      </span>
+                    </a>
+                  )}
+                  {comprasParadas.length > 0 && (
+                    <a href="/compras" style={{ textDecoration: "none" }}>
+                      <span className="chip cy" style={{ cursor: "pointer" }}>
+                        {comprasParadas.length} compra{comprasParadas.length > 1 ? "s" : ""} parada{comprasParadas.length > 1 ? "s" : ""} há mais de 7 dias
+                      </span>
+                    </a>
+                  )}
+                  {semProgramacaoReal.length > 0 && (
+                    <a href="/programacao" style={{ textDecoration: "none" }}>
+                      <span className="chip cb" style={{ cursor: "pointer" }}>
+                        {semProgramacaoReal.length} pedido{semProgramacaoReal.length > 1 ? "s" : ""} sem programação
                       </span>
                     </a>
                   )}
