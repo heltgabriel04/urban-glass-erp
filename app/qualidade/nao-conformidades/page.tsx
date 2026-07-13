@@ -14,6 +14,7 @@ import { formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import SearchInput from "@/components/ui/SearchInput";
+import { Campo } from "@/components/ui/Campo";
 import type {
   NaoConformidade, NaoConformidadeInsert,
   StatusNaoConformidade, GravidadeNC, TipoNC,
@@ -303,62 +304,53 @@ export default function NaoConformidadesPage() {
 
             <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Tipo de ocorrência *</label>
+                <Campo label="Tipo de ocorrência *">
                   <select className="fc" value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value as TipoNC }))}>
                     {TIPOS_NC.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
-                </div>
-                <div className="fg">
-                  <label className="fl">Gravidade *</label>
+                </Campo>
+                <Campo label="Gravidade *">
                   <select className="fc" value={form.gravidade} onChange={e => setForm(f => ({ ...f, gravidade: e.target.value as GravidadeNC }))}>
                     {(["Baixa","Média","Alta","Crítica"] as GravidadeNC[]).map(g => <option key={g} value={g}>{g}</option>)}
                   </select>
-                </div>
+                </Campo>
               </div>
 
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Etapa da produção *</label>
+                <Campo label="Etapa da produção *">
                   <select className="fc" value={form.etapa} onChange={e => setForm(f => ({ ...f, etapa: e.target.value }))}>
                     {ETAPAS.map(e => <option key={e} value={e}>{e}</option>)}
                   </select>
-                </div>
-                <div className="fg">
-                  <label className="fl">Pedido vinculado</label>
+                </Campo>
+                <Campo label="Pedido vinculado">
                   <select className="fc" value={form.pedido_id ?? ""} onChange={e => setForm(f => ({ ...f, pedido_id: e.target.value || null }))}>
                     <option value="">— Nenhum —</option>
                     {pedidos.map(p => <option key={p.id} value={p.id}>{p.id} · {p.cliente_nome}</option>)}
                   </select>
-                </div>
+                </Campo>
               </div>
 
-              <div className="fg">
-                <label className="fl">Produto envolvido</label>
+              <Campo label="Produto envolvido">
                 <input className="fc" placeholder="Ex: Temperado 8mm Incolor" value={form.produto_nome ?? ""} onChange={e => setForm(f => ({ ...f, produto_nome: e.target.value || null }))} />
-              </div>
+              </Campo>
 
-              <div className="fg">
-                <label className="fl">Descrição detalhada *</label>
+              <Campo label="Descrição detalhada *">
                 <textarea className="fc" rows={3} placeholder="Descreva o que aconteceu…" value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} style={{ resize:"vertical", fontFamily:"inherit" }} />
-              </div>
+              </Campo>
 
-              <div className="fg">
-                <label className="fl">Observações</label>
+              <Campo label="Observações">
                 <textarea className="fc" rows={2} placeholder="Informações adicionais…" value={form.obs ?? ""} onChange={e => setForm(f => ({ ...f, obs: e.target.value || null }))} style={{ resize:"vertical", fontFamily:"inherit" }} />
-              </div>
+              </Campo>
 
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Responsável pela análise</label>
+                <Campo label="Responsável pela análise">
                   <input className="fc" placeholder="Nome ou setor responsável" value={form.responsavel_analise ?? ""} onChange={e => setForm(f => ({ ...f, responsavel_analise: e.target.value || null }))} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Status inicial</label>
+                </Campo>
+                <Campo label="Status inicial">
                   <select className="fc" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as StatusNaoConformidade }))}>
                     {STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
-                </div>
+                </Campo>
               </div>
 
               {/* Fotos */}
