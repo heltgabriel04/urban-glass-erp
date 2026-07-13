@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import DateInput from "@/components/ui/DateInput";
+import { Campo } from "@/components/ui/Campo";
 import {
   getCompras, createCompra, confirmarRecebimento, deletarCompra,
 } from "@/services/compras.service";
@@ -230,25 +231,21 @@ export default function ComprasPage() {
             <div style={{ fontSize: "12px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em", marginBottom: "16px" }}>NOVA COMPRA</div>
 
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
-              <div>
-                <label style={labelStyle}>Fornecedor *</label>
+              <Campo labelStyle={labelStyle} label="Fornecedor *">
                 <select style={selectStyle} value={form.fornecedor_id} onChange={e => setForm(f => ({ ...f, fornecedor_id: e.target.value }))}>
                   <option value="">Selecione...</option>
                   {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
                 </select>
-              </div>
-              <div>
-                <label style={labelStyle}>NF</label>
+              </Campo>
+              <Campo labelStyle={labelStyle} label="NF">
                 <input style={inputStyle} value={form.nf} onChange={e => setForm(f => ({ ...f, nf: e.target.value }))} placeholder="000123" />
-              </div>
-              <div>
-                <label style={labelStyle}>Data</label>
+              </Campo>
+              <Campo labelStyle={labelStyle} label="Data">
                 <DateInput style={inputStyle} className="" value={form.dt_compra} onChange={v => setForm(f => ({ ...f, dt_compra: v }))} />
-              </div>
-              <div>
-                <label style={labelStyle}>Condição de Pagamento</label>
+              </Campo>
+              <Campo labelStyle={labelStyle} label="Condição de Pagamento">
                 <input style={inputStyle} value={form.condicao_pgto} onChange={e => setForm(f => ({ ...f, condicao_pgto: e.target.value }))} placeholder="30/60/90" />
-              </div>
+              </Campo>
             </div>
 
             <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em", marginBottom: "10px" }}>ITENS</div>
@@ -258,14 +255,14 @@ export default function ComprasPage() {
                 <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 0.8fr 0.8fr 0.9fr 1fr 1fr auto", gap: "10px", alignItems: "end", marginBottom: "10px" }}>
                   <div>
                     {i === 0 && <label style={labelStyle}>Produto</label>}
-                    <select style={selectStyle} value={it.produto_id} onChange={e => updItem(i, "produto_id", e.target.value)}>
+                    <select aria-label="Produto" style={selectStyle} value={it.produto_id} onChange={e => updItem(i, "produto_id", e.target.value)}>
                       <option value="">Selecione...</option>
                       {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
                     </select>
                   </div>
                   <div>
                     {i === 0 && <label style={labelStyle}>Colares</label>}
-                    <input style={inputStyle} type="number" min="0" value={it.colares} onChange={e => updItem(i, "colares", e.target.value)}
+                    <input aria-label="Colares" style={inputStyle} type="number" min="0" value={it.colares} onChange={e => updItem(i, "colares", e.target.value)}
                       placeholder={prod?.chapas_por_colar ? `× ${prod.chapas_por_colar} ch.` : "config. no produto"} />
                   </div>
                   <div>
@@ -275,7 +272,7 @@ export default function ComprasPage() {
                         {it.chapas || "—"}
                       </div>
                     ) : (
-                      <input style={inputStyle} type="number" min="0" value={it.chapas} onChange={e => updItem(i, "chapas", e.target.value)} />
+                      <input aria-label="Chapas" style={inputStyle} type="number" min="0" value={it.chapas} onChange={e => updItem(i, "chapas", e.target.value)} />
                     )}
                   </div>
                   <div>
@@ -285,12 +282,12 @@ export default function ComprasPage() {
                         {it.m2_por_chapa}
                       </div>
                     ) : (
-                      <input style={inputStyle} type="number" min="0" step="0.0001" value={it.m2_por_chapa} onChange={e => updItem(i, "m2_por_chapa", e.target.value)} />
+                      <input aria-label="m²/chapa" style={inputStyle} type="number" min="0" step="0.0001" value={it.m2_por_chapa} onChange={e => updItem(i, "m2_por_chapa", e.target.value)} />
                     )}
                   </div>
                   <div>
                     {i === 0 && <label style={labelStyle}>Custo/m²</label>}
-                    <CurrencyInput style={inputStyle} className="" value={it.custo_unitario_m2} onChange={v => updItem(i, "custo_unitario_m2", v)} />
+                    <CurrencyInput aria-label="Custo/m²" style={inputStyle} className="" value={it.custo_unitario_m2} onChange={v => updItem(i, "custo_unitario_m2", v)} />
                   </div>
                   <div>
                     {i === 0 && <label style={labelStyle}>Subtotal</label>}
@@ -308,10 +305,9 @@ export default function ComprasPage() {
             })}
             <button className="btn bg sm" onClick={addItem} style={{ marginBottom: "16px" }}>+ Item</button>
 
-            <div className="fg" style={{ marginBottom: "14px" }}>
-              <label style={labelStyle}>Observação</label>
+            <Campo style={{ marginBottom: "14px" }} labelStyle={labelStyle} label="Observação">
               <input style={inputStyle} value={form.obs} onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} placeholder="Observações opcionais" />
-            </div>
+            </Campo>
 
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", alignItems: "center" }}>
               <span style={{ fontSize: "13px", color: "var(--t2)", marginRight: "8px" }}>

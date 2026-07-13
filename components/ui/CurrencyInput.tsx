@@ -12,6 +12,7 @@ interface CurrencyInputProps {
   disabled?: boolean;
   tabIndex?: number;
   id?: string;
+  "aria-label"?: string;
   onFocus?: React.FocusEventHandler<HTMLInputElement>;
   onBlur?: React.FocusEventHandler<HTMLInputElement>;
 }
@@ -26,6 +27,7 @@ export default function CurrencyInput({
   value, onChange,
   placeholder = "R$ 0,00",
   title, style, className = "fc", disabled, tabIndex, id,
+  "aria-label": ariaLabel,
   onFocus: onFocusProp, onBlur: onBlurProp,
 }: CurrencyInputProps) {
   const [cents, setCents] = useState(Math.round((value ?? 0) * 100));
@@ -92,6 +94,7 @@ export default function CurrencyInput({
     <input
       ref={ref}
       id={id}
+      aria-label={ariaLabel}
       className={className}
       type="text"
       inputMode="numeric"
