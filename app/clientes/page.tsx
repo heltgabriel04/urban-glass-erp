@@ -10,6 +10,7 @@ import SearchInput from "@/components/ui/SearchInput";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import { Modal } from "@/components/ui/Modal";
+import { Campo } from "@/components/ui/Campo";
 import type { Cliente, FinanceiroCliente, ClienteInsert, TipoPessoa, IndIE } from "@/types";
 
 type ClienteForm = ClienteInsert & { responsavel?: string; tel_responsavel?: string };
@@ -410,45 +411,43 @@ export default function ClientesPage() {
 
                   {/* Tipo + Status */}
                   <div className="fr">
-                    <div className="fg">
-                      <label className="fl">Tipo de Pessoa *</label>
+                    <Campo label="Tipo de Pessoa *">
                       <select className="fc" value={form.tipo_pessoa} onChange={e => { F("tipo_pessoa", e.target.value); setCnpjStatus(""); }}>
                         <option value="PJ">Pessoa Jurídica (CNPJ)</option>
                         <option value="PF">Pessoa Física (CPF)</option>
                       </select>
-                    </div>
-                    <div className="fg">
-                      <label className="fl">Status</label>
+                    </Campo>
+                    <Campo label="Status">
                       <select className="fc" value={form.ativo ? "1" : "0"} onChange={e => F("ativo", e.target.value === "1")}>
                         <option value="1">Ativo</option>
                         <option value="0">Inativo</option>
                       </select>
-                    </div>
+                    </Campo>
                   </div>
 
                   {/* CNPJ / CPF — primeiro campo para busca automática */}
                   <div className="fr">
                     {form.tipo_pessoa === "PJ" ? (
-                      <div className="fg">
-                        <label className="fl" style={{ display:"flex", alignItems:"center", gap:"6px" }}>
+                      <Campo
+                        labelStyle={{ display:"flex", alignItems:"center", gap:"6px" }}
+                        label={<>
                           CNPJ *
                           {buscandoCnpj && <span style={{ fontSize:"10px", color:"var(--acc)", fontWeight:500 }}>buscando...</span>}
                           {!buscandoCnpj && cnpjStatus === "ok"      && <span style={{ fontSize:"10px", color:"var(--ok)",   fontWeight:600 }}>✓ dados preenchidos</span>}
                           {!buscandoCnpj && cnpjStatus === "err"     && <span style={{ fontSize:"10px", color:"var(--warn)", fontWeight:600 }}>CNPJ não encontrado</span>}
                           {!buscandoCnpj && cnpjStatus === "offline" && <span style={{ fontSize:"10px", color:"var(--warn)", fontWeight:600 }}>serviço indisponível, tente novamente</span>}
-                        </label>
+                        </>}
+                      >
                         <input className="fc" value={form.cnpj} onChange={e => handleCnpjChange(maskCNPJ(e.target.value))} placeholder="00.000.000/0001-00" maxLength={18} inputMode="numeric" autoFocus />
-                      </div>
+                      </Campo>
                     ) : (
-                      <div className="fg">
-                        <label className="fl">CPF *</label>
+                      <Campo label="CPF *">
                         <input className="fc" value={form.cpf} onChange={e => F("cpf", maskCPF(e.target.value))} placeholder="000.000.000-00" maxLength={14} inputMode="numeric" autoFocus />
-                      </div>
+                      </Campo>
                     )}
-                    <div className="fg">
-                      <label className="fl">Telefone da Empresa</label>
+                    <Campo label="Telefone da Empresa">
                       <input className="fc" value={form.tel} onChange={e => F("tel", maskTel(e.target.value))} placeholder="(00) 00000-0000" maxLength={15} inputMode="numeric" />
-                    </div>
+                    </Campo>
                   </div>
 
                   {/* Aviso de busca automática — só para PJ sem resultado ainda */}
@@ -459,44 +458,38 @@ export default function ClientesPage() {
                     </div>
                   )}
 
-                  <div className="fg">
-                    <label className="fl">Nome / Razão Social *</label>
+                  <Campo label="Nome / Razão Social *">
                     <input className="fc" value={form.nome} onChange={e => F("nome", e.target.value)} placeholder="Nome ou razão social" />
-                  </div>
+                  </Campo>
 
                   {/* Responsável */}
                   <div className="fr">
-                    <div className="fg">
-                      <label className="fl">Nome do Responsável</label>
+                    <Campo label="Nome do Responsável">
                       <input className="fc" value={form.responsavel ?? ""} onChange={e => F("responsavel", e.target.value)} placeholder="Nome do contato / responsável" />
-                    </div>
-                    <div className="fg">
-                      <label className="fl">Telefone do Responsável</label>
+                    </Campo>
+                    <Campo label="Telefone do Responsável">
                       <input className="fc" value={form.tel_responsavel ?? ""} onChange={e => F("tel_responsavel", maskTel(e.target.value))} placeholder="(00) 00000-0000" maxLength={15} inputMode="numeric" />
-                    </div>
+                    </Campo>
                   </div>
 
-                  <div className="fg">
-                    <label className="fl">E-mail</label>
+                  <Campo label="E-mail">
                     <input className="fc" value={form.email} onChange={e => F("email", e.target.value)} placeholder="email@empresa.com" inputMode="email" />
-                  </div>
+                  </Campo>
 
                   <div className="fr">
-                    <div className="fg">
-                      <label className="fl">Forma de Pagamento</label>
+                    <Campo label="Forma de Pagamento">
                       <select className="fc" value={form.pgto} onChange={e => F("pgto", e.target.value)}>
                         <option value="">Selecione...</option>
                         <option>Dinheiro</option><option>PIX</option><option>Boleto</option>
                         <option>Cartão</option><option>Cheque</option><option>A Prazo</option>
                       </select>
-                    </div>
-                    <div className="fg">
-                      <label className="fl">Tabela de Preço</label>
+                    </Campo>
+                    <Campo label="Tabela de Preço">
                       <select className="fc" value={form.tabela} onChange={e => F("tabela", e.target.value)}>
                         <option value="p">Padrão</option>
                         <option value="g">Grandes Clientes</option>
                       </select>
-                    </div>
+                    </Campo>
                   </div>
                 </div>
               )}
@@ -504,42 +497,34 @@ export default function ClientesPage() {
               {aba === "endereco" && (
                 <div style={{ display:"flex", flexDirection:"column", gap:"14px" }}>
                   <div className="fr">
-                    <div className="fg" style={{ maxWidth:"160px" }}>
-                      <label className="fl">CEP {buscandoCep && <span style={{ color:"var(--acc)", fontSize:"10px" }}>buscando...</span>}</label>
+                    <Campo style={{ maxWidth:"160px" }} label={<>CEP {buscandoCep && <span style={{ color:"var(--acc)", fontSize:"10px" }}>buscando...</span>}</>}>
                       <input className="fc" value={form.cep} onChange={e => F("cep", maskCEP(e.target.value))} onBlur={handleCepBlur} placeholder="00000-000" maxLength={9} inputMode="numeric" />
-                    </div>
-                    <div className="fg">
-                      <label className="fl">Logradouro</label>
+                    </Campo>
+                    <Campo label="Logradouro">
                       <input className="fc" value={form.logradouro} onChange={e => F("logradouro", e.target.value)} placeholder="Rua, Av., Travessa..." />
-                    </div>
-                    <div className="fg" style={{ maxWidth:"100px" }}>
-                      <label className="fl">Número</label>
+                    </Campo>
+                    <Campo style={{ maxWidth:"100px" }} label="Número">
                       <input className="fc" value={form.numero} onChange={e => F("numero", e.target.value)} placeholder="Nº" />
-                    </div>
+                    </Campo>
                   </div>
                   <div className="fr">
-                    <div className="fg">
-                      <label className="fl">Complemento</label>
+                    <Campo label="Complemento">
                       <input className="fc" value={form.complemento} onChange={e => F("complemento", e.target.value)} placeholder="Sala, apto, bloco..." />
-                    </div>
-                    <div className="fg">
-                      <label className="fl">Bairro</label>
+                    </Campo>
+                    <Campo label="Bairro">
                       <input className="fc" value={form.bairro} onChange={e => F("bairro", e.target.value)} placeholder="Bairro" />
-                    </div>
+                    </Campo>
                   </div>
                   <div className="fr">
-                    <div className="fg">
-                      <label className="fl">Cidade</label>
+                    <Campo label="Cidade">
                       <input className="fc" value={form.cidade} onChange={e => F("cidade", e.target.value)} placeholder="Cidade" />
-                    </div>
-                    <div className="fg" style={{ maxWidth:"80px" }}>
-                      <label className="fl">UF</label>
+                    </Campo>
+                    <Campo style={{ maxWidth:"80px" }} label="UF">
                       <input className="fc" value={form.uf} onChange={e => F("uf", e.target.value.toUpperCase().slice(0,2))} placeholder="MG" maxLength={2} />
-                    </div>
-                    <div className="fg">
-                      <label className="fl">Cód. IBGE</label>
+                    </Campo>
+                    <Campo label="Cód. IBGE">
                       <input className="fc" value={form.cod_ibge} onChange={e => F("cod_ibge", e.target.value)} placeholder="Preenchido auto via CEP" inputMode="numeric" />
-                    </div>
+                    </Campo>
                   </div>
                   <div style={{ fontSize:"11px", color:"var(--t3)", background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px" }}>
                     💡 Digite o CEP e saia do campo — o endereço é preenchido automaticamente via ViaCEP.
@@ -550,18 +535,16 @@ export default function ClientesPage() {
               {aba === "fiscal" && (
                 <div style={{ display:"flex", flexDirection:"column", gap:"16px" }}>
                   <div className="fr">
-                    <div className="fg">
-                      <label className="fl">Inscrição Estadual (IE)</label>
+                    <Campo label="Inscrição Estadual (IE)">
                       <input className="fc" value={form.ie} onChange={e => F("ie", maskIE(e.target.value))} placeholder="000.000.000/0000" maxLength={17} inputMode="numeric" />
-                    </div>
-                    <div className="fg">
-                      <label className="fl">Indicador IE *</label>
+                    </Campo>
+                    <Campo label="Indicador IE *">
                       <select className="fc" value={form.ind_ie} onChange={e => F("ind_ie", e.target.value)}>
                         <option value="1">1 — Contribuinte ICMS</option>
                         <option value="2">2 — Contribuinte Isento</option>
                         <option value="9">9 — Não Contribuinte</option>
                       </select>
-                    </div>
+                    </Campo>
                   </div>
 
                   <div style={{ background:"var(--surf2)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"14px 16px" }}>
@@ -581,10 +564,9 @@ export default function ClientesPage() {
                     </div>
                   </div>
 
-                  <div className="fg">
-                    <label className="fl">Observações padrão na NF-e</label>
+                  <Campo label="Observações padrão na NF-e">
                     <textarea className="fc" value={form.obs_nfe} onChange={e => F("obs_nfe", e.target.value)} placeholder="Texto que aparece no campo de observações de todas as NF-e deste cliente" rows={3} style={{ resize:"vertical" }} />
-                  </div>
+                  </Campo>
 
                   <div style={{ background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)", borderRadius:"8px", padding:"10px 14px", fontSize:"12px", color:"var(--warn)" }}>
                     ⚠ Indicador IE e Consumidor Final impactam diretamente o XML da NF-e.
