@@ -5,6 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { getProjecaoCaixa, type ProjecaoHorizonte } from "@/services/dashboardFinanceiro.service";
+import { getFinanceiroClientes } from "@/services/financeiro.service";
 import {
   getConcentracaoClientes, getConcentracaoFornecedores, getClientesInativos,
   type Concentracao, type ClienteInativo,
@@ -32,6 +33,7 @@ interface Dados {
   concFornecedores: Concentracao;
   inativos: ClienteInativo[];
   clientesBloqueados: number;
+  clientesEstouraramCredito: number;
 }
 
 export default function EstrategicaPage() {
@@ -52,14 +54,23 @@ function EstrategicaInner() {
 
   async function load() {
     setLoading(true);
-    const [projecao, concClientes, concFornecedores, inativos, { data: bloqueados }] = await Promise.all([
+    const [projecao, concClientes, concFornecedores, inativos, { data: clientesData }, financeiroClientes] = await Promise.all([
       getProjecaoCaixa(undefined, HORIZONTES),
       getConcentracaoClientes(12),
       getConcentracaoFornecedores(12),
       getClientesInativos(60, 3),
-      supabase.from("clientes").select("id").eq("bloqueado_credito", true),
+      supabase.from("clientes").select("id, credito, bloqueado_credito"),
+      getFinanceiroClientes(),
     ]);
-    setDados({ projecao, concClientes, concFornecedores, inativos, clientesBloqueados: (bloqueados ?? []).length });
+    const clientes = (clientesData ?? []) as { id: number; credito: number; bloqueado_credito: boolean | null }[];
+    const clientesBloqueados = clientes.filter(c => c.bloqueado_credito).length;
+    const clientesEstouraramCredito = clientes.filter(c => {
+      if (c.bloqueado_credito) return false;
+      if (!c.credito || c.credito <= 0) return false;
+      const fin = financeiroClientes.find(f => f.cliente_id === c.id);
+      return !!fin && Number(fin.a_receber) > c.credito;
+    }).length;
+    setDados({ projecao, concClientes, concFornecedores, inativos, clientesBloqueados, clientesEstouraramCredito });
     setLoading(false);
   }
 
@@ -67,6 +78,7 @@ function EstrategicaInner() {
 
   const riscos: RiscoItem[] = dados ? [
     ...(dados.clientesBloqueados > 0 ? [{ texto: `${dados.clientesBloqueados} cliente(s) bloqueado(s) por crédito`, nivel: "alto" as const }] : []),
+    ...(dados.clientesEstouraramCredito > 0 ? [{ texto: `${dados.clientesEstouraramCredito} cliente(s) com saldo em aberto acima do limite de crédito`, nivel: "alto" as const }] : []),
     ...(primeiraNegativa ? [{ texto: `Saldo projetado fica negativo em ${primeiraNegativa.dias} dias (${formatBRL(primeiraNegativa.saldo)})`, nivel: "alto" as const }] : []),
     ...(dados.concClientes.maiorPct >= 30 ? [{ texto: `Cliente "${dados.concClientes.maiorNome}" responde por ${dados.concClientes.maiorPct.toFixed(0)}% do faturamento (últimos 12 meses)`, nivel: "medio" as const }] : []),
     ...(dados.concFornecedores.maiorPct >= 30 ? [{ texto: `Fornecedor "${dados.concFornecedores.maiorNome}" responde por ${dados.concFornecedores.maiorPct.toFixed(0)}% das despesas (últimos 12 meses)`, nivel: "medio" as const }] : []),
