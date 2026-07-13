@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
+import { Campo } from "@/components/ui/Campo";
 import { supabase } from "@/lib/supabase/client";
 import { formatDate } from "@/lib/formatters";
 import {
@@ -163,26 +164,22 @@ export default function ChecklistMensalPage() {
 
                   {!naoAplicavel && (
                     <div style={{ display: "grid", gridTemplateColumns: "140px 1fr 1fr auto auto", gap: "10px", alignItems: "end" }}>
-                      <div className="fg">
-                        <label className="fl">Status</label>
+                      <Campo label="Status">
                         <select className="fc" value={item.status} onChange={(e) => handleAtualizarItem(item, { status: e.target.value as StatusChecklistItem, data_conclusao: e.target.value === "concluido" ? new Date().toISOString().split("T")[0] : item.data_conclusao })}>
                           <option value="pendente">Pendente</option>
                           <option value="em_andamento">Em Andamento</option>
                           <option value="concluido">Concluído</option>
                         </select>
-                      </div>
-                      <div className="fg">
-                        <label className="fl">Responsável</label>
+                      </Campo>
+                      <Campo label="Responsável">
                         <input className="fc" defaultValue={item.responsavel ?? ""} onBlur={(e) => handleAtualizarItem(item, { responsavel: e.target.value || null })} />
-                      </div>
-                      <div className="fg">
-                        <label className="fl">Observação</label>
+                      </Campo>
+                      <Campo label="Observação">
                         <input className="fc" defaultValue={item.observacao ?? ""} onBlur={(e) => handleAtualizarItem(item, { observacao: e.target.value || null })} />
-                      </div>
-                      <div className="fg">
-                        <label className="fl">Anexo</label>
+                      </Campo>
+                      <Campo label="Anexo">
                         <input className="fc" type="file" style={{ fontSize: "11px" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(item, f); }} />
-                      </div>
+                      </Campo>
                       <div style={{ fontSize: "11px", color: "var(--t3)" }}>
                         {(item.anexos?.length ?? 0) > 0 ? `${item.anexos!.length} anexo(s)` : ""}
                       </div>
