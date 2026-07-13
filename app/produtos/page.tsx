@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import AppLayout from "@/components/layout/AppLayout";
 import { useConfirm } from "@/components/ui/confirm";
+import { Modal } from "@/components/ui/Modal";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
 import CurrencyInput from "@/components/ui/CurrencyInput";
@@ -216,14 +217,7 @@ export default function ProdutosPage() {
         )}
       </div>
 
-      {modal && (
-        <div className="mov open" onClick={e => e.target === e.currentTarget && setModal(false)}>
-          <div className="mod" style={{ width:"560px" }}>
-            <div className="mhd">
-              <div className="mtit">{editId ? "Editar Produto" : "Novo Produto"}</div>
-              <button className="mcl" onClick={() => setModal(false)} aria-label="Fechar">✕</button>
-            </div>
-
+      <Modal open={modal} onClose={() => setModal(false)} title={editId ? "Editar Produto" : "Novo Produto"} width="560px">
             <div className="fr">
               {/* Código — gerado automaticamente, bloqueado em novo; editável em edição */}
               <div className="fg">
@@ -368,9 +362,7 @@ export default function ProdutosPage() {
                 {salvando ? "Salvando..." : "Salvar Produto"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </AppLayout>
   );
 }
