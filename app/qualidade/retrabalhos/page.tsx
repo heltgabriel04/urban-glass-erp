@@ -5,6 +5,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { getRetrabalhos, createRetrabalho, updateRetrabalho } from "@/services/qualidade.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
+import { Campo } from "@/components/ui/Campo";
 import type { Retrabalho, RetrabalhoInsert, StatusRetrabalho } from "@/types";
 import { supabase } from "@/lib/supabase/client";
 
@@ -227,68 +228,58 @@ export default function RetrabalhosPage() {
 
             <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Motivo *</label>
+                <Campo label="Motivo *">
                   <select className="fc" value={form.motivo} onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))}>
                     <option value="">— Selecione —</option>
                     {MOTIVOS.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
-                </div>
-                <div className="fg">
-                  <label className="fl">Quantidade</label>
+                </Campo>
+                <Campo label="Quantidade">
                   <input type="number" className="fc" min={1} value={form.quantidade} onChange={e => setForm(f => ({ ...f, quantidade: Number(e.target.value) }))} />
-                </div>
+                </Campo>
               </div>
 
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Etapa onde gerou o problema *</label>
+                <Campo label="Etapa onde gerou o problema *">
                   <select className="fc" value={form.etapa_origem} onChange={e => setForm(f => ({ ...f, etapa_origem: e.target.value }))}>
                     {ETAPAS.map(e => <option key={e} value={e}>{e}</option>)}
                   </select>
-                </div>
-                <div className="fg">
-                  <label className="fl">Etapa de correção *</label>
+                </Campo>
+                <Campo label="Etapa de correção *">
                   <select className="fc" value={form.etapa_correcao} onChange={e => setForm(f => ({ ...f, etapa_correcao: e.target.value }))}>
                     {ETAPAS.map(e => <option key={e} value={e}>{e}</option>)}
                   </select>
-                </div>
+                </Campo>
               </div>
 
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Responsável original</label>
+                <Campo label="Responsável original">
                   <input className="fc" placeholder="Quem gerou o erro" value={form.responsavel_original ?? ""} onChange={e => setForm(f => ({ ...f, responsavel_original: e.target.value || null }))} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Responsável pela correção</label>
+                </Campo>
+                <Campo label="Responsável pela correção">
                   <input className="fc" placeholder="Quem vai corrigir" value={form.responsavel_correcao ?? ""} onChange={e => setForm(f => ({ ...f, responsavel_correcao: e.target.value || null }))} />
-                </div>
+                </Campo>
               </div>
 
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Tempo adicional (min)</label>
+                <Campo label="Tempo adicional (min)">
                   <input type="number" className="fc" min={0} value={form.tempo_adicional_min ?? ""} onChange={e => setForm(f => ({ ...f, tempo_adicional_min: e.target.value ? Number(e.target.value) : null }))} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Custo adicional (R$)</label>
+                </Campo>
+                <Campo label="Custo adicional (R$)">
                   <input type="number" className="fc" step="0.01" min={0} value={form.custo_adicional ?? ""} onChange={e => setForm(f => ({ ...f, custo_adicional: e.target.value ? Number(e.target.value) : null }))} />
-                </div>
+                </Campo>
               </div>
 
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Pedido vinculado</label>
+                <Campo label="Pedido vinculado">
                   <select className="fc" value={form.pedido_id ?? ""} onChange={e => setForm(f => ({ ...f, pedido_id: e.target.value || null }))}>
                     <option value="">— Nenhum —</option>
                     {pedidos.map(p => <option key={p.id} value={p.id}>{p.id} · {p.cliente_nome}</option>)}
                   </select>
-                </div>
-                <div className="fg">
-                  <label className="fl">Produto</label>
+                </Campo>
+                <Campo label="Produto">
                   <input className="fc" placeholder="Nome do produto" value={form.produto_nome ?? ""} onChange={e => setForm(f => ({ ...f, produto_nome: e.target.value || null }))} />
-                </div>
+                </Campo>
               </div>
 
               <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end", marginTop:"6px" }}>
