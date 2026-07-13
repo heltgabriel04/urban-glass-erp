@@ -6,6 +6,7 @@ import ContabilidadeTabs from "@/components/contabilidade/ContabilidadeTabs";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import { usePrompt } from "@/components/ui/prompt";
+import { Modal } from "@/components/ui/Modal";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { ordenarPorCodigoEstruturado } from "@/lib/planoContas";
@@ -65,12 +66,7 @@ function ModalCartao({ editando, contasBancarias, usuarioEmail, onSalvo, onFecha
   }
 
   return (
-    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
-      <div className="mod" style={{ width: "520px" }}>
-        <div className="mhd">
-          <div className="mtit">{editando ? "Editar Cartão" : "Novo Cartão"}</div>
-          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
-        </div>
+    <Modal open onClose={onFechar} title={editando ? "Editar Cartão" : "Novo Cartão"} width="520px">
         <form id="form-cartao" onSubmit={handleSubmit} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
             <div className="fg">
@@ -127,8 +123,7 @@ function ModalCartao({ editando, contasBancarias, usuarioEmail, onSalvo, onFecha
           <button type="button" className="btn bg" onClick={onFechar} disabled={salvando}>Cancelar</button>
           <button type="submit" form="form-cartao" className="btn bp" disabled={salvando}>{salvando ? "Salvando..." : "Salvar"}</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -179,12 +174,7 @@ function ModalFatura({ cartao, editando, onSalvo, onFechar }: {
   }
 
   return (
-    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
-      <div className="mod" style={{ width: "520px" }}>
-        <div className="mhd">
-          <div className="mtit">{editando ? `Editar Fatura — ${cartao.nome}` : `Nova Fatura — ${cartao.nome}`}</div>
-          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
-        </div>
+    <Modal open onClose={onFechar} title={editando ? `Editar Fatura — ${cartao.nome}` : `Nova Fatura — ${cartao.nome}`} width="520px">
         <form id="form-fatura" onSubmit={handleSubmit} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <div className="fg">
@@ -239,8 +229,7 @@ function ModalFatura({ cartao, editando, onSalvo, onFechar }: {
           <button type="button" className="btn bg" onClick={onFechar} disabled={salvando}>Cancelar</button>
           <button type="submit" form="form-fatura" className="btn bp" disabled={salvando}>{salvando ? "Salvando..." : "Salvar"}</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -300,15 +289,10 @@ function ModalLancamentos({ cartao, fatura, fornecedores, planoContas, usuarioEm
   const total = lancamentos.reduce((s, l) => s + Number(l.valor), 0);
 
   return (
-    <div className="mov open" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
-      <div className="mod" style={{ width: "780px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
-        <div className="mhd">
-          <div className="mtit">
-            {fatura ? `Lançamentos — ${cartao.nome} (${String(fatura.competencia_mes).padStart(2, "0")}/${fatura.competencia_ano})` : `Lançamentos avulsos (débito) — ${cartao.nome}`}
-          </div>
-          <button className="mcl" onClick={onFechar} aria-label="Fechar">✕</button>
-        </div>
-
+    <Modal
+      open onClose={onFechar} width="780px" style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}
+      title={fatura ? `Lançamentos — ${cartao.nome} (${String(fatura.competencia_mes).padStart(2, "0")}/${fatura.competencia_ano})` : `Lançamentos avulsos (débito) — ${cartao.nome}`}
+    >
         <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1 }}>
           <form onSubmit={handleAdd} style={{ display: "grid", gridTemplateColumns: "1fr 2fr 1fr 1fr 1fr auto", gap: "8px", marginBottom: "16px", alignItems: "end" }}>
             <div className="fg" style={{ margin: 0 }}>
@@ -378,8 +362,7 @@ function ModalLancamentos({ cartao, fatura, fornecedores, planoContas, usuarioEm
         <div style={{ display: "flex", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
           <button type="button" className="btn bg" onClick={onFechar}>Fechar</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
