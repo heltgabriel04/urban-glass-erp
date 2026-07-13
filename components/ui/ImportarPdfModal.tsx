@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { ItemPdfImportado } from "@/lib/importPdfOrcamento";
 import { parsePdfOrcamentoText } from "@/lib/importPdfOrcamento";
 import { Modal } from "./Modal";
@@ -48,6 +48,8 @@ async function lerTextoPdf(file: File): Promise<string> {
 }
 
 export default function ImportarPdfModal({ produtos, onImportar, onClose }: Props) {
+  const arquivoFieldId = useId();
+  const produtoFieldId = useId();
   const [itens, setItens]             = useState<ItemPdfImportado[] | null>(null);
   const [produtoOverride, setProduto] = useState<number | null>(null);
   const [erro, setErro]               = useState("");
@@ -84,8 +86,9 @@ export default function ImportarPdfModal({ produtos, onImportar, onClose }: Prop
   return (
     <Modal open onClose={onClose} title="Importar PDF de Pedido/Orçamento" width="640px">
         <div className="fg" style={{ marginBottom: "12px" }}>
-          <label className="fl">Arquivo PDF</label>
+          <label className="fl" htmlFor={arquivoFieldId}>Arquivo PDF</label>
           <input
+            id={arquivoFieldId}
             className="fc"
             type="file"
             accept=".pdf,application/pdf"
@@ -120,8 +123,8 @@ export default function ImportarPdfModal({ produtos, onImportar, onClose }: Prop
             )}
 
             <div className="fg" style={{ marginBottom: "16px" }}>
-              <label className="fl">Substituir produto de todos os itens por (opcional)</label>
-              <select className="fc" value={produtoOverride ?? ""} onChange={e => setProduto(e.target.value ? Number(e.target.value) : null)}>
+              <label className="fl" htmlFor={produtoFieldId}>Substituir produto de todos os itens por (opcional)</label>
+              <select id={produtoFieldId} className="fc" value={produtoOverride ?? ""} onChange={e => setProduto(e.target.value ? Number(e.target.value) : null)}>
                 <option value="">— Manter produto detectado no PDF —</option>
                 {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
               </select>
