@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useId } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { getQuebras, createQuebra, confirmarBaixaEstoqueQuebra } from "@/services/qualidade.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import SearchInput from "@/components/ui/SearchInput";
+import { Campo } from "@/components/ui/Campo";
 import type { Quebra, QuebraInsert, SetorQualidade } from "@/types";
 import { supabase } from "@/lib/supabase/client";
 import { getEstoque } from "@/services/estoque.service";
@@ -31,6 +32,7 @@ const BLANK: QuebraInsert = {
 export default function QuebrasPage() {
   const { toast } = useToast();
   const confirm = useConfirm();
+  const produtoFieldId = useId();
   const [quebras, setQuebras]   = useState<Quebra[]>([]);
   const [loading, setLoading]   = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -236,44 +238,39 @@ export default function QuebrasPage() {
             <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
               <div className="fr">
                 <div className="fg">
-                  <label className="fl">Produto *</label>
-                  <input className="fc" list="produtos-list" placeholder="Nome do produto" value={form.produto_nome}
+                  <label className="fl" htmlFor={produtoFieldId}>Produto *</label>
+                  <input id={produtoFieldId} className="fc" list="produtos-list" placeholder="Nome do produto" value={form.produto_nome}
                     onChange={e => handleProdutoChange(e.target.value)} />
                   <datalist id="produtos-list">{produtos.map(p => <option key={p.nome} value={p.nome} />)}</datalist>
                 </div>
-                <div className="fg">
-                  <label className="fl">Setor</label>
+                <Campo label="Setor">
                   <select className="fc" value={form.setor ?? ""} onChange={e => setForm(f => ({ ...f, setor: (e.target.value || null) as SetorQualidade | null }))}>
                     <option value="">— Selecione —</option>
                     {SETORES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
-                </div>
+                </Campo>
               </div>
 
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Largura (mm)</label>
+                <Campo label="Largura (mm)">
                   <input type="number" className="fc" min={0} value={form.largura_mm ?? ""} onChange={e => setForm(f => ({ ...f, largura_mm: e.target.value ? Number(e.target.value) : null }))} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Altura (mm)</label>
+                </Campo>
+                <Campo label="Altura (mm)">
                   <input type="number" className="fc" min={0} value={form.altura_mm ?? ""} onChange={e => setForm(f => ({ ...f, altura_mm: e.target.value ? Number(e.target.value) : null }))} />
-                </div>
-                <div className="fg">
-                  <label className="fl">m² perdido</label>
+                </Campo>
+                <Campo label="m² perdido">
                   <input type="number" className="fc" step="0.001" min={0}
                     value={(form.largura_mm && form.altura_mm) ? calcM2() : (form.m2_perdido || "")}
                     readOnly={!!(form.largura_mm && form.altura_mm)}
                     onChange={e => !form.largura_mm && !form.altura_mm && setForm(f => ({ ...f, m2_perdido: Number(e.target.value) }))}
                     style={{ background: (form.largura_mm && form.altura_mm) ? "var(--surf2)" : undefined }} />
-                </div>
+                </Campo>
               </div>
 
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Custo/m² (R$)</label>
+                <Campo label="Custo/m² (R$)">
                   <input type="number" className="fc" step="0.01" min={0} value={form.custo_m2 ?? ""} onChange={e => setForm(f => ({ ...f, custo_m2: e.target.value ? Number(e.target.value) : null }))} />
-                </div>
+                </Campo>
                 <div className="fg" style={{ display:"flex", flexDirection:"column", justifyContent:"flex-end" }}>
                   <label className="fl">Valor estimado da perda</label>
                   <div style={{ fontSize:"16px", fontWeight:700, color:"var(--err)", fontFamily:"'DM Mono',monospace", padding:"8px 0" }}>
@@ -283,46 +280,39 @@ export default function QuebrasPage() {
               </div>
 
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Motivo *</label>
+                <Campo label="Motivo *">
                   <select className="fc" value={form.motivo} onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))}>
                     <option value="">— Selecione —</option>
                     {MOTIVOS.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
-                </div>
-                <div className="fg">
-                  <label className="fl">Máquina</label>
+                </Campo>
+                <Campo label="Máquina">
                   <input className="fc" placeholder="Ex: Serra 1, Mesa 2…" value={form.maquina ?? ""} onChange={e => setForm(f => ({ ...f, maquina: e.target.value || null }))} />
-                </div>
+                </Campo>
               </div>
 
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Responsável</label>
+                <Campo label="Responsável">
                   <input className="fc" placeholder="Nome do operador" value={form.responsavel ?? ""} onChange={e => setForm(f => ({ ...f, responsavel: e.target.value || null }))} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Pedido vinculado</label>
+                </Campo>
+                <Campo label="Pedido vinculado">
                   <select className="fc" value={form.pedido_id ?? ""} onChange={e => setForm(f => ({ ...f, pedido_id: e.target.value || null }))}>
                     <option value="">— Nenhum —</option>
                     {pedidos.map(p => <option key={p.id} value={p.id}>{p.id} · {p.cliente_nome}</option>)}
                   </select>
-                </div>
+                </Campo>
               </div>
 
               <div className="fr">
-                <div className="fg">
-                  <label className="fl">Espessura</label>
+                <Campo label="Espessura">
                   <input className="fc" placeholder="Ex: 6mm, 8mm" value={form.espessura ?? ""} onChange={e => setForm(f => ({ ...f, espessura: e.target.value || null }))} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Cor</label>
+                </Campo>
+                <Campo label="Cor">
                   <input className="fc" placeholder="Ex: Incolor, Fumê" value={form.cor ?? ""} onChange={e => setForm(f => ({ ...f, cor: e.target.value || null }))} />
-                </div>
-                <div className="fg">
-                  <label className="fl">Chapa referência</label>
+                </Campo>
+                <Campo label="Chapa referência">
                   <input className="fc" placeholder="Ex: CHAPA 3 – P-047" value={form.chapa_referencia ?? ""} onChange={e => setForm(f => ({ ...f, chapa_referencia: e.target.value || null }))} />
-                </div>
+                </Campo>
               </div>
 
               <div style={{ display:"flex", gap:"8px", justifyContent:"flex-end", marginTop:"6px" }}>
