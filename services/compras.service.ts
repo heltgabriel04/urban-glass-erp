@@ -144,7 +144,13 @@ export interface DadosXmlParaDocumento {
   serie: string | null;
   ncm: string | null;
   cfop: string | null;
+  cst: string | null;
   valorTotal: number;
+  valorProdutos: number | null;
+  valorIcms: number | null;
+  valorIpi: number | null;
+  valorPis: number | null;
+  valorCofins: number | null;
   fornecedorId: number | null;
   competenciaAno: number;
   competenciaMes: number;
@@ -176,8 +182,9 @@ export async function anexarXmlNaCompra(
     competencia_ano: dados.competenciaAno, competencia_mes: dados.competenciaMes,
     numero_documento: dados.numeroNF, serie: dados.serie, chave_acesso: dados.chaveAcesso,
     fornecedor_id: dados.fornecedorId, compra_id: compraId, nota_fiscal_id: null,
-    ncm: dados.ncm, cfop: dados.cfop, cst: null,
-    valor_produtos: null, valor_icms: null, valor_pis: null, valor_cofins: null, valor_ipi: null,
+    ncm: dados.ncm, cfop: dados.cfop, cst: dados.cst,
+    valor_produtos: dados.valorProdutos, valor_icms: dados.valorIcms, valor_pis: dados.valorPis,
+    valor_cofins: dados.valorCofins, valor_ipi: dados.valorIpi,
     valor_total: dados.valorTotal,
     motivo: null, material: null, quantidade: null,
     numero_inicial: null, numero_final: null,

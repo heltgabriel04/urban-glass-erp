@@ -26,6 +26,15 @@ const XML_VALIDO = `<?xml version="1.0" encoding="UTF-8"?>
           <vUnCom>85.0000</vUnCom>
           <vProd>3842.00</vProd>
         </prod>
+        <imposto>
+          <ICMS>
+            <ICMS00>
+              <orig>0</orig>
+              <CST>00</CST>
+              <vICMS>691.56</vICMS>
+            </ICMS00>
+          </ICMS>
+        </imposto>
       </det>
       <det nItem="2">
         <prod>
@@ -38,9 +47,22 @@ const XML_VALIDO = `<?xml version="1.0" encoding="UTF-8"?>
           <vUnCom>120.0000</vUnCom>
           <vProd>2400.00</vProd>
         </prod>
+        <imposto>
+          <ICMS>
+            <ICMSSN102>
+              <orig>0</orig>
+              <CSOSN>102</CSOSN>
+            </ICMSSN102>
+          </ICMS>
+        </imposto>
       </det>
       <total>
         <ICMSTot>
+          <vProd>6242.00</vProd>
+          <vICMS>691.56</vICMS>
+          <vIPI>0.00</vIPI>
+          <vPIS>102.39</vPIS>
+          <vCOFINS>473.20</vCOFINS>
           <vNF>6242.00</vNF>
         </ICMSTot>
       </total>
@@ -62,13 +84,22 @@ describe("parseXmlCompra", () => {
       descricao: "VIDRO TEMPERADO 8MM INCOLOR",
       ncm: "70071900",
       cfop: "5102",
+      cst: "00",
       quantidade: 45.2,
       unidade: "M2",
       valorUnitario: 85,
       valorTotal: 3842,
     });
     expect(r.itens[1].descricao).toBe("VIDRO LAMINADO 4+4 INCOLOR");
+    // Item 2 é Simples Nacional (usa CSOSN em vez de CST) — cst cai no
+    // fallback pra CSOSN.
+    expect(r.itens[1].cst).toBe("102");
     expect(r.valorTotalNota).toBe(6242);
+    expect(r.valorProdutos).toBe(6242);
+    expect(r.valorIcms).toBe(691.56);
+    expect(r.valorIpi).toBe(0);
+    expect(r.valorPis).toBe(102.39);
+    expect(r.valorCofins).toBe(473.2);
   });
 
   it("lança erro se o XML não tem <infNFe>", () => {

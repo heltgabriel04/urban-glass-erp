@@ -2,6 +2,7 @@ export interface ItemXmlCompra {
   descricao: string;
   ncm: string | null;
   cfop: string | null;
+  cst: string | null;
   quantidade: number;
   unidade: string;
   valorUnitario: number;
@@ -17,6 +18,14 @@ export interface XmlCompraParseado {
   fornecedorNome: string | null;
   itens: ItemXmlCompra[];
   valorTotalNota: number;
+  // Totais de imposto — vêm do bloco <ICMSTot>, mesmo bloco de onde
+  // valorTotalNota (vNF) já era lido. Antes eram parseados e descartados
+  // na hora de persistir o documento fiscal (sempre null).
+  valorProdutos: number | null;
+  valorIcms: number | null;
+  valorIpi: number | null;
+  valorPis: number | null;
+  valorCofins: number | null;
 }
 
 function extrairTag(bloco: string, nomeTag: string): string | null {
@@ -61,10 +70,18 @@ export function parseXmlCompra(xmlText: string): XmlCompraParseado {
 
   const itens: ItemXmlCompra[] = detBlocos.map((det) => {
     const prodBloco = extrairBlocos(det, "prod")[0] ?? det;
+    // CST fica dentro de um grupo variável (ICMS00/ICMS10/.../ICMSSN101 etc,
+    // depende do regime tributário do emitente) — em vez de listar todos os
+    // grupos possíveis, procura <CST> em qualquer lugar do bloco <imposto>
+    // do item, com <CSOSN> como alternativa (Simples Nacional usa CSOSN
+    // em vez de CST).
+    const impostoBloco = extrairBlocos(det, "imposto")[0] ?? det;
+    const cst = extrairTag(impostoBloco, "CST") ?? extrairTag(impostoBloco, "CSOSN");
     return {
       descricao: extrairTag(prodBloco, "xProd") ?? "",
       ncm: extrairTag(prodBloco, "NCM"),
       cfop: extrairTag(prodBloco, "CFOP"),
+      cst,
       quantidade: Number(extrairTag(prodBloco, "qCom") ?? 0),
       unidade: extrairTag(prodBloco, "uCom") ?? "",
       valorUnitario: Number(extrairTag(prodBloco, "vUnCom") ?? 0),
@@ -74,8 +91,20 @@ export function parseXmlCompra(xmlText: string): XmlCompraParseado {
 
   const totalBloco = extrairBlocos(xmlText, "ICMSTot")[0] ?? "";
   const valorTotalNota = Number(extrairTag(totalBloco, "vNF") ?? 0);
+  const lerTotal = (tag: string) => {
+    const v = extrairTag(totalBloco, tag);
+    return v != null ? Number(v) : null;
+  };
+  const valorProdutos = lerTotal("vProd");
+  const valorIcms = lerTotal("vICMS");
+  const valorIpi = lerTotal("vIPI");
+  const valorPis = lerTotal("vPIS");
+  const valorCofins = lerTotal("vCOFINS");
 
-  return { chaveAcesso, numeroNF, serie, dataEmissao, fornecedorCnpj, fornecedorNome, itens, valorTotalNota };
+  return {
+    chaveAcesso, numeroNF, serie, dataEmissao, fornecedorCnpj, fornecedorNome, itens, valorTotalNota,
+    valorProdutos, valorIcms, valorIpi, valorPis, valorCofins,
+  };
 }
 
 export interface FornecedorParaCasamento {

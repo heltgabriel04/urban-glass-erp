@@ -185,9 +185,19 @@ export default function ComprasPage() {
         chaveAcesso: xmlPendente.dados.chaveAcesso,
         numeroNF: xmlPendente.dados.numeroNF,
         serie: xmlPendente.dados.serie,
+        // NCM/CFOP/CST só do primeiro item — mesma limitação de antes,
+        // documentos_fiscais tem um campo só, não por item. Nota com NCM
+        // diferente por item perde essa granularidade aqui (ver
+        // compras_itens pra ver os NCMs/CFOPs individuais salvos por item).
         ncm: primeiroItem?.ncm ?? null,
         cfop: primeiroItem?.cfop ?? null,
+        cst: primeiroItem?.cst ?? null,
         valorTotal: xmlPendente.dados.valorTotalNota,
+        valorProdutos: xmlPendente.dados.valorProdutos,
+        valorIcms: xmlPendente.dados.valorIcms,
+        valorIpi: xmlPendente.dados.valorIpi,
+        valorPis: xmlPendente.dados.valorPis,
+        valorCofins: xmlPendente.dados.valorCofins,
         fornecedorId: Number(form.fornecedor_id),
         competenciaAno: Number(dt.slice(0, 4)),
         competenciaMes: Number(dt.slice(5, 7)),
