@@ -296,11 +296,12 @@ export interface SugestaoProximaFatura {
  *  (última fatura ainda aberta, cartão sem dia_fechamento cadastrado,
  *  ou a próxima já existe). */
 export async function sugerirProximaFatura(cartaoId: number): Promise<SugestaoProximaFatura | null> {
-  const { data: cartaoRow } = await supabase.from("cartoes").select("dia_fechamento, dia_vencimento").eq("id", cartaoId).maybeSingle();
+  const { data: cartaoRow, error: errCartao } = await supabase.from("cartoes").select("dia_fechamento, dia_vencimento").eq("id", cartaoId).maybeSingle();
+  if (errCartao) { console.error("sugerirProximaFatura (cartao):", errCartao); return null; }
   const cartao = cartaoRow as { dia_fechamento: number | null; dia_vencimento: number | null } | null;
   if (!cartao?.dia_fechamento || !cartao?.dia_vencimento) return null;
 
-  const { data: ultimaRow } = await supabase
+  const { data: ultimaRow, error: errUltima } = await supabase
     .from("cartoes_faturas")
     .select("status, competencia_ano, competencia_mes")
     .eq("cartao_id", cartaoId)
@@ -308,6 +309,7 @@ export async function sugerirProximaFatura(cartaoId: number): Promise<SugestaoPr
     .order("competencia_mes", { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (errUltima) { console.error("sugerirProximaFatura (ultima fatura):", errUltima); return null; }
   const ultima = ultimaRow as { status: CartaoFatura["status"]; competencia_ano: number; competencia_mes: number } | null;
   if (!ultima || ultima.status === "aberta") return null;
 
@@ -315,12 +317,13 @@ export async function sugerirProximaFatura(cartaoId: number): Promise<SugestaoPr
   let ano = ultima.competencia_ano;
   if (mes > 12) { mes = 1; ano += 1; }
 
-  const { count } = await supabase
+  const { count, error: errCount } = await supabase
     .from("cartoes_faturas")
     .select("id", { count: "exact", head: true })
     .eq("cartao_id", cartaoId)
     .eq("competencia_ano", ano)
     .eq("competencia_mes", mes);
+  if (errCount) { console.error("sugerirProximaFatura (count):", errCount); return null; }
   if (count && count > 0) return null;
 
   return {
@@ -336,19 +339,21 @@ export async function sugerirProximaFatura(cartaoId: number): Promise<SugestaoPr
  *  cadastrado não tem como calcular competência — devolve null
  *  (chamador cai pro fluxo manual). */
 export async function encontrarOuCriarFaturaParaData(cartaoId: number, dataCompraIso: string): Promise<CartaoFatura | null> {
-  const { data: cartaoRow } = await supabase.from("cartoes").select("dia_fechamento, dia_vencimento").eq("id", cartaoId).maybeSingle();
+  const { data: cartaoRow, error: errCartao } = await supabase.from("cartoes").select("dia_fechamento, dia_vencimento").eq("id", cartaoId).maybeSingle();
+  if (errCartao) { console.error("encontrarOuCriarFaturaParaData (cartao):", errCartao); return null; }
   const cartao = cartaoRow as { dia_fechamento: number | null; dia_vencimento: number | null } | null;
   if (!cartao?.dia_fechamento) return null;
 
   const { ano, mes } = competenciaParaData(cartao.dia_fechamento, dataCompraIso);
 
-  const { data: existente } = await supabase
+  const { data: existente, error: errExistente } = await supabase
     .from("cartoes_faturas")
     .select("*")
     .eq("cartao_id", cartaoId)
     .eq("competencia_ano", ano)
     .eq("competencia_mes", mes)
     .maybeSingle();
+  if (errExistente) { console.error("encontrarOuCriarFaturaParaData (existente):", errExistente); return null; }
   if (existente) return existente as CartaoFatura;
 
   return criarFatura({
