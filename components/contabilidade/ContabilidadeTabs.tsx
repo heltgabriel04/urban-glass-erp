@@ -16,10 +16,11 @@ const ABAS: Aba[] = [
   { label: "Cartões", slug: "cartoes" },
   { label: "Empréstimos", slug: "emprestimos" },
   { label: "Consórcios", slug: "consorcios" },
+  { label: "Documentos Diversos", slug: "diversos" },
   { label: "Configuração Fiscal", slug: "fiscal-produtos" },
 ];
 
-export default function ContabilidadeTabs({ ativo }: { ativo: "dashboard" | "checklist" | "documentos" | "estoque" | "ativo-imobilizado" | "cartoes" | "emprestimos" | "consorcios" | "fiscal-produtos" }) {
+export default function ContabilidadeTabs({ ativo }: { ativo: "dashboard" | "checklist" | "documentos" | "estoque" | "ativo-imobilizado" | "cartoes" | "emprestimos" | "consorcios" | "diversos" | "fiscal-produtos" }) {
   return (
     <div className="no-print" style={{ display: "flex", gap: "2px", overflowX: "auto", padding: "0 26px" }}>
       {ABAS.map((a) => {
