@@ -199,3 +199,41 @@ export async function anexarXmlNaCompra(
 
   return { ok: true };
 }
+
+export interface HistoricoPrecoItem {
+  data: string;
+  fornecedorNome: string;
+  custoUnitarioM2: number;
+  chapas: number;
+  m2: number;
+}
+
+/** Histórico de preços já pagos por um produto — só compras já recebidas
+ *  (rascunho tem preço não confirmado, fica de fora). Sem paginação: volume
+ *  de compras hoje é baixo, e é histórico completo por design (não uma
+ *  amostra). */
+export async function getHistoricoPrecoProduto(produtoId: number): Promise<HistoricoPrecoItem[]> {
+  const { data, error } = await supabase
+    .from('compras_itens')
+    .select('custo_unitario_m2, chapas, m2, compras!inner ( dt_recebimento, status, fornecedores ( nome ) )')
+    .eq('produto_id', produtoId)
+    .eq('compras.status', 'recebido');
+  if (error) { console.error('getHistoricoPrecoProduto:', error); return []; }
+
+  const linhas = (data ?? []) as unknown as Array<{
+    custo_unitario_m2: number;
+    chapas: number;
+    m2: number;
+    compras: { dt_recebimento: string | null; fornecedores: { nome: string } | null };
+  }>;
+
+  return linhas
+    .map(row => ({
+      data: row.compras.dt_recebimento ?? '',
+      fornecedorNome: row.compras.fornecedores?.nome ?? '—',
+      custoUnitarioM2: row.custo_unitario_m2,
+      chapas: row.chapas,
+      m2: row.m2,
+    }))
+    .sort((a, b) => b.data.localeCompare(a.data));
+}
