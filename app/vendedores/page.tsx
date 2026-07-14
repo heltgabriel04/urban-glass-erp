@@ -131,7 +131,7 @@ export default function VendedoresPage() {
           {[
             { label: "Total",           value: String(vendedores.length),                               color: "var(--t1)",   sub: "cadastrados" },
             { label: "Ativos",          value: String(vendedores.filter(v => v.ativo).length),          color: "var(--ok)",   sub: "em operação" },
-            { label: "A Pagar",         value: formatBRL(totalPendente),                                color: "var(--warn)", sub: "comissões pendentes" },
+            { label: "A Pagar",         value: formatBRL(totalPendente),                                color: totalPendente > 0 ? "var(--warn)" : "var(--t2)", sub: "comissões pendentes" },
             { label: "Média Comissão",  value: vendedores.length > 0 ? (vendedores.filter(v => v.ativo).reduce((a, v) => a + v.comissao_pct, 0) / Math.max(vendedores.filter(v => v.ativo).length, 1)).toFixed(1) + "%" : "—", color: "var(--acc)", sub: "entre ativos" },
           ].map(card => (
             <div key={card.label} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "16px 20px" }}>

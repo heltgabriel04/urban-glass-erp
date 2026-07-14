@@ -281,7 +281,7 @@ export default function ComprasPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginBottom: "20px" }}>
           {[
             { label: "Total de Compras",        value: String(compras.length),           color: "var(--t1)",   sub: "cadastradas" },
-            { label: "Pendentes de Recebimento", value: String(pendentes.length),          color: "var(--warn)", sub: "ainda em rascunho" },
+            { label: "Pendentes de Recebimento", value: String(pendentes.length),          color: pendentes.length > 0 ? "var(--warn)" : "var(--t2)", sub: "ainda em rascunho" },
             { label: "Recebido este mês",        value: formatBRL(valorRecebidoMes),       color: "var(--ok)",   sub: "valor confirmado" },
           ].map(card => (
             <div key={card.label} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: "4px" }}>
