@@ -362,7 +362,7 @@ export default function ConsorciosPage() {
                     <td className="mono">{formatBRL(c.valor_credito)}</td>
                     <td className="mono">{formatBRL(c.valor_parcela)}</td>
                     <td>
-                      <span className={c.status === "contemplado" ? "chip cg" : c.status === "encerrado" ? "chip cy" : "chip cgr"} style={{ fontSize: "11px" }}>
+                      <span className={c.status === "contemplado" ? "chip cg" : "chip cgr"} style={{ fontSize: "11px" }}>
                         {c.status === "contemplado" ? "Contemplado" : c.status === "encerrado" ? "Encerrado" : "Ativo"}
                       </span>
                     </td>

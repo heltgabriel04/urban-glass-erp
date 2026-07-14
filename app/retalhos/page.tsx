@@ -15,7 +15,7 @@ import type { Retalho, StatusRetalho } from "@/types";
 
 const CHIP: Record<StatusRetalho, string> = {
   "Disponível": "chip cg",
-  "Reservado":  "chip cy",
+  "Reservado":  "chip cgr",
   "Em uso":     "chip cb",
   "Descartado": "chip cr",
 };
@@ -608,7 +608,7 @@ export default function RetalhoPage() {
                         <td>
                           <div style={{ display:"flex", gap:"4px", alignItems:"center" }}>
                             {r.status !== "Disponível" && btnStatus("Disponível", "var(--ok)",   "rgba(16,185,129,.15)", () => mudarStatus(r.id, "Disponível"))}
-                            {r.status !== "Reservado"  && btnStatus("Reservado",  "var(--warn)", "rgba(245,158,11,.15)", () => mudarStatus(r.id, "Reservado"))}
+                            {r.status !== "Reservado"  && btnStatus("Reservado",  "var(--t2)", "rgba(113,113,122,.15)", () => mudarStatus(r.id, "Reservado"))}
                             {r.status !== "Em uso"     && btnStatus("Em uso",     "var(--acc2)", "rgba(99,179,237,.15)", () => mudarStatus(r.id, "Em uso"))}
                           </div>
                         </td>

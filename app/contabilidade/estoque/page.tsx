@@ -34,7 +34,7 @@ const TIPO_LABEL: Record<TipoMovimentacaoItemEstoque, string> = {
   transferencia: "Transferência", saldo_inicial: "Saldo Inicial",
 };
 const TIPO_CHIP: Record<TipoMovimentacaoItemEstoque, string> = {
-  entrada: "chip cg", saida: "chip cy", ajuste: "chip cb", perda: "chip cr",
+  entrada: "chip cg", saida: "chip cgr", ajuste: "chip cb", perda: "chip cr",
   transferencia: "chip cp", saldo_inicial: "chip cgr",
 };
 
