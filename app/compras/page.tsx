@@ -13,6 +13,7 @@ import {
   getCompras, createCompra, confirmarRecebimento, deletarCompra, anexarXmlNaCompra,
 } from "@/services/compras.service";
 import ImportarXmlCompraModal, { type DadosImportadosXml } from "@/components/ui/ImportarXmlCompraModal";
+import { HistoricoPrecoProduto } from "@/components/ui/HistoricoPrecoProduto";
 import type { XmlCompraParseado } from "@/lib/importXmlCompra";
 import type { Compra, Produto, StatusCompra } from "@/types";
 
@@ -318,54 +319,57 @@ export default function ComprasPage() {
             {itens.map((it, i) => {
               const prod = produtos.find(p => String(p.id) === it.produto_id);
               return (
-                <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 0.8fr 0.8fr 0.9fr 1fr 1fr auto", gap: "10px", alignItems: "end", marginBottom: "10px" }}>
-                  <div>
-                    {i === 0 && <label style={labelStyle}>Produto</label>}
-                    <select aria-label="Produto" style={selectStyle} value={it.produto_id} onChange={e => updItem(i, "produto_id", e.target.value)}>
-                      <option value="">Selecione...</option>
-                      {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    {i === 0 && <label style={labelStyle}>Colares</label>}
-                    <input aria-label="Colares" style={inputStyle} type="number" min="0" value={it.colares} onChange={e => updItem(i, "colares", e.target.value)}
-                      placeholder={prod?.chapas_por_colar ? `× ${prod.chapas_por_colar} ch.` : "config. no produto"} />
-                  </div>
-                  <div>
-                    {i === 0 && <label style={labelStyle}>Chapas *</label>}
-                    {prod?.chapas_por_colar ? (
-                      <div style={{ ...inputStyle, background: "transparent", color: "var(--t2)" }} title="Calculado automaticamente a partir dos colares">
-                        {it.chapas || "—"}
-                      </div>
-                    ) : (
-                      <input aria-label="Chapas" style={inputStyle} type="number" min="0" value={it.chapas} onChange={e => updItem(i, "chapas", e.target.value)} />
-                    )}
-                  </div>
-                  <div>
-                    {i === 0 && <label style={labelStyle}>m²/chapa *</label>}
-                    {prod?.chapa_largura_mm && prod?.chapa_altura_mm ? (
-                      <div style={{ ...inputStyle, background: "transparent", color: "var(--t2)" }} title="Calculado automaticamente a partir da chapa do produto">
-                        {it.m2_por_chapa}
-                      </div>
-                    ) : (
-                      <input aria-label="m²/chapa" style={inputStyle} type="number" min="0" step="0.0001" value={it.m2_por_chapa} onChange={e => updItem(i, "m2_por_chapa", e.target.value)} />
-                    )}
-                  </div>
-                  <div>
-                    {i === 0 && <label style={labelStyle}>Custo/m²</label>}
-                    <CurrencyInput aria-label="Custo/m²" style={inputStyle} className="" value={it.custo_unitario_m2} onChange={v => updItem(i, "custo_unitario_m2", v)} />
-                  </div>
-                  <div>
-                    {i === 0 && <label style={labelStyle}>Subtotal</label>}
-                    <div style={{ ...inputStyle, background: "transparent", border: "1px solid transparent", color: "var(--acc)", fontFamily: "'DM Mono', monospace" }}>
-                      {formatBRL(subtotalItem(it))}
+                <div key={i} style={{ marginBottom: "10px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "2fr 0.8fr 0.8fr 0.9fr 1fr 1fr auto", gap: "10px", alignItems: "end" }}>
+                    <div>
+                      {i === 0 && <label style={labelStyle}>Produto</label>}
+                      <select aria-label="Produto" style={selectStyle} value={it.produto_id} onChange={e => updItem(i, "produto_id", e.target.value)}>
+                        <option value="">Selecione...</option>
+                        {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                      </select>
                     </div>
+                    <div>
+                      {i === 0 && <label style={labelStyle}>Colares</label>}
+                      <input aria-label="Colares" style={inputStyle} type="number" min="0" value={it.colares} onChange={e => updItem(i, "colares", e.target.value)}
+                        placeholder={prod?.chapas_por_colar ? `× ${prod.chapas_por_colar} ch.` : "config. no produto"} />
+                    </div>
+                    <div>
+                      {i === 0 && <label style={labelStyle}>Chapas *</label>}
+                      {prod?.chapas_por_colar ? (
+                        <div style={{ ...inputStyle, background: "transparent", color: "var(--t2)" }} title="Calculado automaticamente a partir dos colares">
+                          {it.chapas || "—"}
+                        </div>
+                      ) : (
+                        <input aria-label="Chapas" style={inputStyle} type="number" min="0" value={it.chapas} onChange={e => updItem(i, "chapas", e.target.value)} />
+                      )}
+                    </div>
+                    <div>
+                      {i === 0 && <label style={labelStyle}>m²/chapa *</label>}
+                      {prod?.chapa_largura_mm && prod?.chapa_altura_mm ? (
+                        <div style={{ ...inputStyle, background: "transparent", color: "var(--t2)" }} title="Calculado automaticamente a partir da chapa do produto">
+                          {it.m2_por_chapa}
+                        </div>
+                      ) : (
+                        <input aria-label="m²/chapa" style={inputStyle} type="number" min="0" step="0.0001" value={it.m2_por_chapa} onChange={e => updItem(i, "m2_por_chapa", e.target.value)} />
+                      )}
+                    </div>
+                    <div>
+                      {i === 0 && <label style={labelStyle}>Custo/m²</label>}
+                      <CurrencyInput aria-label="Custo/m²" style={inputStyle} className="" value={it.custo_unitario_m2} onChange={v => updItem(i, "custo_unitario_m2", v)} />
+                    </div>
+                    <div>
+                      {i === 0 && <label style={labelStyle}>Subtotal</label>}
+                      <div style={{ ...inputStyle, background: "transparent", border: "1px solid transparent", color: "var(--acc)", fontFamily: "'DM Mono', monospace" }}>
+                        {formatBRL(subtotalItem(it))}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => remItem(i)}
+                      title="Remover item"
+                      style={{ height: "37px", width: "32px", borderRadius: "6px", background: "transparent", border: "1px solid var(--b2)", color: "var(--t3)", cursor: "pointer" }}
+                    >✕</button>
                   </div>
-                  <button
-                    onClick={() => remItem(i)}
-                    title="Remover item"
-                    style={{ height: "37px", width: "32px", borderRadius: "6px", background: "transparent", border: "1px solid var(--b2)", color: "var(--t3)", cursor: "pointer" }}
-                  >✕</button>
+                  {it.produto_id && <HistoricoPrecoProduto produtoId={Number(it.produto_id)} />}
                 </div>
               );
             })}
