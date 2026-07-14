@@ -47,6 +47,13 @@ export default function DREPage() {
               ["Receita Bruta", dre.receitaBruta],
               ...(dre.devolucoes > 0 ? [["(-) Devoluções", -dre.devolucoes]] : []),
               ["(-) CMV", -dre.cmv],
+              ...(regime === "competencia" && dre.cmvDetalhe ? [
+                ["   Vidro", -dre.cmvDetalhe.vidro.cmv],
+                ["   Itens Gerais", -dre.cmvDetalhe.itensGerais.cmv],
+                ["      Estoque Inicial", dre.cmvDetalhe.itensGerais.estoqueInicial],
+                ["      Compras", dre.cmvDetalhe.itensGerais.compras],
+                ["      Estoque Final", -dre.cmvDetalhe.itensGerais.estoqueFinal],
+              ] as (string | number)[][] : []),
               ["= Lucro Bruto", dre.lucroBruto],
               ...dre.despesas.map(d => [`(-) ${d.categoria}`, -d.valor]),
               ["(-) Total de Despesas", -dre.despesasTotal],
@@ -59,8 +66,8 @@ export default function DREPage() {
       <div className="con">
         <div className="al al-i" style={{ marginBottom: "16px", fontSize: "12px" }}>
           {regime === "competencia" ? (
-            <>DRE por competência ({periodoLabel}). Receita = faturamento (pedidos por data). CMV usa o custo/m² atual
-            do estoque (sem lapidação). Despesas = lançamentos de saída agrupados pelo Plano de Contas.</>
+            <>DRE por competência ({periodoLabel}). Receita = faturamento (pedidos por data). CMV é o mesmo cálculo
+            rigoroso da tela Contabilidade → Estoque → CMV (custo histórico do vidro + itens gerais). Despesas = lançamentos de saída agrupados pelo Plano de Contas.</>
           ) : (
             <>DRE por caixa ({periodoLabel}). Receita e despesas somadas pela data em que a baixa foi registrada
             (dinheiro que efetivamente mudou de mão) — CMV não é calculado nesse regime.</>
@@ -72,6 +79,15 @@ export default function DREPage() {
             <Linha label="Receita Bruta" valor={dre.receitaBruta} forte />
             {dre.devolucoes > 0 && <Linha label="(−) Devoluções" valor={-dre.devolucoes} cor="var(--warn)" />}
             <Linha label="(−) CMV" valor={-dre.cmv} cor="var(--warn)" />
+            {regime === "competencia" && dre.cmvDetalhe && (
+              <>
+                <Linha label="Vidro" valor={-dre.cmvDetalhe.vidro.cmv} indent={1} pequeno />
+                <Linha label="Itens Gerais" valor={-dre.cmvDetalhe.itensGerais.cmv} indent={1} pequeno />
+                <Linha label="Estoque Inicial" valor={dre.cmvDetalhe.itensGerais.estoqueInicial} indent={2} pequeno />
+                <Linha label="Compras" valor={dre.cmvDetalhe.itensGerais.compras} indent={2} pequeno />
+                <Linha label="Estoque Final" valor={-dre.cmvDetalhe.itensGerais.estoqueFinal} indent={2} pequeno />
+              </>
+            )}
             <Linha label="= Lucro Bruto" valor={dre.lucroBruto} forte sub={formatPercent(dre.margemBrutaPct, 1) + " da receita"} divisor />
 
             <div style={{ padding: "10px 20px 4px", fontSize: "11px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
@@ -81,7 +97,7 @@ export default function DREPage() {
               <div style={{ padding: "4px 20px 10px", fontSize: "12px", color: "var(--t3)" }}>Nenhuma despesa no período.</div>
             )}
             {dre.despesas.map(d => (
-              <Linha key={d.categoria} label={d.categoria} valor={-d.valor} indent pequeno />
+              <Linha key={d.categoria} label={d.categoria} valor={-d.valor} indent={1} pequeno />
             ))}
             <Linha label="(−) Total de Despesas" valor={-dre.despesasTotal} cor="var(--warn)" divisor />
 
@@ -103,13 +119,13 @@ export default function DREPage() {
 
 function Linha({ label, valor, forte, cor, sub, indent, pequeno, divisor }: {
   label: string; valor: number; forte?: boolean; cor?: string; sub?: string;
-  indent?: boolean; pequeno?: boolean; divisor?: boolean;
+  indent?: 1 | 2; pequeno?: boolean; divisor?: boolean;
 }) {
   return (
     <div style={{
       display: "flex", justifyContent: "space-between", alignItems: "center",
       padding: pequeno ? "6px 20px" : "12px 20px",
-      paddingLeft: indent ? "36px" : "20px",
+      paddingLeft: indent === 2 ? "52px" : indent === 1 ? "36px" : "20px",
       borderTop: divisor ? "1px solid var(--b1)" : undefined,
     }}>
       <div>
