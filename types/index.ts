@@ -905,15 +905,17 @@ export interface CartaoFatura {
   criado_por: string | null;
   created_at: string;
   updated_at: string;
+  lancamento_id: number | null;
   cartoes?: Pick<Cartao, 'id' | 'nome' | 'tipo'>;
 }
-export type CartaoFaturaInsert = Omit<CartaoFatura, 'id' | 'valor_total' | 'created_at' | 'updated_at' | 'cartoes'>;
+export type CartaoFaturaInsert = Omit<CartaoFatura, 'id' | 'valor_total' | 'created_at' | 'updated_at' | 'cartoes' | 'lancamento_id'>;
 export type CartaoFaturaUpdate = Partial<CartaoFaturaInsert>;
 
 export interface CartaoLancamento {
   id: number;
   cartao_id: number;
   fatura_id: number | null;
+  lancamento_id: number | null;
   data: string;
   descricao: string;
   plano_contas_id: number | null;
@@ -933,7 +935,7 @@ export interface CartaoLancamento {
   fornecedores?: Pick<Fornecedor, 'id' | 'nome'>;
 }
 export type CartaoLancamentoInsert = Omit<CartaoLancamento,
-  'id' | 'deletado_em' | 'deletado_por' | 'motivo_exclusao' | 'created_at' | 'updated_at' | 'fornecedores'>;
+  'id' | 'deletado_em' | 'deletado_por' | 'motivo_exclusao' | 'created_at' | 'updated_at' | 'fornecedores' | 'lancamento_id'>;
 export type CartaoLancamentoUpdate = Partial<CartaoLancamentoInsert>;
 
 // ─── CONTABILIDADE — EMPRÉSTIMOS (Fase 4) ──────────────────
