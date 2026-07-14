@@ -15,8 +15,9 @@ import {
   getCartoes, criarCartao, atualizarCartao, inativarCartao, reativarCartao,
   getFaturas, criarFatura, atualizarFatura,
   getLancamentosFatura, getLancamentosCartao, criarLancamentoCartao, atualizarLancamentoCartao, softDeleteLancamentoCartao,
-  uploadAnexoCartao,
+  uploadAnexoCartao, sugerirProximaFatura, encontrarOuCriarFaturaParaData,
 } from "@/services/cartoes.service";
+import type { SugestaoProximaFatura } from "@/services/cartoes.service";
 import { getFornecedores } from "@/services/fornecedores.service";
 import { getContasBancarias } from "@/services/contasBancarias.service";
 import type {
@@ -350,6 +351,7 @@ export default function CartoesPage() {
   const confirm = useConfirm();
   const [cartoes, setCartoes] = useState<Cartao[]>([]);
   const [faturas, setFaturas] = useState<CartaoFatura[]>([]);
+  const [sugestaoFatura, setSugestaoFatura] = useState<SugestaoProximaFatura | null>(null);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>([]);
   const [planoContas, setPlanoContas] = useState<PlanoContasOpcao[]>([]);
@@ -388,6 +390,7 @@ export default function CartoesPage() {
 
   async function loadFaturas(cartaoId: number) {
     setFaturas(await getFaturas({ cartaoId }));
+    setSugestaoFatura(cartaoSelecionado?.tipo === "credito" ? await sugerirProximaFatura(cartaoId) : null);
   }
 
   async function handleInativar(c: Cartao) {
@@ -395,6 +398,22 @@ export default function CartoesPage() {
     const ok = c.ativo ? await inativarCartao(c.id) : await reativarCartao(c.id);
     toast(ok ? "Cartão atualizado" : "Erro ao atualizar", ok ? "ok" : "err");
     if (ok) loadCartoes();
+  }
+
+  async function handleCriarFaturaSugerida() {
+    if (!cartaoSelecionado || !sugestaoFatura) return;
+    const criada = await criarFatura({
+      cartao_id: cartaoSelecionado.id,
+      competencia_ano: sugestaoFatura.competenciaAno,
+      competencia_mes: sugestaoFatura.competenciaMes,
+      status: "aberta",
+      data_fechamento: sugestaoFatura.dataFechamento,
+      data_vencimento: sugestaoFatura.dataVencimento,
+      data_pagamento: null, pdf_url: null, comprovante_pagamento_url: null, observacoes: null, criado_por: null,
+    });
+    if (!criada) { toast("Erro ao criar fatura", "err"); return; }
+    toast("Fatura criada");
+    loadFaturas(cartaoSelecionado.id);
   }
 
   return (
@@ -490,6 +509,15 @@ export default function CartoesPage() {
                 <button className="btn bp sm" onClick={() => setFaturaLancamentos("avulso")}>+ Ver Lançamentos</button>
               )}
             </div>
+
+            {cartaoSelecionado.tipo === "credito" && sugestaoFatura && (
+              <div className="card" style={{ padding: "14px 18px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", border: "1px solid var(--acc)" }}>
+                <div style={{ fontSize: "12.5px", color: "var(--t2)" }}>
+                  Fatura anterior fechou. Criar {String(sugestaoFatura.competenciaMes).padStart(2, "0")}/{sugestaoFatura.competenciaAno} — fecha {formatDate(sugestaoFatura.dataFechamento)}, vence {formatDate(sugestaoFatura.dataVencimento)}?
+                </div>
+                <button className="btn bp sm" onClick={handleCriarFaturaSugerida}>Criar fatura</button>
+              </div>
+            )}
 
             {cartaoSelecionado.tipo === "credito" && (
               faturas.length === 0 ? (
