@@ -55,15 +55,34 @@ export interface FiltroFaturas {
   competenciaMes?: number;
 }
 
+interface FaturaComLancamento extends CartaoFatura {
+  lancamentos?: { status: string; dt_pagamento: string | null } | null;
+}
+
 export async function getFaturas(filtro: FiltroFaturas = {}): Promise<CartaoFatura[]> {
-  let query = supabase.from("cartoes_faturas").select("*, cartoes ( id, nome, tipo )").order("competencia_ano", { ascending: false }).order("competencia_mes", { ascending: false });
+  let query = supabase
+    .from("cartoes_faturas")
+    .select("*, cartoes ( id, nome, tipo ), lancamentos ( status, dt_pagamento )")
+    .order("competencia_ano", { ascending: false })
+    .order("competencia_mes", { ascending: false });
   if (filtro.cartaoId) query = query.eq("cartao_id", filtro.cartaoId);
   if (filtro.status) query = query.eq("status", filtro.status);
   if (filtro.competenciaAno) query = query.eq("competencia_ano", filtro.competenciaAno);
   if (filtro.competenciaMes) query = query.eq("competencia_mes", filtro.competenciaMes);
   const { data, error } = await query;
   if (error) { console.error("getFaturas:", error); return []; }
-  return data as CartaoFatura[];
+
+  const faturas = (data ?? []) as unknown as FaturaComLancamento[];
+  for (const f of faturas) {
+    if (f.lancamentos?.status === "Pago" && f.status !== "paga") {
+      const dataPagamento = f.lancamentos.dt_pagamento ?? new Date().toISOString().split("T")[0];
+      await supabase.from("cartoes_faturas").update({ status: "paga", data_pagamento: dataPagamento } as never).eq("id", f.id);
+      f.status = "paga";
+      f.data_pagamento = dataPagamento;
+    }
+    delete f.lancamentos;
+  }
+  return faturas as CartaoFatura[];
 }
 
 export async function criarFatura(input: CartaoFaturaInsert): Promise<CartaoFatura | null> {
