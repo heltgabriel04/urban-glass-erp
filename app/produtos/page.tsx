@@ -11,6 +11,7 @@ import { formatBRL } from "@/lib/formatters";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import SearchInput from "@/components/ui/SearchInput";
 import ModalClassificacaoFiscal from "@/components/produtos/ModalClassificacaoFiscal";
+import { HistoricoPrecoProduto } from "@/components/ui/HistoricoPrecoProduto";
 import { getConfigPadrao, salvarConfigFiscalProduto, PADRAO_FALLBACK } from "@/services/contabilidade.service";
 import type { ConfigFiscalProdutoInput } from "@/services/contabilidade.service";
 import type { Produto, ProdutoInsert, ConfigFiscalPadrao } from "@/types";
@@ -363,6 +364,12 @@ export default function ProdutosPage() {
             <Campo style={{ marginBottom:"14px" }} label="Observação">
               <input className="fc" value={form.obs} onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} placeholder="Observações opcionais" />
             </Campo>
+
+            {editId && (
+              <div style={{ marginBottom: "14px" }}>
+                <HistoricoPrecoProduto produtoId={editId} />
+              </div>
+            )}
 
             {/* Aviso se tipo não selecionado em novo produto */}
             {!editId && !form.cod && (
