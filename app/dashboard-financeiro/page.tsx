@@ -150,7 +150,7 @@ function DashboardFinanceiroInner() {
               </div>
               <div className="kpi">
                 <div className="kpi-l">A Pagar</div>
-                <div className="kpi-v" style={{ color: "var(--acc3)" }}>{formatBRL(dados.aPagar)}</div>
+                <div className="kpi-v" style={{ color: dados.aPagar > 0 ? "var(--acc3)" : "var(--t1)" }}>{formatBRL(dados.aPagar)}</div>
                 <div className="kpi-s">Títulos em aberto</div>
               </div>
               <div className="kpi">

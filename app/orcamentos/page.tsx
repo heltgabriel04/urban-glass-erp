@@ -121,8 +121,8 @@ export default function OrcamentosPage() {
             { label:"Total",       value: String(orcamentos.length), color:"var(--t1)",   sub:"orçamentos" },
             { label:"Valor Total", value: formatBRL(totalValor),     color:"var(--acc)",  sub:"soma geral" },
             { label:"Aprovados",   value: String(totalAprovados),    color:"var(--ok)",   sub:"convertidos" },
-            { label:"Pendentes",   value: String(totalPendentes),    color:"var(--warn)", sub:"rascunho + enviado" },
-            { label:"Rejeitados",  value: String(totalRejeitados),   color:"var(--err)",  sub:"não aprovados" },
+            { label:"Pendentes",   value: String(totalPendentes),    color: totalPendentes > 0 ? "var(--warn)" : "var(--t1)", sub:"rascunho + enviado" },
+            { label:"Rejeitados",  value: String(totalRejeitados),   color: totalRejeitados > 0 ? "var(--err)" : "var(--t1)", sub:"não aprovados" },
             { label:"Conversão",   value: formatPercent(taxaConversao, 0), color:"var(--acc2)", sub:"aprov. ÷ decididos" },
           ].map(card => (
             <div key={card.label} style={{ background:"var(--surf1)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px 20px", display:"flex", flexDirection:"column", gap:"4px" }}>

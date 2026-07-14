@@ -1623,7 +1623,7 @@ export default function RelatoriosPage() {
               <div style={{ ...S.sec, borderBottomColor: "#c0392b", color: "#c0392b" }}>Resumo da Situação de Crédito</div>
               <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
                 {[
-                  { label: "Total em Aberto",       value: formatBRL(totalDevedores),                                                              sub: `${devedores.length} clientes`,    alert: true },
+                  { label: "Total em Aberto",       value: formatBRL(totalDevedores),                                                              sub: `${devedores.length} clientes`,    alert: totalDevedores > 0 },
                   { label: "Sem Nenhum Pagamento",   value: String(inadimplentes.length),                                                          sub: formatBRL(inadimplentes.reduce((a,f)=>a+Number(f.a_receber),0)),  alert: inadimplentes.length > 0 },
                   { label: "Pagamento Parcial",      value: String(devedores.filter(f => Number(f.recebido) > 0).length),                          sub: "abaixo de 100%",                  alert: false },
                   { label: "Parcelas Vencidas",      value: String(parcelasVencidas.length),                                                       sub: formatBRL(totalVencido) + " atrasado", alert: parcelasVencidas.length > 0 },
@@ -1786,10 +1786,10 @@ export default function RelatoriosPage() {
               {/* Painel Resumo */}
               <div style={{ display: "flex", gap: "12px" }}>
                 {[
-                  { label: "Total em Aberto",      value: formatBRL(totalDevedores),                                                                cor: "#c0392b" },
-                  { label: "Total Vencido",         value: formatBRL(totalVencido),                                                                  cor: "#721c24" },
+                  { label: "Total em Aberto",      value: formatBRL(totalDevedores),                                                                cor: totalDevedores > 0 ? "#c0392b" : AZUL },
+                  { label: "Total Vencido",         value: formatBRL(totalVencido),                                                                  cor: totalVencido > 0 ? "#721c24" : AZUL },
                   { label: "Taxa de Recebimento",   value: fatTotal > 0 ? (recTotal/fatTotal*100).toFixed(1) + "%" : "—",                           cor: fatTotal > 0 && recTotal/fatTotal >= 0.9 ? "#155724" : "#c0392b" },
-                  { label: "Clientes em Risco",     value: devedores.length + " / " + financeiro.length,                                            cor: "#856404" },
+                  { label: "Clientes em Risco",     value: devedores.length + " / " + financeiro.length,                                            cor: devedores.length > 0 ? "#856404" : AZUL },
                 ].map(k => (
                   <div key={k.label} style={{ flex: 1, padding: "14px 16px", background: "#f8f9fa", border: `2px solid ${k.cor}44`, borderRadius: "8px" }}>
                     <div style={{ fontSize: "8px", fontWeight: 700, color: "#666", textTransform: "uppercase" as const, letterSpacing: "1px", marginBottom: "6px" }}>{k.label}</div>

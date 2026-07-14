@@ -531,7 +531,7 @@ function ContasReceberPageInner() {
           {[
             { label: "Total de Títulos", val: recebiveis.length,  sub: "lançamentos", cor: "var(--t1)" },
             { label: "A Receber",        val: formatBRL(recebiveis.filter(r => getStatusEfetivo(r) === "A Receber").reduce((s,r) => s+Number(r.valor),0)), sub: `${recebiveis.filter(r => getStatusEfetivo(r) === "A Receber").length} título(s)`, cor: "#60a5fa" },
-            { label: "Vencido",          val: formatBRL(recebiveis.filter(r => getStatusEfetivo(r) === "Vencido").reduce((s,r) => s+Number(r.valor),0)),   sub: `${qtdVencidos} título(s)`, cor: "var(--err)" },
+            { label: "Vencido",          val: formatBRL(recebiveis.filter(r => getStatusEfetivo(r) === "Vencido").reduce((s,r) => s+Number(r.valor),0)),   sub: `${qtdVencidos} título(s)`, cor: qtdVencidos > 0 ? "var(--err)" : "var(--t1)" },
             { label: "Recebido (total)", val: formatBRL(recebiveis.reduce((s,r) => s + calcularSaldo(r, baixasMap.get(r.id)).valorPago, 0)),   sub: `${recebiveis.filter(r => getStatusEfetivo(r) === "Recebido").length} título(s)`, cor: "var(--ok)" },
           ].map(s => (
             <div key={s.label} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "14px 16px" }}>

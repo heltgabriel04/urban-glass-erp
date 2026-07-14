@@ -236,7 +236,7 @@ function ResumoStats({ resumo, corPrincipal }: { resumo: ResumoAberto; corPrinci
           <div style={{ fontSize: 10, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 6 }}>
             {it.label}
           </div>
-          <div style={{ fontSize: 16, fontWeight: 800, fontFamily: "'DM Mono', monospace", color: it.cor }}>
+          <div style={{ fontSize: 16, fontWeight: 800, fontFamily: "'DM Mono', monospace", color: it.valor > 0 ? it.cor : "var(--t1)" }}>
             {formatBRL(it.valor)}
           </div>
         </div>

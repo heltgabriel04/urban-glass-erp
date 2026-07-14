@@ -534,7 +534,7 @@ function ContasPagarPageInner() {
           {[
             { label: "Total de Títulos", val: contas.length,                                        sub: "lançamentos",    cor: "var(--t1)" },
             { label: "Em Aberto",        val: formatBRL(contas.filter(c => getStatusEfetivo(c) === "Em aberto").reduce((s,c) => s+Number(c.valor),0)), sub: `${contas.filter(c => getStatusEfetivo(c) === "Em aberto").length} contas`, cor: "#60a5fa" },
-            { label: "Vencido",          val: formatBRL(contas.filter(c => getStatusEfetivo(c) === "Vencido").reduce((s,c) => s+Number(c.valor),0)),   sub: `${contasVencidas} conta(s)`, cor: "var(--err)" },
+            { label: "Vencido",          val: formatBRL(contas.filter(c => getStatusEfetivo(c) === "Vencido").reduce((s,c) => s+Number(c.valor),0)),   sub: `${contasVencidas} conta(s)`, cor: contasVencidas > 0 ? "var(--err)" : "var(--t1)" },
             { label: "Pago (total)",     val: formatBRL(contas.reduce((s,c) => s + calcularSaldo(c, baixasMap.get(c.id)).valorPago, 0)),       sub: `${contas.filter(c => getStatusEfetivo(c) === "Pago").length} contas`, cor: "var(--ok)" },
           ].map(s => (
             <div key={s.label} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "14px 16px" }}>
