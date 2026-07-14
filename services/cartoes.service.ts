@@ -240,3 +240,42 @@ export async function uploadAnexoCartao(area: "cartoes" | "cartoes-faturas" | "c
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return data.publicUrl;
 }
+
+// ─── Reconhecimento de fatura (cálculo de datas) ────────────
+
+function clampDiaNoMes(dia: number, ano: number, mes: number): number {
+  const ultimoDiaDoMes = new Date(ano, mes, 0).getDate(); // mes é 1-based
+  return Math.min(dia, ultimoDiaDoMes);
+}
+
+function proximoDiaUtil(ano: number, mes: number, dia: number): string {
+  const d = new Date(ano, mes - 1, dia);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return d.toISOString().split("T")[0];
+}
+
+/** Data de fechamento/vencimento sugerida pro cartão numa competência:
+ *  clampa o dia cadastrado ao mês (ex. dia 31 em fevereiro vira o
+ *  último dia real) e empurra pro próximo dia útil se cair em fim de
+ *  semana (só sábado/domingo — feriado específico continua sendo
+ *  ajuste manual). Exportada só pra ser testada diretamente. */
+export function dataSugerida(diaCadastrado: number, ano: number, mes: number): string {
+  const dia = clampDiaNoMes(diaCadastrado, ano, mes);
+  return proximoDiaUtil(ano, mes, dia);
+}
+
+/** A que competência (ano, mês) uma compra pertence, dado o dia de
+ *  fechamento do cartão: pertence à primeira competência cuja data de
+ *  fechamento sugerida seja >= à data da compra (regra padrão de
+ *  fatura de cartão — "até o fechamento entra no ciclo atual"). */
+export function competenciaParaData(diaFechamento: number, dataCompraIso: string): { ano: number; mes: number } {
+  const compra = new Date(dataCompraIso + "T00:00:00");
+  let ano = compra.getFullYear();
+  let mes = compra.getMonth() + 1;
+  const fechamentoNoMesDaCompra = dataSugerida(diaFechamento, ano, mes);
+  if (dataCompraIso > fechamentoNoMesDaCompra) {
+    mes += 1;
+    if (mes > 12) { mes = 1; ano += 1; }
+  }
+  return { ano, mes };
+}
