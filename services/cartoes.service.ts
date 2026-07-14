@@ -251,7 +251,10 @@ function clampDiaNoMes(dia: number, ano: number, mes: number): number {
 function proximoDiaUtil(ano: number, mes: number, dia: number): string {
   const d = new Date(ano, mes - 1, dia);
   while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
-  return d.toISOString().split("T")[0];
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 /** Data de fechamento/vencimento sugerida pro cartão numa competência:
