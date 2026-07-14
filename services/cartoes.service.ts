@@ -282,3 +282,79 @@ export function competenciaParaData(diaFechamento: number, dataCompraIso: string
   }
   return { ano, mes };
 }
+
+export interface SugestaoProximaFatura {
+  competenciaAno: number;
+  competenciaMes: number;
+  dataFechamento: string;
+  dataVencimento: string;
+}
+
+/** Se a fatura mais recente do cartão estiver fechada/paga e não
+ *  existir ainda uma fatura pra competência seguinte, devolve a
+ *  sugestão de datas pra criá-la. null se não houver o que sugerir
+ *  (última fatura ainda aberta, cartão sem dia_fechamento cadastrado,
+ *  ou a próxima já existe). */
+export async function sugerirProximaFatura(cartaoId: number): Promise<SugestaoProximaFatura | null> {
+  const { data: cartaoRow } = await supabase.from("cartoes").select("dia_fechamento, dia_vencimento").eq("id", cartaoId).maybeSingle();
+  const cartao = cartaoRow as { dia_fechamento: number | null; dia_vencimento: number | null } | null;
+  if (!cartao?.dia_fechamento || !cartao?.dia_vencimento) return null;
+
+  const { data: ultimaRow } = await supabase
+    .from("cartoes_faturas")
+    .select("status, competencia_ano, competencia_mes")
+    .eq("cartao_id", cartaoId)
+    .order("competencia_ano", { ascending: false })
+    .order("competencia_mes", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const ultima = ultimaRow as { status: CartaoFatura["status"]; competencia_ano: number; competencia_mes: number } | null;
+  if (!ultima || ultima.status === "aberta") return null;
+
+  let mes = ultima.competencia_mes + 1;
+  let ano = ultima.competencia_ano;
+  if (mes > 12) { mes = 1; ano += 1; }
+
+  const { count } = await supabase
+    .from("cartoes_faturas")
+    .select("id", { count: "exact", head: true })
+    .eq("cartao_id", cartaoId)
+    .eq("competencia_ano", ano)
+    .eq("competencia_mes", mes);
+  if (count && count > 0) return null;
+
+  return {
+    competenciaAno: ano,
+    competenciaMes: mes,
+    dataFechamento: dataSugerida(cartao.dia_fechamento, ano, mes),
+    dataVencimento: dataSugerida(cartao.dia_vencimento, ano, mes),
+  };
+}
+
+/** Acha a fatura da competência calculada pra essa data de compra; se
+ *  não existir, cria com as datas sugeridas. Cartão sem dia_fechamento
+ *  cadastrado não tem como calcular competência — devolve null
+ *  (chamador cai pro fluxo manual). */
+export async function encontrarOuCriarFaturaParaData(cartaoId: number, dataCompraIso: string): Promise<CartaoFatura | null> {
+  const { data: cartaoRow } = await supabase.from("cartoes").select("dia_fechamento, dia_vencimento").eq("id", cartaoId).maybeSingle();
+  const cartao = cartaoRow as { dia_fechamento: number | null; dia_vencimento: number | null } | null;
+  if (!cartao?.dia_fechamento) return null;
+
+  const { ano, mes } = competenciaParaData(cartao.dia_fechamento, dataCompraIso);
+
+  const { data: existente } = await supabase
+    .from("cartoes_faturas")
+    .select("*")
+    .eq("cartao_id", cartaoId)
+    .eq("competencia_ano", ano)
+    .eq("competencia_mes", mes)
+    .maybeSingle();
+  if (existente) return existente as CartaoFatura;
+
+  return criarFatura({
+    cartao_id: cartaoId, competencia_ano: ano, competencia_mes: mes, status: "aberta",
+    data_fechamento: dataSugerida(cartao.dia_fechamento, ano, mes),
+    data_vencimento: cartao.dia_vencimento ? dataSugerida(cartao.dia_vencimento, ano, mes) : null,
+    data_pagamento: null, pdf_url: null, comprovante_pagamento_url: null, observacoes: null, criado_por: null,
+  });
+}
