@@ -49,8 +49,11 @@ export default function NotasPage() {
   }
 
   async function handleConsultar(nota: NotaFiscal) {
-    setSalvando(true); await consultarStatusNFe(nota.id); setSalvando(false);
-    toast("Status atualizado"); await load();
+    setSalvando(true);
+    const result = await consultarStatusNFe(nota.id);
+    setSalvando(false);
+    toast(result.mensagem, result.ok ? "ok" : "err");
+    await load();
   }
 
   async function handleDeletar(nota: NotaFiscal) {

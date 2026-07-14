@@ -390,14 +390,18 @@ export async function emitirNFe(notaId: number, pedido: Pedido): Promise<{ ok: b
   } catch(err) { console.error("emitirNFe:", err); return { ok: false, mensagem: "Erro de conexão." }; }
 }
 
-export async function consultarStatusNFe(notaId: number): Promise<void> {
+export async function consultarStatusNFe(notaId: number): Promise<{ ok: boolean; mensagem: string }> {
   const nota = await getNotaById(notaId);
-  if (!nota?.nuvem_fiscal_id) return;
+  if (!nota?.nuvem_fiscal_id) return { ok: false, mensagem: "Nota ainda não foi enviada para o FocusNFe." };
   try {
     const res = await fetch(`/api/notas/consultar/${nota.nuvem_fiscal_id}`);
     const json = await res.json();
-    if (!res.ok) return;
+    if (!res.ok) {
+      const motivo = json.mensagem_sefaz ?? json.mensagens_erro?.[0]?.mensagem ?? "Erro ao consultar status no FocusNFe.";
+      return { ok: false, mensagem: motivo };
+    }
     const updates: Record<string, unknown> = {};
+    let mensagem = "Nenhuma mudança de status — ainda em processamento na SEFAZ.";
     if (json.status === "autorizado") {
       updates.status         = "autorizada";
       updates.numero         = json.numero?.toString();
@@ -406,12 +410,22 @@ export async function consultarStatusNFe(notaId: number): Promise<void> {
       updates.danfe_url      = json.caminho_danfe;
       updates.xml_url        = json.caminho_xml_nota_fiscal;
       updates.dt_autorizacao = new Date().toISOString();
+      mensagem = "NF-e autorizada.";
     } else if (json.status === "erro_autorizacao" || json.status === "denegado") {
       updates.status          = "rejeitada";
       updates.motivo_rejeicao = json.mensagem_sefaz ?? json.mensagens_erro?.[0]?.mensagem ?? json.status;
+      mensagem = `NF-e rejeitada: ${updates.motivo_rejeicao}`;
     } else if (json.status === "cancelado") {
       updates.status = "cancelada";
+      mensagem = "NF-e cancelada.";
     }
-    if (Object.keys(updates).length > 0) await supabase.from("notas_fiscais").update(updates as never).eq("id", notaId);
-  } catch(err) { console.error("consultarStatusNFe:",err); }
+    if (Object.keys(updates).length > 0) {
+      const { error } = await supabase.from("notas_fiscais").update(updates as never).eq("id", notaId);
+      if (error) return { ok: false, mensagem: "Status consultado, mas falhou ao salvar no sistema." };
+    }
+    return { ok: true, mensagem };
+  } catch (err) {
+    console.error("consultarStatusNFe:", err);
+    return { ok: false, mensagem: "Erro de conexão ao consultar o FocusNFe." };
+  }
 }
