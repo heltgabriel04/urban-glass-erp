@@ -137,7 +137,7 @@ function AnaliticaInner() {
         <PersonalizarWidgets widgets={widgets} visivel={visivel} toggle={toggle} />
       </div>
       <NivelTabs ativo="analitica" />
-      <FiltroGlobalFinanceiro />
+      <FiltroGlobalFinanceiro mostrarPeriodo={false} mostrarConta={false} />
 
       <div className="con">
         {loading || !dados ? <div className="loading">Carregando...</div> : (

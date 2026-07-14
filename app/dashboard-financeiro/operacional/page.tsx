@@ -103,7 +103,7 @@ function OperacionalInner() {
         <PersonalizarWidgets widgets={widgets} visivel={visivel} toggle={toggle} />
       </div>
       <NivelTabs ativo="operacional" />
-      <FiltroGlobalFinanceiro />
+      <FiltroGlobalFinanceiro mostrarPeriodo={false} />
 
       <div className="con">
         {loading || !dados ? <div className="loading">Carregando...</div> : (

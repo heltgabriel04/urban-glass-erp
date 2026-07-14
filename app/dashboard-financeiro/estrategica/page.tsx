@@ -15,6 +15,7 @@ import FiltroGlobalFinanceiro from "@/components/financeiro/FiltroGlobalFinancei
 import PersonalizarWidgets from "@/components/financeiro/PersonalizarWidgets";
 import { useWidgetsVisiveis } from "@/components/financeiro/useWidgetsVisiveis";
 import { useRealtimeDashboard } from "@/components/financeiro/useRealtimeDashboard";
+import { useFiltroFinanceiro } from "@/components/financeiro/useFiltroFinanceiro";
 
 const WIDGETS_ESTRATEGICA = [
   { key: "previsao", label: "Previsão de Caixa Estendida" },
@@ -45,17 +46,18 @@ export default function EstrategicaPage() {
 }
 
 function EstrategicaInner() {
+  const { filtro } = useFiltroFinanceiro();
   const { visivel, toggle, widgets } = useWidgetsVisiveis("estrategica", WIDGETS_ESTRATEGICA);
   const [dados, setDados] = useState<Dados | null>(null);
   const [loading, setLoading] = useState(true);
   const { ativo: aoVivo } = useRealtimeDashboard(() => load());
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [filtro.contaId]);
 
   async function load() {
     setLoading(true);
     const [projecao, concClientes, concFornecedores, inativos, { data: clientesData }, financeiroClientes] = await Promise.all([
-      getProjecaoCaixa(undefined, HORIZONTES),
+      getProjecaoCaixa({ contaId: filtro.contaId }, HORIZONTES),
       getConcentracaoClientes(12),
       getConcentracaoFornecedores(12),
       getClientesInativos(60, 3),
@@ -95,7 +97,7 @@ function EstrategicaInner() {
         <PersonalizarWidgets widgets={widgets} visivel={visivel} toggle={toggle} />
       </div>
       <NivelTabs ativo="estrategica" />
-      <FiltroGlobalFinanceiro />
+      <FiltroGlobalFinanceiro mostrarPeriodo={false} />
 
       <div className="con">
         {loading || !dados ? <div className="loading">Carregando...</div> : (
