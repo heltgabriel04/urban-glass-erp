@@ -74,9 +74,54 @@ export async function criarFatura(input: CartaoFaturaInsert): Promise<CartaoFatu
   return fatura;
 }
 
+const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+/** Cria o lançamento único da fatura fechada em `lancamentos` — o cartão
+ *  corporativo debita a conta numa parcela só, na data de vencimento da
+ *  fatura, independente de quantas compras aconteceram dentro dela. O
+ *  detalhamento por compra continua vivo em cartoes_lancamentos, não se
+ *  perde. Idempotente: só roda se a fatura ainda não tiver lancamento_id. */
+async function gerarLancamentoDaFatura(faturaId: number): Promise<void> {
+  const { data: faturaRow } = await supabase
+    .from("cartoes_faturas")
+    .select("id, valor_total, data_vencimento, competencia_ano, competencia_mes, lancamento_id, cartoes ( nome )")
+    .eq("id", faturaId)
+    .maybeSingle();
+  if (!faturaRow) return;
+  const fatura = faturaRow as unknown as {
+    id: number; valor_total: number; data_vencimento: string | null;
+    competencia_ano: number; competencia_mes: number; lancamento_id: number | null;
+    cartoes: { nome: string } | null;
+  };
+  if (fatura.lancamento_id) return; // já gerado antes, não duplica
+
+  const nomeCartao = fatura.cartoes?.nome ?? "cartão";
+  const mesLabel = MESES_ABREV[fatura.competencia_mes - 1] ?? String(fatura.competencia_mes);
+
+  const { data: lancamento, error } = await supabase
+    .from("lancamentos")
+    .insert([{
+      tipo: "Saída",
+      descricao: `Fatura cartão ${nomeCartao} — ${mesLabel}/${fatura.competencia_ano}`,
+      valor: fatura.valor_total,
+      status: "Pendente",
+      vencimento: fatura.data_vencimento,
+      plano_contas_id: null,
+      fornecedor_id: null,
+      pedido_id: null,
+      cliente_id: null,
+    } as never])
+    .select("id")
+    .single();
+  if (error || !lancamento) { console.error("gerarLancamentoDaFatura:", error); return; }
+
+  await supabase.from("cartoes_faturas").update({ lancamento_id: (lancamento as { id: number }).id } as never).eq("id", faturaId);
+}
+
 export async function atualizarFatura(id: number, patch: CartaoFaturaUpdate): Promise<boolean> {
   const { error } = await supabase.from("cartoes_faturas").update({ ...patch, updated_at: new Date().toISOString() } as never).eq("id", id);
   if (error) { console.error("atualizarFatura:", error); return false; }
+  if (patch.status === "fechada") await gerarLancamentoDaFatura(id);
   registrarLog({ acao: "atualizou", tabela: "cartoes_faturas", registro_id: String(id), descricao: `Atualizou fatura #${id}`, campos_alterados: patch as Record<string, unknown> });
   return true;
 }
@@ -108,6 +153,37 @@ export async function criarLancamentoCartao(input: CartaoLancamentoInsert): Prom
   if (error) { console.error("criarLancamentoCartao:", error); return null; }
   const lanc = data as CartaoLancamento;
   if (lanc.fatura_id) await recalcularValorTotalFatura(lanc.fatura_id);
+
+  // Débito sem fatura debita a conta na hora — gera o lançamento já aqui,
+  // um por compra (diferente do crédito, que agrega tudo na fatura).
+  if (!lanc.fatura_id) {
+    const { data: cartaoRow } = await supabase.from("cartoes").select("tipo").eq("id", lanc.cartao_id).maybeSingle();
+    const tipoCartao = (cartaoRow as { tipo: "credito" | "debito" } | null)?.tipo;
+    if (tipoCartao === "debito") {
+      const { data: lancamento, error: errLanc } = await supabase
+        .from("lancamentos")
+        .insert([{
+          tipo: "Saída",
+          descricao: lanc.descricao,
+          valor: lanc.valor,
+          status: "Pendente",
+          vencimento: lanc.data,
+          plano_contas_id: lanc.plano_contas_id,
+          fornecedor_id: lanc.fornecedor_id,
+          pedido_id: null,
+          cliente_id: null,
+        } as never])
+        .select("id")
+        .single();
+      if (!errLanc && lancamento) {
+        await supabase.from("cartoes_lancamentos").update({ lancamento_id: (lancamento as { id: number }).id } as never).eq("id", lanc.id);
+        lanc.lancamento_id = (lancamento as { id: number }).id;
+      } else {
+        console.error("criarLancamentoCartao (lancamento débito):", errLanc);
+      }
+    }
+  }
+
   registrarLog({ acao: "criou", tabela: "cartoes_lancamentos", registro_id: String(lanc.id), descricao: `Criou lançamento de cartão: ${lanc.descricao} (${lanc.valor})` });
   return lanc;
 }
