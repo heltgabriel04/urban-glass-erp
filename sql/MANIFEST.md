@@ -115,3 +115,4 @@ que é a ordem real em que foram escritos e (presumivelmente) rodados.
 | 2026-07-13 | `sql/seguranca-05-restringe-select-financeiro.sql` | Restringe SELECT de 40 tabelas financeiras a admin/financeiro | ✅ |
 | 2026-07-13 | `sql/seguranca-06-rpc-cliente-nome-publico.sql` | RPC `get_cliente_nome_publico` (tela de produção) | ✅ |
 | 2026-07-13 | `sql/contabilidade-fase6-checklist-ativa-financeiro.sql` | Contabilidade Fase 6 — Ativa item "Financeiro" no checklist de fechamentos antigos | ✅ |
+| 2026-07-14 | `sql/crm-interacoes-cliente.sql` | CRM — Painel do Cliente: tabela de interações comerciais | ⏳ |
