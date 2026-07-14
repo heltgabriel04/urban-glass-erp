@@ -354,7 +354,16 @@ export async function encontrarOuCriarFaturaParaData(cartaoId: number, dataCompr
     .eq("competencia_mes", mes)
     .maybeSingle();
   if (errExistente) { console.error("encontrarOuCriarFaturaParaData (existente):", errExistente); return null; }
-  if (existente) return existente as CartaoFatura;
+  if (existente) {
+    // Fatura já fechada/paga: NÃO anexa a compra nela. O lançamento de contas a
+    // pagar dessa fatura (gerarLancamentoDaFatura) já foi gerado no fechamento e
+    // é idempotente — não regenera. Se anexássemos aqui e recalculássemos o
+    // valor_total, o total exibido e o valor realmente devido divergiriam
+    // silenciosamente. Devolve null igual ao caso "sem dia_fechamento" pra cair
+    // no fluxo manual do chamador.
+    if ((existente as CartaoFatura).status !== "aberta") return null;
+    return existente as CartaoFatura;
+  }
 
   return criarFatura({
     cartao_id: cartaoId, competencia_ano: ano, competencia_mes: mes, status: "aberta",

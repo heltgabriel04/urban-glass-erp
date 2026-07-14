@@ -236,7 +236,7 @@ function ModalLancarCompra({ cartao, fornecedores, planoContas, usuarioEmail, on
     setSalvando(true);
     const fatura = await encontrarOuCriarFaturaParaData(cartao.id, form.data);
     if (!fatura) {
-      toast("Cadastre o dia de fechamento do cartão antes de lançar", "err");
+      toast("Não foi possível lançar automaticamente: cadastre o dia de fechamento do cartão, ou a fatura dessa competência já está fechada — lance direto na fatura pela tela de Lançamentos.", "err");
       setSalvando(false);
       return;
     }
@@ -428,6 +428,7 @@ export default function CartoesPage() {
   const [faturaLancamentos, setFaturaLancamentos] = useState<CartaoFatura | null | "avulso">(null);
   const [modalLancarCompraAberto, setModalLancarCompraAberto] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [criandoFaturaSugerida, setCriandoFaturaSugerida] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUsuarioEmail(data.user?.email ?? "sistema"));
@@ -465,7 +466,8 @@ export default function CartoesPage() {
   }
 
   async function handleCriarFaturaSugerida() {
-    if (!cartaoSelecionado || !sugestaoFatura) return;
+    if (!cartaoSelecionado || !sugestaoFatura || criandoFaturaSugerida) return;
+    setCriandoFaturaSugerida(true);
     const criada = await criarFatura({
       cartao_id: cartaoSelecionado.id,
       competencia_ano: sugestaoFatura.competenciaAno,
@@ -475,6 +477,7 @@ export default function CartoesPage() {
       data_vencimento: sugestaoFatura.dataVencimento,
       data_pagamento: null, pdf_url: null, comprovante_pagamento_url: null, observacoes: null, criado_por: null,
     });
+    setCriandoFaturaSugerida(false);
     if (!criada) { toast("Erro ao criar fatura", "err"); return; }
     toast("Fatura criada");
     loadFaturas(cartaoSelecionado.id);
@@ -593,7 +596,7 @@ export default function CartoesPage() {
                 <div style={{ fontSize: "12.5px", color: "var(--t2)" }}>
                   Fatura anterior fechou. Criar {String(sugestaoFatura.competenciaMes).padStart(2, "0")}/{sugestaoFatura.competenciaAno} — fecha {formatDate(sugestaoFatura.dataFechamento)}, vence {formatDate(sugestaoFatura.dataVencimento)}?
                 </div>
-                <button className="btn bp sm" onClick={handleCriarFaturaSugerida}>Criar fatura</button>
+                <button className="btn bp sm" onClick={handleCriarFaturaSugerida} disabled={criandoFaturaSugerida}>{criandoFaturaSugerida ? "Criando..." : "Criar fatura"}</button>
               </div>
             )}
 
