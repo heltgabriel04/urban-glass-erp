@@ -6,7 +6,11 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate, formatPercent } from "@/lib/formatters";
 import { registrarRecente } from "@/lib/recentes";
-import type { Cliente, Pedido, FinanceiroCliente } from "@/types";
+import { useConfirm } from "@/components/ui/confirm";
+import { Campo } from "@/components/ui/Campo";
+import DateInput from "@/components/ui/DateInput";
+import { getInteracoesPorCliente, createInteracao, deletarInteracao } from "@/services/interacoes.service";
+import type { Cliente, Pedido, FinanceiroCliente, Orcamento, InteracaoCliente, TipoInteracao } from "@/types";
 
 const CHIP: Record<string, string> = {
   "Aguardando otimização":   "chip cy",
@@ -25,32 +29,86 @@ const IND_IE: Record<string, string> = {
   "9": "Não Contribuinte",
 };
 
+const ORCAMENTO_CHIP: Record<string, string> = {
+  "Rascunho":  "chip cgr",
+  "Enviado":   "chip cy",
+  "Aprovado":  "chip cg",
+  "Rejeitado": "chip cr",
+};
+
+const TIPO_LABEL: Record<TipoInteracao, string> = {
+  ligacao: "Ligação",
+  email: "E-mail",
+  reuniao: "Reunião",
+  nota: "Nota",
+};
+
+function hoje(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default function ClienteDetalhe() {
   const { id } = useParams<{ id: string }>();
   const router  = useRouter();
+  const confirm = useConfirm();
 
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [fin, setFin]         = useState<FinanceiroCliente | null>(null);
+  const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
+  const [interacoes, setInteracoes] = useState<InteracaoCliente[]>([]);
+  const [showFormInteracao, setShowFormInteracao] = useState(false);
+  const [novoTipo, setNovoTipo] = useState<TipoInteracao>("ligacao");
+  const [novaDescricao, setNovaDescricao] = useState("");
+  const [novoProximoContato, setNovoProximoContato] = useState("");
+  const [salvandoInteracao, setSalvandoInteracao] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { load(); }, [id]);
 
   async function load() {
     setLoading(true);
-    const [{ data: cliData }, { data: pedData }, { data: finData }] = await Promise.all([
+    const [{ data: cliData }, { data: pedData }, { data: finData }, { data: orcData }, interacoesData] = await Promise.all([
       supabase.from("clientes").select("*").eq("id", id).single(),
       supabase.from("pedidos").select("*, itens_pedido(id)").eq("cliente_id", id).order("dt_pedido", { ascending: false }),
       supabase.from("financeiro_clientes").select("*").eq("cliente_id", id).single(),
+      supabase.from("orcamentos").select("*").eq("cliente_id", id).order("dt_criacao", { ascending: false }),
+      getInteracoesPorCliente(Number(id)),
     ]);
     setCliente(cliData as Cliente);
     setPedidos((pedData ?? []) as Pedido[]);
     setFin(finData as FinanceiroCliente ?? null);
+    setOrcamentos((orcData ?? []) as Orcamento[]);
+    setInteracoes(interacoesData);
     setLoading(false);
     if (cliData) {
       const c = cliData as Cliente;
       registrarRecente({ tipo: "cliente", id: String(c.id), label: c.nome, sublabel: c.cidade ?? undefined, href: `/clientes/${c.id}` });
     }
+  }
+
+  async function handleCriarInteracao() {
+    if (!cliente || !novaDescricao.trim()) return;
+    setSalvandoInteracao(true);
+    const res = await createInteracao({
+      cliente_id: cliente.id,
+      tipo: novoTipo,
+      descricao: novaDescricao.trim(),
+      proximo_contato: novoProximoContato || null,
+    });
+    setSalvandoInteracao(false);
+    if (!res) return;
+    setNovoTipo("ligacao");
+    setNovaDescricao("");
+    setNovoProximoContato("");
+    setShowFormInteracao(false);
+    load();
+  }
+
+  async function handleExcluirInteracao(interacaoId: number) {
+    if (!(await confirm("Excluir esta interação?", { perigo: true }))) return;
+    await deletarInteracao(interacaoId);
+    load();
   }
 
   if (loading) return <AppLayout><div className="con"><div className="loading">Carregando cliente...</div></div></AppLayout>;
@@ -184,6 +242,104 @@ export default function ClienteDetalhe() {
           <div style={{ display:"flex", justifyContent:"space-between", fontSize:"11px", color:"var(--t3)", marginTop:"6px" }}>
             <span>Recebimento geral</span><span>{pctRec.toFixed(0)}%</span>
           </div>
+        </div>
+
+        {/* Interações */}
+        <div className="card" style={{ padding:"20px 24px" }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px" }}>
+            <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>INTERAÇÕES ({interacoes.length})</div>
+            <button className="btn bp xs" onClick={() => setShowFormInteracao(v => !v)}>
+              {showFormInteracao ? "✕ Cancelar" : "+ Nova Interação"}
+            </button>
+          </div>
+
+          {showFormInteracao && (
+            <div style={{ background:"var(--surf2)", border:"1px solid var(--b1)", borderRadius:"8px", padding:"14px 16px", marginBottom:"16px", display:"flex", flexDirection:"column", gap:"10px" }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px" }}>
+                <Campo label="Tipo">
+                  <select className="fc" value={novoTipo} onChange={e => setNovoTipo(e.target.value as TipoInteracao)}>
+                    <option value="ligacao">Ligação</option>
+                    <option value="email">E-mail</option>
+                    <option value="reuniao">Reunião</option>
+                    <option value="nota">Nota</option>
+                  </select>
+                </Campo>
+                <Campo label="Próximo contato (opcional)">
+                  <DateInput value={novoProximoContato} onChange={setNovoProximoContato} />
+                </Campo>
+              </div>
+              <Campo label="Descrição">
+                <textarea className="fc" rows={3} value={novaDescricao} onChange={e => setNovaDescricao(e.target.value)} placeholder="O que foi conversado..." />
+              </Campo>
+              <div style={{ display:"flex", justifyContent:"flex-end" }}>
+                <button className="btn bp sm" onClick={handleCriarInteracao} disabled={salvandoInteracao || !novaDescricao.trim()}>
+                  {salvandoInteracao ? "Salvando..." : "Salvar Interação"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {interacoes.length === 0 ? (
+            <div style={{ color:"var(--t3)", padding:"24px 0", textAlign:"center" }}>Nenhuma interação registrada ainda.</div>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:"10px" }}>
+              {interacoes.map(it => {
+                const atrasado = it.proximo_contato != null && it.proximo_contato < hoje();
+                return (
+                  <div key={it.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:"12px", borderBottom:"1px solid var(--b1)", paddingBottom:"10px" }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"4px" }}>
+                        <span className="chip cgr" style={{ fontSize:"10px" }}>{TIPO_LABEL[it.tipo]}</span>
+                        <span style={{ fontSize:"11px", color:"var(--t3)" }}>{formatDate(it.data)}</span>
+                        {atrasado && <span className="chip cr" style={{ fontSize:"10px" }}>⚠ Follow-up atrasado</span>}
+                      </div>
+                      <div style={{ fontSize:"13px", color:"var(--t1)" }}>{it.descricao}</div>
+                      {it.proximo_contato && !atrasado && (
+                        <div style={{ fontSize:"11px", color:"var(--t3)", marginTop:"4px" }}>Próximo contato: {formatDate(it.proximo_contato)}</div>
+                      )}
+                    </div>
+                    <button
+                      title="Excluir interação"
+                      onClick={() => handleExcluirInteracao(it.id)}
+                      style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:"26px", height:"26px", borderRadius:"6px", background:"transparent", border:"1px solid var(--b2)", color:"var(--t3)", fontSize:"12px", cursor:"pointer", flexShrink:0 }}
+                    >🗑</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Orçamentos do cliente */}
+        <div className="card" style={{ padding:"20px 24px" }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px" }}>
+            <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>ORÇAMENTOS DO CLIENTE ({orcamentos.length})</div>
+            <a href="/orcamentos/novo" className="btn bp xs">+ Novo Orçamento</a>
+          </div>
+
+          {orcamentos.length === 0 ? (
+            <div style={{ color:"var(--t3)", padding:"24px 0", textAlign:"center" }}>Nenhum orçamento registrado para este cliente.</div>
+          ) : (
+            <div className="tw">
+              <table>
+                <thead>
+                  <tr><th>Orçamento</th><th>Data</th><th>Validade</th><th>Valor</th><th>Status</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {orcamentos.map(o => (
+                    <tr key={o.id}>
+                      <td><span className="mono" style={{ color:"var(--acc)" }}>{o.id}</span></td>
+                      <td className="mono">{formatDate(o.dt_criacao)}</td>
+                      <td className="mono">{o.validade} dias</td>
+                      <td className="mono">{formatBRL(o.valor_total)}</td>
+                      <td><span className={ORCAMENTO_CHIP[o.status] ?? "chip cgr"}>{o.status}</span></td>
+                      <td><a href={`/orcamentos/${o.id}`} className="btn bg xs">Ver</a></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Histórico de pedidos */}
