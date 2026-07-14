@@ -217,6 +217,69 @@ function ModalFatura({ cartao, editando, onSalvo, onFechar }: {
   );
 }
 
+// ─── Modal: Lançar Compra (sem escolher fatura) ─────────────
+function ModalLancarCompra({ cartao, fornecedores, planoContas, usuarioEmail, onFechar, onSalvo }: {
+  cartao: Cartao; fornecedores: Fornecedor[]; planoContas: PlanoContasOpcao[]; usuarioEmail: string;
+  onFechar: () => void; onSalvo: () => void;
+}) {
+  const { toast } = useToast();
+  const [form, setForm] = useState<typeof LANC_VAZIO>({ ...LANC_VAZIO });
+  const [salvando, setSalvando] = useState(false);
+
+  function set<K extends keyof typeof LANC_VAZIO>(k: K, v: (typeof LANC_VAZIO)[K]) {
+    setForm((f) => ({ ...f, [k]: v }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.descricao.trim() || !form.valor) { toast("Preencha descrição e valor", "err"); return; }
+    setSalvando(true);
+    const fatura = await encontrarOuCriarFaturaParaData(cartao.id, form.data);
+    if (!fatura) {
+      toast("Cadastre o dia de fechamento do cartão antes de lançar", "err");
+      setSalvando(false);
+      return;
+    }
+    const criado = await criarLancamentoCartao({ ...form, cartao_id: cartao.id, fatura_id: fatura.id, criado_por: usuarioEmail });
+    setSalvando(false);
+    if (!criado) { toast("Erro ao lançar compra", "err"); return; }
+    toast(`Lançado na fatura ${String(fatura.competencia_mes).padStart(2, "0")}/${fatura.competencia_ano}`);
+    onSalvo();
+  }
+
+  return (
+    <Modal open onClose={onFechar} title={`Lançar Compra — ${cartao.nome}`} width="480px">
+        <form id="form-lancar-compra" onSubmit={handleSubmit} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
+          <Campo label="Data">
+            <input className="fc" type="date" value={form.data} onChange={(e) => set("data", e.target.value)} required />
+          </Campo>
+          <Campo label="Descrição">
+            <input className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} required />
+          </Campo>
+          <Campo label="Fornecedor">
+            <select className="fc" value={form.fornecedor_id ?? ""} onChange={(e) => set("fornecedor_id", e.target.value ? Number(e.target.value) : null)}>
+              <option value="">—</option>
+              {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+            </select>
+          </Campo>
+          <Campo label="Conta">
+            <select className="fc" value={form.plano_contas_id ?? ""} onChange={(e) => set("plano_contas_id", e.target.value ? Number(e.target.value) : null)}>
+              <option value="">—</option>
+              {planoContas.map((p) => <option key={p.id} value={p.id}>{p.codigo_estruturado}</option>)}
+            </select>
+          </Campo>
+          <Campo label="Valor">
+            <input className="fc" type="number" step="0.01" value={form.valor} onChange={(e) => set("valor", Number(e.target.value))} required style={{ fontFamily: "'DM Mono', monospace" }} />
+          </Campo>
+        </form>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
+          <button type="button" className="btn bg" onClick={onFechar} disabled={salvando}>Cancelar</button>
+          <button type="submit" form="form-lancar-compra" className="btn bp" disabled={salvando}>{salvando ? "Salvando..." : "Lançar"}</button>
+        </div>
+    </Modal>
+  );
+}
+
 // ─── Modal: Lançamentos da Fatura ───────────────────────────
 function ModalLancamentos({ cartao, fatura, fornecedores, planoContas, usuarioEmail, onFechar, onMudou }: {
   cartao: Cartao; fatura: CartaoFatura | null; fornecedores: Fornecedor[]; planoContas: PlanoContasOpcao[]; usuarioEmail: string;
@@ -363,6 +426,7 @@ export default function CartoesPage() {
   const [editandoFatura, setEditandoFatura] = useState<CartaoFatura | null>(null);
   const [modalFaturaAberto, setModalFaturaAberto] = useState(false);
   const [faturaLancamentos, setFaturaLancamentos] = useState<CartaoFatura | null | "avulso">(null);
+  const [modalLancarCompraAberto, setModalLancarCompraAberto] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -454,6 +518,17 @@ export default function CartoesPage() {
         />
       )}
 
+      {modalLancarCompraAberto && cartaoSelecionado && (
+        <ModalLancarCompra
+          cartao={cartaoSelecionado}
+          fornecedores={fornecedores}
+          planoContas={planoContas}
+          usuarioEmail={usuarioEmail}
+          onFechar={() => setModalLancarCompraAberto(false)}
+          onSalvo={() => { setModalLancarCompraAberto(false); loadFaturas(cartaoSelecionado.id); }}
+        />
+      )}
+
       <div className="con">
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
           <select className="fc" value={filtroAtivo} onChange={(e) => setFiltroAtivo(e.target.value as typeof filtroAtivo)} style={{ width: "120px" }}>
@@ -504,7 +579,10 @@ export default function CartoesPage() {
                 {cartaoSelecionado.tipo === "credito" ? `Faturas — ${cartaoSelecionado.nome}` : `Lançamentos — ${cartaoSelecionado.nome}`}
               </div>
               {cartaoSelecionado.tipo === "credito" ? (
-                <button className="btn bp sm" onClick={() => { setEditandoFatura(null); setModalFaturaAberto(true); }}>+ Nova Fatura</button>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button className="btn bg sm" onClick={() => setModalLancarCompraAberto(true)}>+ Lançar Compra</button>
+                  <button className="btn bp sm" onClick={() => { setEditandoFatura(null); setModalFaturaAberto(true); }}>+ Nova Fatura</button>
+                </div>
               ) : (
                 <button className="btn bp sm" onClick={() => setFaturaLancamentos("avulso")}>+ Ver Lançamentos</button>
               )}
