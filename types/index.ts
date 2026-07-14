@@ -436,6 +436,37 @@ export interface InteracaoCliente {
 
 export type InteracaoClienteInsert = Omit<InteracaoCliente, 'id' | 'created_at' | 'data'>;
 
+// ─── DOCUMENTO DIVERSO (gap do SIEG) ──────────────────────
+export type CategoriaDocumentoDiverso =
+  | 'energia' | 'agua' | 'telefone_internet' | 'guia_imposto'
+  | 'boleto_diverso' | 'reembolso_funcionario' | 'outros';
+
+export interface DocumentoDiverso {
+  id: number;
+  categoria: CategoriaDocumentoDiverso;
+  fornecedor_id: number | null;
+  competencia_ano: number;
+  competencia_mes: number;
+  descricao: string;
+  valor: number;
+  vencimento: string | null;
+  pdf_url: string | null;
+  lancamento_id: number | null;
+  observacoes: string | null;
+  deletado_em: string | null;
+  deletado_por: string | null;
+  motivo_exclusao: string | null;
+  criado_por: string | null;
+  created_at: string;
+  updated_at: string;
+  fornecedores?: Pick<Fornecedor, 'id' | 'nome' | 'cnpj'>;
+}
+
+export type DocumentoDiversoInsert = Pick<DocumentoDiverso,
+  'categoria' | 'fornecedor_id' | 'competencia_ano' | 'competencia_mes' |
+  'descricao' | 'valor' | 'vencimento' | 'observacoes'
+> & { criado_por?: string | null };
+
 // ─── RETALHO ───────────────────────────────────────────────
 export interface Retalho {
   id: string;
@@ -1323,6 +1354,7 @@ export type Database = {
       compras:                 { Row: Compra;              Insert: CompraInsert                                };
       compras_itens:           { Row: CompraItem;          Insert: CompraItemInsert                            };
       interacoes_cliente:      { Row: InteracaoCliente;    Insert: InteracaoClienteInsert                       };
+      documentos_diversos:     { Row: DocumentoDiverso;    Insert: DocumentoDiversoInsert                       };
       produtos:                { Row: Produto;             Insert: ProdutoInsert;      Update: ProdutoUpdate  };
       pedidos:                 { Row: Pedido;              Insert: PedidoInsert;       Update: PedidoUpdate   };
       itens_pedido:            { Row: ItemPedido;          Insert: ItemPedidoInsert                           };
