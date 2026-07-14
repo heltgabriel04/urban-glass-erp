@@ -13,6 +13,8 @@ import {
   type MesValor, type ProjecaoHorizonte,
 } from "@/services/dashboardFinanceiro.service";
 import { getMeta } from "@/services/metas.service";
+import MetricCard from "@/components/ui/MetricCard";
+import EmptyState from "@/components/ui/EmptyState";
 import NivelTabs from "@/components/financeiro/NivelTabs";
 import FiltroGlobalFinanceiro from "@/components/financeiro/FiltroGlobalFinanceiro";
 import PersonalizarWidgets from "@/components/financeiro/PersonalizarWidgets";
@@ -108,6 +110,11 @@ function DashboardFinanceiroInner() {
     setLoading(false);
   }
 
+  const resultadoSerie = dados ? dados.receitaDespesa.map(d => d.receita - d.despesa) : [];
+  const resultadoAtual = resultadoSerie.length > 0 ? resultadoSerie[resultadoSerie.length - 1] : 0;
+  const resultadoAnterior = resultadoSerie.length > 1 ? resultadoSerie[resultadoSerie.length - 2] : 0;
+  const trendResultado = resultadoAnterior !== 0 ? ((resultadoAtual - resultadoAnterior) / Math.abs(resultadoAnterior)) * 100 : 0;
+
   return (
     <AppLayout>
       <div className="tb">
@@ -136,30 +143,32 @@ function DashboardFinanceiroInner() {
             {/* KPIs */}
             {visivel("kpis") && (
             <div className="g4" style={{ marginBottom: 16 }}>
-              <div className="kpi">
-                <div className="kpi-l">Saldo em Caixa</div>
-                <div className="kpi-v" style={{ color: dados.saldoCaixa >= 0 ? "var(--ok)" : "var(--err)" }}>
-                  {formatBRL(dados.saldoCaixa)}
-                </div>
-                <div className="kpi-s">{filtro.contaId ? "Conta selecionada" : "Contas bancárias ativas"}</div>
-              </div>
-              <div className="kpi">
-                <div className="kpi-l">A Receber</div>
-                <div className="kpi-v" style={{ color: "var(--acc2)" }}>{formatBRL(dados.aReceber)}</div>
-                <div className="kpi-s">Títulos em aberto</div>
-              </div>
-              <div className="kpi">
-                <div className="kpi-l">A Pagar</div>
-                <div className="kpi-v" style={{ color: dados.aPagar > 0 ? "var(--acc3)" : "var(--t1)" }}>{formatBRL(dados.aPagar)}</div>
-                <div className="kpi-s">Títulos em aberto</div>
-              </div>
-              <div className="kpi">
-                <div className="kpi-l">Resultado do Período</div>
-                <div className="kpi-v" style={{ color: dados.dre.resultado >= 0 ? "var(--ok)" : "var(--err)" }}>
-                  {formatBRL(dados.dre.resultado)}
-                </div>
-                <div className="kpi-s">DRE · {PERIODO_LABEL[filtro.periodo].toLowerCase()}</div>
-              </div>
+              <MetricCard
+                label="Saldo em Caixa"
+                value={formatBRL(dados.saldoCaixa)}
+                sub={filtro.contaId ? "Conta selecionada" : "Contas bancárias ativas"}
+                valueColor={dados.saldoCaixa >= 0 ? "var(--ok)" : "var(--err)"}
+              />
+              <MetricCard
+                label="A Receber"
+                value={formatBRL(dados.aReceber)}
+                sub="Títulos em aberto"
+                valueColor="var(--acc2)"
+              />
+              <MetricCard
+                label="A Pagar"
+                value={formatBRL(dados.aPagar)}
+                sub="Títulos em aberto"
+                valueColor={dados.aPagar > 0 ? "var(--acc3)" : "var(--t1)"}
+              />
+              <MetricCard
+                label="Resultado do Período"
+                value={formatBRL(dados.dre.resultado)}
+                sub={`DRE · ${PERIODO_LABEL[filtro.periodo].toLowerCase()}`}
+                variant="hero"
+                trend={resultadoSerie.length > 1 ? { percent: trendResultado, label: "vs. mês anterior" } : undefined}
+                sparkline={resultadoSerie.length > 1 ? resultadoSerie : undefined}
+              />
             </div>
             )}
 
@@ -202,9 +211,10 @@ function DashboardFinanceiroInner() {
               <div className="card">
                 <div className="ct">Despesas por Categoria · {PERIODO_LABEL[filtro.periodo].toLowerCase()}</div>
                 {dados.despesasCategoria.length === 0 ? (
-                  <div style={{ padding: "40px 0", textAlign: "center", color: "var(--t3)", fontSize: 12 }}>
-                    Nenhuma despesa no período.
-                  </div>
+                  <EmptyState
+                    title="Nenhuma despesa no período."
+                    subtitle="Lançamentos aparecem aqui assim que houver despesas registradas."
+                  />
                 ) : (
                   <ResponsiveContainer width="100%" height={280}>
                     <BarChart data={dados.despesasCategoria} layout="vertical" margin={{ left: 8 }}>
