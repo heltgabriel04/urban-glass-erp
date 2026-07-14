@@ -421,6 +421,21 @@ export interface Orcamento {
 
 export type OrcamentoInsert = Omit<Orcamento, 'created_at' | 'clientes'>;
 
+// ─── INTERAÇÃO CLIENTE (CRM) ──────────────────────────────
+export type TipoInteracao = 'ligacao' | 'email' | 'reuniao' | 'nota';
+
+export interface InteracaoCliente {
+  id: number;
+  cliente_id: number;
+  tipo: TipoInteracao;
+  data: string;
+  descricao: string;
+  proximo_contato: string | null;
+  created_at: string;
+}
+
+export type InteracaoClienteInsert = Omit<InteracaoCliente, 'id' | 'created_at' | 'data'>;
+
 // ─── RETALHO ───────────────────────────────────────────────
 export interface Retalho {
   id: string;
@@ -1307,6 +1322,7 @@ export type Database = {
       fornecedores:            { Row: Fornecedor;          Insert: FornecedorInsert;   Update: FornecedorUpdate };
       compras:                 { Row: Compra;              Insert: CompraInsert                                };
       compras_itens:           { Row: CompraItem;          Insert: CompraItemInsert                            };
+      interacoes_cliente:      { Row: InteracaoCliente;    Insert: InteracaoClienteInsert                       };
       produtos:                { Row: Produto;             Insert: ProdutoInsert;      Update: ProdutoUpdate  };
       pedidos:                 { Row: Pedido;              Insert: PedidoInsert;       Update: PedidoUpdate   };
       itens_pedido:            { Row: ItemPedido;          Insert: ItemPedidoInsert                           };
