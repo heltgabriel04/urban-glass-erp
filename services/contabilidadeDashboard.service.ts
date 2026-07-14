@@ -7,6 +7,7 @@ import { getAtivosImobilizados } from "./ativosImobilizados.service";
 import { getCartoes } from "./cartoes.service";
 import { getEmprestimos } from "./emprestimos.service";
 import { getConsorcios } from "./consorcios.service";
+import { getDocumentosDiversos } from "./contabilidadeDocumentosDiversos.service";
 import type { NotaFiscal } from "@/types";
 
 // ─── NF Saída — 100% derivado de notas_fiscais, sem cadastro duplicado ────
@@ -144,6 +145,10 @@ export async function getAlertas(ano: number, mes: number): Promise<Alerta[]> {
   const chavesDuplicadas = chaves.filter((c, i) => chaves.indexOf(c) !== i);
   if (chavesDuplicadas.length > 0) alertas.push({ severidade: "critico", mensagem: "Documento fiscal com chave de acesso duplicada", quantidade: new Set(chavesDuplicadas).size });
 
+  const docsDiversos = await getDocumentosDiversos({ competenciaAno: ano, competenciaMes: mes });
+  const diversoSemPdf = docsDiversos.filter((d) => !d.pdf_url).length;
+  if (diversoSemPdf > 0) alertas.push({ severidade: "critico", mensagem: "Documento diverso sem PDF anexado", quantidade: diversoSemPdf });
+
   const agora = new Date();
   const ehCompetenciaAtual = agora.getFullYear() === ano && agora.getMonth() + 1 === mes;
   if (ehCompetenciaAtual && agora.getDate() >= 3) {
@@ -260,12 +265,25 @@ export async function getStatusAreas(ano: number, mes: number): Promise<StatusAr
       ? { area: "financeiro", label: "Financeiro", semaforo: "amarelo", detalhe: "Checklist financeiro ainda pendente" }
       : { area: "financeiro", label: "Financeiro", semaforo: "verde", detalhe: "Completo" };
 
+  const docsDiversosArea = await getDocumentosDiversos({ competenciaAno: ano, competenciaMes: mes });
+  const diversoSemPdfArea = docsDiversosArea.filter((d) => !d.pdf_url).length;
+  const itemChecklistDiversos = itens.find((i) => i.item_key === "documentos_diversos");
+  const checklistDiversosPendente = itemChecklistDiversos?.status === "pendente" || itemChecklistDiversos?.status === "em_andamento";
+
+  const documentosDiversosArea: StatusArea =
+    diversoSemPdfArea > 0
+      ? { area: "documentos_diversos", label: "Documentos Diversos", semaforo: "vermelho", detalhe: `${diversoSemPdfArea} documento(s) sem PDF anexado` }
+      : checklistDiversosPendente
+      ? { area: "documentos_diversos", label: "Documentos Diversos", semaforo: "amarelo", detalhe: "Checklist de documentos diversos ainda pendente" }
+      : { area: "documentos_diversos", label: "Documentos Diversos", semaforo: "verde", detalhe: "Completo" };
+
   return [
     documentosFiscais,
     estoque,
     ativoImobilizado,
     cartoesArea,
     financeiroArea,
+    documentosDiversosArea,
   ];
 }
 
