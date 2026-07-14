@@ -799,65 +799,70 @@ textarea.fc { resize: vertical; min-height: 64px; }
 }
 
 /* ─── TEMA CLARO ─────────────────────────────────────────── */
+/* Paleta neutra e semântica (migração 2026-07-14) — --acc (ação) e
+   --ok (positivo) finalmente têm hues diferentes (indigo vs. verde);
+   antes colapsavam no mesmo #0d9668. Ver docs/superpowers/specs/
+   2026-07-14-tema-claro-neutro-semantico-design.md pro mapeamento
+   completo e o porquê de cada valor. */
 [data-theme="light"] {
-  --bg:    #e3d5cc;
-  --surf:  #ffffff;
-  --surf1: #ffffff;
-  --surf2: #e8edf7;
-  --surf3: #dce4f2;
-  --surf4: #d0daea;
+  --bg:    #FAFAFA;
+  --surf:  #FFFFFF;
+  --surf1: #FFFFFF;
+  --surf2: #F4F4F5;
+  --surf3: #EFEFF1;
+  --surf4: #E4E4E7;
 
-  --b1: #bcc8da;
-  --b2: #a4b4c8;
-  --b3: #849ab2;
+  --b1: #E4E4E7;
+  --b2: #D4D4D8;
+  --b3: #A1A1AA;
 
-  --acc:  #0d9668;
-  --acc2: #0369a1;
-  --acc3: #c2410c;
-  --acc4: #6d28d9;
-  --acc5: #b45309;
+  --acc:  #4F46E5;
+  --acc2: #2563EB;
+  --acc3: #C2410C;
+  --acc4: #7C3AED;
+  --acc5: #D97706;
 
-  --ok:   #0d9668;
-  --warn: #b45309;
-  --err:  #be123c;
+  --ok:   #16A34A;
+  --warn: #D97706;
+  --err:  #DC2626;
 
-  --t1: #111827;
-  --t2: #374151;
-  --t3: #6b7280;
-  --t4: #9ca3af;
+  --t1: #18181B;
+  --t2: #71717A;
+  --t3: #A1A1AA;
+  --t4: #D4D4D8;
 
   --sh: 0 4px 32px rgba(0,0,0,.1);
 }
 
 /* Ajustes de componentes para tema claro */
 [data-theme="light"] .bp { color: #fff; }
-[data-theme="light"] .bp:hover { background: #0a7a54; box-shadow: 0 0 18px rgba(13,150,104,.25); }
+[data-theme="light"] .bp:hover { background: #4338CA; box-shadow: 0 0 18px rgba(79,70,229,.25); }
 [data-theme="light"] .bs { color: #fff; }
-[data-theme="light"] .bs:hover { background: #025a8c; }
+[data-theme="light"] .bs:hover { background: #1D4ED8; }
 
-[data-theme="light"] .ni.active { background: rgba(13,150,104,.09); }
-[data-theme="light"] .sb-logo-wrap:hover { background: rgba(13,150,104,.06) !important; }
+[data-theme="light"] .ni.active { background: rgba(79,70,229,.09); }
+[data-theme="light"] .sb-logo-wrap:hover { background: rgba(79,70,229,.06) !important; }
 [data-theme="light"] .sb:hover { box-shadow: 4px 0 24px rgba(0,0,0,.12) !important; }
 
 [data-theme="light"] tbody tr:hover td { background: rgba(0,0,0,.025); }
 
-[data-theme="light"] .cg { color: #065f46; border-color: rgba(16,185,129,.4); }
-[data-theme="light"] .cy { color: #78350f; border-color: rgba(245,158,11,.4); }
-[data-theme="light"] .cr { color: #881337; border-color: rgba(244,63,94,.4); }
-[data-theme="light"] .cb { color: #0c4a6e; border-color: rgba(0,200,255,.4); }
-[data-theme="light"] .cp { color: #4c1d95; border-color: rgba(167,139,250,.4); }
-[data-theme="light"] .co { color: #7c2d12; border-color: rgba(255,107,53,.4); }
+[data-theme="light"] .cg { background: rgba(22,163,74,.12);  color: #15803D; border-color: rgba(22,163,74,.35); }
+[data-theme="light"] .cy { background: rgba(217,119,6,.12);  color: #B45309; border-color: rgba(217,119,6,.35); }
+[data-theme="light"] .cr { background: rgba(220,38,38,.12);  color: #B91C1C; border-color: rgba(220,38,38,.35); }
+[data-theme="light"] .cb { background: rgba(37,99,235,.12);  color: #1D4ED8; border-color: rgba(37,99,235,.35); }
+[data-theme="light"] .cp { background: rgba(124,58,237,.12); color: #6D28D9; border-color: rgba(124,58,237,.35); }
+[data-theme="light"] .co { background: rgba(194,65,12,.12);  color: #9A3412; border-color: rgba(194,65,12,.35); }
 [data-theme="light"] .cgr { background: rgba(0,0,0,.05); color: var(--t3); }
 
 [data-theme="light"] .nbdg.blue { color: #fff; }
 
-[data-theme="light"] .add-il:hover { background: rgba(13,150,104,.07); }
+[data-theme="light"] .add-il:hover { background: rgba(79,70,229,.07); }
 
 [data-theme="light"] .mov { background: rgba(0,0,0,.45); }
 
 [data-theme="light"] .rtag {
-  background: rgba(3,105,161,.08);
-  border-color: rgba(3,105,161,.25);
+  background: rgba(37,99,235,.08);
+  border-color: rgba(37,99,235,.25);
   color: var(--acc2);
 }
 
@@ -871,7 +876,7 @@ textarea.fc { resize: vertical; min-height: 64px; }
 [data-theme="light"] thead th { background: var(--surf3); border-bottom-color: var(--b2); }
 [data-theme="light"] tbody td { border-bottom-color: var(--b2); }
 [data-theme="light"] tbody tr:nth-child(even) td { background: rgba(0,0,0,.03); }
-[data-theme="light"] tbody tr:hover td { background: rgba(13,150,104,.08) !important; }
+[data-theme="light"] tbody tr:hover td { background: rgba(79,70,229,.08) !important; }
 
 /* ─── RESPONSIVO (celular) ───────────────────────────────────
    .sb (sidebar) e .topbar-hamburger têm suas regras de mobile
