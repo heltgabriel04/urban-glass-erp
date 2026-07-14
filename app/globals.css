@@ -306,6 +306,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
   border: 1px solid var(--b1);
   border-radius: var(--r2);
   padding: 18px;
+  box-shadow: var(--card-shadow, none);
 }
 
 .card-sm { padding: 14px; }
@@ -349,6 +350,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
   position: relative;
   overflow: hidden;
   transition: border-color 0.15s, transform 0.15s;
+  box-shadow: var(--card-shadow, none);
 }
 
 .kpi:hover { border-color: var(--b2); transform: translateY(-1px); }
@@ -397,6 +399,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
   border: 1px solid var(--b1);
   border-radius: var(--r3);
   padding: 28px 32px;
+  box-shadow: var(--card-shadow, none);
 }
 
 .hero-label {
@@ -455,6 +458,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
   flex-direction: column;
   gap: 12px;
   transition: border-color 0.12s;
+  box-shadow: var(--card-shadow, none);
 }
 
 .item-card:hover { border-color: var(--b2); }
@@ -677,7 +681,7 @@ textarea.fc { resize: vertical; min-height: 64px; }
 .kb { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; }
 .kbc { min-width: 195px; background: var(--surf2); border: 1px solid var(--b1); border-radius: var(--r2); padding: 12px; flex-shrink: 0; }
 .kbt { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; font-family: 'DM Mono', monospace; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
-.kbcard { background: var(--surf); border: 1px solid var(--b1); border-radius: var(--r); padding: 11px; margin-bottom: 7px; cursor: pointer; transition: 0.12s; }
+.kbcard { background: var(--surf); border: 1px solid var(--b1); border-radius: var(--r); padding: 11px; margin-bottom: 7px; cursor: pointer; transition: 0.12s; box-shadow: var(--card-shadow, none); }
 .kbcard:hover { border-color: var(--b2); transform: translateY(-1px); }
 .kbcard:last-child { margin-bottom: 0; }
 .kbcid { font-size: 9.5px; color: var(--t3); font-family: 'DM Mono', monospace; }
@@ -812,9 +816,14 @@ textarea.fc { resize: vertical; min-height: 64px; }
   --surf3: #EFEFF1;
   --surf4: #E4E4E7;
 
-  --b1: #E4E4E7;
-  --b2: #D4D4D8;
-  --b3: #A1A1AA;
+  --b1: #D4D4D8;
+  --b2: #A1A1AA;
+  --b3: #71717A;
+  /* Ajuste 2026-07-14: --b1 (borda de card) estava sutil demais contra
+     --bg/--surf; escala inteira desceu um degrau pra manter distinção
+     entre b1/b2/b3. --card-shadow só existe no tema claro de propósito
+     (o escuro nunca teve sombra de card e não deve ganhar uma agora). */
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
 
   --acc:  #4F46E5;
   --acc2: #2563EB;
