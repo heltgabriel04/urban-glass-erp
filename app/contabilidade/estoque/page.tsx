@@ -420,7 +420,7 @@ export default function EstoqueGeralPage() {
                 <table>
                   <thead>
                     <tr>
-                      <th>Código</th><th>Descrição</th><th>Grupo</th><th>Localização</th>
+                      <th>Código</th><th>Descrição</th><th>Grupo</th><th>NCM</th><th>Localização</th>
                       <th>Saldo</th><th>Custo Médio</th><th>Valor Total</th><th>Última Compra</th><th>Ação</th>
                     </tr>
                   </thead>
@@ -430,6 +430,7 @@ export default function EstoqueGeralPage() {
                         <td className="mono">{i.codigo}</td>
                         <td>{i.descricao}</td>
                         <td><span className="chip cgr" style={{ fontSize: "11px" }}>{labelGrupoItem(i.grupo)}</span></td>
+                        <td className="mono" style={{ fontSize: "11px", color: i.ncm ? "var(--t1)" : "var(--t3)" }}>{i.ncm ?? "—"}</td>
                         <td>{i.localizacao ?? "—"}</td>
                         <td className="mono">
                           {i.saldo_qtd} {i.unidade}

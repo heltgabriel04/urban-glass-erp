@@ -20,7 +20,8 @@ import {
 import { getResumoNotasSaida, getNotasCanceladas, type ResumoNotasSaida, type NotaCancelada } from "@/services/contabilidadeDashboard.service";
 import { getFornecedores } from "@/services/fornecedores.service";
 import { getNotas } from "@/services/notas.service";
-import type { DocumentoFiscal, DocumentoFiscalInsert, Fornecedor, NotaFiscal, TipoDocumentoFiscal } from "@/types";
+import { getItensEstoqueGerais } from "@/services/itensEstoqueGerais.service";
+import type { DocumentoFiscal, DocumentoFiscalInsert, Fornecedor, ItemEstoqueGeral, NotaFiscal, TipoDocumentoFiscal } from "@/types";
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -60,15 +61,20 @@ interface ModalDocProps {
   mes: number;
   fornecedores: Fornecedor[];
   notasVenda: NotaFiscal[];
+  itensEstoque: ItemEstoqueGeral[];
   usuarioEmail: string;
   onSalvo: () => void;
   onFechar: () => void;
 }
 
-function ModalDocumento({ tipo, titulo, editando, ano, mes, fornecedores, notasVenda, usuarioEmail, onSalvo, onFechar }: ModalDocProps) {
+function ModalDocumento({ tipo, titulo, editando, ano, mes, fornecedores, notasVenda, itensEstoque, usuarioEmail, onSalvo, onFechar }: ModalDocProps) {
   const { toast } = useToast();
   const base = editando ?? docVazio(tipo, ano, mes);
   const [form, setForm] = useState<DocumentoFiscalInsert>({ ...base });
+  // Só ajuda a pré-preencher o NCM a partir do cadastro do item — não é
+  // salvo no documento fiscal (que não tem vínculo a item de estoque),
+  // só evita redigitar um NCM que já existe em outro lugar do sistema.
+  const [itemEstoqueId, setItemEstoqueId] = useState("");
   const [xmlFile, setXmlFile] = useState<File | null>(null);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [fotos, setFotos] = useState<File[]>([]);
@@ -158,6 +164,19 @@ function ModalDocumento({ tipo, titulo, editando, ano, mes, fornecedores, notasV
               <Campo label="Chave de Acesso (44 dígitos)">
                 <input className="fc" value={form.chave_acesso ?? ""} maxLength={44} style={{ fontFamily: "'DM Mono', monospace" }}
                   onChange={(e) => set("chave_acesso", e.target.value.replace(/\D/g, "").slice(0, 44) || null)} />
+              </Campo>
+              <Campo label="Item do Estoque Geral (opcional — preenche o NCM)">
+                <select className="fc" value={itemEstoqueId} onChange={(e) => {
+                  const id = e.target.value;
+                  setItemEstoqueId(id);
+                  const item = itensEstoque.find((i) => String(i.id) === id);
+                  if (item?.ncm) set("ncm", item.ncm);
+                }}>
+                  <option value="">Selecione pra preencher o NCM...</option>
+                  {itensEstoque.map((i) => (
+                    <option key={i.id} value={i.id}>{i.codigo} · {i.descricao}{i.ncm ? ` (NCM ${i.ncm})` : " (sem NCM cadastrado)"}</option>
+                  ))}
+                </select>
               </Campo>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
                 <Campo label="NCM">
@@ -300,6 +319,7 @@ export default function DocumentosFiscaisPage() {
   const [canceladas, setCanceladas] = useState<NotaCancelada[]>([]);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [notasVenda, setNotasVenda] = useState<NotaFiscal[]>([]);
+  const [itensEstoque, setItensEstoque] = useState<ItemEstoqueGeral[]>([]);
   const [usuarioEmail, setUsuarioEmail] = useState("");
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState<DocumentoFiscal | null>(null);
@@ -307,6 +327,7 @@ export default function DocumentosFiscaisPage() {
 
   useEffect(() => {
     getFornecedores(true).then(setFornecedores);
+    getItensEstoqueGerais({ ativo: true }).then(setItensEstoque);
     supabase.auth.getUser().then(({ data }) => setUsuarioEmail(data.user?.email ?? "sistema"));
   }, []);
 
@@ -367,6 +388,7 @@ export default function DocumentosFiscaisPage() {
           mes={mes}
           fornecedores={fornecedores}
           notasVenda={notasVenda}
+          itensEstoque={itensEstoque}
           usuarioEmail={usuarioEmail}
           onSalvo={() => { setModalAberto(null); setEditando(null); load(); }}
           onFechar={() => { setModalAberto(null); setEditando(null); }}
