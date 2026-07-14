@@ -1,15 +1,19 @@
 import { supabase } from '@/lib/supabase/client';
+import { getCMVPeriodo, type CMVPeriodo } from './contabilidadeEstoqueCmv.service';
 
 export interface DRELinhaDespesa { categoria: string; valor: number; }
 
 export type RegimeDRE = 'competencia' | 'caixa';
+
+export type DRECmvDetalhe = Pick<CMVPeriodo, 'vidro' | 'itensGerais'>;
 
 export interface DRE {
   regime: RegimeDRE;
   receitaBruta: number;     // competência: Σ valor_total dos pedidos · caixa: Σ baixas de Entrada
   devolucoes: number;       // lançamentos natureza='devolucao' no período
   receita: number;          // receitaBruta − devolucoes
-  cmv: number;              // custo das chapas (aprox., custo_m2 atual) — só calculado em competência
+  cmv: number;              // mesmo CMV rigoroso da tela Estoque/CMV — só calculado em competência
+  cmvDetalhe: DRECmvDetalhe | null;  // quebra vidro/itens gerais — null no regime 'caixa'
   lucroBruto: number;       // receita − cmv
   despesas: DRELinhaDespesa[];
   despesasTotal: number;
@@ -44,7 +48,8 @@ function agruparDespesas(rows: Array<{ valor: number; plano_contas: { descricao:
  * DRE por regime de competência × caixa (`regime`, default 'competencia').
  * Competência:
  *   Receita Bruta (faturamento por dt_pedido)
- *   (−) CMV (custo das chapas; custo_m2 atual, sem lapidação)
+ *   (−) CMV (mesmo cálculo rigoroso da tela Contabilidade → Estoque →
+ *       CMV: vidro por custo histórico + itens gerais por EI+Compras−EF)
  *   = Lucro Bruto
  *   (−) Despesas operacionais (lançamentos de Saída por vencimento, agrupados pelo Plano de Contas)
  *   = Resultado
@@ -76,17 +81,17 @@ export async function getDRE(ano: number, mes: number | null, regime: RegimeDRE 
     const resultado = parseFloat((lucroBruto - despesasTotal).toFixed(2));
 
     return {
-      regime, receitaBruta, devolucoes, receita, cmv, lucroBruto, despesas, despesasTotal, resultado,
+      regime, receitaBruta, devolucoes, receita, cmv, cmvDetalhe: null, lucroBruto, despesas, despesasTotal, resultado,
       margemBrutaPct:   receita > 0 ? (lucroBruto / receita) * 100 : 0,
       margemLiquidaPct: receita > 0 ? (resultado / receita) * 100 : 0,
     };
   }
 
-  const [pedidosRes, estoqueRes, despesasRes, devolucoesRes] = await Promise.all([
+  const [pedidosRes, despesasRes, devolucoesRes, cmvPeriodo] = await Promise.all([
     supabase.from('pedidos').select('id, valor_total').neq('status', 'Cancelado').gte('dt_pedido', ini).lte('dt_pedido', fim),
-    supabase.from('estoque').select('produto_id, custo_m2'),
     supabase.from('lancamentos').select('valor, vencimento, plano_contas(descricao)').eq('tipo', 'Saída').eq('natureza', 'normal').gte('vencimento', ini).lte('vencimento', fim).is('deletado_em', null),
     supabase.from('lancamentos').select('valor').eq('natureza', 'devolucao').gte('vencimento', ini).lte('vencimento', fim).is('deletado_em', null),
+    getCMVPeriodo(ini, fim),
   ]);
 
   const pedidos = (pedidosRes.data ?? []) as Array<{ id: string; valor_total: number }>;
@@ -94,25 +99,9 @@ export async function getDRE(ano: number, mes: number | null, regime: RegimeDRE 
   const devolucoes = parseFloat((devolucoesRes.data ?? []).reduce((a, d) => a + Number((d as { valor: number }).valor), 0).toFixed(2));
   const receita = parseFloat((receitaBruta - devolucoes).toFixed(2));
 
-  // CMV dos pedidos do período
-  let cmv = 0;
-  const pedidoIds = pedidos.map(p => p.id);
-  if (pedidoIds.length) {
-    const custoM2 = new Map<number, number>();
-    for (const e of (estoqueRes.data ?? []) as Array<{ produto_id: number | null; custo_m2: number }>) {
-      if (e.produto_id != null) custoM2.set(e.produto_id, Number(e.custo_m2) || 0);
-    }
-    const { data: itens } = await supabase
-      .from('itens_pedido')
-      .select('produto_id, m2, vidro_cliente')
-      .in('pedido_id', pedidoIds);
-    for (const it of (itens ?? []) as Array<{ produto_id: number | null; m2: number; vidro_cliente: boolean }>) {
-      if (it.vidro_cliente) continue;
-      const c = it.produto_id != null ? (custoM2.get(it.produto_id) ?? 0) : 0;
-      cmv += Number(it.m2) * c;
-    }
-    cmv = parseFloat(cmv.toFixed(2));
-  }
+  // CMV dos pedidos do período — mesmo cálculo rigoroso da tela Estoque/CMV
+  const cmv = cmvPeriodo.cmvTotal;
+  const cmvDetalhe: DRECmvDetalhe = { vidro: cmvPeriodo.vidro, itensGerais: cmvPeriodo.itensGerais };
 
   const lucroBruto = parseFloat((receita - cmv).toFixed(2));
 
@@ -124,7 +113,7 @@ export async function getDRE(ano: number, mes: number | null, regime: RegimeDRE 
   const resultado = parseFloat((lucroBruto - despesasTotal).toFixed(2));
 
   return {
-    regime, receitaBruta, devolucoes, receita, cmv, lucroBruto, despesas, despesasTotal, resultado,
+    regime, receitaBruta, devolucoes, receita, cmv, cmvDetalhe, lucroBruto, despesas, despesasTotal, resultado,
     margemBrutaPct:   receita > 0 ? (lucroBruto / receita) * 100 : 0,
     margemLiquidaPct: receita > 0 ? (resultado / receita) * 100 : 0,
   };
