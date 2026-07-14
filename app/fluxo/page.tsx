@@ -94,6 +94,9 @@ function FluxoPageInner() {
   const [filtroSituacao, setFiltroSituacao] = useState<"Todos" | (typeof SITUACOES)[number]>("Todos");
   const [filtroPlano, setFiltroPlano] = useState("");
   const [busca, setBusca] = useState("");
+  // Painel de filtros extras começa fechado — ocupava espaço grande demais
+  // parado no estado padrão, empurrando os KPIs pra baixo.
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -284,6 +287,8 @@ function FluxoPageInner() {
     );
   }
 
+  const filtrosAtivos = (filtroTipo !== "Todos" ? 1 : 0) + (filtroSituacao !== "Todos" ? 1 : 0) + (filtroPlano ? 1 : 0) + (busca ? 1 : 0);
+
   return (
     <AppLayout>
       <div className="tb">
@@ -300,56 +305,7 @@ function FluxoPageInner() {
           o usuário decidir se estende pro resto do sistema. */}
       <div className="con" style={theme === "light" ? { background: "#eef1f6" } : undefined}>
 
-        {/* Filtro de período — estilo extrato */}
-        <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", marginBottom: "14px", background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "8px", padding: "9px 12px" }}>
-          <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
-            {ATALHOS.map(a => {
-              const [ai, af] = a.get();
-              const ativo = !verTudo && ai === dataIni && af === dataFim;
-              return (
-                <button key={a.label} className={ativo ? "btn bp xs" : "btn bg xs"}
-                  onClick={() => setPeriodo(ai, af)}>
-                  {a.label}
-                </button>
-              );
-            })}
-            <button className={verTudo ? "btn bp xs" : "btn bg xs"} onClick={() => setVerTudo(true)}>
-              Ver tudo
-            </button>
-          </div>
-          <div style={{ display: "flex", gap: "6px", alignItems: "center", marginLeft: "auto" }}>
-            <span style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>De</span>
-            <DateInput value={dataIni} onChange={v => setPeriodo(v, dataFim)} style={inputXs} />
-            <span style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Até</span>
-            <DateInput value={dataFim} onChange={v => setPeriodo(dataIni, v)} style={inputXs} />
-          </div>
-        </div>
-
-        {/* Filtros extras — vieram de Movimentações */}
-        <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap", marginBottom: "16px", background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "8px", padding: "9px 12px" }}>
-          <select className="fc" style={inputSelXs} value={filtroTipo} onChange={e => setFiltroTipo(e.target.value as typeof filtroTipo)}>
-            <option value="Todos">Todos os tipos</option>
-            <option value="Entrada">↑ Entrada</option>
-            <option value="Saída">↓ Saída</option>
-          </select>
-          <select className="fc" style={inputSelXs} value={filtroSituacao} onChange={e => setFiltroSituacao(e.target.value as typeof filtroSituacao)}>
-            <option value="Todos">Todas as situações</option>
-            {SITUACOES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <select className="fc" style={{ ...inputSelXs, width: "200px" }} value={filtroPlano} onChange={e => setFiltroPlano(e.target.value)}>
-            <option value="">Todos os planos de contas</option>
-            {planos.map(p => <option key={p.id} value={p.id}>{p.codigo_estruturado} · {p.descricao}</option>)}
-          </select>
-          <input className="fc" style={{ ...inputSelXs, width: "220px" }} placeholder="Buscar cliente, fornecedor ou descrição..."
-            value={busca} onChange={e => setBusca(e.target.value)} />
-          {(filtroTipo !== "Todos" || filtroSituacao !== "Todos" || filtroPlano || busca) && (
-            <button className="btn bg xs" onClick={() => { setFiltroTipo("Todos"); setFiltroSituacao("Todos"); setFiltroPlano(""); setBusca(""); }}>
-              ✕ Limpar
-            </button>
-          )}
-        </div>
-
-        {/* KPIs */}
+        {/* KPIs — primeira coisa visível na página, antes de qualquer filtro */}
         <div className="g4" style={{ marginBottom: "16px" }}>
           <div className="kpi">
             <div className="kpi-l">Caixa Atual</div>
@@ -374,6 +330,60 @@ function FluxoPageInner() {
             <div className="kpi-s">{visiveis.filter(l => l.tipo === "Saída").length} lançamento(s)</div>
           </div>
         </div>
+
+        {/* Filtro de período — estilo extrato */}
+        <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", marginBottom: "14px", background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "8px", padding: "9px 12px" }}>
+          <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
+            {ATALHOS.map(a => {
+              const [ai, af] = a.get();
+              const ativo = !verTudo && ai === dataIni && af === dataFim;
+              return (
+                <button key={a.label} className={ativo ? "btn bp xs" : "btn bg xs"}
+                  onClick={() => setPeriodo(ai, af)}>
+                  {a.label}
+                </button>
+              );
+            })}
+            <button className={verTudo ? "btn bp xs" : "btn bg xs"} onClick={() => setVerTudo(true)}>
+              Ver tudo
+            </button>
+          </div>
+          <div style={{ display: "flex", gap: "6px", alignItems: "center", marginLeft: "auto" }}>
+            <span style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>De</span>
+            <DateInput value={dataIni} onChange={v => setPeriodo(v, dataFim)} style={inputXs} />
+            <span style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Até</span>
+            <DateInput value={dataFim} onChange={v => setPeriodo(dataIni, v)} style={inputXs} />
+            <button className={filtrosAbertos ? "btn bp xs" : "btn bg xs"} onClick={() => setFiltrosAbertos(v => !v)}>
+              ⚙ Filtros{filtrosAtivos > 0 ? ` (${filtrosAtivos})` : ""}
+            </button>
+          </div>
+        </div>
+
+        {/* Filtros extras — vieram de Movimentações, escondidos por padrão */}
+        {filtrosAbertos && (
+        <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap", marginBottom: "16px", background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "8px", padding: "9px 12px" }}>
+          <select className="fc" style={inputSelXs} value={filtroTipo} onChange={e => setFiltroTipo(e.target.value as typeof filtroTipo)}>
+            <option value="Todos">Todos os tipos</option>
+            <option value="Entrada">↑ Entrada</option>
+            <option value="Saída">↓ Saída</option>
+          </select>
+          <select className="fc" style={inputSelXs} value={filtroSituacao} onChange={e => setFiltroSituacao(e.target.value as typeof filtroSituacao)}>
+            <option value="Todos">Todas as situações</option>
+            {SITUACOES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select className="fc" style={{ ...inputSelXs, width: "200px" }} value={filtroPlano} onChange={e => setFiltroPlano(e.target.value)}>
+            <option value="">Todos os planos de contas</option>
+            {planos.map(p => <option key={p.id} value={p.id}>{p.codigo_estruturado} · {p.descricao}</option>)}
+          </select>
+          <input className="fc" style={{ ...inputSelXs, width: "220px" }} placeholder="Buscar cliente, fornecedor ou descrição..."
+            value={busca} onChange={e => setBusca(e.target.value)} />
+          {(filtroTipo !== "Todos" || filtroSituacao !== "Todos" || filtroPlano || busca) && (
+            <button className="btn bg xs" onClick={() => { setFiltroTipo("Todos"); setFiltroSituacao("Todos"); setFiltroPlano(""); setBusca(""); }}>
+              ✕ Limpar
+            </button>
+          )}
+        </div>
+        )}
 
         {loading ? <div className="loading">Carregando...</div> : (
           <div className="tw">
