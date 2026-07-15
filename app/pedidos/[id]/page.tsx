@@ -764,6 +764,12 @@ export default function PedidoDetalhe() {
     await load();
   }
 
+  async function handleToggleSemNotaFiscal() {
+    if (!pedido) return;
+    await updatePedido(id, { sem_nota_fiscal: !pedido.sem_nota_fiscal } as any);
+    await load();
+  }
+
   if (loading) return <AppLayout><div className="con"><div className="loading">Carregando pedido...</div></div></AppLayout>;
   if (!pedido) return <AppLayout><div className="con"><div style={{ color:"var(--err)", padding:"32px" }}>Pedido não encontrado.</div></div></AppLayout>;
 
@@ -1413,11 +1419,18 @@ export default function PedidoDetalhe() {
                 {(pedido.nfe_urls?.length ?? 0) > 0 && (
                   <span style={{ fontSize: "10px", background: "rgba(99,102,241,.15)", color: "var(--acc)", borderRadius: "10px", padding: "1px 7px", fontWeight: 700 }}>{pedido.nfe_urls!.length}</span>
                 )}
+                {pedido.sem_nota_fiscal && (
+                  <span style={{ fontSize: "10px", background: "var(--surf2)", color: "var(--t3)", border: "1px solid var(--b2)", borderRadius: "10px", padding: "1px 7px", fontWeight: 700 }}>VENDIDO SEM NF</span>
+                )}
               </div>
               <span style={{ fontSize: "11px", color: "var(--t3)", transform: abrirNfe ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}>▾</span>
             </button>
             {abrirNfe && (
               <div style={{ padding: "0 18px 14px" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "7px", fontSize: "11.5px", color: "var(--t2)", cursor: "pointer", marginBottom: "12px" }}>
+                  <input type="checkbox" name="sem_nota_fiscal" checked={!!pedido.sem_nota_fiscal} onChange={handleToggleSemNotaFiscal} style={{ width: "13px", height: "13px", accentColor: "var(--acc)", cursor: "pointer" }} />
+                  Este pedido foi vendido sem nota fiscal
+                </label>
                 {(pedido.itens_pedido?.length ?? 0) > 0 && (
                   <div style={{ marginBottom: "12px" }}>
                     <div style={{ fontSize: "9.5px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase", marginBottom: "6px" }}>

@@ -342,6 +342,14 @@ function PedidosPageInner() {
                   const bloqueado     = !finalizado && p.status === "Aguardando otimização" && !podeAvancarSemOtim;
                   const temEtiqueta   = temOtim || isChapa || isVidroCliente;
 
+                  // Documentos pendentes (NF-e, boleto, romaneio assinado) — só sinaliza
+                  // quando o documento já era esperado nessa fase do pedido.
+                  const faltaNfe      = !p.sem_nota_fiscal && (p.nfe_urls?.length ?? 0) === 0
+                    && p.status !== "Cancelado" && ["Separação", "Finalizado", "Entregue"].includes(p.status);
+                  const faltaBoleto   = (p.boleto_urls?.length ?? 0) === 0
+                    && p.status !== "Cancelado" && p.forma_pgto?.toLowerCase().includes("boleto");
+                  const faltaRomaneio = (p.romaneio_assinado_urls?.length ?? 0) === 0 && p.status === "Entregue";
+
                   return (
                     <tr
                       key={p.id}
@@ -352,7 +360,21 @@ function PedidosPageInner() {
                     >
                       <td><span className="mono" style={{ color:"var(--acc)" }}>{p.id}</span></td>
                       <td>
-                        <strong>{p.clientes?.nome ?? "—"}</strong>
+                        <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap" }}>
+                          <strong>{p.clientes?.nome ?? "—"}</strong>
+                          {p.sem_nota_fiscal && (
+                            <span title="Vendido sem nota fiscal" style={{ fontSize: "9px", fontWeight: 700, color: "var(--t3)", background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: "8px", padding: "1px 6px" }}>S/NF</span>
+                          )}
+                          {faltaNfe && (
+                            <span title="NF-e pendente de anexar" style={{ fontSize: "9px", fontWeight: 700, color: "var(--err)", background: "rgba(244,63,94,.12)", border: "1px solid rgba(244,63,94,.25)", borderRadius: "8px", padding: "1px 6px" }}>NF</span>
+                          )}
+                          {faltaBoleto && (
+                            <span title="Boleto pendente de anexar" style={{ fontSize: "9px", fontWeight: 700, color: "var(--err)", background: "rgba(244,63,94,.12)", border: "1px solid rgba(244,63,94,.25)", borderRadius: "8px", padding: "1px 6px" }}>BL</span>
+                          )}
+                          {faltaRomaneio && (
+                            <span title="Romaneio assinado pendente de anexar" style={{ fontSize: "9px", fontWeight: 700, color: "var(--err)", background: "rgba(244,63,94,.12)", border: "1px solid rgba(244,63,94,.25)", borderRadius: "8px", padding: "1px 6px" }}>RM</span>
+                          )}
+                        </div>
                         {p.clientes?.cidade && <div className="tdim">{p.clientes.cidade}</div>}
                       </td>
                       <td className="mono">{formatDate(p.dt_pedido)}</td>

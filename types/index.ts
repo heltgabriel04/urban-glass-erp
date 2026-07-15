@@ -286,6 +286,7 @@ export interface Pedido {
   romaneio_assinado_urls?: string[] | null;
   nfe_urls?: string[] | null;
   boleto_urls?: string[] | null;
+  sem_nota_fiscal?: boolean;
   created_at: string;
   updated_at: string;
   clientes?: Cliente;
