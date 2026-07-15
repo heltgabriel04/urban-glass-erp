@@ -229,7 +229,7 @@ export async function emitirNFeCompleta(p: PayloadNota): Promise<{ ok: boolean; 
       numero_item:                  String(i + 1),
       codigo_produto:               `ITEM-${String(i+1).padStart(3,"0")}`,
       descricao:                    item.produto_nome,
-      codigo_ncm:                   item.ncm || "70031200",
+      codigo_ncm:                   item.ncm || configPadrao.ncm_padrao,
       cfop:                         (item.cfop || cfopNum).replace(".", ""),
       unidade_comercial:            item.unidade,
       quantidade_comercial:         String(Number(item.quantidade.toFixed(4))),
