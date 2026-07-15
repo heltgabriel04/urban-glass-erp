@@ -228,7 +228,7 @@ export default function VendedoresPage() {
 
               <div className="fr">
                 <Campo label="Status">
-                  <select className="fc" value={form.ativo ? "1" : "0"} onChange={e => F("ativo", e.target.value === "1")}>
+                  <select name="ativo" className="fc" value={form.ativo ? "1" : "0"} onChange={e => F("ativo", e.target.value === "1")}>
                     <option value="1">Ativo</option>
                     <option value="0">Inativo</option>
                   </select>
@@ -236,24 +236,24 @@ export default function VendedoresPage() {
               </div>
 
               <Campo label="Nome completo *">
-                <input className="fc" value={form.nome} onChange={e => F("nome", e.target.value)} placeholder="Nome do vendedor" autoFocus />
+                <input name="nome" className="fc" value={form.nome} onChange={e => F("nome", e.target.value)} placeholder="Nome do vendedor" autoFocus />
               </Campo>
 
               <div className="fr">
                 <Campo label="Telefone">
-                  <input className="fc" value={form.telefone ? mascTel(form.telefone) : ""}
+                  <input name="telefone" className="fc" value={form.telefone ? mascTel(form.telefone) : ""}
                     onChange={e => F("telefone", e.target.value.replace(/\D/g, ""))}
                     placeholder="(32) 99999-9999" maxLength={15} inputMode="numeric" />
                 </Campo>
                 <Campo label="CPF">
-                  <input className="fc" value={form.cpf ? mascCpf(form.cpf) : ""}
+                  <input name="cpf" className="fc" value={form.cpf ? mascCpf(form.cpf) : ""}
                     onChange={e => F("cpf", e.target.value.replace(/\D/g, ""))}
                     placeholder="000.000.000-00" maxLength={14} inputMode="numeric" />
                 </Campo>
               </div>
 
               <Campo label="E-mail">
-                <input className="fc" type="email" value={form.email ?? ""}
+                <input name="email" className="fc" type="email" value={form.email ?? ""}
                   onChange={e => F("email", e.target.value || null)}
                   placeholder="vendedor@email.com" inputMode="email" />
               </Campo>
@@ -288,7 +288,7 @@ export default function VendedoresPage() {
               </div>
 
               <Campo label="Observações">
-                <textarea className="fc" rows={2} style={{ resize: "vertical" }}
+                <textarea name="obs" className="fc" rows={2} style={{ resize: "vertical" }}
                   value={form.obs ?? ""} onChange={e => F("obs", e.target.value || null)}
                   placeholder="Informações adicionais..." />
               </Campo>

@@ -40,7 +40,7 @@ export default function FiltroGlobalFinanceiro({ mostrarPeriodo = true, mostrarC
         Filtros
       </span>
       {mostrarPeriodo && (
-        <select className="fc" style={{ margin: 0, width: "auto" }} value={filtro.periodo}
+        <select name="filtro_periodo" className="fc" style={{ margin: 0, width: "auto" }} value={filtro.periodo}
           onChange={e => setFiltro({ periodo: e.target.value as PeriodoFiltro })}>
           {(Object.keys(PERIODO_LABEL) as PeriodoFiltro[]).map(p => (
             <option key={p} value={p}>{PERIODO_LABEL[p]}</option>
@@ -48,7 +48,7 @@ export default function FiltroGlobalFinanceiro({ mostrarPeriodo = true, mostrarC
         </select>
       )}
       {mostrarConta && (
-        <select className="fc" style={{ margin: 0, width: "auto" }} value={filtro.contaId ?? ""}
+        <select name="filtro_conta_id" className="fc" style={{ margin: 0, width: "auto" }} value={filtro.contaId ?? ""}
           onChange={e => setFiltro({ contaId: e.target.value ? Number(e.target.value) : null })}>
           <option value="">Todas as contas</option>
           {contas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}

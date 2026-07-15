@@ -118,7 +118,7 @@ function SecaoPadrao({ padrao, onChange, onSalvar, salvando }: SecaoPadraoProps)
               { key: "aliq_ipi",         label: "IPI",                        hint: "ex: 0" },
             ] as const).map(({ key, label, hint }) => (
               <Campo key={key} labelStyle={{ fontSize: "10px" }} label={label}>
-                <input
+                <input name="padrao"
                   className="fc"
                   type="number"
                   min="0"
@@ -141,7 +141,7 @@ function SecaoPadrao({ padrao, onChange, onSalvar, salvando }: SecaoPadraoProps)
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px" }}>
             <Campo label="NCM Padrão">
-              <input
+              <input name="padrao_ncm_padrao"
                 className="fc"
                 value={padrao.ncm_padrao}
                 onChange={(e) => set("ncm_padrao", e.target.value.replace(/\D/g, "").slice(0, 8))}
@@ -150,17 +150,17 @@ function SecaoPadrao({ padrao, onChange, onSalvar, salvando }: SecaoPadraoProps)
               />
             </Campo>
             <Campo label={`${padrao.regime === "simples" ? "CSOSN" : "CST ICMS"} Padrão`}>
-              <select className="fc" value={padrao.cst_icms_padrao} onChange={(e) => set("cst_icms_padrao", e.target.value)}>
+              <select name="padrao_cst_icms_padrao" className="fc" value={padrao.cst_icms_padrao} onChange={(e) => set("cst_icms_padrao", e.target.value)}>
                 {cstOpcoes.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </Campo>
             <Campo label="CFOP Dentro (MG)">
-              <select className="fc" value={padrao.cfop_dentro_padrao} onChange={(e) => set("cfop_dentro_padrao", e.target.value)}>
+              <select name="padrao_cfop_dentro_padrao" className="fc" value={padrao.cfop_dentro_padrao} onChange={(e) => set("cfop_dentro_padrao", e.target.value)}>
                 {CFOP_DENTRO.map((o) => <option key={o.value} value={o.value}>{o.value.replace(/(\d)(\d{3})/, "$1.$2")}</option>)}
               </select>
             </Campo>
             <Campo label="CFOP Fora">
-              <select className="fc" value={padrao.cfop_fora_padrao} onChange={(e) => set("cfop_fora_padrao", e.target.value)}>
+              <select name="padrao_cfop_fora_padrao" className="fc" value={padrao.cfop_fora_padrao} onChange={(e) => set("cfop_fora_padrao", e.target.value)}>
                 {CFOP_FORA.map((o) => <option key={o.value} value={o.value}>{o.value.replace(/(\d)(\d{3})/, "$1.$2")}</option>)}
               </select>
             </Campo>

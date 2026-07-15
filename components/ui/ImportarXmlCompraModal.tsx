@@ -93,7 +93,7 @@ export default function ImportarXmlCompraModal({ produtos, fornecedores, onImpor
     <Modal open onClose={onClose} title="Importar XML de Compra" width="620px" style={{ maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "20px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>
           <Campo label="Arquivo XML da NF-e">
-            <input className="fc" type="file" accept=".xml" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+            <input className="fc" type="file" accept=".xml" name="arquivo_xml" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
           </Campo>
 
           {lendo && <div style={{ fontSize: "12px", color: "var(--t3)" }}>Lendo XML...</div>}
@@ -124,7 +124,7 @@ export default function ImportarXmlCompraModal({ produtos, fornecedores, onImpor
               )}
               {!fornecedorNaoAchado && fornecedorId !== null && (
                 <Campo label="Fornecedor">
-                  <select className="fc" value={fornecedorId} onChange={(e) => setFornecedorId(Number(e.target.value))}>
+                  <select name="fornecedor_id" className="fc" value={fornecedorId} onChange={(e) => setFornecedorId(Number(e.target.value))}>
                     {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
                   </select>
                 </Campo>
@@ -138,7 +138,7 @@ export default function ImportarXmlCompraModal({ produtos, fornecedores, onImpor
                     <div style={{ fontSize: "10px", color: "var(--t3)" }}>NCM {item.ncm ?? "—"} · CFOP {item.cfop ?? "—"} · {item.quantidade} {item.unidade} · {item.valorTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
                   </div>
                   <Campo label="Produto">
-                    <select className="fc" value={produtoIds[i] ?? ""} onChange={(e) => {
+                    <select name="produto_ids" className="fc" value={produtoIds[i] ?? ""} onChange={(e) => {
                       const v = e.target.value ? Number(e.target.value) : null;
                       setProdutoIds((prev) => prev.map((p, idx) => idx === i ? v : p));
                     }}>

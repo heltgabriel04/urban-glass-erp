@@ -229,10 +229,10 @@ export default function RetiradasPedidoPage() {
                 <DateInput value={novaData} onChange={setNovaData} className="fc" />
               </Campo>
               <Campo label="Motorista (opcional)">
-                <input className="fc" value={novoMotorista} onChange={e => setNovoMotorista(e.target.value)} placeholder="Nome do motorista" />
+                <input name="novo_motorista" className="fc" value={novoMotorista} onChange={e => setNovoMotorista(e.target.value)} placeholder="Nome do motorista" />
               </Campo>
               <Campo label="Veículo (opcional)">
-                <input className="fc" value={novoVeiculo} onChange={e => setNovoVeiculo(e.target.value)} placeholder="Placa / modelo" />
+                <input name="novo_veiculo" className="fc" value={novoVeiculo} onChange={e => setNovoVeiculo(e.target.value)} placeholder="Placa / modelo" />
               </Campo>
             </div>
 
@@ -281,7 +281,7 @@ export default function RetiradasPedidoPage() {
                         opacity: disponivel ? 1 : 0.5,
                       }}
                     >
-                      <input
+                      <input name="sel_sel"
                         type="checkbox"
                         checked={sel.sel}
                         disabled={!disponivel}
@@ -302,12 +302,12 @@ export default function RetiradasPedidoPage() {
                           <span className={STATUS_CHIP[s.status]}>{s.status}</span>
                         )}
                       </div>
-                      <input
+                      <input name="sel_quantidade"
                         className="fc" type="number" min={0} max={s.quantidade_pendente} disabled={!disponivel}
                         value={sel.quantidade}
                         onChange={e => setItemQuantidade(s.item_pedido_id, Number(e.target.value), s.quantidade_pendente)}
                       />
-                      <input
+                      <input name="sel_obs"
                         className="fc" disabled={!disponivel}
                         value={sel.obs}
                         onChange={e => setItemObs(s.item_pedido_id, e.target.value)}

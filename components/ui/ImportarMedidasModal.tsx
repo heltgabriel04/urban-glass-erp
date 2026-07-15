@@ -86,7 +86,7 @@ export default function ImportarMedidasModal({ produtos, onImportar, onClose }: 
             </div>
 
             <Campo style={{ marginBottom: "16px" }} label="Vidro para todos os itens importados (opcional)">
-              <select className="fc" value={produtoId ?? ""} onChange={e => setProdutoId(e.target.value ? Number(e.target.value) : null)}>
+              <select name="produto_id" className="fc" value={produtoId ?? ""} onChange={e => setProdutoId(e.target.value ? Number(e.target.value) : null)}>
                 <option value="">— Deixar em branco, selecionar depois —</option>
                 {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
               </select>

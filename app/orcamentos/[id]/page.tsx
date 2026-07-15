@@ -332,7 +332,7 @@ export default function OrcamentoDetalhe() {
                   {uploadandoAssinado ? "Enviando..." : "Substituir"}
                 </button>
                 <button className="btn bw sm" onClick={handleRemoverAssinado} disabled={uploadandoAssinado}>Remover</button>
-                <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: "none" }}
+                <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" name="arquivo_assinado" style={{ display: "none" }}
                   onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadAssinado(f); e.target.value = ""; }} />
               </div>
             ) : (
@@ -343,7 +343,7 @@ export default function OrcamentoDetalhe() {
                 <span style={{ fontSize: "12px", color: "var(--t3)" }}>
                   {uploadandoAssinado ? "Enviando..." : "Arraste ou clique para anexar o orçamento assinado pelo cliente (PDF ou imagem)"}
                 </span>
-                <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: "none" }} disabled={uploadandoAssinado}
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png" name="arquivo_assinado" style={{ display: "none" }} disabled={uploadandoAssinado}
                   onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadAssinado(f); e.target.value = ""; }} />
               </label>
             )}
@@ -516,7 +516,7 @@ export default function OrcamentoDetalhe() {
 
               <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
                 <label style={{ fontSize:"12px", color:"var(--t3)", fontWeight:600 }}>Motivo</label>
-                <select className="fc" value={motivoRejeicao} onChange={e => setMotivoRejeicao(e.target.value)} style={{ margin:0 }}>
+                <select name="motivo_rejeicao" className="fc" value={motivoRejeicao} onChange={e => setMotivoRejeicao(e.target.value)} style={{ margin:0 }}>
                   <option value="">Selecione o motivo...</option>
                   {MOTIVOS.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
@@ -524,7 +524,7 @@ export default function OrcamentoDetalhe() {
 
               <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
                 <label style={{ fontSize:"12px", color:"var(--t3)", fontWeight:600 }}>Observações <span style={{ fontWeight:400 }}>(opcional)</span></label>
-                <textarea
+                <textarea name="obs_rejeicao"
                   className="fc"
                   value={obsRejeicao}
                   onChange={e => setObsRejeicao(e.target.value)}

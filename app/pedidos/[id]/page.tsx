@@ -974,11 +974,11 @@ export default function PedidoDetalhe() {
                   </div>
                   <div style={{ display:"flex", flexDirection:"column", gap:"4px", flex:"1 1 140px" }}>
                     <label style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600 }}>Motorista (opcional)</label>
-                    <input value={retTudoMot} onChange={e => setRetTudoMot(e.target.value)} placeholder="—" style={{ background:"var(--surf3)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"7px 10px", color:"var(--t1)", fontSize:"13px", outline:"none" }} />
+                    <input name="ret_tudo_mot" value={retTudoMot} onChange={e => setRetTudoMot(e.target.value)} placeholder="—" style={{ background:"var(--surf3)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"7px 10px", color:"var(--t1)", fontSize:"13px", outline:"none" }} />
                   </div>
                   <div style={{ display:"flex", flexDirection:"column", gap:"4px", flex:"1 1 140px" }}>
                     <label style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600 }}>Veículo (opcional)</label>
-                    <input value={retTudoVei} onChange={e => setRetTudoVei(e.target.value)} placeholder="—" style={{ background:"var(--surf3)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"7px 10px", color:"var(--t1)", fontSize:"13px", outline:"none" }} />
+                    <input name="ret_tudo_vei" value={retTudoVei} onChange={e => setRetTudoVei(e.target.value)} placeholder="—" style={{ background:"var(--surf3)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"7px 10px", color:"var(--t1)", fontSize:"13px", outline:"none" }} />
                   </div>
                   <div style={{ display:"flex", gap:"8px" }}>
                     <button className="btn bp sm" onClick={handleRetTudo} disabled={salvandoRet} style={{ whiteSpace:"nowrap" }}>
@@ -1084,7 +1084,7 @@ export default function PedidoDetalhe() {
                           <div key={l.id} style={{ background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px", border:`1px solid ${vencido ? "rgba(244,63,94,.3)" : "var(--b2)"}` }}>
                             {/* linha topo: checkbox + descrição + valor + lixeira */}
                             <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
-                              <input
+                              <input name={`marcar_pago_${l.id}`}
                                 type="checkbox"
                                 disabled={marcando}
                                 onChange={() => handleMarcarPago(l.id)}
@@ -1122,7 +1122,7 @@ export default function PedidoDetalhe() {
                               </div>
                               <div>
                                 <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Conta</div>
-                                <select
+                                <select name="pag"
                                   value={pag?.conta ?? ""}
                                   onChange={e => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], conta: e.target.value } }))}
                                   style={{ ...fc, fontSize:"12px", padding:"7px 8px" }}
@@ -1133,7 +1133,7 @@ export default function PedidoDetalhe() {
                               </div>
                               <div>
                                 <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Forma pgto</div>
-                                <select
+                                <select name="pag"
                                   value={pag?.formaPgto ?? ""}
                                   onChange={e => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], formaPgto: e.target.value } }))}
                                   style={{ ...fc, fontSize:"12px", padding:"7px 8px" }}
@@ -1264,7 +1264,7 @@ export default function PedidoDetalhe() {
                                 </div>
                                 <div>
                                   <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, marginBottom:"4px", textTransform:"uppercase", letterSpacing:".04em" }}>Conta</div>
-                                  <select
+                                  <select name="ed_conta"
                                     value={ed.conta}
                                     onChange={e => setEditandoPago(prev => ({ ...prev, [l.id]: { ...prev[l.id], conta: e.target.value } }))}
                                     style={{ ...fc, fontSize:"12px", padding:"6px 8px" }}
@@ -1275,7 +1275,7 @@ export default function PedidoDetalhe() {
                                 </div>
                                 <div>
                                   <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, marginBottom:"4px", textTransform:"uppercase", letterSpacing:".04em" }}>Forma</div>
-                                  <select
+                                  <select name="ed_forma_pgto"
                                     value={ed.formaPgto}
                                     onChange={e => setEditandoPago(prev => ({ ...prev, [l.id]: { ...prev[l.id], formaPgto: e.target.value } }))}
                                     style={{ ...fc, fontSize:"12px", padding:"6px 8px" }}
@@ -1399,7 +1399,7 @@ export default function PedidoDetalhe() {
                   onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoRomaneio) handleUploadRomaneioAssinado(fs); }}>
                   <span style={{ fontSize: "16px" }}>📎</span>
                   <span style={{ fontSize: "11px", color: "var(--t3)", textAlign: "center" }}>{uploadandoRomaneio ? "Enviando..." : "Arraste ou clique para anexar romaneio(s) assinado(s) — dá pra anexar mais de um"}</span>
-                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple style={{ display: "none" }} disabled={uploadandoRomaneio}
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple name="arquivo_romaneio" style={{ display: "none" }} disabled={uploadandoRomaneio}
                     onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadRomaneioAssinado(fs); e.target.value = ""; }} />
                 </label>
               </div>
@@ -1467,7 +1467,7 @@ export default function PedidoDetalhe() {
                   onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoNfe) handleUploadNfe(fs); }}>
                   <span style={{ fontSize: "16px" }}>🧾</span>
                   <span style={{ fontSize: "11px", color: "var(--t3)" }}>{uploadandoNfe ? "Enviando..." : "Arraste ou clique para anexar NF-e (PDF ou XML)"}</span>
-                  <input type="file" accept=".pdf,.xml,.jpg,.jpeg,.png" multiple style={{ display: "none" }} disabled={uploadandoNfe}
+                  <input type="file" accept=".pdf,.xml,.jpg,.jpeg,.png" multiple name="arquivo_nfe" style={{ display: "none" }} disabled={uploadandoNfe}
                     onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadNfe(fs); e.target.value = ""; }} />
                 </label>
               </div>
@@ -1502,7 +1502,7 @@ export default function PedidoDetalhe() {
                   onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoBoleto) handleUploadBoleto(fs); }}>
                   <span style={{ fontSize: "16px" }}>🏦</span>
                   <span style={{ fontSize: "11px", color: "var(--t3)" }}>{uploadandoBoleto ? "Enviando..." : "Arraste ou clique para anexar boleto (PDF ou imagem)"}</span>
-                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple style={{ display: "none" }} disabled={uploadandoBoleto}
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple name="arquivo_boleto" style={{ display: "none" }} disabled={uploadandoBoleto}
                     onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadBoleto(fs); e.target.value = ""; }} />
                 </label>
               </div>
@@ -1522,7 +1522,7 @@ export default function PedidoDetalhe() {
             {abrirObs && (
               <div style={{ padding: "0 18px 14px" }}>
                 <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
-                  <textarea
+                  <textarea name="nova_obs"
                     className="fc"
                     value={novaObs}
                     onChange={e => setNovaObs(e.target.value)}
@@ -1575,7 +1575,7 @@ export default function PedidoDetalhe() {
         <Modal open={editando} onClose={() => setEditando(false)} title={`Editar Pedido · ${pedido.id}`} width="780px" style={{ maxHeight:"90vh", overflowY:"auto" }}>
               <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
                 <Campo label="Cliente">
-                  <select style={fc} value={editForm.cliente_id} onChange={e => setEditForm(f => ({ ...f, cliente_id: Number(e.target.value) }))}>
+                  <select name="cliente_id" style={fc} value={editForm.cliente_id} onChange={e => setEditForm(f => ({ ...f, cliente_id: Number(e.target.value) }))}>
                     {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                   </select>
                 </Campo>
@@ -1603,20 +1603,20 @@ export default function PedidoDetalhe() {
                 </div>
                 <div className="fr">
                   <Campo label="Forma de Pagamento">
-                    <select style={fc} value={editForm.forma_pgto} onChange={e => setEditForm(f => ({ ...f, forma_pgto: e.target.value }))}>
+                    <select name="forma_pgto" style={fc} value={editForm.forma_pgto} onChange={e => setEditForm(f => ({ ...f, forma_pgto: e.target.value }))}>
                       <option value="">Selecione...</option>
                       {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(o => <option key={o}>{o}</option>)}
                     </select>
                   </Campo>
                   <Campo label="Conta">
-                    <select style={fc} value={editForm.conta} onChange={e => setEditForm(f => ({ ...f, conta: e.target.value }))}>
+                    <select name="conta" style={fc} value={editForm.conta} onChange={e => setEditForm(f => ({ ...f, conta: e.target.value }))}>
                       <option value="">Selecione...</option>
                       {CONTAS.map(o => <option key={o}>{o}</option>)}
                     </select>
                   </Campo>
                 </div>
                 <Campo label="Parcelas">
-                  <select style={fc} value={editForm.parcelas} onChange={e => handleEditParcelas(Number(e.target.value))}>
+                  <select name="parcelas" style={fc} value={editForm.parcelas} onChange={e => handleEditParcelas(Number(e.target.value))}>
                     {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
                   </select>
                 </Campo>
@@ -1653,9 +1653,9 @@ export default function PedidoDetalhe() {
                           <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", padding:"7px 10px", background:"var(--surf1)", borderRadius:"6px", border:"1px solid var(--b1)" }}>
                             {item.produto_nome}
                           </div>
-                          <input style={fcSm} type="number" value={item.largura || ""} onChange={e => updEditItem(idx, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
-                          <input style={fcSm} type="number" value={item.altura || ""} onChange={e => updEditItem(idx, "altura", parseInt(e.target.value) || 0)} placeholder="0" />
-                          <input style={fcSm} type="number" value={item.quantidade} onChange={e => updEditItem(idx, "quantidade", parseInt(e.target.value) || 1)} min={1} />
+                          <input name={`item_largura_${idx}`} style={fcSm} type="number" value={item.largura || ""} onChange={e => updEditItem(idx, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
+                          <input name={`item_altura_${idx}`} style={fcSm} type="number" value={item.altura || ""} onChange={e => updEditItem(idx, "altura", parseInt(e.target.value) || 0)} placeholder="0" />
+                          <input name={`item_quantidade_${idx}`} style={fcSm} type="number" value={item.quantidade} onChange={e => updEditItem(idx, "quantidade", parseInt(e.target.value) || 1)} min={1} />
                           <CurrencyInput value={item.valor_m2} onChange={v => updEditItem(idx, "valor_m2", v)} placeholder="R$/m²" style={{ margin:0, padding:"7px 10px", fontSize:"12px" }} />
                           <CurrencyInput value={item.lapidacao} onChange={v => updEditItem(idx, "lapidacao", v)} placeholder="0" style={{ margin:0, padding:"7px 10px", fontSize:"12px" }} />
                           <div style={{ display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -1688,7 +1688,7 @@ export default function PedidoDetalhe() {
                 </div>
 
                 <Campo label="Observações">
-                  <textarea style={{ ...fc, minHeight:"80px", resize:"vertical", fontFamily:"'Inter',sans-serif" }}
+                  <textarea name="obs" style={{ ...fc, minHeight:"80px", resize:"vertical", fontFamily:"'Inter',sans-serif" }}
                     value={editForm.obs} onChange={e => setEditForm(f => ({ ...f, obs: e.target.value }))}
                     placeholder="Observações do pedido..." />
                 </Campo>
@@ -1713,35 +1713,35 @@ export default function PedidoDetalhe() {
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"12px" }}>
                   <div className="form-group" style={{ gridColumn:"1 / -1" }}>
                     <label className="form-label">Tipo *</label>
-                    <select className="form-input" value={ncForm.tipo ?? "Quebra de vidro"} onChange={e => setNcForm(f => ({ ...f, tipo: e.target.value as TipoNC }))}>
+                    <select name="nc_form_tipo" className="form-input" value={ncForm.tipo ?? "Quebra de vidro"} onChange={e => setNcForm(f => ({ ...f, tipo: e.target.value as TipoNC }))}>
                       {TIPOS_NC.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
                     <label className="form-label">Gravidade *</label>
-                    <select className="form-input" value={ncForm.gravidade ?? "Média"} onChange={e => setNcForm(f => ({ ...f, gravidade: e.target.value as GravidadeNC }))}>
+                    <select name="nc_form_gravidade" className="form-input" value={ncForm.gravidade ?? "Média"} onChange={e => setNcForm(f => ({ ...f, gravidade: e.target.value as GravidadeNC }))}>
                       {(["Baixa","Média","Alta","Crítica"] as GravidadeNC[]).map(g => <option key={g} value={g}>{g}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
                     <label className="form-label">Etapa (setor)</label>
-                    <input className="form-input" value={ncForm.etapa ?? pedido?.status ?? ""} onChange={e => setNcForm(f => ({ ...f, etapa: e.target.value }))} placeholder={pedido?.status ?? "Ex: Corte"} />
+                    <input name="nc_form_etapa" className="form-input" value={ncForm.etapa ?? pedido?.status ?? ""} onChange={e => setNcForm(f => ({ ...f, etapa: e.target.value }))} placeholder={pedido?.status ?? "Ex: Corte"} />
                   </div>
                   <div className="form-group" style={{ gridColumn:"1 / -1" }}>
                     <label className="form-label">Produto/peça</label>
-                    <input className="form-input" value={ncForm.produto_nome ?? ""} onChange={e => setNcForm(f => ({ ...f, produto_nome: e.target.value || null }))} placeholder="Nome do produto ou peça afetada" />
+                    <input name="nc_form_produto_nome" className="form-input" value={ncForm.produto_nome ?? ""} onChange={e => setNcForm(f => ({ ...f, produto_nome: e.target.value || null }))} placeholder="Nome do produto ou peça afetada" />
                   </div>
                   <div className="form-group" style={{ gridColumn:"1 / -1" }}>
                     <label className="form-label">Descrição *</label>
-                    <textarea className="form-input" rows={3} value={ncForm.descricao ?? ""} onChange={e => setNcForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Descreva o problema encontrado..." style={{ resize:"vertical" }} />
+                    <textarea name="nc_form_descricao" className="form-input" rows={3} value={ncForm.descricao ?? ""} onChange={e => setNcForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Descreva o problema encontrado..." style={{ resize:"vertical" }} />
                   </div>
                   <div className="form-group" style={{ gridColumn:"1 / -1" }}>
                     <label className="form-label">Observações</label>
-                    <textarea className="form-input" rows={2} value={ncForm.obs ?? ""} onChange={e => setNcForm(f => ({ ...f, obs: e.target.value || null }))} placeholder="Observações adicionais..." style={{ resize:"vertical" }} />
+                    <textarea name="nc_form_obs" className="form-input" rows={2} value={ncForm.obs ?? ""} onChange={e => setNcForm(f => ({ ...f, obs: e.target.value || null }))} placeholder="Observações adicionais..." style={{ resize:"vertical" }} />
                   </div>
                   <div className="form-group" style={{ gridColumn:"1 / -1" }}>
                     <label className="form-label">Responsável pela análise</label>
-                    <input className="form-input" value={ncForm.responsavel_analise ?? ""} onChange={e => setNcForm(f => ({ ...f, responsavel_analise: e.target.value || null }))} placeholder="Nome do responsável pela investigação" />
+                    <input name="nc_form_responsavel_analise" className="form-input" value={ncForm.responsavel_analise ?? ""} onChange={e => setNcForm(f => ({ ...f, responsavel_analise: e.target.value || null }))} placeholder="Nome do responsável pela investigação" />
                   </div>
                 </div>
                 {ncs.length > 0 && (
@@ -1769,7 +1769,7 @@ export default function PedidoDetalhe() {
                   onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = "var(--border)"; const f = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/")); setFotosNC(p => [...p, ...f]); }}>
                   <span style={{ fontSize:"16px" }}>📷</span>
                   <span style={{ fontSize:"11px", color:"var(--t3)" }}>Arraste ou clique para selecionar imagens</span>
-                  <input type="file" accept="image/*" multiple style={{ display:"none" }}
+                  <input name="set_fotos_nc" type="file" accept="image/*" multiple style={{ display:"none" }}
                     onChange={e => { setFotosNC(p => [...p, ...Array.from(e.target.files ?? [])]); e.target.value = ""; }} />
                 </label>
                 {fotosNC.length > 0 && (

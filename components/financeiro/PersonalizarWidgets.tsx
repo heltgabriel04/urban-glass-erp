@@ -58,7 +58,7 @@ export default function PersonalizarWidgets({ widgets, visivel, toggle }: Props)
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             {widgets.map(w => (
               <label key={w.key} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12.5px", color: "var(--t1)", cursor: "pointer" }}>
-                <input type="checkbox" checked={visivel(w.key)} onChange={() => toggle(w.key)} />
+                <input name={`widget_${w.key}`} type="checkbox" checked={visivel(w.key)} onChange={() => toggle(w.key)} />
                 {w.label}
               </label>
             ))}

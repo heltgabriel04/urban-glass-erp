@@ -34,11 +34,11 @@ export default function DREPage() {
             <button className={regime === "competencia" ? "btn bp sm" : "btn bg sm"} style={{ borderRadius: 0 }} onClick={() => setRegime("competencia")}>Competência</button>
             <button className={regime === "caixa" ? "btn bp sm" : "btn bg sm"} style={{ borderRadius: 0 }} onClick={() => setRegime("caixa")}>Caixa</button>
           </div>
-          <select className="fc" value={mes ?? ""} onChange={e => setMes(e.target.value ? Number(e.target.value) : null)} style={{ margin: 0, width: "auto" }}>
+          <select name="mes" className="fc" value={mes ?? ""} onChange={e => setMes(e.target.value ? Number(e.target.value) : null)} style={{ margin: 0, width: "auto" }}>
             <option value="">Ano todo</option>
             {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
           </select>
-          <select className="fc" value={ano} onChange={e => setAno(Number(e.target.value))} style={{ margin: 0, width: "auto" }}>
+          <select name="ano" className="fc" value={ano} onChange={e => setAno(Number(e.target.value))} style={{ margin: 0, width: "auto" }}>
             {ANOS.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
           <button className="btn bg sm" disabled={!dre} onClick={() => dre && exportarExcel(`DRE_UrbanGlass_${periodoLabel.replace("/", "-")}`,

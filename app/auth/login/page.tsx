@@ -154,7 +154,7 @@ function LoginForm() {
                 fontFamily: "'DM Mono', monospace",
                 marginBottom: "6px",
               }}>E-mail</label>
-              <input
+              <input name="email"
                 type="email"
                 required
                 placeholder="seu@email.com"
@@ -187,7 +187,7 @@ function LoginForm() {
                 fontFamily: "'DM Mono', monospace",
                 marginBottom: "6px",
               }}>Senha</label>
-              <input
+              <input name="password"
                 type="password"
                 required
                 placeholder="••••••••"

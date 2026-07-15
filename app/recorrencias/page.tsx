@@ -212,18 +212,18 @@ export default function RecorrenciasPage() {
       <Modal open={modalAberto} onClose={() => setModalAberto(false)} title={`${editId != null ? "Editar" : "Nova"} recorrência`} width="560px">
             <div style={{ padding: "20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
               <Campo label="Tipo *">
-                <select className="fc" value={form.tipo} onChange={e => upd("tipo", e.target.value as "Entrada" | "Saída")} style={{ margin: 0 }}>
+                <select name="tipo" className="fc" value={form.tipo} onChange={e => upd("tipo", e.target.value as "Entrada" | "Saída")} style={{ margin: 0 }}>
                   <option value="Saída">Saída (a pagar)</option>
                   <option value="Entrada">Entrada (a receber)</option>
                 </select>
               </Campo>
               <Campo label="Dia do vencimento *">
-                <input className="fc" type="number" min={1} max={28} value={form.dia_vencimento}
+                <input name="dia_vencimento" className="fc" type="number" min={1} max={28} value={form.dia_vencimento}
                   onChange={e => upd("dia_vencimento", Number(e.target.value))} style={{ margin: 0 }} />
               </Campo>
 
               <Campo label="Descrição *" span2>
-                <input className="fc" placeholder="Aluguel, mensalidade, assinatura..." value={form.descricao}
+                <input name="descricao" className="fc" placeholder="Aluguel, mensalidade, assinatura..." value={form.descricao}
                   onChange={e => upd("descricao", e.target.value)} style={{ margin: 0 }} />
               </Campo>
 
@@ -232,11 +232,11 @@ export default function RecorrenciasPage() {
               </Campo>
               {form.tipo === "Saída" ? (
                 <Campo label="Fornecedor">
-                  <input className="fc" value={form.fornecedor ?? ""} onChange={e => upd("fornecedor", e.target.value)} style={{ margin: 0 }} />
+                  <input name="fornecedor" className="fc" value={form.fornecedor ?? ""} onChange={e => upd("fornecedor", e.target.value)} style={{ margin: 0 }} />
                 </Campo>
               ) : (
                 <Campo label="Cliente">
-                  <select className="fc" value={form.cliente_id ?? ""} onChange={e => upd("cliente_id", e.target.value ? Number(e.target.value) : null)} style={{ margin: 0 }}>
+                  <select name="cliente_id" className="fc" value={form.cliente_id ?? ""} onChange={e => upd("cliente_id", e.target.value ? Number(e.target.value) : null)} style={{ margin: 0 }}>
                     <option value="">Selecione...</option>
                     {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                   </select>
@@ -244,14 +244,14 @@ export default function RecorrenciasPage() {
               )}
 
               <Campo label="Plano de Contas" span2>
-                <select className="fc" value={form.plano_contas_id ?? ""} onChange={e => upd("plano_contas_id", e.target.value ? Number(e.target.value) : null)} style={{ margin: 0 }}>
+                <select name="plano_contas_id" className="fc" value={form.plano_contas_id ?? ""} onChange={e => upd("plano_contas_id", e.target.value ? Number(e.target.value) : null)} style={{ margin: 0 }}>
                   <option value="">Selecione...</option>
                   {planos.map(p => <option key={p.id} value={p.id}>{p.codigo_estruturado} · {p.descricao}</option>)}
                 </select>
               </Campo>
 
               <Campo label="Conta Bancária" span2>
-                <select className="fc" value={form.conta_id ?? ""} onChange={e => upd("conta_id", e.target.value ? Number(e.target.value) : null)} style={{ margin: 0 }}>
+                <select name="conta_id" className="fc" value={form.conta_id ?? ""} onChange={e => upd("conta_id", e.target.value ? Number(e.target.value) : null)} style={{ margin: 0 }}>
                   <option value="">Selecione...</option>
                   {contasBancarias.map(cb => <option key={cb.id} value={cb.id}>{cb.nome}</option>)}
                 </select>
@@ -259,7 +259,7 @@ export default function RecorrenciasPage() {
 
               {editId == null && (
                 <Campo label="Quantos meses gerar agora *">
-                  <input className="fc" type="number" min={1} max={60} value={mesesGerar}
+                  <input name="meses_gerar" className="fc" type="number" min={1} max={60} value={mesesGerar}
                     onChange={e => setMesesGerar(Number(e.target.value))} style={{ margin: 0 }} />
                 </Campo>
               )}
@@ -276,7 +276,7 @@ export default function RecorrenciasPage() {
       <Modal open={gerarMaisId != null} onClose={() => setGerarMaisId(null)} title="Gerar mais meses" width="360px">
             <div style={{ padding: "20px" }}>
               <Campo label="Quantos meses gerar, a partir de onde parou *">
-                <input className="fc" type="number" min={1} max={60} autoFocus value={mesesGerarMais}
+                <input name="meses_gerar_mais" className="fc" type="number" min={1} max={60} autoFocus value={mesesGerarMais}
                   onChange={e => setMesesGerarMais(Number(e.target.value))} style={{ margin: 0 }} />
               </Campo>
             </div>

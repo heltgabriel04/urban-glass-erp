@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 interface Option {
   id: number;
@@ -31,6 +31,8 @@ export default function AutocompleteInput({ options, value, valueLabel, onChange
   const [highlighted, setHighlighted] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef  = useRef<HTMLUListElement>(null);
+  const autoId = useId();
+  const inputId = id ?? autoId;
 
   useEffect(() => {
     if (value === null) { setQuery(valueLabel ?? ""); return; }
@@ -79,7 +81,8 @@ export default function AutocompleteInput({ options, value, valueLabel, onChange
     <div style={{ position: "relative" }}>
       <input
         ref={inputRef}
-        id={id}
+        id={inputId}
+        name={inputId}
         type="text"
         className="fc"
         value={query}

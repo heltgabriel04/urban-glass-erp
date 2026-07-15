@@ -430,7 +430,7 @@ function SecaoCard({
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <label style={{ fontSize: 11, color: "var(--t3)", whiteSpace: "nowrap" }}>
             Início
-            <input
+            <input name="data_inicio"
               type="time"
               value={data.inicio}
               onChange={(e) => onChange({ ...data, inicio: e.target.value })}
@@ -440,7 +440,7 @@ function SecaoCard({
           </label>
           <label style={{ fontSize: 11, color: "var(--t3)", whiteSpace: "nowrap" }}>
             Finalização
-            <input
+            <input name="data_fim"
               type="time"
               value={data.fim}
               onChange={(e) => onChange({ ...data, fim: e.target.value })}
@@ -545,7 +545,7 @@ function SecaoCard({
                   NÃO
                 </button>
               </div>
-              <input
+              <input name={`item_obs_${item.id}`}
                 value={item.obs}
                 onChange={(e) => setItem(item.id, "obs", e.target.value)}
                 placeholder="Observação..."
@@ -561,7 +561,7 @@ function SecaoCard({
       <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
           <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 6 }}>OBSERVAÇÕES GERAIS</div>
-          <textarea
+          <textarea name="data_obs"
             value={data.obs}
             onChange={(e) => onChange({ ...data, obs: e.target.value })}
             disabled={disabled}
@@ -576,7 +576,7 @@ function SecaoCard({
             <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 6 }}>
               RESPONSÁVEL — {def.responsavel}
             </div>
-            <input
+            <input name="data_nome"
               value={data.nome}
               onChange={(e) => onChange({ ...data, nome: e.target.value })}
               placeholder="Nome do responsável"
@@ -923,7 +923,7 @@ export default function ChecklistPage() {
               <div style={{ fontSize: 10, color: "var(--t3)", fontWeight: 700, marginBottom: 6, letterSpacing: "0.05em" }}>
                 TRANSPORTADORA / VEÍCULO PRÓPRIO
               </div>
-              <input
+              <input name="transportadora"
                 value={dados.transportadora}
                 onChange={(e) =>
                   setDados((prev) => ({ ...prev, transportadora: e.target.value }))

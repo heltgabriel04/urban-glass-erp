@@ -72,10 +72,10 @@ function ModalCartao({ editando, contasBancarias, usuarioEmail, onSalvo, onFecha
         <form id="form-cartao" onSubmit={handleSubmit} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
             <Campo label="Nome *">
-              <input className="fc" value={form.nome} onChange={(e) => set("nome", e.target.value)} required />
+              <input name="nome" className="fc" value={form.nome} onChange={(e) => set("nome", e.target.value)} required />
             </Campo>
             <Campo label="Tipo">
-              <select className="fc" value={form.tipo} onChange={(e) => set("tipo", e.target.value as Cartao["tipo"])}>
+              <select name="tipo" className="fc" value={form.tipo} onChange={(e) => set("tipo", e.target.value as Cartao["tipo"])}>
                 <option value="credito">Crédito</option>
                 <option value="debito">Débito</option>
               </select>
@@ -83,17 +83,17 @@ function ModalCartao({ editando, contasBancarias, usuarioEmail, onSalvo, onFecha
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
             <Campo label="Bandeira">
-              <input className="fc" value={form.bandeira ?? ""} onChange={(e) => set("bandeira", e.target.value || null)} />
+              <input name="bandeira" className="fc" value={form.bandeira ?? ""} onChange={(e) => set("bandeira", e.target.value || null)} />
             </Campo>
             <Campo label="Banco Emissor">
-              <input className="fc" value={form.banco_emissor ?? ""} onChange={(e) => set("banco_emissor", e.target.value || null)} />
+              <input name="banco_emissor" className="fc" value={form.banco_emissor ?? ""} onChange={(e) => set("banco_emissor", e.target.value || null)} />
             </Campo>
             <Campo label="Final do Número">
-              <input className="fc" maxLength={4} value={form.final_numero ?? ""} onChange={(e) => set("final_numero", e.target.value || null)} />
+              <input name="final_numero" className="fc" maxLength={4} value={form.final_numero ?? ""} onChange={(e) => set("final_numero", e.target.value || null)} />
             </Campo>
           </div>
           <Campo label="Conta Bancária (débito/pagamento da fatura)">
-            <select className="fc" value={form.conta_bancaria_id ?? ""} onChange={(e) => set("conta_bancaria_id", e.target.value ? Number(e.target.value) : null)}>
+            <select name="conta_bancaria_id" className="fc" value={form.conta_bancaria_id ?? ""} onChange={(e) => set("conta_bancaria_id", e.target.value ? Number(e.target.value) : null)}>
               <option value="">—</option>
               {contasBancarias.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
@@ -101,13 +101,13 @@ function ModalCartao({ editando, contasBancarias, usuarioEmail, onSalvo, onFecha
           {form.tipo === "credito" && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
               <Campo label="Limite">
-                <input className="fc" type="number" step="0.01" value={form.limite ?? ""} onChange={(e) => set("limite", e.target.value ? Number(e.target.value) : null)} style={{ fontFamily: "'DM Mono', monospace" }} />
+                <input name="limite" className="fc" type="number" step="0.01" value={form.limite ?? ""} onChange={(e) => set("limite", e.target.value ? Number(e.target.value) : null)} style={{ fontFamily: "'DM Mono', monospace" }} />
               </Campo>
               <Campo label="Dia de Fechamento">
-                <input className="fc" type="number" min={1} max={31} value={form.dia_fechamento ?? ""} onChange={(e) => set("dia_fechamento", e.target.value ? Number(e.target.value) : null)} />
+                <input name="dia_fechamento" className="fc" type="number" min={1} max={31} value={form.dia_fechamento ?? ""} onChange={(e) => set("dia_fechamento", e.target.value ? Number(e.target.value) : null)} />
               </Campo>
               <Campo label="Dia de Vencimento">
-                <input className="fc" type="number" min={1} max={31} value={form.dia_vencimento ?? ""} onChange={(e) => set("dia_vencimento", e.target.value ? Number(e.target.value) : null)} />
+                <input name="dia_vencimento" className="fc" type="number" min={1} max={31} value={form.dia_vencimento ?? ""} onChange={(e) => set("dia_vencimento", e.target.value ? Number(e.target.value) : null)} />
               </Campo>
             </div>
           )}
@@ -171,14 +171,14 @@ function ModalFatura({ cartao, editando, onSalvo, onFechar }: {
         <form id="form-fatura" onSubmit={handleSubmit} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <Campo label="Competência — Mês">
-              <input className="fc" type="number" min={1} max={12} value={form.competencia_mes} onChange={(e) => set("competencia_mes", Number(e.target.value))} required disabled={!!editando} />
+              <input name="competencia_mes" className="fc" type="number" min={1} max={12} value={form.competencia_mes} onChange={(e) => set("competencia_mes", Number(e.target.value))} required disabled={!!editando} />
             </Campo>
             <Campo label="Competência — Ano">
-              <input className="fc" type="number" value={form.competencia_ano} onChange={(e) => set("competencia_ano", Number(e.target.value))} required disabled={!!editando} />
+              <input name="competencia_ano" className="fc" type="number" value={form.competencia_ano} onChange={(e) => set("competencia_ano", Number(e.target.value))} required disabled={!!editando} />
             </Campo>
           </div>
           <Campo label="Status">
-            <select className="fc" value={form.status} onChange={(e) => set("status", e.target.value as CartaoFatura["status"])}>
+            <select name="status" className="fc" value={form.status} onChange={(e) => set("status", e.target.value as CartaoFatura["status"])}>
               <option value="aberta">Aberta</option>
               <option value="fechada">Fechada</option>
               <option value="paga">Paga</option>
@@ -186,27 +186,27 @@ function ModalFatura({ cartao, editando, onSalvo, onFechar }: {
           </Campo>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <Campo label="Data de Fechamento">
-              <input className="fc" type="date" value={form.data_fechamento ?? ""} onChange={(e) => set("data_fechamento", e.target.value || null)} />
+              <input name="data_fechamento" className="fc" type="date" value={form.data_fechamento ?? ""} onChange={(e) => set("data_fechamento", e.target.value || null)} />
             </Campo>
             <Campo label="Data de Vencimento">
-              <input className="fc" type="date" value={form.data_vencimento ?? ""} onChange={(e) => set("data_vencimento", e.target.value || null)} />
+              <input name="data_vencimento" className="fc" type="date" value={form.data_vencimento ?? ""} onChange={(e) => set("data_vencimento", e.target.value || null)} />
             </Campo>
           </div>
           {form.status === "paga" && (
             <Campo label="Data de Pagamento">
-              <input className="fc" type="date" value={form.data_pagamento ?? ""} onChange={(e) => set("data_pagamento", e.target.value || null)} />
+              <input name="data_pagamento" className="fc" type="date" value={form.data_pagamento ?? ""} onChange={(e) => set("data_pagamento", e.target.value || null)} />
             </Campo>
           )}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <Campo label="PDF da Fatura">
-              <input className="fc" type="file" accept=".pdf" onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)} />
+              <input name="set_pdf_file" className="fc" type="file" accept=".pdf" onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)} />
             </Campo>
             <Campo label="Comprovante de Pagamento">
-              <input className="fc" type="file" onChange={(e) => setComprovanteFile(e.target.files?.[0] ?? null)} />
+              <input name="set_comprovante_file" className="fc" type="file" onChange={(e) => setComprovanteFile(e.target.files?.[0] ?? null)} />
             </Campo>
           </div>
           <Campo label="Observações">
-            <textarea className="fc" rows={2} value={form.observacoes ?? ""} onChange={(e) => set("observacoes", e.target.value || null)} />
+            <textarea name="observacoes" className="fc" rows={2} value={form.observacoes ?? ""} onChange={(e) => set("observacoes", e.target.value || null)} />
           </Campo>
         </form>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
@@ -251,25 +251,25 @@ function ModalLancarCompra({ cartao, fornecedores, planoContas, usuarioEmail, on
     <Modal open onClose={onFechar} title={`Lançar Compra — ${cartao.nome}`} width="480px">
         <form id="form-lancar-compra" onSubmit={handleSubmit} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
           <Campo label="Data">
-            <input className="fc" type="date" value={form.data} onChange={(e) => set("data", e.target.value)} required />
+            <input name="data" className="fc" type="date" value={form.data} onChange={(e) => set("data", e.target.value)} required />
           </Campo>
           <Campo label="Descrição">
-            <input className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} required />
+            <input name="descricao" className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} required />
           </Campo>
           <Campo label="Fornecedor">
-            <select className="fc" value={form.fornecedor_id ?? ""} onChange={(e) => set("fornecedor_id", e.target.value ? Number(e.target.value) : null)}>
+            <select name="fornecedor_id" className="fc" value={form.fornecedor_id ?? ""} onChange={(e) => set("fornecedor_id", e.target.value ? Number(e.target.value) : null)}>
               <option value="">—</option>
               {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
             </select>
           </Campo>
           <Campo label="Conta">
-            <select className="fc" value={form.plano_contas_id ?? ""} onChange={(e) => set("plano_contas_id", e.target.value ? Number(e.target.value) : null)}>
+            <select name="plano_contas_id" className="fc" value={form.plano_contas_id ?? ""} onChange={(e) => set("plano_contas_id", e.target.value ? Number(e.target.value) : null)}>
               <option value="">—</option>
               {planoContas.map((p) => <option key={p.id} value={p.id}>{p.codigo_estruturado}</option>)}
             </select>
           </Campo>
           <Campo label="Valor">
-            <input className="fc" type="number" step="0.01" value={form.valor} onChange={(e) => set("valor", Number(e.target.value))} required style={{ fontFamily: "'DM Mono', monospace" }} />
+            <input name="valor" className="fc" type="number" step="0.01" value={form.valor} onChange={(e) => set("valor", Number(e.target.value))} required style={{ fontFamily: "'DM Mono', monospace" }} />
           </Campo>
         </form>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
@@ -343,25 +343,25 @@ function ModalLancamentos({ cartao, fatura, fornecedores, planoContas, usuarioEm
         <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1 }}>
           <form onSubmit={handleAdd} style={{ display: "grid", gridTemplateColumns: "1fr 2fr 1fr 1fr 1fr auto", gap: "8px", marginBottom: "16px", alignItems: "end" }}>
             <Campo style={{ margin: 0 }} label="Data">
-              <input className="fc" type="date" value={form.data} onChange={(e) => set("data", e.target.value)} required />
+              <input name="data" className="fc" type="date" value={form.data} onChange={(e) => set("data", e.target.value)} required />
             </Campo>
             <Campo style={{ margin: 0 }} label="Descrição">
-              <input className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} required />
+              <input name="descricao" className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} required />
             </Campo>
             <Campo style={{ margin: 0 }} label="Fornecedor">
-              <select className="fc" value={form.fornecedor_id ?? ""} onChange={(e) => set("fornecedor_id", e.target.value ? Number(e.target.value) : null)}>
+              <select name="fornecedor_id" className="fc" value={form.fornecedor_id ?? ""} onChange={(e) => set("fornecedor_id", e.target.value ? Number(e.target.value) : null)}>
                 <option value="">—</option>
                 {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
               </select>
             </Campo>
             <Campo style={{ margin: 0 }} label="Conta">
-              <select className="fc" value={form.plano_contas_id ?? ""} onChange={(e) => set("plano_contas_id", e.target.value ? Number(e.target.value) : null)}>
+              <select name="plano_contas_id" className="fc" value={form.plano_contas_id ?? ""} onChange={(e) => set("plano_contas_id", e.target.value ? Number(e.target.value) : null)}>
                 <option value="">—</option>
                 {planoContas.map((p) => <option key={p.id} value={p.id}>{p.codigo_estruturado}</option>)}
               </select>
             </Campo>
             <Campo style={{ margin: 0 }} label="Valor">
-              <input className="fc" type="number" step="0.01" value={form.valor} onChange={(e) => set("valor", Number(e.target.value))} required style={{ fontFamily: "'DM Mono', monospace" }} />
+              <input name="valor" className="fc" type="number" step="0.01" value={form.valor} onChange={(e) => set("valor", Number(e.target.value))} required style={{ fontFamily: "'DM Mono', monospace" }} />
             </Campo>
             <button type="submit" className="btn bp sm" disabled={salvando}>+ Add</button>
           </form>
@@ -386,7 +386,7 @@ function ModalLancamentos({ cartao, fatura, fornecedores, planoContas, usuarioEm
                         {l.comprovante_url ? (
                           <a href={l.comprovante_url} target="_blank" rel="noreferrer" style={{ fontSize: "11px" }}>Ver</a>
                         ) : (
-                          <input type="file" style={{ fontSize: "10px", width: "90px" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAnexo(l.id, f); }} />
+                          <input type="file" name={`comprovante_${l.id}`} style={{ fontSize: "10px", width: "90px" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAnexo(l.id, f); }} />
                         )}
                       </td>
                       <td><button className="btn bg xs" onClick={() => handleExcluir(l.id)}>Excluir</button></td>
@@ -534,7 +534,7 @@ export default function CartoesPage() {
 
       <div className="con">
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
-          <select className="fc" value={filtroAtivo} onChange={(e) => setFiltroAtivo(e.target.value as typeof filtroAtivo)} style={{ width: "120px" }}>
+          <select name="filtro_ativo" className="fc" value={filtroAtivo} onChange={(e) => setFiltroAtivo(e.target.value as typeof filtroAtivo)} style={{ width: "120px" }}>
             <option value="ativos">Ativos</option>
             <option value="inativos">Inativos</option>
             <option value="todos">Todos</option>

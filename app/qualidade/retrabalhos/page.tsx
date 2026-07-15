@@ -114,7 +114,7 @@ export default function RetrabalhosPage() {
       <div className="tb">
         <div className="tb-title">Controle de Retrabalhos</div>
         <div style={{ display:"flex", gap:"6px", alignItems:"center" }}>
-          <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
+          <select name="filtro_status" value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
             style={{ fontSize:"11px", padding:"5px 8px", borderRadius:"6px", border:"1px solid var(--b2)", background:"var(--surf2)", color:"var(--t1)", fontFamily:"'DM Mono',monospace" }}>
             <option value="todos">Todos os status</option>
             {STATUS_RT.map(s => <option key={s} value={s}>{s}</option>)}
@@ -229,24 +229,24 @@ export default function RetrabalhosPage() {
             <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
               <div className="fr">
                 <Campo label="Motivo *">
-                  <select className="fc" value={form.motivo} onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))}>
+                  <select name="motivo" className="fc" value={form.motivo} onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))}>
                     <option value="">— Selecione —</option>
                     {MOTIVOS.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
                 </Campo>
                 <Campo label="Quantidade">
-                  <input type="number" className="fc" min={1} value={form.quantidade} onChange={e => setForm(f => ({ ...f, quantidade: Number(e.target.value) }))} />
+                  <input name="quantidade" type="number" className="fc" min={1} value={form.quantidade} onChange={e => setForm(f => ({ ...f, quantidade: Number(e.target.value) }))} />
                 </Campo>
               </div>
 
               <div className="fr">
                 <Campo label="Etapa onde gerou o problema *">
-                  <select className="fc" value={form.etapa_origem} onChange={e => setForm(f => ({ ...f, etapa_origem: e.target.value }))}>
+                  <select name="etapa_origem" className="fc" value={form.etapa_origem} onChange={e => setForm(f => ({ ...f, etapa_origem: e.target.value }))}>
                     {ETAPAS.map(e => <option key={e} value={e}>{e}</option>)}
                   </select>
                 </Campo>
                 <Campo label="Etapa de correção *">
-                  <select className="fc" value={form.etapa_correcao} onChange={e => setForm(f => ({ ...f, etapa_correcao: e.target.value }))}>
+                  <select name="etapa_correcao" className="fc" value={form.etapa_correcao} onChange={e => setForm(f => ({ ...f, etapa_correcao: e.target.value }))}>
                     {ETAPAS.map(e => <option key={e} value={e}>{e}</option>)}
                   </select>
                 </Campo>
@@ -254,31 +254,31 @@ export default function RetrabalhosPage() {
 
               <div className="fr">
                 <Campo label="Responsável original">
-                  <input className="fc" placeholder="Quem gerou o erro" value={form.responsavel_original ?? ""} onChange={e => setForm(f => ({ ...f, responsavel_original: e.target.value || null }))} />
+                  <input name="responsavel_original" className="fc" placeholder="Quem gerou o erro" value={form.responsavel_original ?? ""} onChange={e => setForm(f => ({ ...f, responsavel_original: e.target.value || null }))} />
                 </Campo>
                 <Campo label="Responsável pela correção">
-                  <input className="fc" placeholder="Quem vai corrigir" value={form.responsavel_correcao ?? ""} onChange={e => setForm(f => ({ ...f, responsavel_correcao: e.target.value || null }))} />
+                  <input name="responsavel_correcao" className="fc" placeholder="Quem vai corrigir" value={form.responsavel_correcao ?? ""} onChange={e => setForm(f => ({ ...f, responsavel_correcao: e.target.value || null }))} />
                 </Campo>
               </div>
 
               <div className="fr">
                 <Campo label="Tempo adicional (min)">
-                  <input type="number" className="fc" min={0} value={form.tempo_adicional_min ?? ""} onChange={e => setForm(f => ({ ...f, tempo_adicional_min: e.target.value ? Number(e.target.value) : null }))} />
+                  <input name="tempo_adicional_min" type="number" className="fc" min={0} value={form.tempo_adicional_min ?? ""} onChange={e => setForm(f => ({ ...f, tempo_adicional_min: e.target.value ? Number(e.target.value) : null }))} />
                 </Campo>
                 <Campo label="Custo adicional (R$)">
-                  <input type="number" className="fc" step="0.01" min={0} value={form.custo_adicional ?? ""} onChange={e => setForm(f => ({ ...f, custo_adicional: e.target.value ? Number(e.target.value) : null }))} />
+                  <input name="custo_adicional" type="number" className="fc" step="0.01" min={0} value={form.custo_adicional ?? ""} onChange={e => setForm(f => ({ ...f, custo_adicional: e.target.value ? Number(e.target.value) : null }))} />
                 </Campo>
               </div>
 
               <div className="fr">
                 <Campo label="Pedido vinculado">
-                  <select className="fc" value={form.pedido_id ?? ""} onChange={e => setForm(f => ({ ...f, pedido_id: e.target.value || null }))}>
+                  <select name="pedido_id" className="fc" value={form.pedido_id ?? ""} onChange={e => setForm(f => ({ ...f, pedido_id: e.target.value || null }))}>
                     <option value="">— Nenhum —</option>
                     {pedidos.map(p => <option key={p.id} value={p.id}>{p.id} · {p.cliente_nome}</option>)}
                   </select>
                 </Campo>
                 <Campo label="Produto">
-                  <input className="fc" placeholder="Nome do produto" value={form.produto_nome ?? ""} onChange={e => setForm(f => ({ ...f, produto_nome: e.target.value || null }))} />
+                  <input name="produto_nome" className="fc" placeholder="Nome do produto" value={form.produto_nome ?? ""} onChange={e => setForm(f => ({ ...f, produto_nome: e.target.value || null }))} />
                 </Campo>
               </div>
 

@@ -367,7 +367,7 @@ export default function EstoquePage() {
                 {editItem ? (
                   <div style={ro}>{editItem.produtos?.nome ?? editItem.cod}</div>
                 ) : (
-                  <select style={{ ...inp, cursor: "pointer" }} value={form.produto_id} onChange={e => handleProduto(e.target.value)}>
+                  <select name="produto_id" style={{ ...inp, cursor: "pointer" }} value={form.produto_id} onChange={e => handleProduto(e.target.value)}>
                     <option value="">Selecione o produto...</option>
                     {produtos.map(p => <option key={p.id} value={String(p.id)}>{p.cod} — {p.nome}</option>)}
                   </select>
@@ -375,7 +375,7 @@ export default function EstoquePage() {
               </div>
               <div>
                 <label style={lbl}>{editItem ? "Chapas (novo total) *" : "Quantidade de Chapas *"}</label>
-                <input style={inp} type="number" min="1"
+                <input name="chapas" style={inp} type="number" min="1"
                   placeholder={editItem ? `Atual: ${editItem.chapas_saldo}` : "Ex: 10"}
                   value={form.chapas}
                   onChange={e => setForm(f => ({ ...f, chapas: e.target.value }))}
@@ -385,7 +385,7 @@ export default function EstoquePage() {
 
             <div style={{ marginBottom: 12 }}>
               <label style={lbl}>Medida Padrão</label>
-              <select style={{ ...inp, cursor: "pointer" }} value={medidaPadrao} onChange={e => handleMedidaPadrao(e.target.value)}>
+              <select name="medida_padrao" style={{ ...inp, cursor: "pointer" }} value={medidaPadrao} onChange={e => handleMedidaPadrao(e.target.value)}>
                 <option value="">Selecione uma medida padrão ou preencha manualmente...</option>
                 {MEDIDAS_PADRAO.map(m => <option key={m.label} value={m.label}>{m.label}</option>)}
               </select>
@@ -394,14 +394,14 @@ export default function EstoquePage() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
               <div>
                 <label style={lbl}>Largura (mm) *</label>
-                <input style={inp} type="number" placeholder="Ex: 3210"
+                <input name="larg_chapa" style={inp} type="number" placeholder="Ex: 3210"
                   value={form.larg_chapa}
                   onChange={e => { setMedidaPadrao("Personalizado"); setForm(f => ({ ...f, larg_chapa: e.target.value })); }}
                 />
               </div>
               <div>
                 <label style={lbl}>Altura (mm) *</label>
-                <input style={inp} type="number" placeholder="Ex: 2250"
+                <input name="alt_chapa" style={inp} type="number" placeholder="Ex: 2250"
                   value={form.alt_chapa}
                   onChange={e => { setMedidaPadrao("Personalizado"); setForm(f => ({ ...f, alt_chapa: e.target.value })); }}
                 />
@@ -593,6 +593,7 @@ export default function EstoquePage() {
                       <span style={{ fontSize: 10, color: "var(--t3)" }}>mín</span>
                       <input
                         type="number" min="0"
+                        name={`estoque_minimo_${e.id}`}
                         defaultValue={Number(e.estoque_minimo_chapas ?? 0)}
                         onBlur={ev => salvarMinimo(e, parseInt(ev.target.value || "0"))}
                         title="Estoque mínimo (chapas)"

@@ -171,44 +171,44 @@ export default function FornecedoresPage() {
       <Modal open={modalAberto} onClose={() => setModalAberto(false)} title={`${editId != null ? "Editar" : "Novo"} fornecedor`} width="560px">
             <div style={{ padding:"20px", display:"grid", gridTemplateColumns:"1fr 1fr", gap:"14px" }}>
               <Campo label="Nome *" span2>
-                <input className="fc" value={form.nome} onChange={e => upd("nome", e.target.value)} style={{ margin:0 }} />
+                <input name="nome" className="fc" value={form.nome} onChange={e => upd("nome", e.target.value)} style={{ margin:0 }} />
               </Campo>
               <Campo label="CNPJ / CPF">
-                <input className="fc" value={form.cnpj} onChange={e => upd("cnpj", e.target.value)} style={{ margin:0 }} />
+                <input name="cnpj" className="fc" value={form.cnpj} onChange={e => upd("cnpj", e.target.value)} style={{ margin:0 }} />
               </Campo>
               <Campo label="Categoria">
-                <input className="fc" placeholder="Vidro, ferragem, insumo..." value={form.categoria} onChange={e => upd("categoria", e.target.value)} style={{ margin:0 }} />
+                <input name="categoria" className="fc" placeholder="Vidro, ferragem, insumo..." value={form.categoria} onChange={e => upd("categoria", e.target.value)} style={{ margin:0 }} />
               </Campo>
               <Campo label="Pessoa de contato">
-                <input className="fc" value={form.contato} onChange={e => upd("contato", e.target.value)} style={{ margin:0 }} />
+                <input name="contato" className="fc" value={form.contato} onChange={e => upd("contato", e.target.value)} style={{ margin:0 }} />
               </Campo>
               <Campo label="Telefone">
-                <input className="fc" value={form.tel} onChange={e => upd("tel", e.target.value)} style={{ margin:0 }} />
+                <input name="tel" className="fc" value={form.tel} onChange={e => upd("tel", e.target.value)} style={{ margin:0 }} />
               </Campo>
               <Campo label="E-mail" span2>
-                <input className="fc" value={form.email} onChange={e => upd("email", e.target.value)} style={{ margin:0 }} />
+                <input name="email" className="fc" value={form.email} onChange={e => upd("email", e.target.value)} style={{ margin:0 }} />
               </Campo>
               <Campo label="Cidade">
-                <input className="fc" value={form.cidade} onChange={e => upd("cidade", e.target.value)} style={{ margin:0 }} />
+                <input name="cidade" className="fc" value={form.cidade} onChange={e => upd("cidade", e.target.value)} style={{ margin:0 }} />
               </Campo>
               <Campo label="UF">
-                <input className="fc" maxLength={2} value={form.uf} onChange={e => upd("uf", e.target.value.toUpperCase())} style={{ margin:0 }} />
+                <input name="uf" className="fc" maxLength={2} value={form.uf} onChange={e => upd("uf", e.target.value.toUpperCase())} style={{ margin:0 }} />
               </Campo>
               <Campo label="Observações" span2>
-                <textarea className="fc" rows={2} value={form.obs} onChange={e => upd("obs", e.target.value)} style={{ margin:0, resize:"vertical" }} />
+                <textarea name="obs" className="fc" rows={2} value={form.obs} onChange={e => upd("obs", e.target.value)} style={{ margin:0, resize:"vertical" }} />
               </Campo>
               <Campo label="Inscrição Estadual (IE)">
-                <input className="fc" value={form.ie} onChange={e => upd("ie", maskIE(e.target.value))} placeholder="000.000.000/0000" maxLength={17} inputMode="numeric" style={{ margin:0 }} />
+                <input name="ie" className="fc" value={form.ie} onChange={e => upd("ie", maskIE(e.target.value))} placeholder="000.000.000/0000" maxLength={17} inputMode="numeric" style={{ margin:0 }} />
               </Campo>
               <Campo label="Indicador IE">
-                <select className="fc" value={form.ind_ie} onChange={e => upd("ind_ie", e.target.value as IndIE)} style={{ margin:0 }}>
+                <select name="ind_ie" className="fc" value={form.ind_ie} onChange={e => upd("ind_ie", e.target.value as IndIE)} style={{ margin:0 }}>
                   <option value="1">1 — Contribuinte ICMS</option>
                   <option value="2">2 — Contribuinte Isento</option>
                   <option value="9">9 — Não Contribuinte</option>
                 </select>
               </Campo>
               <Campo label="Regime Tributário" span2>
-                <select className="fc" value={form.regime_tributario} onChange={e => upd("regime_tributario", e.target.value as FornecedorInsert["regime_tributario"])} style={{ margin:0 }}>
+                <select name="regime_tributario" className="fc" value={form.regime_tributario} onChange={e => upd("regime_tributario", e.target.value as FornecedorInsert["regime_tributario"])} style={{ margin:0 }}>
                   <option value="">Não informado</option>
                   <option value="mei">MEI</option>
                   <option value="simples">Simples Nacional</option>

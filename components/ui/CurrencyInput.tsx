@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 interface CurrencyInputProps {
   value: number;
@@ -33,6 +33,8 @@ export default function CurrencyInput({
   const [cents, setCents] = useState(Math.round((value ?? 0) * 100));
   const focused = useRef(false);
   const ref = useRef<HTMLInputElement>(null);
+  const autoId = useId();
+  const inputId = id ?? autoId;
 
   useEffect(() => {
     if (!focused.current) {
@@ -93,7 +95,8 @@ export default function CurrencyInput({
   return (
     <input
       ref={ref}
-      id={id}
+      id={inputId}
+      name={inputId}
       aria-label={ariaLabel}
       className={className}
       type="text"

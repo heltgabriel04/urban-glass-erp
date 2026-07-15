@@ -75,32 +75,32 @@ function ModalConsorcio({ editando, usuarioEmail, onSalvo, onFechar }: {
     <Modal open onClose={onFechar} title={editando ? "Editar Consórcio" : "Novo Consórcio"} width="560px">
         <form id="form-consorcio" onSubmit={handleSubmit} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
           <Campo label="Descrição *">
-            <input className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} required />
+            <input name="descricao" className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} required />
           </Campo>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
             <Campo label="Administradora">
-              <input className="fc" value={form.administradora ?? ""} onChange={(e) => set("administradora", e.target.value || null)} />
+              <input name="administradora" className="fc" value={form.administradora ?? ""} onChange={(e) => set("administradora", e.target.value || null)} />
             </Campo>
             <Campo label="Grupo">
-              <input className="fc" value={form.grupo ?? ""} onChange={(e) => set("grupo", e.target.value || null)} />
+              <input name="grupo" className="fc" value={form.grupo ?? ""} onChange={(e) => set("grupo", e.target.value || null)} />
             </Campo>
             <Campo label="Cota">
-              <input className="fc" value={form.cota ?? ""} onChange={(e) => set("cota", e.target.value || null)} />
+              <input name="cota" className="fc" value={form.cota ?? ""} onChange={(e) => set("cota", e.target.value || null)} />
             </Campo>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
             <Campo label="Valor do Crédito">
-              <input className="fc" type="number" step="0.01" value={form.valor_credito} onChange={(e) => set("valor_credito", Number(e.target.value))} required style={{ fontFamily: "'DM Mono', monospace" }} />
+              <input name="valor_credito" className="fc" type="number" step="0.01" value={form.valor_credito} onChange={(e) => set("valor_credito", Number(e.target.value))} required style={{ fontFamily: "'DM Mono', monospace" }} />
             </Campo>
             <Campo label="Nº de Parcelas">
-              <input className="fc" type="number" value={form.numero_parcelas} onChange={(e) => set("numero_parcelas", Number(e.target.value))} required disabled={!!editando} />
+              <input name="numero_parcelas" className="fc" type="number" value={form.numero_parcelas} onChange={(e) => set("numero_parcelas", Number(e.target.value))} required disabled={!!editando} />
             </Campo>
             <Campo label="Valor da Parcela">
-              <input className="fc" type="number" step="0.01" value={form.valor_parcela} onChange={(e) => set("valor_parcela", Number(e.target.value))} required disabled={!!editando} style={{ fontFamily: "'DM Mono', monospace" }} />
+              <input name="valor_parcela" className="fc" type="number" step="0.01" value={form.valor_parcela} onChange={(e) => set("valor_parcela", Number(e.target.value))} required disabled={!!editando} style={{ fontFamily: "'DM Mono', monospace" }} />
             </Campo>
           </div>
           <Campo label="Data de Adesão">
-            <input className="fc" type="date" value={form.data_adesao} onChange={(e) => set("data_adesao", e.target.value)} required disabled={!!editando} />
+            <input name="data_adesao" className="fc" type="date" value={form.data_adesao} onChange={(e) => set("data_adesao", e.target.value)} required disabled={!!editando} />
           </Campo>
           {editando && (
             <div style={{ fontSize: "11px", color: "var(--t3)" }}>
@@ -108,10 +108,10 @@ function ModalConsorcio({ editando, usuarioEmail, onSalvo, onFechar }: {
             </div>
           )}
           <Campo label="Contrato (PDF)">
-            <input className="fc" type="file" accept=".pdf" onChange={(e) => setContratoFile(e.target.files?.[0] ?? null)} />
+            <input name="set_contrato_file" className="fc" type="file" accept=".pdf" onChange={(e) => setContratoFile(e.target.files?.[0] ?? null)} />
           </Campo>
           <Campo label="Observações">
-            <textarea className="fc" rows={2} value={form.observacoes ?? ""} onChange={(e) => set("observacoes", e.target.value || null)} />
+            <textarea name="observacoes" className="fc" rows={2} value={form.observacoes ?? ""} onChange={(e) => set("observacoes", e.target.value || null)} />
           </Campo>
         </form>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
@@ -161,13 +161,13 @@ function ModalLances({ consorcio, usuarioEmail, onFechar }: {
         <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1 }}>
           <form onSubmit={handleAdd} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: "8px", marginBottom: "16px", alignItems: "end" }}>
             <Campo style={{ margin: 0 }} label="Data">
-              <input className="fc" type="date" value={form.data} onChange={(e) => set("data", e.target.value)} required />
+              <input name="data" className="fc" type="date" value={form.data} onChange={(e) => set("data", e.target.value)} required />
             </Campo>
             <Campo style={{ margin: 0 }} label="Valor">
-              <input className="fc" type="number" step="0.01" value={form.valor} onChange={(e) => set("valor", Number(e.target.value))} required style={{ fontFamily: "'DM Mono', monospace" }} />
+              <input name="valor" className="fc" type="number" step="0.01" value={form.valor} onChange={(e) => set("valor", Number(e.target.value))} required style={{ fontFamily: "'DM Mono', monospace" }} />
             </Campo>
             <Campo style={{ margin: 0 }} label="Tipo">
-              <select className="fc" value={form.tipo} onChange={(e) => set("tipo", e.target.value as ConsorcioLance["tipo"])}>
+              <select name="tipo" className="fc" value={form.tipo} onChange={(e) => set("tipo", e.target.value as ConsorcioLance["tipo"])}>
                 <option value="livre">Livre</option>
                 <option value="embutido">Embutido</option>
                 <option value="fixo">Fixo</option>
@@ -337,7 +337,7 @@ export default function ConsorciosPage() {
 
       <div className="con">
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
-          <select className="fc" value={filtroAtivo} onChange={(e) => setFiltroAtivo(e.target.value as typeof filtroAtivo)} style={{ width: "120px" }}>
+          <select name="filtro_ativo" className="fc" value={filtroAtivo} onChange={(e) => setFiltroAtivo(e.target.value as typeof filtroAtivo)} style={{ width: "120px" }}>
             <option value="ativos">Ativos</option>
             <option value="inativos">Inativos</option>
             <option value="todos">Todos</option>
@@ -407,7 +407,7 @@ export default function ConsorciosPage() {
                           {p.comprovante_url ? (
                             <a href={p.comprovante_url} target="_blank" rel="noreferrer" style={{ fontSize: "11px" }}>Ver</a>
                           ) : (
-                            <input type="file" style={{ fontSize: "10px", width: "90px" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAnexo(p, f); }} />
+                            <input type="file" name={`comprovante_${p.id}`} style={{ fontSize: "10px", width: "90px" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAnexo(p, f); }} />
                           )}
                         </td>
                         <td><button className="btn bg xs" onClick={() => handleMarcarPaga(p)}>{p.status === "pago" ? "Reabrir" : "Marcar Paga"}</button></td>

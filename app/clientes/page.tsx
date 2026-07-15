@@ -412,13 +412,13 @@ export default function ClientesPage() {
                   {/* Tipo + Status */}
                   <div className="fr">
                     <Campo label="Tipo de Pessoa *">
-                      <select className="fc" value={form.tipo_pessoa} onChange={e => { F("tipo_pessoa", e.target.value); setCnpjStatus(""); }}>
+                      <select name="tipo_pessoa" className="fc" value={form.tipo_pessoa} onChange={e => { F("tipo_pessoa", e.target.value); setCnpjStatus(""); }}>
                         <option value="PJ">Pessoa Jurídica (CNPJ)</option>
                         <option value="PF">Pessoa Física (CPF)</option>
                       </select>
                     </Campo>
                     <Campo label="Status">
-                      <select className="fc" value={form.ativo ? "1" : "0"} onChange={e => F("ativo", e.target.value === "1")}>
+                      <select name="ativo" className="fc" value={form.ativo ? "1" : "0"} onChange={e => F("ativo", e.target.value === "1")}>
                         <option value="1">Ativo</option>
                         <option value="0">Inativo</option>
                       </select>
@@ -438,15 +438,15 @@ export default function ClientesPage() {
                           {!buscandoCnpj && cnpjStatus === "offline" && <span style={{ fontSize:"10px", color:"var(--warn)", fontWeight:600 }}>serviço indisponível, tente novamente</span>}
                         </>}
                       >
-                        <input className="fc" value={form.cnpj} onChange={e => handleCnpjChange(maskCNPJ(e.target.value))} placeholder="00.000.000/0001-00" maxLength={18} inputMode="numeric" autoFocus />
+                        <input name="cnpj" className="fc" value={form.cnpj} onChange={e => handleCnpjChange(maskCNPJ(e.target.value))} placeholder="00.000.000/0001-00" maxLength={18} inputMode="numeric" autoFocus />
                       </Campo>
                     ) : (
                       <Campo label="CPF *">
-                        <input className="fc" value={form.cpf} onChange={e => F("cpf", maskCPF(e.target.value))} placeholder="000.000.000-00" maxLength={14} inputMode="numeric" autoFocus />
+                        <input name="cpf" className="fc" value={form.cpf} onChange={e => F("cpf", maskCPF(e.target.value))} placeholder="000.000.000-00" maxLength={14} inputMode="numeric" autoFocus />
                       </Campo>
                     )}
                     <Campo label="Telefone da Empresa">
-                      <input className="fc" value={form.tel} onChange={e => F("tel", maskTel(e.target.value))} placeholder="(00) 00000-0000" maxLength={15} inputMode="numeric" />
+                      <input name="tel" className="fc" value={form.tel} onChange={e => F("tel", maskTel(e.target.value))} placeholder="(00) 00000-0000" maxLength={15} inputMode="numeric" />
                     </Campo>
                   </div>
 
@@ -459,33 +459,33 @@ export default function ClientesPage() {
                   )}
 
                   <Campo label="Nome / Razão Social *">
-                    <input className="fc" value={form.nome} onChange={e => F("nome", e.target.value)} placeholder="Nome ou razão social" />
+                    <input name="nome" className="fc" value={form.nome} onChange={e => F("nome", e.target.value)} placeholder="Nome ou razão social" />
                   </Campo>
 
                   {/* Responsável */}
                   <div className="fr">
                     <Campo label="Nome do Responsável">
-                      <input className="fc" value={form.responsavel ?? ""} onChange={e => F("responsavel", e.target.value)} placeholder="Nome do contato / responsável" />
+                      <input name="responsavel" className="fc" value={form.responsavel ?? ""} onChange={e => F("responsavel", e.target.value)} placeholder="Nome do contato / responsável" />
                     </Campo>
                     <Campo label="Telefone do Responsável">
-                      <input className="fc" value={form.tel_responsavel ?? ""} onChange={e => F("tel_responsavel", maskTel(e.target.value))} placeholder="(00) 00000-0000" maxLength={15} inputMode="numeric" />
+                      <input name="tel_responsavel" className="fc" value={form.tel_responsavel ?? ""} onChange={e => F("tel_responsavel", maskTel(e.target.value))} placeholder="(00) 00000-0000" maxLength={15} inputMode="numeric" />
                     </Campo>
                   </div>
 
                   <Campo label="E-mail">
-                    <input className="fc" value={form.email} onChange={e => F("email", e.target.value)} placeholder="email@empresa.com" inputMode="email" />
+                    <input name="email" className="fc" value={form.email} onChange={e => F("email", e.target.value)} placeholder="email@empresa.com" inputMode="email" />
                   </Campo>
 
                   <div className="fr">
                     <Campo label="Forma de Pagamento">
-                      <select className="fc" value={form.pgto} onChange={e => F("pgto", e.target.value)}>
+                      <select name="pgto" className="fc" value={form.pgto} onChange={e => F("pgto", e.target.value)}>
                         <option value="">Selecione...</option>
                         <option>Dinheiro</option><option>PIX</option><option>Boleto</option>
                         <option>Cartão</option><option>Cheque</option><option>A Prazo</option>
                       </select>
                     </Campo>
                     <Campo label="Tabela de Preço">
-                      <select className="fc" value={form.tabela} onChange={e => F("tabela", e.target.value)}>
+                      <select name="tabela" className="fc" value={form.tabela} onChange={e => F("tabela", e.target.value)}>
                         <option value="p">Padrão</option>
                         <option value="g">Grandes Clientes</option>
                       </select>
@@ -498,32 +498,32 @@ export default function ClientesPage() {
                 <div style={{ display:"flex", flexDirection:"column", gap:"14px" }}>
                   <div className="fr">
                     <Campo style={{ maxWidth:"160px" }} label={<>CEP {buscandoCep && <span style={{ color:"var(--acc)", fontSize:"10px" }}>buscando...</span>}</>}>
-                      <input className="fc" value={form.cep} onChange={e => F("cep", maskCEP(e.target.value))} onBlur={handleCepBlur} placeholder="00000-000" maxLength={9} inputMode="numeric" />
+                      <input name="cep" className="fc" value={form.cep} onChange={e => F("cep", maskCEP(e.target.value))} onBlur={handleCepBlur} placeholder="00000-000" maxLength={9} inputMode="numeric" />
                     </Campo>
                     <Campo label="Logradouro">
-                      <input className="fc" value={form.logradouro} onChange={e => F("logradouro", e.target.value)} placeholder="Rua, Av., Travessa..." />
+                      <input name="logradouro" className="fc" value={form.logradouro} onChange={e => F("logradouro", e.target.value)} placeholder="Rua, Av., Travessa..." />
                     </Campo>
                     <Campo style={{ maxWidth:"100px" }} label="Número">
-                      <input className="fc" value={form.numero} onChange={e => F("numero", e.target.value)} placeholder="Nº" />
+                      <input name="numero" className="fc" value={form.numero} onChange={e => F("numero", e.target.value)} placeholder="Nº" />
                     </Campo>
                   </div>
                   <div className="fr">
                     <Campo label="Complemento">
-                      <input className="fc" value={form.complemento} onChange={e => F("complemento", e.target.value)} placeholder="Sala, apto, bloco..." />
+                      <input name="complemento" className="fc" value={form.complemento} onChange={e => F("complemento", e.target.value)} placeholder="Sala, apto, bloco..." />
                     </Campo>
                     <Campo label="Bairro">
-                      <input className="fc" value={form.bairro} onChange={e => F("bairro", e.target.value)} placeholder="Bairro" />
+                      <input name="bairro" className="fc" value={form.bairro} onChange={e => F("bairro", e.target.value)} placeholder="Bairro" />
                     </Campo>
                   </div>
                   <div className="fr">
                     <Campo label="Cidade">
-                      <input className="fc" value={form.cidade} onChange={e => F("cidade", e.target.value)} placeholder="Cidade" />
+                      <input name="cidade" className="fc" value={form.cidade} onChange={e => F("cidade", e.target.value)} placeholder="Cidade" />
                     </Campo>
                     <Campo style={{ maxWidth:"80px" }} label="UF">
-                      <input className="fc" value={form.uf} onChange={e => F("uf", e.target.value.toUpperCase().slice(0,2))} placeholder="MG" maxLength={2} />
+                      <input name="uf" className="fc" value={form.uf} onChange={e => F("uf", e.target.value.toUpperCase().slice(0,2))} placeholder="MG" maxLength={2} />
                     </Campo>
                     <Campo label="Cód. IBGE">
-                      <input className="fc" value={form.cod_ibge} onChange={e => F("cod_ibge", e.target.value)} placeholder="Preenchido auto via CEP" inputMode="numeric" />
+                      <input name="cod_ibge" className="fc" value={form.cod_ibge} onChange={e => F("cod_ibge", e.target.value)} placeholder="Preenchido auto via CEP" inputMode="numeric" />
                     </Campo>
                   </div>
                   <div style={{ fontSize:"11px", color:"var(--t3)", background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px" }}>
@@ -536,10 +536,10 @@ export default function ClientesPage() {
                 <div style={{ display:"flex", flexDirection:"column", gap:"16px" }}>
                   <div className="fr">
                     <Campo label="Inscrição Estadual (IE)">
-                      <input className="fc" value={form.ie} onChange={e => F("ie", maskIE(e.target.value))} placeholder="000.000.000/0000" maxLength={17} inputMode="numeric" />
+                      <input name="ie" className="fc" value={form.ie} onChange={e => F("ie", maskIE(e.target.value))} placeholder="000.000.000/0000" maxLength={17} inputMode="numeric" />
                     </Campo>
                     <Campo label="Indicador IE *">
-                      <select className="fc" value={form.ind_ie} onChange={e => F("ind_ie", e.target.value)}>
+                      <select name="ind_ie" className="fc" value={form.ind_ie} onChange={e => F("ind_ie", e.target.value)}>
                         <option value="1">1 — Contribuinte ICMS</option>
                         <option value="2">2 — Contribuinte Isento</option>
                         <option value="9">9 — Não Contribuinte</option>
@@ -565,7 +565,7 @@ export default function ClientesPage() {
                   </div>
 
                   <Campo label="Observações padrão na NF-e">
-                    <textarea className="fc" value={form.obs_nfe} onChange={e => F("obs_nfe", e.target.value)} placeholder="Texto que aparece no campo de observações de todas as NF-e deste cliente" rows={3} style={{ resize:"vertical" }} />
+                    <textarea name="obs_nfe" className="fc" value={form.obs_nfe} onChange={e => F("obs_nfe", e.target.value)} placeholder="Texto que aparece no campo de observações de todas as NF-e deste cliente" rows={3} style={{ resize:"vertical" }} />
                   </Campo>
 
                   <div style={{ background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)", borderRadius:"8px", padding:"10px 14px", fontSize:"12px", color:"var(--warn)" }}>

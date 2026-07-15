@@ -236,12 +236,12 @@ function NovaNFeInner() {
             <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em" }}>IDENTIFICAÇÃO</div>
             <div className="fr">
               <Campo style={{ flex:2 }} label="Pedido *">
-                <select className="fc" value={form.pedido_id} onChange={e => handlePedidoChange(e.target.value)}>
+                <select name="pedido_id" className="fc" value={form.pedido_id} onChange={e => handlePedidoChange(e.target.value)}>
                   <option value="">Selecione um pedido...</option>
                   {pedidos.map(p => <option key={p.id} value={p.id}>{p.id} — {p.clientes?.nome ?? "?"} — {formatBRL(p.valor_total)}</option>)}
                 </select>
               </Campo>
-              <Campo label="Série"><input className="fc" value={form.serie} onChange={e => setF("serie", e.target.value)} maxLength={3} /></Campo>
+              <Campo label="Série"><input name="serie" className="fc" value={form.serie} onChange={e => setF("serie", e.target.value)} maxLength={3} /></Campo>
             </div>
             {cliente && (
               <div style={{ background:"var(--surf2)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"14px 16px", display:"flex", gap:"24px", flexWrap:"wrap" }}>
@@ -252,9 +252,9 @@ function NovaNFeInner() {
               </div>
             )}
             <div className="fr">
-              <Campo style={{ flex:2 }} label="Natureza da Operação *"><input className="fc" value={form.natureza_op} onChange={e => setF("natureza_op", e.target.value)} /></Campo>
+              <Campo style={{ flex:2 }} label="Natureza da Operação *"><input name="natureza_op" className="fc" value={form.natureza_op} onChange={e => setF("natureza_op", e.target.value)} /></Campo>
               <Campo label="Finalidade">
-                <select className="fc" value={form.finalidade} onChange={e => setF("finalidade", e.target.value)}>
+                <select name="finalidade" className="fc" value={form.finalidade} onChange={e => setF("finalidade", e.target.value)}>
                   <option value="1">1 — NF-e Normal</option>
                   <option value="2">2 — Complementar</option>
                   <option value="3">3 — Ajuste</option>
@@ -262,14 +262,14 @@ function NovaNFeInner() {
                 </select>
               </Campo>
               <Campo label="Tipo">
-                <select className="fc" value={form.tipo} onChange={e => setF("tipo", e.target.value)}>
+                <select name="tipo" className="fc" value={form.tipo} onChange={e => setF("tipo", e.target.value)}>
                   <option value="saida">Saída</option>
                   <option value="entrada">Entrada</option>
                 </select>
               </Campo>
             </div>
             <Campo label="CFOP Padrão">
-              <select className="fc" value={form.cfop_padrao} onChange={e => setF("cfop_padrao", e.target.value)}>
+              <select name="cfop_padrao" className="fc" value={form.cfop_padrao} onChange={e => setF("cfop_padrao", e.target.value)}>
                 <option value="5.101">5.101 — Venda dentro de MG (ICMS 18%)</option>
                 <option value="6.101">6.101 — Venda fora de MG (ICMS 12%)</option>
                 <option value="5.102">5.102 — Prod. própria MG</option>
@@ -290,22 +290,22 @@ function NovaNFeInner() {
                   <div key={i} style={{ background:"var(--surf2)", border:"1px solid var(--b1)", borderRadius:"10px", padding:"16px" }}>
                     <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"12px" }}>
                       <div style={{ width:"24px", height:"24px", borderRadius:"6px", background:"var(--surf3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"11px", fontWeight:700, color:"var(--t3)", flexShrink:0 }}>{i+1}</div>
-                      <input className="fc" value={item.produto_nome} onChange={e => atualizarItem(i,"produto_nome",e.target.value)} style={{ flex:1, fontSize:"14px", fontWeight:600 }} />
+                      <input name={`item_produto_nome_${i}`} className="fc" value={item.produto_nome} onChange={e => atualizarItem(i,"produto_nome",e.target.value)} style={{ flex:1, fontSize:"14px", fontWeight:600 }} />
                     </div>
                     <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:"8px" }}>
-                      <Campo label="NCM"><input className="fc" value={item.ncm} onChange={e => atualizarItem(i,"ncm",e.target.value)} maxLength={8} /></Campo>
-                      <Campo label="CFOP"><input className="fc" value={item.cfop} onChange={e => atualizarItem(i,"cfop",e.target.value)} maxLength={5} /></Campo>
-                      <Campo label="CST ICMS"><input className="fc" value={item.cst} onChange={e => atualizarItem(i,"cst",e.target.value)} maxLength={2} /></Campo>
-                      <Campo label="Unidade"><input className="fc" value={item.unidade} onChange={e => atualizarItem(i,"unidade",e.target.value)} maxLength={6} /></Campo>
-                      <Campo label="Quantidade (m²)"><input className="fc" type="number" value={item.quantidade} onChange={e => atualizarItem(i,"quantidade",Number(e.target.value))} /></Campo>
+                      <Campo label="NCM"><input name={`item_ncm_${i}`} className="fc" value={item.ncm} onChange={e => atualizarItem(i,"ncm",e.target.value)} maxLength={8} /></Campo>
+                      <Campo label="CFOP"><input name={`item_cfop_${i}`} className="fc" value={item.cfop} onChange={e => atualizarItem(i,"cfop",e.target.value)} maxLength={5} /></Campo>
+                      <Campo label="CST ICMS"><input name={`item_cst_${i}`} className="fc" value={item.cst} onChange={e => atualizarItem(i,"cst",e.target.value)} maxLength={2} /></Campo>
+                      <Campo label="Unidade"><input name={`item_unidade_${i}`} className="fc" value={item.unidade} onChange={e => atualizarItem(i,"unidade",e.target.value)} maxLength={6} /></Campo>
+                      <Campo label="Quantidade (m²)"><input name={`item_quantidade_${i}`} className="fc" type="number" value={item.quantidade} onChange={e => atualizarItem(i,"quantidade",Number(e.target.value))} /></Campo>
                       <Campo label="Valor Unitário"><CurrencyInput value={item.valor_unitario} onChange={v => atualizarItem(i,"valor_unitario",v)} /></Campo>
                       <Campo label="Valor Bruto"><CurrencyInput value={item.valor_bruto} onChange={v => atualizarItem(i,"valor_bruto",v)} /></Campo>
-                      <Campo label="IPI %"><input className="fc" type="number" min="0" max="100" step="0.5" value={item.ipi_pct} onChange={e => atualizarItem(i,"ipi_pct",Number(e.target.value))} /></Campo>
-                      <Campo label="ICMS %"><input className="fc" value={item.icms_pct} readOnly style={{ opacity:0.6 }} /></Campo>
-                      <Campo label="Valor ICMS"><input className="fc" value={formatBRL(item.valor_icms)} readOnly style={{ opacity:0.6 }} /></Campo>
-                      <Campo label="Valor PIS"><input className="fc" value={formatBRL(item.valor_pis)} readOnly style={{ opacity:0.6 }} /></Campo>
-                      <Campo label="Valor COFINS"><input className="fc" value={formatBRL(item.valor_cofins)} readOnly style={{ opacity:0.6 }} /></Campo>
-                      <Campo label="Valor Total"><input className="fc" value={formatBRL(item.valor_bruto + item.valor_ipi)} readOnly style={{ color:"var(--acc)", fontWeight:700 }} /></Campo>
+                      <Campo label="IPI %"><input name={`item_ipi_pct_${i}`} className="fc" type="number" min="0" max="100" step="0.5" value={item.ipi_pct} onChange={e => atualizarItem(i,"ipi_pct",Number(e.target.value))} /></Campo>
+                      <Campo label="ICMS %"><input name={`item_icms_pct_${i}`} className="fc" value={item.icms_pct} readOnly style={{ opacity:0.6 }} /></Campo>
+                      <Campo label="Valor ICMS"><input name={`item_valor_icms_${i}`} className="fc" value={formatBRL(item.valor_icms)} readOnly style={{ opacity:0.6 }} /></Campo>
+                      <Campo label="Valor PIS"><input name={`item_valor_pis_${i}`} className="fc" value={formatBRL(item.valor_pis)} readOnly style={{ opacity:0.6 }} /></Campo>
+                      <Campo label="Valor COFINS"><input name={`item_valor_cofins_${i}`} className="fc" value={formatBRL(item.valor_cofins)} readOnly style={{ opacity:0.6 }} /></Campo>
+                      <Campo label="Valor Total"><input name={`item_valor_bruto_${i}`} className="fc" value={formatBRL(item.valor_bruto + item.valor_ipi)} readOnly style={{ color:"var(--acc)", fontWeight:700 }} /></Campo>
                     </div>
                   </div>
                 ))}
@@ -351,11 +351,11 @@ function NovaNFeInner() {
             <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em" }}>CONDIÇÕES DE PAGAMENTO</div>
             <div className="fr">
               <Campo style={{ flex:2 }} label="Forma de Pagamento *">
-                <select className="fc" value={form.forma_pgto} onChange={e => setF("forma_pgto", e.target.value)}>
+                <select name="forma_pgto" className="fc" value={form.forma_pgto} onChange={e => setF("forma_pgto", e.target.value)}>
                   {FORMAS_PGTO.map(f => <option key={f.cod} value={f.cod}>{f.cod} — {f.label}</option>)}
                 </select>
               </Campo>
-              <Campo label="Parcelas"><input className="fc" type="number" min="1" max="99" value={form.parcelas} onChange={e => setF("parcelas", Number(e.target.value))} /></Campo>
+              <Campo label="Parcelas"><input name="parcelas" className="fc" type="number" min="1" max="99" value={form.parcelas} onChange={e => setF("parcelas", Number(e.target.value))} /></Campo>
             </div>
             <div style={{ fontSize:"12px", color:"var(--t3)", background:"var(--surf2)", borderRadius:"8px", padding:"10px 14px" }}>
               💡 Para pagamentos parcelados, o contador pode ajustar datas de vencimento na Nuvem Fiscal após a emissão.
@@ -367,7 +367,7 @@ function NovaNFeInner() {
           <div className="card" style={{ padding:"24px", display:"flex", flexDirection:"column", gap:"18px" }}>
             <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em" }}>TRANSPORTE</div>
             <Campo label="Modalidade de Frete">
-              <select className="fc" value={form.modalidade_frete} onChange={e => setF("modalidade_frete", Number(e.target.value))}>
+              <select name="modalidade_frete" className="fc" value={form.modalidade_frete} onChange={e => setF("modalidade_frete", Number(e.target.value))}>
                 <option value={9}>9 — Sem Frete</option>
                 <option value={0}>0 — Por conta do Emitente (CIF)</option>
                 <option value={1}>1 — Por conta do Destinatário (FOB)</option>
@@ -378,16 +378,16 @@ function NovaNFeInner() {
             </Campo>
             {form.modalidade_frete !== 9 && (<>
               <div className="fr">
-                <Campo style={{ flex:2 }} label="Transportadora"><input className="fc" value={form.transportadora} onChange={e => setF("transportadora", e.target.value)} /></Campo>
-                <Campo label="Placa"><input className="fc" value={form.placa_veiculo} onChange={e => setF("placa_veiculo", e.target.value.toUpperCase())} maxLength={8} /></Campo>
-                <Campo style={{ maxWidth:"80px" }} label="UF"><input className="fc" value={form.uf_veiculo} onChange={e => setF("uf_veiculo", e.target.value.toUpperCase().slice(0,2))} maxLength={2} /></Campo>
-                <Campo label="RNTC"><input className="fc" value={form.rntc} onChange={e => setF("rntc", e.target.value)} /></Campo>
+                <Campo style={{ flex:2 }} label="Transportadora"><input name="transportadora" className="fc" value={form.transportadora} onChange={e => setF("transportadora", e.target.value)} /></Campo>
+                <Campo label="Placa"><input name="placa_veiculo" className="fc" value={form.placa_veiculo} onChange={e => setF("placa_veiculo", e.target.value.toUpperCase())} maxLength={8} /></Campo>
+                <Campo style={{ maxWidth:"80px" }} label="UF"><input name="uf_veiculo" className="fc" value={form.uf_veiculo} onChange={e => setF("uf_veiculo", e.target.value.toUpperCase().slice(0,2))} maxLength={2} /></Campo>
+                <Campo label="RNTC"><input name="rntc" className="fc" value={form.rntc} onChange={e => setF("rntc", e.target.value)} /></Campo>
               </div>
               <div className="fr">
-                <Campo label="Peso Bruto (kg)"><input className="fc" type="number" value={form.peso_bruto} onChange={e => setF("peso_bruto", e.target.value)} /></Campo>
-                <Campo label="Peso Líquido (kg)"><input className="fc" type="number" value={form.peso_liquido} onChange={e => setF("peso_liquido", e.target.value)} /></Campo>
-                <Campo label="Volumes"><input className="fc" type="number" value={form.volumes} onChange={e => setF("volumes", e.target.value)} /></Campo>
-                <Campo label="Espécie"><input className="fc" value={form.especie_volume} onChange={e => setF("especie_volume", e.target.value)} placeholder="Caixa, Fardo..." /></Campo>
+                <Campo label="Peso Bruto (kg)"><input name="peso_bruto" className="fc" type="number" value={form.peso_bruto} onChange={e => setF("peso_bruto", e.target.value)} /></Campo>
+                <Campo label="Peso Líquido (kg)"><input name="peso_liquido" className="fc" type="number" value={form.peso_liquido} onChange={e => setF("peso_liquido", e.target.value)} /></Campo>
+                <Campo label="Volumes"><input name="volumes" className="fc" type="number" value={form.volumes} onChange={e => setF("volumes", e.target.value)} /></Campo>
+                <Campo label="Espécie"><input name="especie_volume" className="fc" value={form.especie_volume} onChange={e => setF("especie_volume", e.target.value)} placeholder="Caixa, Fardo..." /></Campo>
               </div>
             </>)}
           </div>
@@ -398,13 +398,13 @@ function NovaNFeInner() {
             <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:"0.06em" }}>DETALHES DA NOTA FISCAL</div>
             <div className="fr">
               <Campo label="Data de Saída"><DateInput value={form.dt_saida} onChange={v => setF("dt_saida", v)} /></Campo>
-              <Campo label="Hora de Saída"><input className="fc" type="time" value={form.hora_saida} onChange={e => setF("hora_saida", e.target.value)} /></Campo>
+              <Campo label="Hora de Saída"><input name="hora_saida" className="fc" type="time" value={form.hora_saida} onChange={e => setF("hora_saida", e.target.value)} /></Campo>
             </div>
             <Campo label="Observações (impressas na nota)">
-              <textarea className="fc" value={form.obs_contribuinte} onChange={e => setF("obs_contribuinte", e.target.value)} placeholder="Esta informação será impressa nas observações da nota." rows={4} style={{ resize:"vertical" }} />
+              <textarea name="obs_contribuinte" className="fc" value={form.obs_contribuinte} onChange={e => setF("obs_contribuinte", e.target.value)} placeholder="Esta informação será impressa nas observações da nota." rows={4} style={{ resize:"vertical" }} />
             </Campo>
             <Campo label="Observações Internas (não impressas)">
-              <textarea className="fc" value={form.obs_internas} onChange={e => setF("obs_internas", e.target.value)} placeholder="Esta informação é de uso interno e não será impressa na nota." rows={3} style={{ resize:"vertical" }} />
+              <textarea name="obs_internas" className="fc" value={form.obs_internas} onChange={e => setF("obs_internas", e.target.value)} placeholder="Esta informação é de uso interno e não será impressa na nota." rows={3} style={{ resize:"vertical" }} />
             </Campo>
           </div>
         )}

@@ -203,7 +203,7 @@ function PedidosPageInner() {
         <div className="tb-title">Pedidos</div>
         <div className="tb-search">
           <span className="tb-search-ic">⌕</span>
-          <input
+          <input name="filtro"
             placeholder="Buscar pedido ou cliente..."
             value={filtro}
             onChange={e => { setFiltro(e.target.value); setPage(0); setSugestoesAbertas(true); }}

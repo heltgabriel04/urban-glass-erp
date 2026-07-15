@@ -263,7 +263,7 @@ export default function TabelasPage() {
                         </td>
                         <td>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <input
+                            <input name="edit_margem"
                               className="fc"
                               type="number" min="0" max="100" step="0.5"
                               value={edit.margem || ""}

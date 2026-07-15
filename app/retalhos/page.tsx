@@ -319,7 +319,7 @@ export default function RetalhoPage() {
           ))}
         </div>
         {boxes.length > 0 && (
-          <select
+          <select name="filtro_box"
             value={filtroBox}
             onChange={e => setFiltroBox(e.target.value)}
             style={{ background:"var(--surf2)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"5px 10px", color:"var(--t2)", fontSize:"12px", cursor:"pointer" }}
@@ -368,7 +368,7 @@ export default function RetalhoPage() {
 
               <div>
                 <label style={labelStyle}>Produto *</label>
-                <select
+                <select name="produto_nome"
                   style={selectStyle}
                   value={form.produto_nome}
                   onChange={e => setForm(f => ({ ...f, produto_nome: e.target.value }))}
@@ -382,7 +382,7 @@ export default function RetalhoPage() {
 
               <div>
                 <label style={labelStyle}>Largura (mm) *</label>
-                <input
+                <input name="largura"
                   style={inputStyle}
                   type="number"
                   placeholder="1200"
@@ -393,7 +393,7 @@ export default function RetalhoPage() {
 
               <div>
                 <label style={labelStyle}>Altura (mm) *</label>
-                <input
+                <input name="altura"
                   style={inputStyle}
                   type="number"
                   placeholder="800"
@@ -404,7 +404,7 @@ export default function RetalhoPage() {
 
               <div>
                 <label style={labelStyle}>Espessura (mm)</label>
-                <input
+                <input name="espessura"
                   style={inputStyle}
                   type="number"
                   placeholder="4"
@@ -415,7 +415,7 @@ export default function RetalhoPage() {
 
               <div>
                 <label style={labelStyle}>Quantidade</label>
-                <input
+                <input name="quantidade"
                   style={inputStyle}
                   type="number"
                   min={1}
@@ -430,7 +430,7 @@ export default function RetalhoPage() {
 
               <div>
                 <label style={labelStyle}>Box</label>
-                <input
+                <input name="box"
                   style={inputStyle}
                   placeholder="BOX 3"
                   value={form.box}
@@ -440,7 +440,7 @@ export default function RetalhoPage() {
 
               <div>
                 <label style={labelStyle}>Chapa Origem</label>
-                <input
+                <input name="chapa_origem"
                   style={inputStyle}
                   placeholder="CH-441-0012"
                   value={form.chapa_origem}
@@ -450,7 +450,7 @@ export default function RetalhoPage() {
 
               <div>
                 <label style={labelStyle}>Pedido Origem</label>
-                <select
+                <select name="pedido_origem"
                   style={selectStyle}
                   value={form.pedido_origem}
                   onChange={e => setForm(f => ({ ...f, pedido_origem: e.target.value }))}
@@ -474,7 +474,7 @@ export default function RetalhoPage() {
 
               <div>
                 <label style={labelStyle}>Localização</label>
-                <input
+                <input name="localizacao"
                   style={inputStyle}
                   placeholder="Cavalete 3 - B"
                   value={form.localizacao}
@@ -485,7 +485,7 @@ export default function RetalhoPage() {
 
             <div style={{ marginTop:"12px" }}>
               <label style={labelStyle}>Observação / Cliente (deixe em branco se for vidro próprio)</label>
-              <input
+              <input name="observacao"
                 style={{ ...inputStyle, borderColor: form.observacao ? "var(--warn)" : "var(--b2)" }}
                 placeholder="Nome do cliente dono do vidro, ex: Diogo"
                 value={form.observacao}
@@ -552,7 +552,7 @@ export default function RetalhoPage() {
                   <thead>
                     <tr>
                       <th style={{ width:"32px", textAlign:"center" }}>
-                        <input
+                        <input name="filtrados"
                           type="checkbox"
                           checked={filtrados.length > 0 && filtrados.every(r => selecionados.has(r.id))}
                           onChange={toggleSelecionarTodos}
@@ -579,7 +579,7 @@ export default function RetalhoPage() {
                         style={r.observacao ? { background:"rgba(245,158,11,.06)", borderLeft:"3px solid rgba(245,158,11,.5)" } : undefined}
                       >
                         <td style={{ textAlign:"center" }}>
-                          <input
+                          <input name={`r_id_${r.id}`}
                             type="checkbox"
                             checked={selecionados.has(r.id)}
                             onChange={() => toggleSelecionado(r.id)}

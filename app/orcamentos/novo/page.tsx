@@ -536,7 +536,7 @@ function NovoOrcamentoPageInner() {
             <div className="fr">
               <Campo label="Previsão de Entrega"><DateInput value={dtEntrega} onChange={setDtEntrega} /></Campo>
               <Campo label="Frete">
-                <select tabIndex={-1} className="fc" value={frete} onChange={e => setFrete(e.target.value)}>
+                <select name="frete" tabIndex={-1} className="fc" value={frete} onChange={e => setFrete(e.target.value)}>
                   {["Retirada","Fretado"].map(f => <option key={f}>{f}</option>)}
                 </select>
               </Campo>
@@ -568,11 +568,11 @@ function NovoOrcamentoPageInner() {
               {/* Parcelas + Desconto */}
               <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
                 <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em" }}>Parcelas</div>
-                <select tabIndex={-1} className="fc" style={{ margin: 0, width: "72px" }} value={parcelas} onChange={e => setParcelas(Number(e.target.value))}>
+                <select name="parcelas" tabIndex={-1} className="fc" style={{ margin: 0, width: "72px" }} value={parcelas} onChange={e => setParcelas(Number(e.target.value))}>
                   {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
                 </select>
                 <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginLeft: "8px" }}>Desconto (%)</div>
-                <input tabIndex={-1} className="fc" style={{ margin: 0, width: "72px" }} type="number" min="0" max="100" step="0.5" value={desconto || ""} onChange={e => setDesconto(parseFloat(e.target.value) || 0)} placeholder="0" />
+                <input name="desconto" tabIndex={-1} className="fc" style={{ margin: 0, width: "72px" }} type="number" min="0" max="100" step="0.5" value={desconto || ""} onChange={e => setDesconto(parseFloat(e.target.value) || 0)} placeholder="0" />
               </div>
 
               {/* Tabela de parcelas — tudo em linha */}
@@ -589,7 +589,7 @@ function NovoOrcamentoPageInner() {
                         {parcelas > 1 ? `${idx + 1}ª` : "·"}
                       </div>
                       <DateInput value={p.data} onChange={v => idx === 0 ? handlePrimeiraDtPgto(v) : handleDtPgto(idx, v)} />
-                      <select
+                      <select name={`p_forma_pgto_${idx}`}
                         tabIndex={-1}
                         className="fc"
                         style={{ margin: 0, fontSize: "12px", padding: "7px 8px" }}
@@ -599,7 +599,7 @@ function NovoOrcamentoPageInner() {
                         <option value="">— Forma —</option>
                         {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
                       </select>
-                      <select
+                      <select name={`p_conta_${idx}`}
                         tabIndex={-1}
                         className="fc"
                         style={{ margin: 0, fontSize: "12px", padding: "7px 8px" }}
@@ -621,7 +621,7 @@ function NovoOrcamentoPageInner() {
               </div>
             </div>
             <Campo style={{ marginTop: "10px" }} label="Observações">
-              <textarea tabIndex={-1} className="fc" value={obs} onChange={e => setObs(e.target.value)} placeholder="Observações do orçamento..." />
+              <textarea name="obs" tabIndex={-1} className="fc" value={obs} onChange={e => setObs(e.target.value)} placeholder="Observações do orçamento..." />
             </Campo>
           </div>
 
@@ -734,7 +734,7 @@ function NovoOrcamentoPageInner() {
                     placeholder="Buscar produto..."
                     tabIndex={i * 4 + 1}
                   />
-                  <input
+                  <input name={`item_largura_${i}`}
                     className="fc"
                     type="number"
                     ref={el => { largRefs.current[i] = el; }}
@@ -744,7 +744,7 @@ function NovoOrcamentoPageInner() {
                     tabIndex={i * 4 + 2}
                     placeholder="0"
                   />
-                  <input
+                  <input name={`item_altura_${i}`}
                     className="fc"
                     type="number"
                     ref={el => { altRefs.current[i] = el; }}
@@ -754,7 +754,7 @@ function NovoOrcamentoPageInner() {
                     tabIndex={i * 4 + 3}
                     placeholder="0"
                   />
-                  <input
+                  <input name={`item_quantidade_${i}`}
                     className="fc"
                     type="number"
                     ref={el => { qtdRefs.current[i] = el; }}

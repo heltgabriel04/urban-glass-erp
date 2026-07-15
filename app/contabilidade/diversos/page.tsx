@@ -69,12 +69,12 @@ function ModalDocDiverso({ ano, mes, fornecedores, usuarioEmail, onSalvo, onFech
       <form id="form-doc-diverso" onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px", flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
           <Campo label="Categoria">
-            <select className="fc" value={form.categoria} onChange={(e) => set("categoria", e.target.value as CategoriaDocumentoDiverso)}>
+            <select name="categoria" className="fc" value={form.categoria} onChange={(e) => set("categoria", e.target.value as CategoriaDocumentoDiverso)}>
               {CATEGORIAS_DOC_DIVERSO.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
           </Campo>
           <Campo label="Fornecedor">
-            <select className="fc" value={form.fornecedor_id ?? ""} onChange={(e) => set("fornecedor_id", e.target.value ? Number(e.target.value) : null)}>
+            <select name="fornecedor_id" className="fc" value={form.fornecedor_id ?? ""} onChange={(e) => set("fornecedor_id", e.target.value ? Number(e.target.value) : null)}>
               <option value="">—</option>
               {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
             </select>
@@ -82,7 +82,7 @@ function ModalDocDiverso({ ano, mes, fornecedores, usuarioEmail, onSalvo, onFech
         </div>
 
         <Campo label="Descrição *">
-          <input className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} placeholder="Ex: Conta de energia — Julho/2026" required />
+          <input name="descricao" className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} placeholder="Ex: Conta de energia — Julho/2026" required />
         </Campo>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -95,11 +95,11 @@ function ModalDocDiverso({ ano, mes, fornecedores, usuarioEmail, onSalvo, onFech
         </div>
 
         <Campo label="PDF do documento">
-          <input className="fc" type="file" accept=".pdf" onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)} />
+          <input name="set_pdf_file" className="fc" type="file" accept=".pdf" onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)} />
         </Campo>
 
         <Campo label="Observações">
-          <textarea className="fc" rows={2} value={form.observacoes ?? ""} onChange={(e) => set("observacoes", e.target.value || null)} />
+          <textarea name="observacoes" className="fc" rows={2} value={form.observacoes ?? ""} onChange={(e) => set("observacoes", e.target.value || null)} />
         </Campo>
       </form>
 
@@ -168,11 +168,11 @@ export default function DocumentosDiversosPage() {
       <div className="con">
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <select className="fc" value={mes} onChange={(e) => setMes(Number(e.target.value))} style={{ width: "140px" }}>
+            <select name="mes" className="fc" value={mes} onChange={(e) => setMes(Number(e.target.value))} style={{ width: "140px" }}>
               {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
             </select>
-            <input className="fc" type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} style={{ width: "90px" }} />
-            <select className="fc" value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value as CategoriaDocumentoDiverso | "")} style={{ width: "220px" }}>
+            <input name="ano" className="fc" type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} style={{ width: "90px" }} />
+            <select name="filtro_categoria" className="fc" value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value as CategoriaDocumentoDiverso | "")} style={{ width: "220px" }}>
               <option value="">Todas as categorias</option>
               {CATEGORIAS_DOC_DIVERSO.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>

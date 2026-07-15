@@ -80,10 +80,10 @@ export default function ContabilidadeDashboardPage() {
           <div>
             <div style={{ fontSize: "11px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>Mês de Referência</div>
             <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-              <select className="fc" value={mes} onChange={(e) => setMes(Number(e.target.value))} style={{ width: "140px" }}>
+              <select name="mes" className="fc" value={mes} onChange={(e) => setMes(Number(e.target.value))} style={{ width: "140px" }}>
                 {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
               </select>
-              <input className="fc" type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} style={{ width: "90px" }} />
+              <input name="ano" className="fc" type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} style={{ width: "90px" }} />
             </div>
           </div>
 

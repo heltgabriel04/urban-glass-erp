@@ -94,7 +94,7 @@ export default function CommandPalette() {
       backdropStyle={{ alignItems: "flex-start", paddingTop: "10vh" }}
     >
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--b1)" }}>
-          <input
+          <input name="query"
             ref={inputRef} value={query} onChange={e => setQuery(e.target.value)} onKeyDown={onKeyDown}
             placeholder="Buscar pedido, cliente, lançamento ou tela..."
             className="fc" style={{ margin: 0, width: "100%", fontSize: "14px" }}

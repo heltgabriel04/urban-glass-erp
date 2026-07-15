@@ -211,12 +211,12 @@ export default function NaoConformidadesPage() {
             value={busca} onChange={setBusca}
             inputStyle={{ fontSize:"11px", padding:"5px 10px", borderRadius:"6px", border:"1px solid var(--b2)", background:"var(--surf2)", color:"var(--t1)", width:"220px", fontFamily:"'DM Mono',monospace" }}
           />
-          <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
+          <select name="filtro_status" value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
             style={{ fontSize:"11px", padding:"5px 8px", borderRadius:"6px", border:"1px solid var(--b2)", background:"var(--surf2)", color:"var(--t1)", fontFamily:"'DM Mono',monospace" }}>
             <option value="todos">Todos os status</option>
             {STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <select value={filtroGravidade} onChange={e => setFiltroGravidade(e.target.value)}
+          <select name="filtro_gravidade" value={filtroGravidade} onChange={e => setFiltroGravidade(e.target.value)}
             style={{ fontSize:"11px", padding:"5px 8px", borderRadius:"6px", border:"1px solid var(--b2)", background:"var(--surf2)", color:"var(--t1)", fontFamily:"'DM Mono',monospace" }}>
             <option value="todas">Toda gravidade</option>
             {(["Baixa","Média","Alta","Crítica"] as GravidadeNC[]).map(g => <option key={g} value={g}>{g}</option>)}
@@ -305,12 +305,12 @@ export default function NaoConformidadesPage() {
             <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
               <div className="fr">
                 <Campo label="Tipo de ocorrência *">
-                  <select className="fc" value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value as TipoNC }))}>
+                  <select name="tipo" className="fc" value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value as TipoNC }))}>
                     {TIPOS_NC.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </Campo>
                 <Campo label="Gravidade *">
-                  <select className="fc" value={form.gravidade} onChange={e => setForm(f => ({ ...f, gravidade: e.target.value as GravidadeNC }))}>
+                  <select name="gravidade" className="fc" value={form.gravidade} onChange={e => setForm(f => ({ ...f, gravidade: e.target.value as GravidadeNC }))}>
                     {(["Baixa","Média","Alta","Crítica"] as GravidadeNC[]).map(g => <option key={g} value={g}>{g}</option>)}
                   </select>
                 </Campo>
@@ -318,12 +318,12 @@ export default function NaoConformidadesPage() {
 
               <div className="fr">
                 <Campo label="Etapa da produção *">
-                  <select className="fc" value={form.etapa} onChange={e => setForm(f => ({ ...f, etapa: e.target.value }))}>
+                  <select name="etapa" className="fc" value={form.etapa} onChange={e => setForm(f => ({ ...f, etapa: e.target.value }))}>
                     {ETAPAS.map(e => <option key={e} value={e}>{e}</option>)}
                   </select>
                 </Campo>
                 <Campo label="Pedido vinculado">
-                  <select className="fc" value={form.pedido_id ?? ""} onChange={e => setForm(f => ({ ...f, pedido_id: e.target.value || null }))}>
+                  <select name="pedido_id" className="fc" value={form.pedido_id ?? ""} onChange={e => setForm(f => ({ ...f, pedido_id: e.target.value || null }))}>
                     <option value="">— Nenhum —</option>
                     {pedidos.map(p => <option key={p.id} value={p.id}>{p.id} · {p.cliente_nome}</option>)}
                   </select>
@@ -331,23 +331,23 @@ export default function NaoConformidadesPage() {
               </div>
 
               <Campo label="Produto envolvido">
-                <input className="fc" placeholder="Ex: Temperado 8mm Incolor" value={form.produto_nome ?? ""} onChange={e => setForm(f => ({ ...f, produto_nome: e.target.value || null }))} />
+                <input name="produto_nome" className="fc" placeholder="Ex: Temperado 8mm Incolor" value={form.produto_nome ?? ""} onChange={e => setForm(f => ({ ...f, produto_nome: e.target.value || null }))} />
               </Campo>
 
               <Campo label="Descrição detalhada *">
-                <textarea className="fc" rows={3} placeholder="Descreva o que aconteceu…" value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} style={{ resize:"vertical", fontFamily:"inherit" }} />
+                <textarea name="descricao" className="fc" rows={3} placeholder="Descreva o que aconteceu…" value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} style={{ resize:"vertical", fontFamily:"inherit" }} />
               </Campo>
 
               <Campo label="Observações">
-                <textarea className="fc" rows={2} placeholder="Informações adicionais…" value={form.obs ?? ""} onChange={e => setForm(f => ({ ...f, obs: e.target.value || null }))} style={{ resize:"vertical", fontFamily:"inherit" }} />
+                <textarea name="obs" className="fc" rows={2} placeholder="Informações adicionais…" value={form.obs ?? ""} onChange={e => setForm(f => ({ ...f, obs: e.target.value || null }))} style={{ resize:"vertical", fontFamily:"inherit" }} />
               </Campo>
 
               <div className="fr">
                 <Campo label="Responsável pela análise">
-                  <input className="fc" placeholder="Nome ou setor responsável" value={form.responsavel_analise ?? ""} onChange={e => setForm(f => ({ ...f, responsavel_analise: e.target.value || null }))} />
+                  <input name="responsavel_analise" className="fc" placeholder="Nome ou setor responsável" value={form.responsavel_analise ?? ""} onChange={e => setForm(f => ({ ...f, responsavel_analise: e.target.value || null }))} />
                 </Campo>
                 <Campo label="Status inicial">
-                  <select className="fc" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as StatusNaoConformidade }))}>
+                  <select name="status" className="fc" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as StatusNaoConformidade }))}>
                     {STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </Campo>
@@ -362,7 +362,7 @@ export default function NaoConformidadesPage() {
                   onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = "var(--b2)"; const f = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/")); setFotosNovas(p => [...p, ...f]); }}>
                   <span style={{ fontSize:"20px" }}>📷</span>
                   <span style={{ fontSize:"11px", color:"var(--t3)" }}>Arraste imagens ou clique para selecionar</span>
-                  <input type="file" accept="image/*" multiple style={{ display:"none" }}
+                  <input name="set_fotos_novas" type="file" accept="image/*" multiple style={{ display:"none" }}
                     onChange={e => { const f = Array.from(e.target.files ?? []); setFotosNovas(p => [...p, ...f]); e.target.value = ""; }} />
                 </label>
                 {fotosNovas.length > 0 && (
@@ -446,7 +446,7 @@ export default function NaoConformidadesPage() {
                     onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = "var(--b2)"; const f = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/")); setFotosDetalhePendentes(p => [...p, ...f]); }}>
                     <span style={{ fontSize:"18px" }}>+</span>
                     <span>foto</span>
-                    <input type="file" accept="image/*" multiple style={{ display:"none" }}
+                    <input name="set_fotos_detalhe_pendentes" type="file" accept="image/*" multiple style={{ display:"none" }}
                       onChange={e => { const f = Array.from(e.target.files ?? []); setFotosDetalhePendentes(p => [...p, ...f]); e.target.value = ""; }} />
                   </label>
                 )}

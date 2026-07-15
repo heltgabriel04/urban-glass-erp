@@ -684,7 +684,7 @@ function ModalAgendar({
               )}
             </span>
           }>
-            <input className="fc" value={dtDisplay} onChange={e => setDtDisplay(maskData(e.target.value))}
+            <input name="dt_display" className="fc" value={dtDisplay} onChange={e => setDtDisplay(maskData(e.target.value))}
               placeholder="dd/mm/aaaa" maxLength={10} inputMode="numeric"
               style={{ fontSize: 15, borderColor: dtDisplay.length === 10 && !dtValida ? "var(--err)" : undefined }} />
           </Campo>
@@ -693,7 +693,7 @@ function ModalAgendar({
             <Campo label="Linha de Corte">
               {linhasCorte.length === 0
                 ? <div className="fc" style={{ color: "var(--t3)", pointerEvents: "none" }}>Nenhuma linha configurada</div>
-                : <select className="fc" value={linhaCorteId} onChange={e => setLinhaCorteId(Number(e.target.value))}>
+                : <select name="linha_corte_id" className="fc" value={linhaCorteId} onChange={e => setLinhaCorteId(Number(e.target.value))}>
                     {linhasCorte.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
                   </select>
               }
@@ -704,7 +704,7 @@ function ModalAgendar({
             <Campo label="Linha de Lapidação">
               {linhasLap.length === 0
                 ? <div className="fc" style={{ color: "var(--t3)", pointerEvents: "none" }}>Nenhuma linha configurada</div>
-                : <select className="fc" value={linhaLapId ?? ""} onChange={e => setLinhaLapId(Number(e.target.value) || undefined)}>
+                : <select name="linha_lap_id" className="fc" value={linhaLapId ?? ""} onChange={e => setLinhaLapId(Number(e.target.value) || undefined)}>
                     <option value="">— sem lapidação —</option>
                     {linhasLap.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
                   </select>
@@ -811,13 +811,13 @@ function ModalAgendamentoLote({
               {dtDisplay.length === 10 && !dtValida && <span style={{ color: "var(--err)", fontSize: 11, fontWeight: 400 }}>inválida</span>}
             </span>
           }>
-            <input className="fc" value={dtDisplay} onChange={e => setDtDisplay(maskData(e.target.value))}
+            <input name="dt_display" className="fc" value={dtDisplay} onChange={e => setDtDisplay(maskData(e.target.value))}
               placeholder="dd/mm/aaaa" maxLength={10} inputMode="numeric"
               style={{ fontSize: 15, borderColor: dtDisplay.length === 10 && !dtValida ? "var(--err)" : undefined }} />
           </Campo>
 
           <Campo label="Linha de Corte">
-            <select className="fc" value={linhaCorteId} onChange={e => setLinhaCorteId(Number(e.target.value))}>
+            <select name="linha_corte_id" className="fc" value={linhaCorteId} onChange={e => setLinhaCorteId(Number(e.target.value))}>
               {linhasCorte.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
             </select>
           </Campo>
@@ -1015,13 +1015,13 @@ function ModalBloco({
               {mostraForm ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingTop: 8, borderTop: "1px solid var(--b1)" }}>
                   <div style={{ display: "flex", gap: 6 }}>
-                    <input
+                    <input name="qtd_retirada"
                       type="number" min={1} max={pecasTotal - pecasEntregues}
                       value={qtdRetirada} onChange={e => setQtdRetirada(e.target.value)}
                       placeholder={`Quantidade (máx ${pecasTotal - pecasEntregues})`}
                       className="fc" style={{ flex: 1, fontSize: 12, padding: "5px 8px" }}
                     />
-                    <input
+                    <input name="obs_retirada"
                       value={obsRetirada} onChange={e => setObsRetirada(e.target.value)}
                       placeholder="Observação (opcional)"
                       className="fc" style={{ flex: 2, fontSize: 12, padding: "5px 8px" }}
@@ -1097,11 +1097,11 @@ function ModalRetrabalho({
             Pedido <strong style={{ color: "var(--t1)" }}>{prog.pedido_id}</strong> · Etapa: {prog.etapa}
           </div>
           <Campo label="Motivo / descrição do problema">
-            <textarea className="fc" rows={3} value={motivo} onChange={e => setMotivo(e.target.value)}
+            <textarea name="motivo" className="fc" rows={3} value={motivo} onChange={e => setMotivo(e.target.value)}
               placeholder="Ex: Peças fora de esquadro, precisa reprocessar..." />
           </Campo>
           <Campo label="Dias de retrabalho estimados">
-            <input className="fc" type="number" min={1} max={30} value={dias}
+            <input name="dias" className="fc" type="number" min={1} max={30} value={dias}
               onChange={e => setDias(e.target.value)} style={{ width: 100 }} />
           </Campo>
           {erro && <div style={{ color: "var(--err)", fontSize: 12 }}>⚠ {erro}</div>}
@@ -1206,21 +1206,21 @@ function ModalBloqueioLinha({
             <div style={{ fontSize: 11, fontWeight: 700, color: "var(--t3)", marginBottom: 10 }}>NOVO BLOQUEIO</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
               <Campo label="Data Início">
-                <input className="fc" value={dtIni} onChange={e => setDtIni(maskData(e.target.value))} placeholder="dd/mm/aaaa" maxLength={10} inputMode="numeric" />
+                <input name="dt_ini" className="fc" value={dtIni} onChange={e => setDtIni(maskData(e.target.value))} placeholder="dd/mm/aaaa" maxLength={10} inputMode="numeric" />
               </Campo>
               <Campo label="Data Fim">
-                <input className="fc" value={dtFim} onChange={e => setDtFim(maskData(e.target.value))} placeholder="dd/mm/aaaa" maxLength={10} inputMode="numeric" />
+                <input name="dt_fim" className="fc" value={dtFim} onChange={e => setDtFim(maskData(e.target.value))} placeholder="dd/mm/aaaa" maxLength={10} inputMode="numeric" />
               </Campo>
             </div>
             <Campo style={{ marginBottom: 10 }} label="Tipo">
-              <select className="fc" value={tipo} onChange={e => setTipo(e.target.value as BloqueioLinha['tipo'])}>
+              <select name="tipo" className="fc" value={tipo} onChange={e => setTipo(e.target.value as BloqueioLinha['tipo'])}>
                 <option value="manutencao">Manutenção</option>
                 <option value="recesso">Recesso</option>
                 <option value="outro">Outro</option>
               </select>
             </Campo>
             <Campo label="Motivo (opcional)">
-              <input className="fc" value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Ex: Revisão preventiva da máquina" />
+              <input name="motivo" className="fc" value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Ex: Revisão preventiva da máquina" />
             </Campo>
           </div>
 
@@ -2085,13 +2085,13 @@ export default function ProgramacaoPage() {
                 {/* Filtros */}
                 <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                   {modoVisao === "linha" && (
-                    <select className="fc" style={{ padding: "4px 8px", fontSize: 11, width: 150 }}
+                    <select name="filtro_linha" className="fc" style={{ padding: "4px 8px", fontSize: 11, width: 150 }}
                       value={filtroLinha ?? ""} onChange={e => setFiltroLinha(e.target.value ? Number(e.target.value) : null)}>
                       <option value="">Todas as linhas</option>
                       {linhas.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
                     </select>
                   )}
-                  <select className="fc" style={{ padding: "4px 8px", fontSize: 11, width: 140 }}
+                  <select name="filtro_status" className="fc" style={{ padding: "4px 8px", fontSize: 11, width: 140 }}
                     value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}>
                     <option value="">Todos os status</option>
                     {["Agendado", "Em Execução", "Concluído"].map(s => <option key={s} value={s}>{s}</option>)}
@@ -2470,7 +2470,7 @@ export default function ProgramacaoPage() {
                 </button>
 
                 {/* Busca */}
-                <input
+                <input name="busca"
                   value={busca}
                   onChange={e => setBusca(e.target.value)}
                   placeholder="Buscar pedido ou cliente…"

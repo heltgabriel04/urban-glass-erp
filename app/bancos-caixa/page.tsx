@@ -233,13 +233,13 @@ export default function BancosCaixaPage() {
       <Modal open={modalAberto} onClose={() => setModalAberto(false)} title={`${editId != null ? "Editar" : "Nova"} conta`} width="480px">
             <div style={{ padding: "20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
               <Campo label="Nome *" span2>
-                <input className="fc" placeholder="Caixa loja, Itaú CC, Aplicação XP..." value={form.nome} onChange={e => upd("nome", e.target.value)} style={{ margin: 0 }} />
+                <input name="nome" className="fc" placeholder="Caixa loja, Itaú CC, Aplicação XP..." value={form.nome} onChange={e => upd("nome", e.target.value)} style={{ margin: 0 }} />
               </Campo>
               <Campo label="Banco">
-                <input className="fc" value={form.banco ?? ""} onChange={e => upd("banco", e.target.value)} style={{ margin: 0 }} />
+                <input name="banco" className="fc" value={form.banco ?? ""} onChange={e => upd("banco", e.target.value)} style={{ margin: 0 }} />
               </Campo>
               <Campo label="Tipo">
-                <select className="fc" value={form.tipo} onChange={e => upd("tipo", e.target.value as TipoContaBancaria)} style={{ margin: 0 }}>
+                <select name="tipo" className="fc" value={form.tipo} onChange={e => upd("tipo", e.target.value as TipoContaBancaria)} style={{ margin: 0 }}>
                   {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </Campo>
@@ -259,13 +259,13 @@ export default function BancosCaixaPage() {
       <Modal open={modalTransfAberto} onClose={() => setModalTransfAberto(false)} title="Nova Transferência" width="420px">
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <Campo label="De (conta de origem) *">
-                <select className="fc" value={contaOrigemId} onChange={e => setContaOrigemId(e.target.value)} style={{ margin: 0 }}>
+                <select name="conta_origem_id" className="fc" value={contaOrigemId} onChange={e => setContaOrigemId(e.target.value)} style={{ margin: 0 }}>
                   <option value="">Selecione...</option>
                   {contas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                 </select>
               </Campo>
               <Campo label="Para (conta de destino) *">
-                <select className="fc" value={contaDestinoId} onChange={e => setContaDestinoId(e.target.value)} style={{ margin: 0 }}>
+                <select name="conta_destino_id" className="fc" value={contaDestinoId} onChange={e => setContaDestinoId(e.target.value)} style={{ margin: 0 }}>
                   <option value="">Selecione...</option>
                   {contas.filter(c => String(c.id) !== String(contaOrigemId)).map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                 </select>
@@ -279,7 +279,7 @@ export default function BancosCaixaPage() {
                 </Campo>
               </div>
               <Campo label="Observação">
-                <input className="fc" value={obsTransf} onChange={e => setObsTransf(e.target.value)} style={{ margin: 0 }} />
+                <input name="obs_transf" className="fc" value={obsTransf} onChange={e => setObsTransf(e.target.value)} style={{ margin: 0 }} />
               </Campo>
             </div>
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>

@@ -573,7 +573,7 @@ export default function EtiquetasPage() {
         {totalChapas > 1 && (
           <div className="filtro-wrap">
             <span>Filtrar:</span>
-            <select
+            <select name="filtro_chapa"
               value={filtroChapa}
               onChange={(e) =>
                 setFiltroChapa(e.target.value === "todas" ? "todas" : Number(e.target.value))

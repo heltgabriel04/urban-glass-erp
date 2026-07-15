@@ -149,16 +149,16 @@ export default function LogsPage() {
         {/* Filtros */}
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "18px", alignItems: "flex-end" }}>
           <Campo style={{ margin: 0, minWidth: "220px" }} label="Buscar">
-            <input className="fc" placeholder="pedido, usuário, descrição..." value={busca} onChange={e => setBusca(e.target.value)} />
+            <input name="busca" className="fc" placeholder="pedido, usuário, descrição..." value={busca} onChange={e => setBusca(e.target.value)} />
           </Campo>
           <Campo style={{ margin: 0, minWidth: "200px" }} label="Usuário">
-            <select className="fc" value={filtroUsuario} onChange={e => setFiltroUsuario(e.target.value)}>
+            <select name="filtro_usuario" className="fc" value={filtroUsuario} onChange={e => setFiltroUsuario(e.target.value)}>
               <option value="">Todos</option>
               {usuarios.map(u => <option key={u} value={u}>{u}</option>)}
             </select>
           </Campo>
           <Campo style={{ margin: 0, minWidth: "160px" }} label="Módulo">
-            <select className="fc" value={filtroTabela} onChange={e => setFiltroTabela(e.target.value)}>
+            <select name="filtro_tabela" className="fc" value={filtroTabela} onChange={e => setFiltroTabela(e.target.value)}>
               <option value="">Todos</option>
               {tabelas.map(t => <option key={t} value={t}>{TABELAS_LABEL[t] ?? t}</option>)}
             </select>

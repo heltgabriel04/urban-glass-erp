@@ -547,20 +547,20 @@ export default function EditarPedidoPage() {
               <Campo label="Data do Pedido"><DateInput value={dtPedido} onChange={setDtPedido} /></Campo>
               <Campo label="Previsão Retirada"><DateInput value={dtRetirada} onChange={setDtRetirada} /></Campo>
               <Campo label="Frete">
-                <select className="fc" value={frete} onChange={e => setFrete(e.target.value)}>
+                <select name="frete" className="fc" value={frete} onChange={e => setFrete(e.target.value)}>
                   {["Retirada","Fretado"].map(f => <option key={f}>{f}</option>)}
                 </select>
               </Campo>
             </div>
             <div className="fr">
               <Campo label="Forma de Pagamento">
-                <select className="fc" value={formaPgto} onChange={e => setFormaPgto(e.target.value)}>
+                <select name="forma_pgto" className="fc" value={formaPgto} onChange={e => setFormaPgto(e.target.value)}>
                   <option value="">Selecione...</option>
                   {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
                 </select>
               </Campo>
               <Campo label="Conta">
-                <select className="fc" value={conta} onChange={e => setConta(e.target.value)}>
+                <select name="conta" className="fc" value={conta} onChange={e => setConta(e.target.value)}>
                   <option value="">Selecione...</option>
                   {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => <option key={c}>{c}</option>)}
                 </select>
@@ -569,7 +569,7 @@ export default function EditarPedidoPage() {
 
             <div className="fr">
               <Campo label="Parcelas">
-                <select className="fc" value={parcelas} onChange={e => handleNParcelas(Number(e.target.value))}>
+                <select name="parcelas" className="fc" value={parcelas} onChange={e => handleNParcelas(Number(e.target.value))}>
                   {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x</option>)}
                 </select>
               </Campo>
@@ -596,7 +596,7 @@ export default function EditarPedidoPage() {
             </div>
 
             <Campo style={{ marginTop:"10px" }} label="Observações">
-              <textarea className="fc" value={obs} onChange={e => setObs(e.target.value)} placeholder="Observações do pedido..." />
+              <textarea name="obs" className="fc" value={obs} onChange={e => setObs(e.target.value)} placeholder="Observações do pedido..." />
             </Campo>
           </div>
 
@@ -660,7 +660,7 @@ export default function EditarPedidoPage() {
               <div key={i} style={{ fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px", fontFamily:"'DM Mono',monospace" }}>{h}</div>
             ))}
             <div style={{ display:"flex", alignItems:"center", gap:"4px" }}>
-              <input
+              <input name="todos_vc"
                 type="checkbox" checked={todosVC}
                 ref={el => { if (el) el.indeterminate = algumVC && !todosVC; }}
                 onChange={e => marcarTodosVC(e.target.checked)}
@@ -689,7 +689,7 @@ export default function EditarPedidoPage() {
 
             const checkboxVC = (
               <div style={{ display:"flex", alignItems:"center", justifyContent:"center" }}>
-                <input type="checkbox" checked={item.vidro_cliente} onChange={e => updItem(i, "vidro_cliente", e.target.checked)}
+                <input name={`item_vidro_cliente_${i}`} type="checkbox" checked={item.vidro_cliente} onChange={e => updItem(i, "vidro_cliente", e.target.checked)}
                   style={{ width:"14px", height:"14px", accentColor:"var(--warn)", cursor:"pointer" }} />
               </div>
             );
@@ -706,18 +706,18 @@ export default function EditarPedidoPage() {
                     <div style={{ display:"grid", gridTemplateColumns:colsMl, gap:"6px", alignItems:"center" }}>
                       <AutocompleteInput options={produtoOpts} value={item.produto_id} valueLabel={item.produto_nome} allowFreeText={item.vidro_cliente} onChange={(id, label) => setProdutoItem(i, id, label)} placeholder={item.vidro_cliente ? "Buscar ou digitar produto do cliente..." : "Buscar produto..."} />
                       <div style={{ position:"relative" }}>
-                        <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" style={{ paddingRight:"24px" }} />
+                        <input name={`item_largura_${i}`} className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" style={{ paddingRight:"24px" }} />
                         <label style={{ position:"absolute", right:"6px", top:"50%", transform:"translateY(-50%)", cursor:"pointer" }}>
-                          <input type="checkbox" checked={item.ml_larg} onChange={e => updItem(i, "ml_larg", e.target.checked)} style={{ width:"12px", height:"12px", accentColor:"#6366f1" }} />
+                          <input name={`item_ml_larg_${i}`} type="checkbox" checked={item.ml_larg} onChange={e => updItem(i, "ml_larg", e.target.checked)} style={{ width:"12px", height:"12px", accentColor:"#6366f1" }} />
                         </label>
                       </div>
                       <div style={{ position:"relative" }}>
-                        <input className="fc" type="number" value={item.altura || ""} onChange={e => updItem(i, "altura", parseInt(e.target.value) || 0)} placeholder="0" style={{ paddingRight:"24px" }} />
+                        <input name={`item_altura_${i}`} className="fc" type="number" value={item.altura || ""} onChange={e => updItem(i, "altura", parseInt(e.target.value) || 0)} placeholder="0" style={{ paddingRight:"24px" }} />
                         <label style={{ position:"absolute", right:"6px", top:"50%", transform:"translateY(-50%)", cursor:"pointer" }}>
-                          <input type="checkbox" checked={item.ml_alt} onChange={e => updItem(i, "ml_alt", e.target.checked)} style={{ width:"12px", height:"12px", accentColor:"#6366f1" }} />
+                          <input name={`item_ml_alt_${i}`} type="checkbox" checked={item.ml_alt} onChange={e => updItem(i, "ml_alt", e.target.checked)} style={{ width:"12px", height:"12px", accentColor:"#6366f1" }} />
                         </label>
                       </div>
-                      <input className="fc" type="number" value={item.quantidade} onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
+                      <input name={`item_quantidade_${i}`} className="fc" type="number" value={item.quantidade} onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
                       <CurrencyInput value={item.valor_m2} onChange={v => updItem(i, "valor_m2", v)} placeholder="R$/ml"
                         style={foraMarjem ? { border:"1px solid var(--err)", color:"var(--err)" } : undefined} />
                       <CurrencyInput value={ml > 0 && item.valor_m2 > 0 ? parseFloat(sub.toFixed(2)) : 0} onChange={v => updTotalItem(i, v)} placeholder="total" />
@@ -735,9 +735,9 @@ export default function EditarPedidoPage() {
                   <div>
                     <div style={{ display:"grid", gridTemplateColumns:colsM2, gap:"6px", alignItems:"center" }}>
                       <AutocompleteInput options={produtoOpts} value={item.produto_id} valueLabel={item.produto_nome} allowFreeText={item.vidro_cliente} onChange={(id, label) => setProdutoItem(i, id, label)} placeholder={item.vidro_cliente ? "Buscar ou digitar produto do cliente..." : "Buscar produto..."} />
-                      <input className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
-                      <input className="fc" type="number" value={item.altura  || ""} onChange={e => updItem(i, "altura",  parseInt(e.target.value) || 0)} placeholder="0" />
-                      <input className="fc" type="number" value={item.quantidade} onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
+                      <input name={`item_largura_${i}`} className="fc" type="number" value={item.largura || ""} onChange={e => updItem(i, "largura", parseInt(e.target.value) || 0)} placeholder="0" />
+                      <input name={`item_altura_${i}`} className="fc" type="number" value={item.altura  || ""} onChange={e => updItem(i, "altura",  parseInt(e.target.value) || 0)} placeholder="0" />
+                      <input name={`item_quantidade_${i}`} className="fc" type="number" value={item.quantidade} onChange={e => updItem(i, "quantidade", parseInt(e.target.value) || 1)} min={1} />
                       <CurrencyInput value={item.valor_m2} onChange={v => updItem(i, "valor_m2", v)} placeholder="R$/m²"
                         title={item.margem_prod > 0 ? `Base: ${formatBRL(item.preco_base)}/m² · Margem ±${item.margem_prod}%` : "Valor por m²"}
                         style={foraMarjem ? { border:"1px solid var(--err)", color:"var(--err)" } : undefined} />
@@ -760,7 +760,7 @@ export default function EditarPedidoPage() {
                     )}
                     <div style={{ display:"flex", alignItems:"center", gap:"6px", marginTop:"4px", paddingLeft:"2px" }}>
                       <span style={{ fontSize:"9px", color:"var(--t3)", textTransform:"uppercase", letterSpacing:"1px", fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap" }}>Código</span>
-                      <input
+                      <input name={`item_codigo_adicional_${i}`}
                         className="fc"
                         type="text"
                         value={item.codigo_adicional}

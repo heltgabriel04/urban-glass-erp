@@ -70,14 +70,14 @@ function ModalEmprestimo({ editando, contasBancarias, usuarioEmail, onSalvo, onF
     <Modal open onClose={onFechar} title={editando ? "Editar Empréstimo" : "Novo Empréstimo"} width="560px">
         <form id="form-emprestimo" onSubmit={handleSubmit} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
           <Campo label="Descrição *">
-            <input className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} required />
+            <input name="descricao" className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} required />
           </Campo>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <Campo label="Banco">
-              <input className="fc" value={form.banco ?? ""} onChange={(e) => set("banco", e.target.value || null)} />
+              <input name="banco" className="fc" value={form.banco ?? ""} onChange={(e) => set("banco", e.target.value || null)} />
             </Campo>
             <Campo label="Conta Bancária (recebimento)">
-              <select className="fc" value={form.conta_bancaria_id ?? ""} onChange={(e) => set("conta_bancaria_id", e.target.value ? Number(e.target.value) : null)}>
+              <select name="conta_bancaria_id" className="fc" value={form.conta_bancaria_id ?? ""} onChange={(e) => set("conta_bancaria_id", e.target.value ? Number(e.target.value) : null)}>
                 <option value="">—</option>
                 {contasBancarias.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
               </select>
@@ -85,21 +85,21 @@ function ModalEmprestimo({ editando, contasBancarias, usuarioEmail, onSalvo, onF
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
             <Campo label="Valor Contratado">
-              <input className="fc" type="number" step="0.01" value={form.valor_contratado} onChange={(e) => set("valor_contratado", Number(e.target.value))} required disabled={!!editando} style={{ fontFamily: "'DM Mono', monospace" }} />
+              <input name="valor_contratado" className="fc" type="number" step="0.01" value={form.valor_contratado} onChange={(e) => set("valor_contratado", Number(e.target.value))} required disabled={!!editando} style={{ fontFamily: "'DM Mono', monospace" }} />
             </Campo>
             <Campo label="Taxa de Juros (% a.m.)">
-              <input className="fc" type="number" step="0.0001" value={form.taxa_juros_pct_am} onChange={(e) => set("taxa_juros_pct_am", Number(e.target.value))} required disabled={!!editando} style={{ fontFamily: "'DM Mono', monospace" }} />
+              <input name="taxa_juros_pct_am" className="fc" type="number" step="0.0001" value={form.taxa_juros_pct_am} onChange={(e) => set("taxa_juros_pct_am", Number(e.target.value))} required disabled={!!editando} style={{ fontFamily: "'DM Mono', monospace" }} />
             </Campo>
             <Campo label="Nº de Parcelas">
-              <input className="fc" type="number" value={form.numero_parcelas} onChange={(e) => set("numero_parcelas", Number(e.target.value))} required disabled={!!editando} />
+              <input name="numero_parcelas" className="fc" type="number" value={form.numero_parcelas} onChange={(e) => set("numero_parcelas", Number(e.target.value))} required disabled={!!editando} />
             </Campo>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <Campo label="Data de Contratação">
-              <input className="fc" type="date" value={form.data_contratacao} onChange={(e) => set("data_contratacao", e.target.value)} required disabled={!!editando} />
+              <input name="data_contratacao" className="fc" type="date" value={form.data_contratacao} onChange={(e) => set("data_contratacao", e.target.value)} required disabled={!!editando} />
             </Campo>
             <Campo label="Data da 1ª Parcela">
-              <input className="fc" type="date" value={form.data_primeira_parcela} onChange={(e) => set("data_primeira_parcela", e.target.value)} required disabled={!!editando} />
+              <input name="data_primeira_parcela" className="fc" type="date" value={form.data_primeira_parcela} onChange={(e) => set("data_primeira_parcela", e.target.value)} required disabled={!!editando} />
             </Campo>
           </div>
           {editando && (
@@ -108,10 +108,10 @@ function ModalEmprestimo({ editando, contasBancarias, usuarioEmail, onSalvo, onF
             </div>
           )}
           <Campo label="Contrato (PDF)">
-            <input className="fc" type="file" accept=".pdf" onChange={(e) => setContratoFile(e.target.files?.[0] ?? null)} />
+            <input name="set_contrato_file" className="fc" type="file" accept=".pdf" onChange={(e) => setContratoFile(e.target.files?.[0] ?? null)} />
           </Campo>
           <Campo label="Observações">
-            <textarea className="fc" rows={2} value={form.observacoes ?? ""} onChange={(e) => set("observacoes", e.target.value || null)} />
+            <textarea name="observacoes" className="fc" rows={2} value={form.observacoes ?? ""} onChange={(e) => set("observacoes", e.target.value || null)} />
           </Campo>
         </form>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
@@ -229,7 +229,7 @@ export default function EmprestimosPage() {
 
       <div className="con">
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
-          <select className="fc" value={filtroAtivo} onChange={(e) => setFiltroAtivo(e.target.value as typeof filtroAtivo)} style={{ width: "120px" }}>
+          <select name="filtro_ativo" className="fc" value={filtroAtivo} onChange={(e) => setFiltroAtivo(e.target.value as typeof filtroAtivo)} style={{ width: "120px" }}>
             <option value="ativos">Ativos</option>
             <option value="inativos">Inativos</option>
             <option value="todos">Todos</option>
@@ -296,7 +296,7 @@ export default function EmprestimosPage() {
                           {p.comprovante_url ? (
                             <a href={p.comprovante_url} target="_blank" rel="noreferrer" style={{ fontSize: "11px" }}>Ver</a>
                           ) : (
-                            <input type="file" style={{ fontSize: "10px", width: "90px" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAnexo(p, f); }} />
+                            <input type="file" name={`comprovante_${p.id}`} style={{ fontSize: "10px", width: "90px" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAnexo(p, f); }} />
                           )}
                         </td>
                         <td><button className="btn bg xs" onClick={() => handleMarcarPaga(p)}>{p.status === "pago" ? "Reabrir" : "Marcar Paga"}</button></td>

@@ -989,7 +989,7 @@ export default function RelatoriosPage() {
                   {/* Seletor de mês */}
                   <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
                     <span style={{ fontSize: "12px", color: "var(--t3)", fontWeight: 600 }}>Mês de fechamento:</span>
-                    <select className="fc" style={{ minWidth: "200px" }} value={mesFechoSel} onChange={e => setMesFechoSel(e.target.value)}>
+                    <select name="mes_fecho_sel" className="fc" style={{ minWidth: "200px" }} value={mesFechoSel} onChange={e => setMesFechoSel(e.target.value)}>
                       {mesesFecho.length === 0 && <option value="">Sem dados</option>}
                       {mesesFecho.map(m => {
                         const [y, mo] = m.split("-").map(Number);

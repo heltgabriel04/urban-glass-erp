@@ -362,20 +362,20 @@ function FluxoPageInner() {
         {/* Filtros extras — vieram de Movimentações, escondidos por padrão */}
         {filtrosAbertos && (
         <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap", marginBottom: "16px", background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "8px", padding: "9px 12px" }}>
-          <select className="fc" style={inputSelXs} value={filtroTipo} onChange={e => setFiltroTipo(e.target.value as typeof filtroTipo)}>
+          <select name="filtro_tipo" className="fc" style={inputSelXs} value={filtroTipo} onChange={e => setFiltroTipo(e.target.value as typeof filtroTipo)}>
             <option value="Todos">Todos os tipos</option>
             <option value="Entrada">↑ Entrada</option>
             <option value="Saída">↓ Saída</option>
           </select>
-          <select className="fc" style={inputSelXs} value={filtroSituacao} onChange={e => setFiltroSituacao(e.target.value as typeof filtroSituacao)}>
+          <select name="filtro_situacao" className="fc" style={inputSelXs} value={filtroSituacao} onChange={e => setFiltroSituacao(e.target.value as typeof filtroSituacao)}>
             <option value="Todos">Todas as situações</option>
             {SITUACOES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <select className="fc" style={{ ...inputSelXs, width: "200px" }} value={filtroPlano} onChange={e => setFiltroPlano(e.target.value)}>
+          <select name="filtro_plano" className="fc" style={{ ...inputSelXs, width: "200px" }} value={filtroPlano} onChange={e => setFiltroPlano(e.target.value)}>
             <option value="">Todos os planos de contas</option>
             {planos.map(p => <option key={p.id} value={p.id}>{p.codigo_estruturado} · {p.descricao}</option>)}
           </select>
-          <input className="fc" style={{ ...inputSelXs, width: "220px" }} placeholder="Buscar cliente, fornecedor ou descrição..."
+          <input name="busca" className="fc" style={{ ...inputSelXs, width: "220px" }} placeholder="Buscar cliente, fornecedor ou descrição..."
             value={busca} onChange={e => setBusca(e.target.value)} />
           {(filtroTipo !== "Todos" || filtroSituacao !== "Todos" || filtroPlano || busca) && (
             <button className="btn bg xs" onClick={() => { setFiltroTipo("Todos"); setFiltroSituacao("Todos"); setFiltroPlano(""); setBusca(""); }}>
@@ -472,7 +472,7 @@ function FluxoPageInner() {
                                   <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>
                                     Motivo da correção *
                                   </div>
-                                  <input className="fc" style={{ margin: 0 }} placeholder="Por que está corrigindo esse lançamento?"
+                                  <input name="edicao_motivo" className="fc" style={{ margin: 0 }} placeholder="Por que está corrigindo esse lançamento?"
                                     value={edicao.motivo} onChange={e => setEdicao(ed => ({ ...ed, motivo: e.target.value }))} />
                                 </div>
                               )}

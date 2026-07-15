@@ -139,11 +139,11 @@ export default function FormasPagamentoPage() {
       <Modal open={modalAberto} onClose={() => setModalAberto(false)} title={`${editId != null ? "Editar" : "Nova"} forma de pagamento`} width="400px">
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <Campo label="Nome *">
-                <input className="fc" placeholder="PIX, Boleto, Cartão..." value={form.nome}
+                <input name="nome" className="fc" placeholder="PIX, Boleto, Cartão..." value={form.nome}
                   onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} style={{ margin: 0 }} />
               </Campo>
               <Campo label="Taxa (%) — opcional">
-                <input className="fc" type="number" step="0.01" placeholder="Ex: 2.5 (maquininha)" value={form.taxa_pct ?? ""}
+                <input name="taxa_pct" className="fc" type="number" step="0.01" placeholder="Ex: 2.5 (maquininha)" value={form.taxa_pct ?? ""}
                   onChange={e => setForm(f => ({ ...f, taxa_pct: e.target.value ? Number(e.target.value) : null }))} style={{ margin: 0 }} />
               </Campo>
             </div>

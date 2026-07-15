@@ -219,7 +219,7 @@ export default function PlanoContasPage() {
                 <SearchInput icon={false} className="fc" placeholder="Buscar por descrição ou código..." value={busca}
                   onChange={setBusca}
                   wrapperStyle={{ flex: 1 }} inputStyle={{ margin: 0 }} />
-                <select className="fc" value={filtroCat} onChange={e => setFiltroCat(e.target.value === "" ? "" : Number(e.target.value))}
+                <select name="filtro_cat" className="fc" value={filtroCat} onChange={e => setFiltroCat(e.target.value === "" ? "" : Number(e.target.value))}
                   style={{ minWidth: "220px", margin: 0 }}>
                   <option value="">Todas as categorias</option>
                   {categorias.map(c => <option key={c.id} value={c.id}>{c.codigo} · {c.descricao}</option>)}
@@ -234,20 +234,20 @@ export default function PlanoContasPage() {
                     <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
                       <div className="fr">
                         <Campo style={{ maxWidth: "90px" }} label="Código">
-                          <input type="number" className="fc" value={planoForm.codigo || ""}
+                          <input name="plano_form_codigo" type="number" className="fc" value={planoForm.codigo || ""}
                             onChange={e => setPlanoForm(f => ({ ...f, codigo: Number(e.target.value) }))} placeholder="69" />
                         </Campo>
                         <Campo style={{ maxWidth: "140px" }} label="Cód. Estruturado">
-                          <input className="fc" style={{ fontFamily: "'DM Mono', monospace" }} value={planoForm.codigo_estruturado}
+                          <input name="plano_form_codigo_estruturado" className="fc" style={{ fontFamily: "'DM Mono', monospace" }} value={planoForm.codigo_estruturado}
                             onChange={e => setPlanoForm(f => ({ ...f, codigo_estruturado: e.target.value }))} placeholder="7.13" />
                         </Campo>
                       </div>
                       <Campo label="Descrição">
-                        <input className="fc" value={planoForm.descricao}
+                        <input name="plano_form_descricao" className="fc" value={planoForm.descricao}
                           onChange={e => setPlanoForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Nome do plano de contas" />
                       </Campo>
                       <Campo label="Categoria">
-                        <select className="fc" value={planoForm.categoria_id ?? ""}
+                        <select name="plano_form_categoria_id" className="fc" value={planoForm.categoria_id ?? ""}
                           onChange={e => setPlanoForm(f => ({ ...f, categoria_id: e.target.value ? Number(e.target.value) : null }))}>
                           <option value="">Selecione...</option>
                           {categorias.map(c => <option key={c.id} value={c.id}>{c.codigo} · {c.descricao}</option>)}
@@ -321,11 +321,11 @@ export default function PlanoContasPage() {
                     <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
                       <div className="fr">
                         <Campo style={{ maxWidth: "90px" }} label="Código">
-                          <input type="number" className="fc" value={catForm.codigo || ""}
+                          <input name="cat_form_codigo" type="number" className="fc" value={catForm.codigo || ""}
                             onChange={e => setCatForm(f => ({ ...f, codigo: Number(e.target.value) }))} placeholder="19" />
                         </Campo>
                         <Campo label="Indicador">
-                          <select className="fc" value={catForm.indicador}
+                          <select name="cat_form_indicador" className="fc" value={catForm.indicador}
                             onChange={e => setCatForm(f => ({ ...f, indicador: e.target.value as "Crédito" | "Débito" }))}>
                             <option value="Crédito">Crédito</option>
                             <option value="Débito">Débito</option>
@@ -333,11 +333,11 @@ export default function PlanoContasPage() {
                         </Campo>
                       </div>
                       <Campo label="Descrição">
-                        <input className="fc" value={catForm.descricao}
+                        <input name="cat_form_descricao" className="fc" value={catForm.descricao}
                           onChange={e => setCatForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Nome da categoria" />
                       </Campo>
                       <Campo label="Faixa no DRE">
-                        <select className="fc" value={catForm.faixa_dre}
+                        <select name="cat_form_faixa_dre" className="fc" value={catForm.faixa_dre}
                           onChange={e => setCatForm(f => ({ ...f, faixa_dre: e.target.value }))}>
                           {FAIXAS_DRE.map(f => <option key={f} value={f}>{f}</option>)}
                         </select>

@@ -254,7 +254,7 @@ export default function ProdutosPage() {
               {/* Código — gerado automaticamente, bloqueado em novo; editável em edição */}
               <Campo label="Código">
                 <div style={{ position: "relative" }}>
-                  <input
+                  <input name="cod"
                     className="fc"
                     value={form.cod || (editId ? "" : "Selecione o tipo...")}
                     readOnly
@@ -269,7 +269,7 @@ export default function ProdutosPage() {
                 </div>
               </Campo>
               <Campo label="Nome *">
-                <input
+                <input name="nome"
                   className="fc"
                   value={form.nome}
                   onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
@@ -280,16 +280,16 @@ export default function ProdutosPage() {
 
             <div className="fr3">
               <Campo label="Tipo">
-                <select className="fc" value={form.tipo} onChange={e => handleTipo(e.target.value)}>
+                <select name="tipo" className="fc" value={form.tipo} onChange={e => handleTipo(e.target.value)}>
                   <option value="">Selecione...</option>
                   {TIPOS.map(t => <option key={t}>{t}</option>)}
                 </select>
               </Campo>
               <Campo label="Espessura">
-                <input className="fc" value={form.espessura} onChange={e => setForm(f => ({ ...f, espessura: e.target.value }))} placeholder="4+4" />
+                <input name="espessura" className="fc" value={form.espessura} onChange={e => setForm(f => ({ ...f, espessura: e.target.value }))} placeholder="4+4" />
               </Campo>
               <Campo label="Cor">
-                <input className="fc" value={form.cor} onChange={e => setForm(f => ({ ...f, cor: e.target.value }))} placeholder="Incolor" />
+                <input name="cor" className="fc" value={form.cor} onChange={e => setForm(f => ({ ...f, cor: e.target.value }))} placeholder="Incolor" />
               </Campo>
             </div>
 
@@ -302,7 +302,7 @@ export default function ProdutosPage() {
                 />
               </Campo>
               <Campo label="Margem negociação (%)">
-                <input
+                <input name="set_form"
                   className="fc"
                   type="number"
                   min="0"
@@ -314,7 +314,7 @@ export default function ProdutosPage() {
                 />
               </Campo>
               <Campo label="Unidade">
-                <select className="fc" value={form.unidade} onChange={e => setForm(f => ({ ...f, unidade: e.target.value }))}>
+                <select name="unidade" className="fc" value={form.unidade} onChange={e => setForm(f => ({ ...f, unidade: e.target.value }))}>
                   <option>m²</option><option>un</option><option>ml</option>
                 </select>
               </Campo>
@@ -322,7 +322,7 @@ export default function ProdutosPage() {
 
             <div className="fr3">
               <Campo label="Chapas por colar">
-                <input
+                <input name="chapas_por_colar"
                   className="fc" type="number" min="0" step="1"
                   value={form.chapas_por_colar ?? ""}
                   onChange={e => setForm(f => ({ ...f, chapas_por_colar: e.target.value ? parseInt(e.target.value, 10) : null }))}
@@ -330,7 +330,7 @@ export default function ProdutosPage() {
                 />
               </Campo>
               <Campo label="Chapa — largura (mm)">
-                <input
+                <input name="chapa_largura_mm"
                   className="fc" type="number" min="0" step="1"
                   value={form.chapa_largura_mm ?? ""}
                   onChange={e => setForm(f => ({ ...f, chapa_largura_mm: e.target.value ? parseFloat(e.target.value) : null }))}
@@ -338,7 +338,7 @@ export default function ProdutosPage() {
                 />
               </Campo>
               <Campo label="Chapa — altura (mm)">
-                <input
+                <input name="chapa_altura_mm"
                   className="fc" type="number" min="0" step="1"
                   value={form.chapa_altura_mm ?? ""}
                   onChange={e => setForm(f => ({ ...f, chapa_altura_mm: e.target.value ? parseFloat(e.target.value) : null }))}
@@ -349,7 +349,7 @@ export default function ProdutosPage() {
 
             <div className="fg" style={{ marginBottom:"14px" }}>
               <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
-                <input
+                <input name="pode_rotacionar"
                   type="checkbox"
                   checked={form.pode_rotacionar}
                   onChange={e => setForm(f => ({ ...f, pode_rotacionar: e.target.checked }))}
@@ -362,7 +362,7 @@ export default function ProdutosPage() {
             </div>
 
             <Campo style={{ marginBottom:"14px" }} label="Observação">
-              <input className="fc" value={form.obs} onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} placeholder="Observações opcionais" />
+              <input name="obs" className="fc" value={form.obs} onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} placeholder="Observações opcionais" />
             </Campo>
 
             {editId && (

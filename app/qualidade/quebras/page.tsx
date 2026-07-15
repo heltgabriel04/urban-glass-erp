@@ -135,7 +135,7 @@ export default function QuebrasPage() {
         <div style={{ display:"flex", gap:"6px", alignItems:"center" }}>
           <SearchInput icon={false} placeholder="Buscar produto, pedido, responsável…" value={busca} onChange={setBusca}
             inputStyle={{ fontSize:"11px", padding:"5px 10px", borderRadius:"6px", border:"1px solid var(--b2)", background:"var(--surf2)", color:"var(--t1)", width:"220px", fontFamily:"'DM Mono',monospace" }} />
-          <select value={filtroSetor} onChange={e => setFiltroSetor(e.target.value)}
+          <select name="filtro_setor" value={filtroSetor} onChange={e => setFiltroSetor(e.target.value)}
             style={{ fontSize:"11px", padding:"5px 8px", borderRadius:"6px", border:"1px solid var(--b2)", background:"var(--surf2)", color:"var(--t1)", fontFamily:"'DM Mono',monospace" }}>
             <option value="todos">Todos os setores</option>
             {SETORES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -244,7 +244,7 @@ export default function QuebrasPage() {
                   <datalist id="produtos-list">{produtos.map(p => <option key={p.nome} value={p.nome} />)}</datalist>
                 </div>
                 <Campo label="Setor">
-                  <select className="fc" value={form.setor ?? ""} onChange={e => setForm(f => ({ ...f, setor: (e.target.value || null) as SetorQualidade | null }))}>
+                  <select name="setor" className="fc" value={form.setor ?? ""} onChange={e => setForm(f => ({ ...f, setor: (e.target.value || null) as SetorQualidade | null }))}>
                     <option value="">— Selecione —</option>
                     {SETORES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
@@ -253,13 +253,13 @@ export default function QuebrasPage() {
 
               <div className="fr">
                 <Campo label="Largura (mm)">
-                  <input type="number" className="fc" min={0} value={form.largura_mm ?? ""} onChange={e => setForm(f => ({ ...f, largura_mm: e.target.value ? Number(e.target.value) : null }))} />
+                  <input name="largura_mm" type="number" className="fc" min={0} value={form.largura_mm ?? ""} onChange={e => setForm(f => ({ ...f, largura_mm: e.target.value ? Number(e.target.value) : null }))} />
                 </Campo>
                 <Campo label="Altura (mm)">
-                  <input type="number" className="fc" min={0} value={form.altura_mm ?? ""} onChange={e => setForm(f => ({ ...f, altura_mm: e.target.value ? Number(e.target.value) : null }))} />
+                  <input name="altura_mm" type="number" className="fc" min={0} value={form.altura_mm ?? ""} onChange={e => setForm(f => ({ ...f, altura_mm: e.target.value ? Number(e.target.value) : null }))} />
                 </Campo>
                 <Campo label="m² perdido">
-                  <input type="number" className="fc" step="0.001" min={0}
+                  <input name="set_form" type="number" className="fc" step="0.001" min={0}
                     value={(form.largura_mm && form.altura_mm) ? calcM2() : (form.m2_perdido || "")}
                     readOnly={!!(form.largura_mm && form.altura_mm)}
                     onChange={e => !form.largura_mm && !form.altura_mm && setForm(f => ({ ...f, m2_perdido: Number(e.target.value) }))}
@@ -269,7 +269,7 @@ export default function QuebrasPage() {
 
               <div className="fr">
                 <Campo label="Custo/m² (R$)">
-                  <input type="number" className="fc" step="0.01" min={0} value={form.custo_m2 ?? ""} onChange={e => setForm(f => ({ ...f, custo_m2: e.target.value ? Number(e.target.value) : null }))} />
+                  <input name="custo_m2" type="number" className="fc" step="0.01" min={0} value={form.custo_m2 ?? ""} onChange={e => setForm(f => ({ ...f, custo_m2: e.target.value ? Number(e.target.value) : null }))} />
                 </Campo>
                 <div className="fg" style={{ display:"flex", flexDirection:"column", justifyContent:"flex-end" }}>
                   <label className="fl">Valor estimado da perda</label>
@@ -281,22 +281,22 @@ export default function QuebrasPage() {
 
               <div className="fr">
                 <Campo label="Motivo *">
-                  <select className="fc" value={form.motivo} onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))}>
+                  <select name="motivo" className="fc" value={form.motivo} onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))}>
                     <option value="">— Selecione —</option>
                     {MOTIVOS.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
                 </Campo>
                 <Campo label="Máquina">
-                  <input className="fc" placeholder="Ex: Serra 1, Mesa 2…" value={form.maquina ?? ""} onChange={e => setForm(f => ({ ...f, maquina: e.target.value || null }))} />
+                  <input name="maquina" className="fc" placeholder="Ex: Serra 1, Mesa 2…" value={form.maquina ?? ""} onChange={e => setForm(f => ({ ...f, maquina: e.target.value || null }))} />
                 </Campo>
               </div>
 
               <div className="fr">
                 <Campo label="Responsável">
-                  <input className="fc" placeholder="Nome do operador" value={form.responsavel ?? ""} onChange={e => setForm(f => ({ ...f, responsavel: e.target.value || null }))} />
+                  <input name="responsavel" className="fc" placeholder="Nome do operador" value={form.responsavel ?? ""} onChange={e => setForm(f => ({ ...f, responsavel: e.target.value || null }))} />
                 </Campo>
                 <Campo label="Pedido vinculado">
-                  <select className="fc" value={form.pedido_id ?? ""} onChange={e => setForm(f => ({ ...f, pedido_id: e.target.value || null }))}>
+                  <select name="pedido_id" className="fc" value={form.pedido_id ?? ""} onChange={e => setForm(f => ({ ...f, pedido_id: e.target.value || null }))}>
                     <option value="">— Nenhum —</option>
                     {pedidos.map(p => <option key={p.id} value={p.id}>{p.id} · {p.cliente_nome}</option>)}
                   </select>
@@ -305,13 +305,13 @@ export default function QuebrasPage() {
 
               <div className="fr">
                 <Campo label="Espessura">
-                  <input className="fc" placeholder="Ex: 6mm, 8mm" value={form.espessura ?? ""} onChange={e => setForm(f => ({ ...f, espessura: e.target.value || null }))} />
+                  <input name="espessura" className="fc" placeholder="Ex: 6mm, 8mm" value={form.espessura ?? ""} onChange={e => setForm(f => ({ ...f, espessura: e.target.value || null }))} />
                 </Campo>
                 <Campo label="Cor">
-                  <input className="fc" placeholder="Ex: Incolor, Fumê" value={form.cor ?? ""} onChange={e => setForm(f => ({ ...f, cor: e.target.value || null }))} />
+                  <input name="cor" className="fc" placeholder="Ex: Incolor, Fumê" value={form.cor ?? ""} onChange={e => setForm(f => ({ ...f, cor: e.target.value || null }))} />
                 </Campo>
                 <Campo label="Chapa referência">
-                  <input className="fc" placeholder="Ex: CHAPA 3 – P-047" value={form.chapa_referencia ?? ""} onChange={e => setForm(f => ({ ...f, chapa_referencia: e.target.value || null }))} />
+                  <input name="chapa_referencia" className="fc" placeholder="Ex: CHAPA 3 – P-047" value={form.chapa_referencia ?? ""} onChange={e => setForm(f => ({ ...f, chapa_referencia: e.target.value || null }))} />
                 </Campo>
               </div>
 

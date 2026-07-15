@@ -81,46 +81,46 @@ function ModalItem({ editando, fornecedores, usuarioEmail, onSalvo, onFechar }: 
         <form id="form-item-estoque" onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px", flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "12px" }}>
             <Campo label="Código *">
-              <input className="fc" value={form.codigo} onChange={(e) => set("codigo", e.target.value)} required />
+              <input name="codigo" className="fc" value={form.codigo} onChange={(e) => set("codigo", e.target.value)} required />
             </Campo>
             <Campo label="Descrição *">
-              <input className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} required />
+              <input name="descricao" className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} required />
             </Campo>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <Campo label="Grupo">
-              <select className="fc" value={form.grupo} onChange={(e) => set("grupo", e.target.value as GrupoItemEstoqueGeral)}>
+              <select name="grupo" className="fc" value={form.grupo} onChange={(e) => set("grupo", e.target.value as GrupoItemEstoqueGeral)}>
                 {GRUPOS_ITEM_ESTOQUE.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
               </select>
             </Campo>
             <Campo label="Subgrupo">
-              <input className="fc" value={form.subgrupo ?? ""} onChange={(e) => set("subgrupo", e.target.value || null)} />
+              <input name="subgrupo" className="fc" value={form.subgrupo ?? ""} onChange={(e) => set("subgrupo", e.target.value || null)} />
             </Campo>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
             <Campo label="Localização">
-              <input className="fc" value={form.localizacao ?? ""} onChange={(e) => set("localizacao", e.target.value || null)} />
+              <input name="localizacao" className="fc" value={form.localizacao ?? ""} onChange={(e) => set("localizacao", e.target.value || null)} />
             </Campo>
             <Campo label="Unidade">
-              <input className="fc" value={form.unidade} onChange={(e) => set("unidade", e.target.value)} placeholder="un, kg, m, cx..." />
+              <input name="unidade" className="fc" value={form.unidade} onChange={(e) => set("unidade", e.target.value)} placeholder="un, kg, m, cx..." />
             </Campo>
             <Campo label="NCM">
-              <input className="fc" value={form.ncm ?? ""} maxLength={8} style={{ fontFamily: "'DM Mono', monospace" }}
+              <input name="ncm" className="fc" value={form.ncm ?? ""} maxLength={8} style={{ fontFamily: "'DM Mono', monospace" }}
                 onChange={(e) => set("ncm", e.target.value.replace(/\D/g, "").slice(0, 8) || null)} />
             </Campo>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
             <Campo label="Fornecedor Principal">
-              <select className="fc" value={form.fornecedor_principal_id ?? ""} onChange={(e) => set("fornecedor_principal_id", e.target.value ? Number(e.target.value) : null)}>
+              <select name="fornecedor_principal_id" className="fc" value={form.fornecedor_principal_id ?? ""} onChange={(e) => set("fornecedor_principal_id", e.target.value ? Number(e.target.value) : null)}>
                 <option value="">—</option>
                 {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
               </select>
             </Campo>
             <Campo label="Estoque Mínimo">
-              <input className="fc" type="number" step="0.001" value={form.estoque_minimo} onChange={(e) => set("estoque_minimo", Number(e.target.value))} />
+              <input name="estoque_minimo" className="fc" type="number" step="0.001" value={form.estoque_minimo} onChange={(e) => set("estoque_minimo", Number(e.target.value))} />
             </Campo>
           </div>
 
@@ -193,14 +193,14 @@ function ModalMovimentacao({ itens, documentosFiscais, usuarioEmail, onSalvo, on
     <Modal open onClose={onFechar} title="Nova Movimentação" width="520px" style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
         <form id="form-movimentacao" onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px", flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>
           <Campo label="Item">
-            <select className="fc" value={itemId} onChange={(e) => setItemId(e.target.value ? Number(e.target.value) : "")} required>
+            <select name="item_id" className="fc" value={itemId} onChange={(e) => setItemId(e.target.value ? Number(e.target.value) : "")} required>
               <option value="">Selecione...</option>
               {itens.map((i) => <option key={i.id} value={i.id}>{i.codigo} — {i.descricao} (saldo: {i.saldo_qtd} {i.unidade})</option>)}
             </select>
           </Campo>
 
           <Campo label="Tipo">
-            <select className="fc" value={tipo} onChange={(e) => setTipo(e.target.value as TipoMovimentacaoItemEstoque)}>
+            <select name="tipo" className="fc" value={tipo} onChange={(e) => setTipo(e.target.value as TipoMovimentacaoItemEstoque)}>
               {(Object.keys(TIPO_LABEL) as TipoMovimentacaoItemEstoque[]).map((t) => <option key={t} value={t}>{TIPO_LABEL[t]}</option>)}
             </select>
           </Campo>
@@ -221,29 +221,29 @@ function ModalMovimentacao({ itens, documentosFiscais, usuarioEmail, onSalvo, on
           {tipo !== "transferencia" && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
               <Campo label="Quantidade">
-                <input className="fc" type="number" step="0.001" value={quantidade} onChange={(e) => setQuantidade(e.target.value)} required style={{ fontFamily: "'DM Mono', monospace" }} />
+                <input name="quantidade" className="fc" type="number" step="0.001" value={quantidade} onChange={(e) => setQuantidade(e.target.value)} required style={{ fontFamily: "'DM Mono', monospace" }} />
               </Campo>
               <Campo label="Custo Unitário">
-                <input className="fc" type="number" step="0.0001" value={custoUnitario} onChange={(e) => setCustoUnitario(e.target.value)} placeholder="opcional" style={{ fontFamily: "'DM Mono', monospace" }} />
+                <input name="custo_unitario" className="fc" type="number" step="0.0001" value={custoUnitario} onChange={(e) => setCustoUnitario(e.target.value)} placeholder="opcional" style={{ fontFamily: "'DM Mono', monospace" }} />
               </Campo>
             </div>
           )}
 
           {tipo === "transferencia" && (
             <Campo label="Localização de Destino">
-              <input className="fc" value={localizacaoDestino} onChange={(e) => setLocalizacaoDestino(e.target.value)} required />
+              <input name="localizacao_destino" className="fc" value={localizacaoDestino} onChange={(e) => setLocalizacaoDestino(e.target.value)} required />
             </Campo>
           )}
 
           <Campo label="Documento Fiscal (opcional)">
-            <select className="fc" value={documentoFiscalId} onChange={(e) => setDocumentoFiscalId(e.target.value ? Number(e.target.value) : "")}>
+            <select name="documento_fiscal_id" className="fc" value={documentoFiscalId} onChange={(e) => setDocumentoFiscalId(e.target.value ? Number(e.target.value) : "")}>
               <option value="">—</option>
               {documentosFiscais.map((d) => <option key={d.id} value={d.id}>{d.numero_documento ?? `#${d.id}`} ({d.tipo})</option>)}
             </select>
           </Campo>
 
           <Campo label="Observações">
-            <textarea className="fc" rows={2} value={obs} onChange={(e) => setObs(e.target.value)} />
+            <textarea name="obs" className="fc" rows={2} value={obs} onChange={(e) => setObs(e.target.value)} />
           </Campo>
         </form>
 
@@ -399,12 +399,12 @@ export default function EstoqueGeralPage() {
           <>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                <input className="fc" placeholder="Buscar código ou descrição..." value={buscaItens} onChange={(e) => setBuscaItens(e.target.value)} style={{ width: "220px" }} />
-                <select className="fc" value={filtroGrupo} onChange={(e) => setFiltroGrupo(e.target.value as GrupoItemEstoqueGeral | "")} style={{ width: "180px" }}>
+                <input name="busca_itens" className="fc" placeholder="Buscar código ou descrição..." value={buscaItens} onChange={(e) => setBuscaItens(e.target.value)} style={{ width: "220px" }} />
+                <select name="filtro_grupo" className="fc" value={filtroGrupo} onChange={(e) => setFiltroGrupo(e.target.value as GrupoItemEstoqueGeral | "")} style={{ width: "180px" }}>
                   <option value="">Todos os grupos</option>
                   {GRUPOS_ITEM_ESTOQUE.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
                 </select>
-                <select className="fc" value={filtroAtivo} onChange={(e) => setFiltroAtivo(e.target.value as typeof filtroAtivo)} style={{ width: "120px" }}>
+                <select name="filtro_ativo" className="fc" value={filtroAtivo} onChange={(e) => setFiltroAtivo(e.target.value as typeof filtroAtivo)} style={{ width: "120px" }}>
                   <option value="ativos">Ativos</option>
                   <option value="inativos">Inativos</option>
                   <option value="todos">Todos</option>
@@ -458,11 +458,11 @@ export default function EstoqueGeralPage() {
           <>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                <select className="fc" value={filtroItemMov} onChange={(e) => setFiltroItemMov(e.target.value ? Number(e.target.value) : "")} style={{ width: "220px" }}>
+                <select name="filtro_item_mov" className="fc" value={filtroItemMov} onChange={(e) => setFiltroItemMov(e.target.value ? Number(e.target.value) : "")} style={{ width: "220px" }}>
                   <option value="">Todos os itens</option>
                   {itens.map((i) => <option key={i.id} value={i.id}>{i.codigo} — {i.descricao}</option>)}
                 </select>
-                <select className="fc" value={filtroTipoMov} onChange={(e) => setFiltroTipoMov(e.target.value as TipoMovimentacaoItemEstoque | "")} style={{ width: "160px" }}>
+                <select name="filtro_tipo_mov" className="fc" value={filtroTipoMov} onChange={(e) => setFiltroTipoMov(e.target.value as TipoMovimentacaoItemEstoque | "")} style={{ width: "160px" }}>
                   <option value="">Todos os tipos</option>
                   {(Object.keys(TIPO_LABEL) as TipoMovimentacaoItemEstoque[]).map((t) => <option key={t} value={t}>{TIPO_LABEL[t]}</option>)}
                 </select>
@@ -512,10 +512,10 @@ export default function EstoqueGeralPage() {
         {aba === "cmv" && (
           <>
             <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
-              <select className="fc" value={mes} onChange={(e) => setMes(Number(e.target.value))} style={{ width: "140px" }}>
+              <select name="mes" className="fc" value={mes} onChange={(e) => setMes(Number(e.target.value))} style={{ width: "140px" }}>
                 {MESES.map((m, idx) => <option key={m} value={idx + 1}>{m}</option>)}
               </select>
-              <input className="fc" type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} style={{ width: "90px" }} />
+              <input name="ano" className="fc" type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} style={{ width: "90px" }} />
             </div>
 
             {loading || !cmv ? <div className="loading">Carregando...</div> : (

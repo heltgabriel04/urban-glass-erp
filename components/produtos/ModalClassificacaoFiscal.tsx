@@ -118,12 +118,12 @@ export default function ModalClassificacaoFiscal({
           {/* CFOP */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <Campo label="CFOP Dentro do Estado (MG)">
-              <select className="fc" value={cfopD} onChange={(e) => setCfopD(e.target.value)} required>
+              <select name="cfop_d" className="fc" value={cfopD} onChange={(e) => setCfopD(e.target.value)} required>
                 {CFOP_DENTRO.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </Campo>
             <Campo label="CFOP Fora do Estado">
-              <select className="fc" value={cfopF} onChange={(e) => setCfopF(e.target.value)} required>
+              <select name="cfop_f" className="fc" value={cfopF} onChange={(e) => setCfopF(e.target.value)} required>
                 {CFOP_FORA.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </Campo>
@@ -131,7 +131,7 @@ export default function ModalClassificacaoFiscal({
 
           {/* CST */}
           <Campo label={padrao.regime === "simples" ? "CSOSN" : "CST ICMS"}>
-            <select className="fc" value={cst} onChange={(e) => setCst(e.target.value)} required>
+            <select name="cst" className="fc" value={cst} onChange={(e) => setCst(e.target.value)} required>
               {cstOpcoes.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </Campo>

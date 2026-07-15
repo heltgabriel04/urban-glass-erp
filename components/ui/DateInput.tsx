@@ -1,5 +1,7 @@
 "use client";
 
+import { useId } from "react";
+
 interface DateInputProps {
   value: string;
   onChange: (v: string) => void;
@@ -10,6 +12,9 @@ interface DateInputProps {
 }
 
 export default function DateInput({ value, onChange, className = "fc", style, tabIndex, id }: DateInputProps) {
+  const autoId = useId();
+  const inputId = id ?? autoId;
+
   const toDisplay = (v: string) => {
     if (!v || !v.includes("-")) return v;
     const parts = v.split("-");
@@ -39,7 +44,8 @@ export default function DateInput({ value, onChange, className = "fc", style, ta
 
   return (
     <input
-      id={id}
+      id={inputId}
+      name={inputId}
       className={className}
       style={style}
       type="text"

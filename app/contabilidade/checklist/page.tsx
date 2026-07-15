@@ -111,10 +111,10 @@ export default function ChecklistMensalPage() {
       <div className="con">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            <select className="fc" value={mes} onChange={(e) => setMes(Number(e.target.value))} style={{ width: "140px" }}>
+            <select name="mes" className="fc" value={mes} onChange={(e) => setMes(Number(e.target.value))} style={{ width: "140px" }}>
               {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
             </select>
-            <input className="fc" type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} style={{ width: "90px" }} />
+            <input name="ano" className="fc" type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} style={{ width: "90px" }} />
           </div>
 
           {fechamento && (
@@ -165,20 +165,20 @@ export default function ChecklistMensalPage() {
                   {!naoAplicavel && (
                     <div style={{ display: "grid", gridTemplateColumns: "140px 1fr 1fr auto auto", gap: "10px", alignItems: "end" }}>
                       <Campo label="Status">
-                        <select className="fc" value={item.status} onChange={(e) => handleAtualizarItem(item, { status: e.target.value as StatusChecklistItem, data_conclusao: e.target.value === "concluido" ? new Date().toISOString().split("T")[0] : item.data_conclusao })}>
+                        <select name={`item_status_${item.id}`} className="fc" value={item.status} onChange={(e) => handleAtualizarItem(item, { status: e.target.value as StatusChecklistItem, data_conclusao: e.target.value === "concluido" ? new Date().toISOString().split("T")[0] : item.data_conclusao })}>
                           <option value="pendente">Pendente</option>
                           <option value="em_andamento">Em Andamento</option>
                           <option value="concluido">Concluído</option>
                         </select>
                       </Campo>
                       <Campo label="Responsável">
-                        <input className="fc" defaultValue={item.responsavel ?? ""} onBlur={(e) => handleAtualizarItem(item, { responsavel: e.target.value || null })} />
+                        <input className="fc" name={`responsavel_${item.id}`} defaultValue={item.responsavel ?? ""} onBlur={(e) => handleAtualizarItem(item, { responsavel: e.target.value || null })} />
                       </Campo>
                       <Campo label="Observação">
-                        <input className="fc" defaultValue={item.observacao ?? ""} onBlur={(e) => handleAtualizarItem(item, { observacao: e.target.value || null })} />
+                        <input className="fc" name={`observacao_${item.id}`} defaultValue={item.observacao ?? ""} onBlur={(e) => handleAtualizarItem(item, { observacao: e.target.value || null })} />
                       </Campo>
                       <Campo label="Anexo">
-                        <input className="fc" type="file" style={{ fontSize: "11px" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(item, f); }} />
+                        <input className="fc" type="file" name={`anexo_${item.id}`} style={{ fontSize: "11px" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(item, f); }} />
                       </Campo>
                       <div style={{ fontSize: "11px", color: "var(--t3)" }}>
                         {(item.anexos?.length ?? 0) > 0 ? `${item.anexos!.length} anexo(s)` : ""}

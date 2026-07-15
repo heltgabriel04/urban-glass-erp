@@ -276,7 +276,7 @@ export default function OrcamentosPage() {
             <div style={{ padding:"20px", display:"flex", flexDirection:"column", gap:"16px" }}>
               <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
                 <label style={{ fontSize:"12px", color:"var(--t3)", fontWeight:600 }}>Motivo</label>
-                <select className="fc" value={motivoRejeicao} onChange={e => setMotivoRejeicao(e.target.value)} style={{ margin:0 }}>
+                <select name="motivo_rejeicao" className="fc" value={motivoRejeicao} onChange={e => setMotivoRejeicao(e.target.value)} style={{ margin:0 }}>
                   <option value="">Selecione o motivo...</option>
                   {MOTIVOS.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
@@ -284,7 +284,7 @@ export default function OrcamentosPage() {
 
               <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
                 <label style={{ fontSize:"12px", color:"var(--t3)", fontWeight:600 }}>Observações <span style={{ fontWeight:400 }}>(opcional)</span></label>
-                <textarea
+                <textarea name="obs_rejeicao"
                   className="fc"
                   value={obsRejeicao}
                   onChange={e => setObsRejeicao(e.target.value)}

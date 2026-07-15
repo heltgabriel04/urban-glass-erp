@@ -20,7 +20,7 @@ export default function DatePromptModal({ titulo, valorInicial, onConfirmar, onF
     <Modal open onClose={onFechar} title={titulo} width="360px">
         <form onSubmit={(e) => { e.preventDefault(); if (data) onConfirmar(data); }} style={{ padding: "20px" }}>
           <Campo style={{ margin: 0 }} label="Data">
-            <input className="fc" type="date" value={data} onChange={(e) => setData(e.target.value)} autoFocus required />
+            <input name="data" className="fc" type="date" value={data} onChange={(e) => setData(e.target.value)} autoFocus required />
           </Campo>
         </form>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>

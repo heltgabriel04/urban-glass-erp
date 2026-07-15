@@ -309,19 +309,19 @@ export default function ComprasPage() {
 
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
               <Campo labelStyle={labelStyle} label="Fornecedor *">
-                <select style={selectStyle} value={form.fornecedor_id} onChange={e => setForm(f => ({ ...f, fornecedor_id: e.target.value }))}>
+                <select name="fornecedor_id" style={selectStyle} value={form.fornecedor_id} onChange={e => setForm(f => ({ ...f, fornecedor_id: e.target.value }))}>
                   <option value="">Selecione...</option>
                   {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
                 </select>
               </Campo>
               <Campo labelStyle={labelStyle} label="NF">
-                <input style={inputStyle} value={form.nf} onChange={e => setForm(f => ({ ...f, nf: e.target.value }))} placeholder="000123" />
+                <input name="nf" style={inputStyle} value={form.nf} onChange={e => setForm(f => ({ ...f, nf: e.target.value }))} placeholder="000123" />
               </Campo>
               <Campo labelStyle={labelStyle} label="Data">
                 <DateInput style={inputStyle} className="" value={form.dt_compra} onChange={v => setForm(f => ({ ...f, dt_compra: v }))} />
               </Campo>
               <Campo labelStyle={labelStyle} label="Condição de Pagamento">
-                <input style={inputStyle} value={form.condicao_pgto} onChange={e => setForm(f => ({ ...f, condicao_pgto: e.target.value }))} placeholder="30/60/90" />
+                <input name="condicao_pgto" style={inputStyle} value={form.condicao_pgto} onChange={e => setForm(f => ({ ...f, condicao_pgto: e.target.value }))} placeholder="30/60/90" />
               </Campo>
             </div>
 
@@ -333,14 +333,14 @@ export default function ComprasPage() {
                   <div style={{ display: "grid", gridTemplateColumns: "2fr 0.8fr 0.8fr 0.9fr 1fr 1fr auto", gap: "10px", alignItems: "end" }}>
                     <div>
                       {i === 0 && <label style={labelStyle}>Produto</label>}
-                      <select aria-label="Produto" style={selectStyle} value={it.produto_id} onChange={e => updItem(i, "produto_id", e.target.value)}>
+                      <select name={`it_produto_id_${i}`} aria-label="Produto" style={selectStyle} value={it.produto_id} onChange={e => updItem(i, "produto_id", e.target.value)}>
                         <option value="">Selecione...</option>
                         {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
                       </select>
                     </div>
                     <div>
                       {i === 0 && <label style={labelStyle}>Colares</label>}
-                      <input aria-label="Colares" style={inputStyle} type="number" min="0" value={it.colares} onChange={e => updItem(i, "colares", e.target.value)}
+                      <input name={`it_colares_${i}`} aria-label="Colares" style={inputStyle} type="number" min="0" value={it.colares} onChange={e => updItem(i, "colares", e.target.value)}
                         placeholder={prod?.chapas_por_colar ? `× ${prod.chapas_por_colar} ch.` : "config. no produto"} />
                     </div>
                     <div>
@@ -350,7 +350,7 @@ export default function ComprasPage() {
                           {it.chapas || "—"}
                         </div>
                       ) : (
-                        <input aria-label="Chapas" style={inputStyle} type="number" min="0" value={it.chapas} onChange={e => updItem(i, "chapas", e.target.value)} />
+                        <input name={`it_chapas_${i}`} aria-label="Chapas" style={inputStyle} type="number" min="0" value={it.chapas} onChange={e => updItem(i, "chapas", e.target.value)} />
                       )}
                     </div>
                     <div>
@@ -360,7 +360,7 @@ export default function ComprasPage() {
                           {it.m2_por_chapa}
                         </div>
                       ) : (
-                        <input aria-label="m²/chapa" style={inputStyle} type="number" min="0" step="0.0001" value={it.m2_por_chapa} onChange={e => updItem(i, "m2_por_chapa", e.target.value)} />
+                        <input name={`it_m2_por_chapa_${i}`} aria-label="m²/chapa" style={inputStyle} type="number" min="0" step="0.0001" value={it.m2_por_chapa} onChange={e => updItem(i, "m2_por_chapa", e.target.value)} />
                       )}
                     </div>
                     <div>
@@ -386,7 +386,7 @@ export default function ComprasPage() {
             <button className="btn bg sm" onClick={addItem} style={{ marginBottom: "16px" }}>+ Item</button>
 
             <Campo style={{ marginBottom: "14px" }} labelStyle={labelStyle} label="Observação">
-              <input style={inputStyle} value={form.obs} onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} placeholder="Observações opcionais" />
+              <input name="obs" style={inputStyle} value={form.obs} onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} placeholder="Observações opcionais" />
             </Campo>
 
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", alignItems: "center" }}>

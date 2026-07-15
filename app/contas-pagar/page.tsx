@@ -584,16 +584,16 @@ function ContasPagarPageInner() {
         {mostrarFiltros && (
           <div style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "14px 16px", marginBottom: "14px", display: "flex", gap: "16px", flexWrap: "wrap", alignItems: "flex-end" }}>
             {[
-              { label: "Emissão de",    val: filtroEmisIni,  set: setFiltroEmisIni },
-              { label: "Emissão até",   val: filtroEmissFim, set: setFiltroEmissFim },
-              { label: "Vencimento de", val: filtroVencIni,  set: setFiltroVencIni },
-              { label: "Vencimento até",val: filtroVencFim,  set: setFiltroVencFim },
-              { label: "Pagamento de",  val: filtroPgtoIni,  set: setFiltroPgtoIni },
-              { label: "Pagamento até", val: filtroPgtoFim,  set: setFiltroPgtoFim },
+              { label: "Emissão de",    name: "filtro_emissao_de",    val: filtroEmisIni,  set: setFiltroEmisIni },
+              { label: "Emissão até",   name: "filtro_emissao_ate",   val: filtroEmissFim, set: setFiltroEmissFim },
+              { label: "Vencimento de", name: "filtro_vencimento_de", val: filtroVencIni,  set: setFiltroVencIni },
+              { label: "Vencimento até",name: "filtro_vencimento_ate",val: filtroVencFim,  set: setFiltroVencFim },
+              { label: "Pagamento de",  name: "filtro_pagamento_de",  val: filtroPgtoIni,  set: setFiltroPgtoIni },
+              { label: "Pagamento até", name: "filtro_pagamento_ate", val: filtroPgtoFim,  set: setFiltroPgtoFim },
             ].map(f => (
               <div key={f.label} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                 <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{f.label}</div>
-                <input type="date" className="fc" style={{ margin: 0 }} value={f.val} onChange={e => f.set(e.target.value)} />
+                <input type="date" className="fc" name={f.name} style={{ margin: 0 }} value={f.val} onChange={e => f.set(e.target.value)} />
               </div>
             ))}
             <button className="btn bg sm" onClick={() => { setFiltroEmisIni(""); setFiltroEmissFim(""); setFiltroVencIni(""); setFiltroVencFim(""); setFiltroPgtoIni(""); setFiltroPgtoFim(""); }}>✕ Limpar</button>
@@ -625,7 +625,7 @@ function ContasPagarPageInner() {
                 <thead>
                   <tr>
                     <th style={{ width: "30px" }}>
-                      <input type="checkbox" checked={todosSelecionados} onChange={toggleSelecionarTodos} />
+                      <input name="todos_selecionados" type="checkbox" checked={todosSelecionados} onChange={toggleSelecionarTodos} />
                     </th>
                     <th style={{ width: "90px" }}>Emissão</th>
                     <th>Fornecedor / Descrição</th>
@@ -652,7 +652,7 @@ function ContasPagarPageInner() {
                     return (
                       <tr key={c.id}>
                         <td>
-                          <input type="checkbox" checked={selecionados.has(c.id)} onChange={() => toggleSelecionado(c.id)} />
+                          <input name={`c_id_${c.id}`} type="checkbox" checked={selecionados.has(c.id)} onChange={() => toggleSelecionado(c.id)} />
                         </td>
                         <td style={{ fontSize: "12px" }}>{fmtData(c.dt_emissao)}</td>
                         <td>
@@ -729,7 +729,7 @@ function ContasPagarPageInner() {
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px", overflowY: "auto", flex: 1 }}>
               {modal === "add" && (
                 <Campo label="Colar linha digitável do boleto (opcional)">
-                  <input className="fc" placeholder="00190.00009 01234.567890 12345.678901 1 23456789012345"
+                  <input name="parse_linha_digitavel" className="fc" placeholder="00190.00009 01234.567890 12345.678901 1 23456789012345"
                     onChange={e => {
                       const dados = parseLinhaDigitavel(e.target.value);
                       if (dados) {
@@ -763,7 +763,7 @@ function ContasPagarPageInner() {
                   />
                 </Campo>
                 <Campo label="Documento">
-                  <input className="fc" placeholder="NF 001, Boleto..." value={form.documento}
+                  <input name="documento" className="fc" placeholder="NF 001, Boleto..." value={form.documento}
                     onChange={e => setForm(f => ({ ...f, documento: e.target.value }))}
                     onBlur={() => checarDuplicado(form.fornecedor_id, form.documento)} />
                 </Campo>
@@ -776,20 +776,20 @@ function ContasPagarPageInner() {
               )}
 
               <Campo label="Descrição *">
-                <input className="fc" placeholder="Descrição da conta" value={form.descricao}
+                <input name="descricao" className="fc" placeholder="Descrição da conta" value={form.descricao}
                   onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} />
               </Campo>
 
               {precisaMotivoRenegociacao && (
                 <div className="al al-w" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   <div style={{ fontSize: "12px" }}>⚠ Este título já tem baixa registrada. Alterar vencimento ou valor exige o motivo da renegociação:</div>
-                  <textarea className="fc" rows={2} placeholder="Motivo da renegociação *" value={motivoRenegociacao}
+                  <textarea name="motivo_renegociacao" className="fc" rows={2} placeholder="Motivo da renegociação *" value={motivoRenegociacao}
                     onChange={e => setMotivoRenegociacao(e.target.value)} style={{ margin: 0, resize: "vertical" }} />
                 </div>
               )}
 
               <Campo label="Plano de Contas">
-                <select className="fc" value={form.plano_contas_id}
+                <select name="plano_contas_id" className="fc" value={form.plano_contas_id}
                   onChange={e => setForm(f => ({ ...f, plano_contas_id: e.target.value }))}>
                   <option value="">Selecione...</option>
                   {planos.map(p => <option key={p.id} value={p.id}>{p.codigo_estruturado} · {p.descricao}</option>)}
@@ -797,7 +797,7 @@ function ContasPagarPageInner() {
               </Campo>
 
               <Campo label="Conta Bancária (previsão de pagamento)">
-                <select className="fc" value={form.conta_id}
+                <select name="conta_id" className="fc" value={form.conta_id}
                   onChange={e => setForm(f => ({ ...f, conta_id: e.target.value }))}>
                   <option value="">Selecione...</option>
                   {contasBancarias.map(cb => <option key={cb.id} value={cb.id}>{cb.nome}</option>)}
@@ -817,7 +817,7 @@ function ContasPagarPageInner() {
               </div>
 
               <Campo label="Observação">
-                <input className="fc" placeholder="Observações..." value={form.obs}
+                <input name="obs" className="fc" placeholder="Observações..." value={form.obs}
                   onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} />
               </Campo>
             </div>
@@ -846,26 +846,26 @@ function ContasPagarPageInner() {
               </div>
               {adiantamentosDisponiveis.length > 0 && (
                 <Campo label="Usar saldo de adiantamento">
-                  <select className="fc" value={adiantamentoUsadoId} onChange={e => setAdiantamentoUsadoId(e.target.value)}>
+                  <select name="adiantamento_usado_id" className="fc" value={adiantamentoUsadoId} onChange={e => setAdiantamentoUsadoId(e.target.value)}>
                     <option value="">Não usar — pagar de conta bancária</option>
                     {adiantamentosDisponiveis.map(a => <option key={a.id} value={a.id}>{a.descricao} · saldo {formatBRL(a.saldo)}</option>)}
                   </select>
                 </Campo>
               )}
               <Campo style={{ display: adiantamentoUsadoId ? "none" : undefined }} label="Conta Bancária">
-                <select className="fc" value={contaBaixaId} onChange={e => setContaBaixaId(e.target.value)}>
+                <select name="conta_baixa_id" className="fc" value={contaBaixaId} onChange={e => setContaBaixaId(e.target.value)}>
                   <option value="">Não informado</option>
                   {contasBancarias.map(cb => <option key={cb.id} value={cb.id}>{cb.nome}</option>)}
                 </select>
               </Campo>
               <Campo label="Forma de Pagamento">
-                <select className="fc" value={formaPgtoBaixa} onChange={e => setFormaPgtoBaixa(e.target.value)}>
+                <select name="forma_pgto_baixa" className="fc" value={formaPgtoBaixa} onChange={e => setFormaPgtoBaixa(e.target.value)}>
                   <option value="">Não informado</option>
                   {formasPagamento.map(fp => <option key={fp.id} value={fp.nome}>{fp.nome}</option>)}
                 </select>
               </Campo>
               <Campo label="Observação">
-                <input className="fc" value={obsBaixa} onChange={e => setObsBaixa(e.target.value)} />
+                <input name="obs_baixa" className="fc" value={obsBaixa} onChange={e => setObsBaixa(e.target.value)} />
               </Campo>
 
               {!mostrarExtrasBaixa ? (
@@ -950,7 +950,7 @@ function ContasPagarPageInner() {
                   )}
                   {estornandoBaixaId === b.id && (
                     <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                      <textarea className="fc" rows={2} placeholder="Motivo do estorno *" value={motivoEstorno}
+                      <textarea name="motivo_estorno" className="fc" rows={2} placeholder="Motivo do estorno *" value={motivoEstorno}
                         onChange={e => setMotivoEstorno(e.target.value)} style={{ margin: 0, resize: "vertical" }} />
                       <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
                         <button className="btn bg xs" onClick={() => setEstornandoBaixaId(null)}>Cancelar</button>
@@ -986,7 +986,7 @@ function ContasPagarPageInner() {
                 ⚠ Este título já tem baixa registrada. A conta não é apagada — fica marcada como excluída, com o histórico preservado.
               </div>
               <Campo label="Motivo da exclusão *">
-                <textarea className="fc" rows={3} value={motivoExclusao} onChange={e => setMotivoExclusao(e.target.value)} style={{ margin: 0, resize: "vertical" }} />
+                <textarea name="motivo_exclusao" className="fc" rows={3} value={motivoExclusao} onChange={e => setMotivoExclusao(e.target.value)} style={{ margin: 0, resize: "vertical" }} />
               </Campo>
             </div>
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
@@ -1011,7 +1011,7 @@ function ContasPagarPageInner() {
                 />
               </Campo>
               <Campo label="Descrição *">
-                <input className="fc" placeholder="Adiantamento p/ compra de material..." value={formAdiant.descricao}
+                <input name="form_adiant_descricao" className="fc" placeholder="Adiantamento p/ compra de material..." value={formAdiant.descricao}
                   onChange={e => setFormAdiant(f => ({ ...f, descricao: e.target.value }))} style={{ margin: 0 }} />
               </Campo>
               <div className="fr">
@@ -1023,7 +1023,7 @@ function ContasPagarPageInner() {
                 </Campo>
               </div>
               <Campo label="Conta Bancária (de onde saiu)">
-                <select className="fc" value={formAdiant.contaId} onChange={e => setFormAdiant(f => ({ ...f, contaId: e.target.value }))} style={{ margin: 0 }}>
+                <select name="form_adiant_conta_id" className="fc" value={formAdiant.contaId} onChange={e => setFormAdiant(f => ({ ...f, contaId: e.target.value }))} style={{ margin: 0 }}>
                   <option value="">Não informado</option>
                   {contasBancarias.map(cb => <option key={cb.id} value={cb.id}>{cb.nome}</option>)}
                 </select>
@@ -1055,7 +1055,7 @@ function ContasPagarPageInner() {
                 </Campo>
               </div>
               <Campo label="Observação">
-                <input className="fc" value={formReembolso.obs} onChange={e => setFormReembolso(f => ({ ...f, obs: e.target.value }))} style={{ margin: 0 }} />
+                <input name="form_reembolso_obs" className="fc" value={formReembolso.obs} onChange={e => setFormReembolso(f => ({ ...f, obs: e.target.value }))} style={{ margin: 0 }} />
               </Campo>
             </div>
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>

@@ -188,7 +188,7 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
             {adicionando && (
               <div style={{ background: "var(--surf2)", border: "1px dashed var(--acc)", borderRadius: "10px", padding: "14px", display: "flex", flexDirection: "column", gap: "8px" }}>
                 <div style={{ fontSize: "10px", fontWeight: 700, color: "var(--acc)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Novo Banco</div>
-                <select className="fc" style={{ fontSize: "12px", margin: 0 }} value={novoBanco.banco}
+                <select name="novo_banco_banco" className="fc" style={{ fontSize: "12px", margin: 0 }} value={novoBanco.banco}
                   onChange={e => setNovoBanco(p => ({ ...p, banco: e.target.value }))}>
                   <option value="">Selecionar...</option>
                   {BANCOS_POSICAO.map(bl => <option key={bl.nome} value={bl.nome}>{bl.nome}</option>)}
@@ -358,10 +358,10 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
                   <div onClick={() => togglePedido(pedido.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", cursor: "pointer", userSelect: "none", background: exp ? "rgba(139,92,246,.04)" : "transparent" }}>
                     <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1 }}>
                       <span style={{ fontSize: "9px", color: "#8b5cf6", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", flexShrink: 0 }}>#{pi + 1}</span>
-                      <input className="fc" placeholder="Material" value={pedido.material}
+                      <input name={`pedido_material_${pi}`} className="fc" placeholder="Material" value={pedido.material}
                         style={{ margin: 0, fontSize: "12px", fontWeight: 600, padding: "3px 7px", flex: 1, minWidth: 0 }}
                         onChange={e => patchPedido(pedido.id, { material: e.target.value })} />
-                      <input className="fc" type="number" step="0.001" placeholder="Quantidade (t)" value={pedido.quantidadeTon || ""}
+                      <input name={`pedido_quantidade_ton_${pi}`} className="fc" type="number" step="0.001" placeholder="Quantidade (t)" value={pedido.quantidadeTon || ""}
                         style={{ margin: 0, fontSize: "11px", padding: "3px 7px", width: "110px", textAlign: "right", fontFamily: "'DM Mono', monospace" }}
                         onChange={e => patchPedido(pedido.id, { quantidadeTon: Number(e.target.value) })} />
                       <CurrencyInput value={pedido.valor}
@@ -394,7 +394,7 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
                         </div>
                       ) : pedido.movimentacoes.map((mov, mi) => (
                         <div key={mov.id} style={{ display: "grid", gridTemplateColumns: "100px 130px 80px 120px 1fr 28px", gap: "4px", alignItems: "center", marginBottom: "3px", padding: "1px 0", background: mi % 2 === 0 ? "transparent" : "rgba(139,92,246,.03)", borderRadius: "4px" }}>
-                          <input type="date" className="fc" value={mov.data}
+                          <input name={`mov_data_${mi}`} type="date" className="fc" value={mov.data}
                             style={{ margin: 0, fontSize: "11px", padding: "4px 5px", background: "transparent", border: "1px solid transparent", borderRadius: "4px" }}
                             onFocus={e => (e.target.style.borderColor = "rgba(139,92,246,.4)")} onBlur={e => (e.target.style.borderColor = "transparent")}
                             onChange={e => patchMov(pedido.id, mov.id, { data: e.target.value })} />
@@ -402,16 +402,16 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
                             style={{ margin: 0, fontSize: "11px", textAlign: "right", fontFamily: "'DM Mono', monospace", padding: "4px 5px", background: "transparent", border: "1px solid transparent", borderRadius: "4px" }}
                             onFocus={e => (e.currentTarget.style.borderColor = "rgba(139,92,246,.4)")} onBlur={e => (e.currentTarget.style.borderColor = "transparent")}
                             onChange={v => patchMov(pedido.id, mov.id, { valor: v })} />
-                          <input className="fc" placeholder="Nº" value={mov.numeroPedido}
+                          <input name={`mov_numero_pedido_${mi}`} className="fc" placeholder="Nº" value={mov.numeroPedido}
                             style={{ margin: 0, fontSize: "11px", padding: "4px 5px", fontFamily: "'DM Mono', monospace", background: "transparent", border: "1px solid transparent", borderRadius: "4px" }}
                             onFocus={e => (e.target.style.borderColor = "rgba(139,92,246,.4)")} onBlur={e => (e.target.style.borderColor = "transparent")}
                             onChange={e => patchMov(pedido.id, mov.id, { numeroPedido: e.target.value })} />
-                          <select className="fc" value={mov.tipo} style={{ margin: 0, fontSize: "10px", padding: "4px 5px" }}
+                          <select name={`mov_tipo_${mi}`} className="fc" value={mov.tipo} style={{ margin: 0, fontSize: "10px", padding: "4px 5px" }}
                             onChange={e => patchMov(pedido.id, mov.id, { tipo: e.target.value as MovPedido["tipo"] })}>
                             <option value="PERMUTA">Permuta</option>
                             <option value="FATURAMENTO">Faturamento</option>
                           </select>
-                          <input className="fc" placeholder="Empresa" value={mov.empresa}
+                          <input name={`mov_empresa_${mi}`} className="fc" placeholder="Empresa" value={mov.empresa}
                             style={{ margin: 0, fontSize: "11px", padding: "4px 5px", background: "transparent", border: "1px solid transparent", borderRadius: "4px" }}
                             onFocus={e => (e.target.style.borderColor = "rgba(139,92,246,.4)")} onBlur={e => (e.target.style.borderColor = "transparent")}
                             onChange={e => patchMov(pedido.id, mov.id, { empresa: e.target.value })} />
@@ -469,7 +469,7 @@ function SecaoPosicaoFinanceira({ bancos, setBancos, aportes, setAportes, permut
 
             {/* ── Salvar + status ── */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0" }}>
-              <select className="fc" value={permuta.status} style={{ fontSize: "10px", padding: "5px 10px", margin: 0, width: "auto" }}
+              <select name="permuta_status" className="fc" value={permuta.status} style={{ fontSize: "10px", padding: "5px 10px", margin: 0, width: "auto" }}
                 onChange={e => setPermuta(p => ({ ...p, status: e.target.value as PermutaV2["status"] }))}>
                 <option value="ativo">● Ativo</option>
                 <option value="parcial">◑ Parcial</option>
@@ -936,13 +936,13 @@ export default function InvestimentosPage() {
         <DateInput value={form.data} onChange={v => set(f => ({ ...f, data: v }))} />
       </td>
       <td>
-        <input style={ci} value={form.descricao} placeholder="Descrição *"
+        <input name="descricao" style={ci} value={form.descricao} placeholder="Descrição *"
           autoFocus={isNew}
           onChange={e => set(f => ({ ...f, descricao: e.target.value }))}
           onKeyDown={e => e.key === "Enter" && onSave()} />
       </td>
       <td>
-        <select className="fc" style={{ margin: 0, width: "100%" }} value={form.empresa}
+        <select name="empresa" className="fc" style={{ margin: 0, width: "100%" }} value={form.empresa}
           onChange={e => set(f => ({ ...f, empresa: e.target.value }))}>
           <option value="">Selecione...</option>
           {listaBancos.map(b => <option key={b} value={b}>{b}</option>)}
@@ -953,13 +953,13 @@ export default function InvestimentosPage() {
       </td>
       <td style={{ minWidth: "200px" }}>
         <div style={{ display: "flex", gap: "4px" }}>
-          <select className="fc" style={{ margin: 0, flex: 1 }} value={form.categoria}
+          <select name="categoria" className="fc" style={{ margin: 0, flex: 1 }} value={form.categoria}
             onChange={e => set(f => ({ ...f, categoria: e.target.value, subcategoria: "" }))}>
             <option value="">—</option>
             {listaCats.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           {!semColSubcat && form.categoria && subcatsDe(form.categoria).length > 0 && (
-            <select className="fc" style={{ margin: 0, flex: 1 }} value={form.subcategoria}
+            <select name="subcategoria" className="fc" style={{ margin: 0, flex: 1 }} value={form.subcategoria}
               onChange={e => set(f => ({ ...f, subcategoria: e.target.value }))}>
               <option value="">—</option>
               {subcatsDe(form.categoria).map(s => <option key={s} value={s}>{s}</option>)}
@@ -968,11 +968,11 @@ export default function InvestimentosPage() {
         </div>
       </td>
       <td>
-        <input style={ci} value={form.observacoes} placeholder="Observação..."
+        <input name="observacoes" style={ci} value={form.observacoes} placeholder="Observação..."
           onChange={e => set(f => ({ ...f, observacoes: e.target.value }))} />
       </td>
       <td>
-        <input style={ci} value={form.comprovante_url} placeholder="https://..."
+        <input name="comprovante_url" style={ci} value={form.comprovante_url} placeholder="https://..."
           onChange={e => set(f => ({ ...f, comprovante_url: e.target.value }))} />
       </td>
       <td>{editActions(onSave, onCancel)}</td>
@@ -1104,23 +1104,23 @@ export default function InvestimentosPage() {
               <div style={{ display: "flex", gap: "10px", marginBottom: "14px", flexWrap: "wrap", alignItems: "center" }}>
                 <SearchInput icon={false} className="fc" placeholder="Buscar banco ou descrição..." value={busca}
                   onChange={setBusca} wrapperStyle={{ flex: 1, minWidth: "200px" }} inputStyle={{ margin: 0 }} />
-                <select className="fc" style={{ minWidth: "160px", margin: 0 }} value={filtroBanco} onChange={e => setFiltroBanco(e.target.value)}>
+                <select name="filtro_banco" className="fc" style={{ minWidth: "160px", margin: 0 }} value={filtroBanco} onChange={e => setFiltroBanco(e.target.value)}>
                   <option value="">Todos os bancos</option>
                   {bancos.map(b => <option key={b} value={b}>{b}</option>)}
                 </select>
-                <select className="fc" style={{ minWidth: "170px", margin: 0 }} value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)}>
+                <select name="filtro_categoria" className="fc" style={{ minWidth: "170px", margin: 0 }} value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)}>
                   <option value="">Todas as categorias</option>
                   {categorias.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <span style={{ fontSize: "11px", color: "var(--t3)", whiteSpace: "nowrap" }}>De</span>
-                  <input type="month" lang="pt-BR" className="fc" style={{ minWidth: "140px", margin: 0 }}
+                  <input name="filtro_inicio" type="month" lang="pt-BR" className="fc" style={{ minWidth: "140px", margin: 0 }}
                     min={mesMin} max={mesMax}
                     value={filtroInicio} onChange={e => setFiltroInicio(e.target.value)} />
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <span style={{ fontSize: "11px", color: "var(--t3)", whiteSpace: "nowrap" }}>Até</span>
-                  <input type="month" lang="pt-BR" className="fc" style={{ minWidth: "140px", margin: 0 }}
+                  <input name="filtro_fim" type="month" lang="pt-BR" className="fc" style={{ minWidth: "140px", margin: 0 }}
                     min={mesMin} max={mesMax}
                     value={filtroFim} onChange={e => setFiltroFim(e.target.value)} />
                 </div>
@@ -1292,7 +1292,7 @@ export default function InvestimentosPage() {
                   ))}
                 </div>
                 <div style={{ display: "flex", gap: "6px" }}>
-                  <input className="fc" value={novoBanco} onChange={e => setNovoBanco(e.target.value)}
+                  <input name="novo_banco" className="fc" value={novoBanco} onChange={e => setNovoBanco(e.target.value)}
                     placeholder="Novo banco..." style={{ margin: 0, flex: 1 }}
                     onKeyDown={e => e.key === "Enter" && addOpcao("banco", novoBanco)} />
                   <button className="btn bp sm" onClick={() => addOpcao("banco", novoBanco)} disabled={!novoBanco.trim()}>+</button>
@@ -1344,7 +1344,7 @@ export default function InvestimentosPage() {
                             ))}
                             {!semColSubcat && (
                               <div style={{ display: "flex", gap: "6px", marginTop: "4px" }}>
-                                <input className="fc" value={novaSubcat} onChange={e => setNovaSubcat(e.target.value)}
+                                <input name="nova_subcat" className="fc" value={novaSubcat} onChange={e => setNovaSubcat(e.target.value)}
                                   placeholder="Nova subcategoria..." style={{ margin: 0, flex: 1, fontSize: "12px" }}
                                   onKeyDown={e => e.key === "Enter" && addSubcat(o.valor, novaSubcat)} />
                                 <button className="btn bp sm" onClick={() => addSubcat(o.valor, novaSubcat)} disabled={!novaSubcat.trim()}>+</button>
@@ -1357,7 +1357,7 @@ export default function InvestimentosPage() {
                   })}
                 </div>
                 <div style={{ display: "flex", gap: "6px" }}>
-                  <input className="fc" value={novaCat} onChange={e => setNovaCat(e.target.value)}
+                  <input name="nova_cat" className="fc" value={novaCat} onChange={e => setNovaCat(e.target.value)}
                     placeholder="Nova categoria..." style={{ margin: 0, flex: 1 }}
                     onKeyDown={e => e.key === "Enter" && addOpcao("categoria", novaCat)} />
                   <button className="btn bp sm" onClick={() => addOpcao("categoria", novaCat)} disabled={!novaCat.trim()}>+</button>

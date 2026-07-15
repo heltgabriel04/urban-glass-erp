@@ -55,7 +55,7 @@ export function PromptProvider({ children }: { children: React.ReactNode }) {
               {state.mensagem}
             </p>
             <form onSubmit={(e) => { e.preventDefault(); if (podeConfirmar) responder(valor); }}>
-              <input
+              <input name="valor"
                 className="fc"
                 autoFocus
                 value={valor}

@@ -97,7 +97,7 @@ export default function SetPasswordPage() {
           Defina sua senha para acessar o sistema
         </p>
 
-        <input
+        <input name="password"
           type="password"
           placeholder="Nova senha"
           value={password}
@@ -113,7 +113,7 @@ export default function SetPasswordPage() {
           }}
         />
 
-        <input
+        <input name="confirm_password"
           type="password"
           placeholder="Confirmar senha"
           value={confirmPassword}

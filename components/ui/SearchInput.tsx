@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useId, type CSSProperties } from "react";
 import { X } from "lucide-react";
 
 interface Props {
@@ -19,11 +19,14 @@ interface Props {
 export default function SearchInput({
   value, onChange, placeholder, icon = true, className, wrapperStyle, inputStyle, id,
 }: Props) {
+  const autoId = useId();
+  const inputId = id ?? autoId;
   return (
     <div className={icon ? "tb-search" : undefined} style={{ position: "relative", ...wrapperStyle }}>
       {icon && <span className="tb-search-ic">⌕</span>}
       <input
-        id={id}
+        id={inputId}
+        name={inputId}
         className={className}
         placeholder={placeholder}
         value={value}

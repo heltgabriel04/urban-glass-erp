@@ -89,21 +89,21 @@ function ModalAtivo({ editando, fornecedores, planoContas, usuarioEmail, onSalvo
         <form id="form-ativo-imobilizado" onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px", flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "12px" }}>
             <Campo label="Nº Patrimônio *">
-              <input className="fc" value={form.numero_patrimonio} onChange={(e) => set("numero_patrimonio", e.target.value)} required />
+              <input name="numero_patrimonio" className="fc" value={form.numero_patrimonio} onChange={(e) => set("numero_patrimonio", e.target.value)} required />
             </Campo>
             <Campo label="Descrição *">
-              <input className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} required />
+              <input name="descricao" className="fc" value={form.descricao} onChange={(e) => set("descricao", e.target.value)} required />
             </Campo>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <Campo label="Categoria">
-              <select className="fc" value={form.categoria} onChange={(e) => set("categoria", e.target.value as CategoriaAtivoImobilizado)}>
+              <select name="categoria" className="fc" value={form.categoria} onChange={(e) => set("categoria", e.target.value as CategoriaAtivoImobilizado)}>
                 {CATEGORIAS_ATIVO.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
             </Campo>
             <Campo label="Fornecedor">
-              <select className="fc" value={form.fornecedor_id ?? ""} onChange={(e) => set("fornecedor_id", e.target.value ? Number(e.target.value) : null)}>
+              <select name="fornecedor_id" className="fc" value={form.fornecedor_id ?? ""} onChange={(e) => set("fornecedor_id", e.target.value ? Number(e.target.value) : null)}>
                 <option value="">—</option>
                 {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
               </select>
@@ -112,10 +112,10 @@ function ModalAtivo({ editando, fornecedores, planoContas, usuarioEmail, onSalvo
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <Campo label="Nº da Nota">
-              <input className="fc" value={form.numero_nota ?? ""} onChange={(e) => set("numero_nota", e.target.value || null)} />
+              <input name="numero_nota" className="fc" value={form.numero_nota ?? ""} onChange={(e) => set("numero_nota", e.target.value || null)} />
             </Campo>
             <Campo label="Conta Contábil">
-              <select className="fc" value={form.plano_contas_id ?? ""} onChange={(e) => set("plano_contas_id", e.target.value ? Number(e.target.value) : null)}>
+              <select name="plano_contas_id" className="fc" value={form.plano_contas_id ?? ""} onChange={(e) => set("plano_contas_id", e.target.value ? Number(e.target.value) : null)}>
                 <option value="">—</option>
                 {planoContas.map((p) => <option key={p.id} value={p.id}>{p.codigo_estruturado} — {p.descricao}</option>)}
               </select>
@@ -124,52 +124,52 @@ function ModalAtivo({ editando, fornecedores, planoContas, usuarioEmail, onSalvo
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
             <Campo label="Valor de Aquisição">
-              <input className="fc" type="number" step="0.01" value={form.valor_aquisicao} onChange={(e) => set("valor_aquisicao", Number(e.target.value))} required style={{ fontFamily: "'DM Mono', monospace" }} />
+              <input name="valor_aquisicao" className="fc" type="number" step="0.01" value={form.valor_aquisicao} onChange={(e) => set("valor_aquisicao", Number(e.target.value))} required style={{ fontFamily: "'DM Mono', monospace" }} />
             </Campo>
             <Campo label="Valor Residual">
-              <input className="fc" type="number" step="0.01" value={form.valor_residual} onChange={(e) => set("valor_residual", Number(e.target.value))} style={{ fontFamily: "'DM Mono', monospace" }} />
+              <input name="valor_residual" className="fc" type="number" step="0.01" value={form.valor_residual} onChange={(e) => set("valor_residual", Number(e.target.value))} style={{ fontFamily: "'DM Mono', monospace" }} />
             </Campo>
             <Campo label="Vida Útil (meses)">
-              <input className="fc" type="number" value={form.vida_util_meses} onChange={(e) => set("vida_util_meses", Number(e.target.value))} required style={{ fontFamily: "'DM Mono', monospace" }} />
+              <input name="vida_util_meses" className="fc" type="number" value={form.vida_util_meses} onChange={(e) => set("vida_util_meses", Number(e.target.value))} required style={{ fontFamily: "'DM Mono', monospace" }} />
             </Campo>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <Campo label="Data de Aquisição">
-              <input className="fc" type="date" value={form.data_aquisicao} onChange={(e) => set("data_aquisicao", e.target.value)} required />
+              <input name="data_aquisicao" className="fc" type="date" value={form.data_aquisicao} onChange={(e) => set("data_aquisicao", e.target.value)} required />
             </Campo>
             <Campo label="Garantia Até">
-              <input className="fc" type="date" value={form.garantia_ate ?? ""} onChange={(e) => set("garantia_ate", e.target.value || null)} />
+              <input name="garantia_ate" className="fc" type="date" value={form.garantia_ate ?? ""} onChange={(e) => set("garantia_ate", e.target.value || null)} />
             </Campo>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <Campo label="Localização">
-              <input className="fc" value={form.localizacao ?? ""} onChange={(e) => set("localizacao", e.target.value || null)} />
+              <input name="localizacao" className="fc" value={form.localizacao ?? ""} onChange={(e) => set("localizacao", e.target.value || null)} />
             </Campo>
             <Campo label="Responsável">
-              <input className="fc" value={form.responsavel ?? ""} onChange={(e) => set("responsavel", e.target.value || null)} />
+              <input name="responsavel" className="fc" value={form.responsavel ?? ""} onChange={(e) => set("responsavel", e.target.value || null)} />
             </Campo>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
             <Campo label="XML">
-              <input className="fc" type="file" accept=".xml" onChange={(e) => setXmlFile(e.target.files?.[0] ?? null)} />
+              <input name="set_xml_file" className="fc" type="file" accept=".xml" onChange={(e) => setXmlFile(e.target.files?.[0] ?? null)} />
             </Campo>
             <Campo label="PDF (nota)">
-              <input className="fc" type="file" accept=".pdf" onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)} />
+              <input name="set_pdf_file" className="fc" type="file" accept=".pdf" onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)} />
             </Campo>
             <Campo label="Manual (PDF)">
-              <input className="fc" type="file" accept=".pdf" onChange={(e) => setManualFile(e.target.files?.[0] ?? null)} />
+              <input name="set_manual_file" className="fc" type="file" accept=".pdf" onChange={(e) => setManualFile(e.target.files?.[0] ?? null)} />
             </Campo>
           </div>
 
           <Campo label="Fotos">
-            <input className="fc" type="file" accept="image/*" multiple onChange={(e) => setFotos(Array.from(e.target.files ?? []))} />
+            <input name="set_fotos" className="fc" type="file" accept="image/*" multiple onChange={(e) => setFotos(Array.from(e.target.files ?? []))} />
           </Campo>
 
           <Campo label="Observações">
-            <textarea className="fc" rows={2} value={form.observacoes ?? ""} onChange={(e) => set("observacoes", e.target.value || null)} />
+            <textarea name="observacoes" className="fc" rows={2} value={form.observacoes ?? ""} onChange={(e) => set("observacoes", e.target.value || null)} />
           </Campo>
 
           {editando && (
@@ -271,12 +271,12 @@ export default function AtivoImobilizadoPage() {
       <div className="con">
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <input className="fc" placeholder="Buscar patrimônio ou descrição..." value={busca} onChange={(e) => setBusca(e.target.value)} style={{ width: "220px" }} />
-            <select className="fc" value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value as CategoriaAtivoImobilizado | "")} style={{ width: "200px" }}>
+            <input name="busca" className="fc" placeholder="Buscar patrimônio ou descrição..." value={busca} onChange={(e) => setBusca(e.target.value)} style={{ width: "220px" }} />
+            <select name="filtro_categoria" className="fc" value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value as CategoriaAtivoImobilizado | "")} style={{ width: "200px" }}>
               <option value="">Todas as categorias</option>
               {CATEGORIAS_ATIVO.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
-            <select className="fc" value={filtroAtivo} onChange={(e) => setFiltroAtivo(e.target.value as typeof filtroAtivo)} style={{ width: "120px" }}>
+            <select name="filtro_ativo" className="fc" value={filtroAtivo} onChange={(e) => setFiltroAtivo(e.target.value as typeof filtroAtivo)} style={{ width: "120px" }}>
               <option value="ativos">Ativos</option>
               <option value="inativos">Inativos</option>
               <option value="todos">Todos</option>

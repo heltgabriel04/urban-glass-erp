@@ -257,7 +257,7 @@ export default function ClienteDetalhe() {
             <div style={{ background:"var(--surf2)", border:"1px solid var(--b1)", borderRadius:"8px", padding:"14px 16px", marginBottom:"16px", display:"flex", flexDirection:"column", gap:"10px" }}>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px" }}>
                 <Campo label="Tipo">
-                  <select className="fc" value={novoTipo} onChange={e => setNovoTipo(e.target.value as TipoInteracao)}>
+                  <select name="novo_tipo" className="fc" value={novoTipo} onChange={e => setNovoTipo(e.target.value as TipoInteracao)}>
                     <option value="ligacao">Ligação</option>
                     <option value="email">E-mail</option>
                     <option value="reuniao">Reunião</option>
@@ -269,7 +269,7 @@ export default function ClienteDetalhe() {
                 </Campo>
               </div>
               <Campo label="Descrição">
-                <textarea className="fc" rows={3} value={novaDescricao} onChange={e => setNovaDescricao(e.target.value)} placeholder="O que foi conversado..." />
+                <textarea name="nova_descricao" className="fc" rows={3} value={novaDescricao} onChange={e => setNovaDescricao(e.target.value)} placeholder="O que foi conversado..." />
               </Campo>
               <div style={{ display:"flex", justifyContent:"flex-end" }}>
                 <button className="btn bp sm" onClick={handleCriarInteracao} disabled={salvandoInteracao || !novaDescricao.trim()}>

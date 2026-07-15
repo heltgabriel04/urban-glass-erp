@@ -63,7 +63,7 @@ export default function MetasPage() {
     <AppLayout>
       <div className="tb">
         <div className="tb-title">Metas Financeiras</div>
-        <select className="fc" style={{ margin: 0, width: "110px" }} value={ano} onChange={e => setAno(Number(e.target.value))}>
+        <select name="ano" className="fc" style={{ margin: 0, width: "110px" }} value={ano} onChange={e => setAno(Number(e.target.value))}>
           {[hoje.getFullYear() - 1, hoje.getFullYear(), hoje.getFullYear() + 1].map(a => <option key={a} value={a}>{a}</option>)}
         </select>
       </div>
