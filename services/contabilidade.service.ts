@@ -59,6 +59,18 @@ export async function getProdutosComConfigFiscal(): Promise<ProdutoComConfig[]> 
   return (prods ?? []).map((p) => ({ produto: p as Produto, config: map.get(p.id) ?? null }));
 }
 
+export async function getConfigFiscalProdutos(
+  produtoIds: number[]
+): Promise<Map<number, ConfigFiscalProduto>> {
+  if (produtoIds.length === 0) return new Map();
+  const { data, error } = await supabase
+    .from("config_fiscal_produtos")
+    .select("*")
+    .in("produto_id", produtoIds);
+  if (error) { console.error("getConfigFiscalProdutos:", error); return new Map(); }
+  return new Map((data ?? []).map((c) => [c.produto_id, c as ConfigFiscalProduto]));
+}
+
 export interface ConfigFiscalProdutoInput {
   produto_id: number;
   ncm: string;
