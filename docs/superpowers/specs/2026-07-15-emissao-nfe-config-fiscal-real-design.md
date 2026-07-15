@@ -87,6 +87,22 @@ cadastro fiscal, então esse valor continua vindo do formulário, não do
 `resolverFiscalItem`. Quando omitido (fluxo de `emitirNFe`, que não tem
 campo de IPI hoje), assume `0`.
 
+Internamente, `resolverFiscalItem` é composto de 2 funções menores,
+também exportadas (a tela precisa só da segunda em alguns pontos, ver
+abaixo):
+
+```ts
+export function resolverClassificacaoFiscal(
+  produtoId: number | null, dentroEstado: boolean,
+  configProdutos: Map<number, ConfigFiscalProduto>, configPadrao: ConfigFiscalPadrao
+): { ncm: string; cfop: string; cst: string }
+
+export function calcularTributosItem(
+  valorBruto: number, ipiPct: number, dentroEstado: boolean, configPadrao: ConfigFiscalPadrao
+): { aliq_icms: number; valor_icms: number; aliq_pis: number; valor_pis: number;
+     aliq_cofins: number; valor_cofins: number; aliq_ipi: number; valor_ipi: number }
+```
+
 ## Busca de configuração
 
 Função nova em `services/contabilidade.service.ts`:
@@ -111,17 +127,29 @@ sem mudança.
   `form.itens` prontos, calculados na tela (ver abaixo). Só usa o que vier.
 - **`app/notas/nova/page.tsx`**: `preencherDoPedido` busca a config (mesmo
   padrão acima) e chama `resolverFiscalItem` ao montar `itens` a partir do
-  pedido; `calcItem` para de recalcular ICMS/PIS/COFINS com percentual
-  fixo. `ItemNota` (interface local) ganha o campo `produto_id: number |
-  null`, ausente hoje.
+  pedido, lendo `produto_id` direto de cada `ItemPedido` de origem — não
+  precisa persistir esse campo em `ItemNota` (interface local), porque a
+  classificação (NCM/CFOP/CST) é resolvida uma única vez na criação do
+  item, não recalculada depois. `calcItem`/`atualizarItem` (usados quando
+  o usuário edita valor bruto ou % de IPI na tela) param de recalcular
+  ICMS/PIS/COFINS com percentual fixo — passam a usar `calcularTributosItem`
+  (a metade de `resolverFiscalItem` que não depende de produto, só da
+  configuração padrão), que fica disponível como export próprio de
+  `lib/fiscal.ts` pra esse caso.
 
 ## Tratamento de erro
 
-Se `getConfigPadrao()` ou `getConfigFiscalProdutos()` falhar (rede, RLS), a
-emissão **bloqueia** com mensagem clara ("Não foi possível carregar a
-configuração fiscal. Tente novamente.") — não cai silenciosamente pros
-valores antigos fixos. Mesmo padrão já usado em `validarCliente` (bloqueia
-com mensagem, não deixa passar dado fiscal duvidoso).
+**Revisto durante o plano de implementação** (achado ao olhar o código real
+de `getConfigPadrao`): a função já existente engole erro de rede/RLS e cai
+num fallback (`PADRAO_FALLBACK`, já definida em `services/contabilidade.service.ts`)
+que tem **exatamente os mesmos 7 valores hoje fixos no código** que este
+projeto está substituindo. Não faz sentido inventar um bloqueio novo com
+mensagem de erro quando o fallback já existente reproduz com precisão o
+comportamento atual — falha de rede vira "igual a hoje", nunca pior. Por
+isso: `getConfigPadrao()` não muda; `getConfigFiscalProdutos()` (função
+nova) segue o mesmo padrão — em erro, loga com `console.error` e devolve
+`Map` vazio, o que faz todo item cair no fallback do `configPadrao` (sem
+override por produto), igual ao comportamento de hoje.
 
 ## Fora de escopo
 
