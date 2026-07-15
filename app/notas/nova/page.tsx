@@ -6,6 +6,8 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { getPedidos } from "@/services/pedidos.service";
 import { salvarNotaCompleta, emitirNFeCompleta } from "@/services/notas.service";
+import { getConfigPadrao, getConfigFiscalProdutos, PADRAO_FALLBACK } from "@/services/contabilidade.service";
+import { resolverFiscalItem, calcularTributosItem } from "@/lib/fiscal";
 import EspelhoModal from "@/components/notas/EspelhoModal";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
@@ -13,7 +15,7 @@ import { Campo } from "@/components/ui/Campo";
 import { formatBRL } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
-import type { Pedido, Cliente } from "@/types";
+import type { Pedido, Cliente, ConfigFiscalPadrao } from "@/types";
 
 const FORMAS_PGTO = [
   { cod:"01", label:"Dinheiro" }, { cod:"02", label:"Cheque" },
@@ -31,7 +33,7 @@ function pgtoFromStr(s: string): string {
 }
 
 interface ItemNota {
-  produto_nome:string; ncm:string; cfop:string; unidade:string;
+  produto_nome:string; ncm:string; cfop:string; cst:string; unidade:string;
   quantidade:number; valor_unitario:number; valor_bruto:number;
   ipi_pct:number; icms_pct:number; valor_ipi:number;
   valor_icms:number; valor_pis:number; valor_cofins:number; lapidacao:number;
@@ -60,13 +62,10 @@ const FORM_VAZIO: FormNota = {
   obs_contribuinte:"", obs_internas:"",
 };
 
-function calcItem(item: ItemNota, cfop: string): ItemNota {
-  const aliqIcms = cfop.startsWith("5") ? 18 : 12;
-  const vIpi    = item.valor_bruto * (item.ipi_pct / 100);
-  const vIcms   = item.valor_bruto * (aliqIcms / 100);
-  const vPis    = item.valor_bruto * 0.0165;
-  const vCofins = item.valor_bruto * 0.076;
-  return { ...item, icms_pct:aliqIcms, valor_ipi:vIpi, valor_icms:vIcms, valor_pis:vPis, valor_cofins:vCofins };
+function calcItem(item: ItemNota, cfop: string, configPadrao: ConfigFiscalPadrao): ItemNota {
+  const dentroEstado = cfop.startsWith("5");
+  const t = calcularTributosItem(item.valor_bruto, item.ipi_pct, dentroEstado, configPadrao);
+  return { ...item, icms_pct:t.aliq_icms, valor_ipi:t.valor_ipi, valor_icms:t.valor_icms, valor_pis:t.valor_pis, valor_cofins:t.valor_cofins };
 }
 
 // ── Componente interno que usa useSearchParams ──
@@ -84,6 +83,7 @@ function NovaNFeInner() {
   const [emitindo, setEmitindo]     = useState(false);
   const [loading, setLoading]       = useState(true);
   const [espelho, setEspelho]       = useState(false);
+  const [configPadrao, setConfigPadrao] = useState<ConfigFiscalPadrao>(PADRAO_FALLBACK);
 
   useEffect(() => {
     async function init() {
@@ -105,16 +105,34 @@ function NovaNFeInner() {
     const pedCompleto = (pedData as Pedido|null) ?? p;
     setCliente(cli);
     const cfop = cli?.uf && cli.uf.toUpperCase() !== "MG" ? "6.101" : "5.101";
-    const itens: ItemNota[] = (pedCompleto.itens_pedido ?? []).map(item => {
+    const dentroEstado = cfop.startsWith("5");
+
+    const itensPedido = pedCompleto.itens_pedido ?? [];
+    const produtoIds  = Array.from(new Set(
+      itensPedido.map(item => item.produto_id).filter((id): id is number => id != null)
+    ));
+    const [padrao, configProdutos] = await Promise.all([
+      getConfigPadrao(),
+      getConfigFiscalProdutos(produtoIds),
+    ]);
+    setConfigPadrao(padrao);
+
+    const itens: ItemNota[] = itensPedido.map(item => {
       const qtd    = Number(item.m2) * item.quantidade;
       const vBruto = Number(item.subtotal);
-      return calcItem({
-        produto_nome:item.produto_nome, ncm:"70031200", cfop:cfop.replace(".",""),
+      const fiscal = resolverFiscalItem({
+        produtoId: item.produto_id, valorBruto: vBruto, dentroEstado,
+        configProdutos, configPadrao: padrao,
+      });
+      return {
+        produto_nome:item.produto_nome, ncm:fiscal.ncm, cfop:fiscal.cfop, cst:fiscal.cst,
         unidade:"M2", quantidade:Number(qtd.toFixed(4)),
         valor_unitario: qtd > 0 ? vBruto / qtd : Number(item.valor_m2),
-        valor_bruto:vBruto, ipi_pct:0, icms_pct:0,
-        valor_ipi:0, valor_icms:0, valor_pis:0, valor_cofins:0, lapidacao:Number(item.lapidacao),
-      }, cfop);
+        valor_bruto:vBruto, ipi_pct:0, icms_pct:fiscal.aliq_icms,
+        valor_ipi:fiscal.valor_ipi, valor_icms:fiscal.valor_icms,
+        valor_pis:fiscal.valor_pis, valor_cofins:fiscal.valor_cofins,
+        lapidacao:Number(item.lapidacao),
+      };
     });
     setForm(f => ({
       ...f, pedido_id:p.id, cliente_id:p.cliente_id, cfop_padrao:cfop,
@@ -135,7 +153,7 @@ function NovaNFeInner() {
     setForm(f => {
       const itens = [...f.itens];
       const item  = { ...itens[idx], [campo]:valor };
-      itens[idx]  = (campo === "valor_bruto" || campo === "ipi_pct") ? calcItem(item, f.cfop_padrao) : item;
+      itens[idx]  = (campo === "valor_bruto" || campo === "ipi_pct") ? calcItem(item, f.cfop_padrao, configPadrao) : item;
       return { ...f, itens };
     });
   }
@@ -277,6 +295,7 @@ function NovaNFeInner() {
                     <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:"8px" }}>
                       <Campo label="NCM"><input className="fc" value={item.ncm} onChange={e => atualizarItem(i,"ncm",e.target.value)} maxLength={8} /></Campo>
                       <Campo label="CFOP"><input className="fc" value={item.cfop} onChange={e => atualizarItem(i,"cfop",e.target.value)} maxLength={5} /></Campo>
+                      <Campo label="CST ICMS"><input className="fc" value={item.cst} onChange={e => atualizarItem(i,"cst",e.target.value)} maxLength={2} /></Campo>
                       <Campo label="Unidade"><input className="fc" value={item.unidade} onChange={e => atualizarItem(i,"unidade",e.target.value)} maxLength={6} /></Campo>
                       <Campo label="Quantidade (m²)"><input className="fc" type="number" value={item.quantidade} onChange={e => atualizarItem(i,"quantidade",Number(e.target.value))} /></Campo>
                       <Campo label="Valor Unitário"><CurrencyInput value={item.valor_unitario} onChange={v => atualizarItem(i,"valor_unitario",v)} /></Campo>
