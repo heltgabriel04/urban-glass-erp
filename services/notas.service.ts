@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase/client';
 import type { NotaFiscal, NotaFiscalInsert, Pedido, Cliente } from "@/types";
 import { registrarLog } from './log.service';
+import { getConfigPadrao, getConfigFiscalProdutos } from './contabilidade.service';
+import { resolverFiscalItem } from '@/lib/fiscal';
 
 // ─── HELPERS DE DATA ───────────────────────────────────────
 
@@ -312,11 +314,17 @@ export async function emitirNFe(notaId: number, pedido: Pedido): Promise<{ ok: b
     if (data) pedidoCompleto = data as Pedido;
   }
 
-  const ref       = `UG-${pedido.id}-${notaId}`;
-  const aliqPct   = nota.cfop.startsWith("5") ? 18 : 12;
-  const aliqIcms  = aliqPct / 100;
-  const cfopNum   = nota.cfop.replace(".", "");
-  const dtEmissao = dtBrasilia();
+  const ref          = `UG-${pedido.id}-${notaId}`;
+  const dentroEstado = nota.cfop.startsWith("5");
+  const dtEmissao    = dtBrasilia();
+  const itensPedido  = pedidoCompleto.itens_pedido ?? [];
+  const produtoIds   = Array.from(new Set(
+    itensPedido.map(item => item.produto_id).filter((id): id is number => id != null)
+  ));
+  const [configPadrao, configProdutos] = await Promise.all([
+    getConfigPadrao(),
+    getConfigFiscalProdutos(produtoIds),
+  ]);
 
   const payload: Record<string, unknown> = {
     natureza_operacao:  nota.natureza_op,
@@ -326,16 +334,20 @@ export async function emitirNFe(notaId: number, pedido: Pedido): Promise<{ ok: b
     // Destinatário
     ...montarCamposDestFlat(cliente),
     // Itens
-    items: (pedidoCompleto.itens_pedido ?? []).map((item, i) => {
-      const vItem = Number(item.subtotal);
-      const qtd   = Number(item.m2) * item.quantidade;
-      const vUnit = qtd > 0 ? vItem / qtd : Number(item.valor_m2);
+    items: itensPedido.map((item, i) => {
+      const vItem  = Number(item.subtotal);
+      const qtd    = Number(item.m2) * item.quantidade;
+      const vUnit  = qtd > 0 ? vItem / qtd : Number(item.valor_m2);
+      const fiscal = resolverFiscalItem({
+        produtoId: item.produto_id, valorBruto: vItem, dentroEstado,
+        configProdutos, configPadrao,
+      });
       return {
         numero_item:                  String(i + 1),
         codigo_produto:               item.produto_id?.toString() ?? `ITEM-${String(i+1).padStart(3,"0")}`,
         descricao:                    item.produto_nome,
-        codigo_ncm:                   "70031200",
-        cfop:                         cfopNum,
+        codigo_ncm:                   fiscal.ncm,
+        cfop:                         fiscal.cfop.replace(".", ""),
         unidade_comercial:            "M2",
         quantidade_comercial:         String(Number(qtd.toFixed(4))),
         valor_unitario_comercial:     String(Number(vUnit.toFixed(4))),
@@ -344,20 +356,20 @@ export async function emitirNFe(notaId: number, pedido: Pedido): Promise<{ ok: b
         quantidade_tributavel:        String(Number(qtd.toFixed(4))),
         valor_bruto:                  String(Number(vItem.toFixed(2))),
         ...(item.lapidacao > 0 ? { outras_despesas: String(Number(item.lapidacao.toFixed(2))) } : {}),
-        icms_situacao_tributaria:     "00",
+        icms_situacao_tributaria:     fiscal.cst,
         icms_origem:                  "0",
         icms_modalidade_base_calculo: "3",
         icms_base_calculo:            String(Number(vItem.toFixed(2))),
-        icms_aliquota:                String(aliqPct),
-        icms_valor:                   String(Number((vItem * aliqIcms).toFixed(2))),
+        icms_aliquota:                String(fiscal.aliq_icms),
+        icms_valor:                   String(Number(fiscal.valor_icms.toFixed(2))),
         pis_situacao_tributaria:      "01",
         pis_base_calculo:             String(Number(vItem.toFixed(2))),
-        pis_aliquota_porcentual:      "1.65",
-        pis_valor:                    String(Number((vItem * 0.0165).toFixed(2))),
+        pis_aliquota_porcentual:      String(fiscal.aliq_pis),
+        pis_valor:                    String(Number(fiscal.valor_pis.toFixed(2))),
         cofins_situacao_tributaria:   "01",
         cofins_base_calculo:          String(Number(vItem.toFixed(2))),
-        cofins_aliquota_porcentual:   "7.60",
-        cofins_valor:                 String(Number((vItem * 0.076).toFixed(2))),
+        cofins_aliquota_porcentual:   String(fiscal.aliq_cofins),
+        cofins_valor:                 String(Number(fiscal.valor_cofins.toFixed(2))),
       };
     }),
     // Totais
