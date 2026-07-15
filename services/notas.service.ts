@@ -76,7 +76,7 @@ interface PayloadNota {
   form: {
     pedido_id: string; cliente_id: number | null;
     natureza_op: string; finalidade: string; tipo: string; serie: string; cfop_padrao: string;
-    itens: { produto_nome: string; ncm: string; cfop: string; unidade: string; quantidade: number;
+    itens: { produto_nome: string; ncm: string; cfop: string; cst: string; unidade: string; quantidade: number;
       valor_unitario: number; valor_bruto: number; ipi_pct: number; icms_pct: number;
       valor_ipi: number; valor_icms: number; valor_pis: number; valor_cofins: number; lapidacao: number; }[];
     valor_desconto: number; valor_frete: number; valor_seguro: number; valor_outros: number;
@@ -198,6 +198,8 @@ export async function emitirNFeCompleta(p: PayloadNota): Promise<{ ok: boolean; 
   const erroValidacao = validarCliente(cliente);
   if (erroValidacao) return { ok: false, mensagem: erroValidacao };
 
+  const configPadrao = await getConfigPadrao();
+
   // Salva rascunho primeiro
   const ok = await salvarNotaCompleta(p);
   if (!ok) return { ok: false, mensagem: "Erro ao salvar rascunho antes de emitir." };
@@ -211,7 +213,6 @@ export async function emitirNFeCompleta(p: PayloadNota): Promise<{ ok: boolean; 
 
   const ref        = `UG-${form.pedido_id}-${notaId}`;
   const cfopNum    = form.cfop_padrao.replace(".", "");
-  const aliqPct    = form.cfop_padrao.startsWith("5") ? 18 : 12;
   const dtEmissao  = dtBrasilia();
 
   // Payload no formato flat do FocusNFe — emitente injetado server-side
@@ -238,19 +239,19 @@ export async function emitirNFeCompleta(p: PayloadNota): Promise<{ ok: boolean; 
       quantidade_tributavel:        String(Number(item.quantidade.toFixed(4))),
       valor_bruto:                  String(Number(item.valor_bruto.toFixed(2))),
       ...(item.lapidacao > 0 ? { outras_despesas: String(Number(item.lapidacao.toFixed(2))) } : {}),
-      icms_situacao_tributaria:     "00",
+      icms_situacao_tributaria:     item.cst,
       icms_origem:                  "0",
       icms_modalidade_base_calculo: "3",
       icms_base_calculo:            String(Number(item.valor_bruto.toFixed(2))),
-      icms_aliquota:                String(aliqPct),
+      icms_aliquota:                String(item.icms_pct),
       icms_valor:                   String(Number(item.valor_icms.toFixed(2))),
       pis_situacao_tributaria:      "01",
       pis_base_calculo:             String(Number(item.valor_bruto.toFixed(2))),
-      pis_aliquota_porcentual:      "1.65",
+      pis_aliquota_porcentual:      String(configPadrao.aliq_pis),
       pis_valor:                    String(Number(item.valor_pis.toFixed(2))),
       cofins_situacao_tributaria:   "01",
       cofins_base_calculo:          String(Number(item.valor_bruto.toFixed(2))),
-      cofins_aliquota_porcentual:   "7.60",
+      cofins_aliquota_porcentual:   String(configPadrao.aliq_cofins),
       cofins_valor:                 String(Number(item.valor_cofins.toFixed(2))),
       ...(item.ipi_pct > 0 ? {
         ipi_situacao_tributaria: "50",
