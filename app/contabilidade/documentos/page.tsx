@@ -385,6 +385,7 @@ export default function DocumentosFiscaisPage() {
   };
 
   const mostraNovo = aba !== "saida" && aba !== "perda_vidro";
+  const mostraSeletorCompetencia = aba !== "perda_vidro";
 
   return (
     <AppLayout>
@@ -424,10 +425,14 @@ export default function DocumentosFiscaisPage() {
             ))}
           </div>
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            <select name="mes" className="fc" value={mes} onChange={(e) => setMes(Number(e.target.value))} style={{ width: "140px" }}>
-              {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-            </select>
-            <input name="ano" className="fc" type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} style={{ width: "90px" }} />
+            {mostraSeletorCompetencia && (
+              <>
+                <select name="mes" className="fc" value={mes} onChange={(e) => setMes(Number(e.target.value))} style={{ width: "140px" }}>
+                  {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                </select>
+                <input name="ano" className="fc" type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} style={{ width: "90px" }} />
+              </>
+            )}
             {mostraNovo && (
               <button className="btn bp sm" onClick={() => { setEditando(null); setValoresIniciaisModal(undefined); setModalAberto(tipoModalAtivo); }}>
                 + Novo
