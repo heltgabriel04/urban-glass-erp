@@ -11,9 +11,9 @@ import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
 import { salvarOtimizacao } from "@/services/otimizador.service";
 import { updatePedido } from "@/services/pedidos.service";
-import { salvarRetalhos } from "@/services/estoque.service";
+import { getEstoque, salvarRetalhos } from "@/services/estoque.service";
 import { registrarMovimentacao, reverterMovimentacao } from "@/services/estoqueMovimentacoes.service";
-import type { Produto, Retalho } from "@/types";
+import type { Produto, Retalho, OtimizacaoPerdaDetalheInsert } from "@/types";
 import { CHAPAS_PADRAO, PRODUTO_CHAPA, isChapaInteira } from "@/lib/chapas";
 import {
   empacotar, empacotarTodas, calcAproveitamento, derivarCortes,
@@ -782,10 +782,12 @@ function OtimizadorContent() {
     // O plano é salvo em historico_otimizador (o delete apontava pra tabela
     // "otimizacoes", que não existe/não é usada — o plano nunca era apagado).
     await supabase.from("historico_otimizador").delete().eq("pedido_id", pedidoRef);
+    await supabase.from("otimizacao_perda_detalhe").delete().eq("pedido_id", pedidoRef);
     await reverterMovimentacao("otimizacao", pedidoRef);
     await updatePedido(pedidoRef, { status: "Aguardando otimização" });
     for (const pid of pedidosSelecionados) {
       await supabase.from("historico_otimizador").delete().eq("pedido_id", pid);
+      await supabase.from("otimizacao_perda_detalhe").delete().eq("pedido_id", pid);
       await reverterMovimentacao("otimizacao", pid);
       await updatePedido(pid, { status: "Aguardando otimização" });
     }
@@ -851,6 +853,49 @@ function OtimizadorContent() {
       } else if (res.alertaMinimo) {
         toast(res.alertaMensagem ?? "", "warn");
       }
+    }
+    // Detalhe de perda de otimização por produto — uma vez por rodada, não
+    // por pedido (rodada pode combinar vários pedidos; chapas_json duplica
+    // as mesmas chapas em cada linha de historico_otimizador por pedido).
+    const estoqueAtual = await getEstoque();
+    const custoPorProdId = new Map<number, number>();
+    for (const e of estoqueAtual) {
+      if (e.produto_id != null) custoPorProdId.set(e.produto_id, Number(e.custo_m2) || 0);
+    }
+
+    const perdaPorProd = new Map<string, { bruta: number; pecas: number; retalhos: number }>();
+    resultado.forEach(r => {
+      const prev = perdaPorProd.get(r.prod) ?? { bruta: 0, pecas: 0, retalhos: 0 };
+      prev.bruta += (r.W * r.H) / 1e6;
+      prev.pecas += r.placed.reduce((a: number, p: any) => a + (p.l * p.a) / 1e6, 0);
+      perdaPorProd.set(r.prod, prev);
+    });
+    retalhosGerados.forEach(fr => {
+      const prev = perdaPorProd.get(fr.prod) ?? { bruta: 0, pecas: 0, retalhos: 0 };
+      prev.retalhos += fr.m2;
+      perdaPorProd.set(fr.prod, prev);
+    });
+
+    const perdaDetalhe: OtimizacaoPerdaDetalheInsert[] = Array.from(perdaPorProd.entries()).map(([prodNome, v]) => {
+      const produtoId = produtos.find(pr => pr.nome === prodNome)?.id ?? null;
+      const m2Perda = parseFloat((v.bruta - v.pecas - v.retalhos).toFixed(4));
+      if (Math.abs(m2Perda) > 0.01 && v.bruta === 0) {
+        console.warn(`Perda de otimização suspeita para "${prodNome}": bruta=0 mas pecas/retalhos > 0.`);
+      }
+      return {
+        pedido_id: pedidoRef,
+        produto_id: produtoId,
+        produto_nome: prodNome,
+        m2_bruta_chapas: parseFloat(v.bruta.toFixed(4)),
+        m2_pecas: parseFloat(v.pecas.toFixed(4)),
+        m2_retalhos: parseFloat(v.retalhos.toFixed(4)),
+        m2_perda: m2Perda,
+        custo_m2: produtoId != null ? (custoPorProdId.get(produtoId) ?? null) : null,
+        dt_otim: hoje,
+      };
+    });
+    if (perdaDetalhe.length > 0) {
+      await supabase.from("otimizacao_perda_detalhe").insert(perdaDetalhe as never);
     }
     router.push("/pedidos/" + pedidoRef);
   }
