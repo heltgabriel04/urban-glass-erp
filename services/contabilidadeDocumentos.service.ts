@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase/client";
-import type { DocumentoFiscal, DocumentoFiscalInsert } from "@/types";
+import type { DocumentoFiscal, DocumentoFiscalInsert, PerdaMensalVidro } from "@/types";
 import { registrarLog } from "./log.service";
 
 const BUCKET = "contabilidade-anexos";
@@ -123,4 +123,18 @@ export async function uploadAnexoDocumentoFiscal(
   if (error) { console.error("uploadAnexoDocumentoFiscal:", error); return null; }
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return data.publicUrl;
+}
+
+export async function getPerdaMensalVidro(): Promise<PerdaMensalVidro[]> {
+  const desde = new Date();
+  desde.setDate(1);
+  desde.setMonth(desde.getMonth() - 11);
+  const { data, error } = await supabase
+    .from("vw_perda_mensal_vidro")
+    .select("*")
+    .gte("mes_referencia", desde.toISOString().slice(0, 10))
+    .order("mes_referencia", { ascending: false })
+    .order("m2_perda_total", { ascending: false });
+  if (error) { console.error("getPerdaMensalVidro:", error); return []; }
+  return data as PerdaMensalVidro[];
 }

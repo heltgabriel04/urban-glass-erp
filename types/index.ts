@@ -678,6 +678,22 @@ export interface OtimizacaoPerdaDetalhe {
 
 export type OtimizacaoPerdaDetalheInsert = Omit<OtimizacaoPerdaDetalhe, 'id' | 'created_at'>;
 
+// Espelha as colunas de `vw_perda_mensal_vidro` (view, não tabela —
+// ver sql/controle-perda-vidro.sql). mes_referencia vem como string
+// ISO (date_trunc no mês); tratar sempre via slice(0, 7) = "YYYY-MM".
+export interface PerdaMensalVidro {
+  produto_id: number | null;
+  produto_nome: string;
+  mes_referencia: string;
+  m2_perda_otimizacao: number;
+  valor_perda_otimizacao: number;
+  m2_perda_incidente: number;
+  valor_perda_incidente: number;
+  m2_perda_total: number;
+  valor_perda_total: number;
+  m2_retalho_salvo: number;
+}
+
 // ─── NOTA FISCAL ───────────────────────────────────────────
 export interface NotaFiscal {
   id: number;
