@@ -121,3 +121,4 @@ que é a ordem real em que foram escritos e (presumivelmente) rodados.
 | 2026-07-16 | `sql/rbac-comercial-operacional.sql` | Novo papel "comercial_operacional" (acesso restrito, sem financeiro) | ✅ |
 | 2026-07-16 | `sql/controle-perda-vidro.sql` | Controle de Perda de Vidro — quebras.produto_id, otimizacao_perda_detalhe, vw_perda_mensal_vidro | ⏳ |
 | 2026-07-16 | `sql/ajuste-p002.sql` | Ajuste pontual de dados — remove 2 lançamentos "A Receber" órfãos do pedido P-002 | ✅ |
+| 2026-07-16 | `sql/ajuste-metro-linear-para-m2.sql` | Ajuste pontual de dados — converte 11 pedidos (33 itens) de metro linear R$15/ml para m² real R$60/m² | ⏳ |
