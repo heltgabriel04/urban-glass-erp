@@ -9,6 +9,7 @@ import { createPedido, getProximoIdPedido, getPedidoById } from "@/services/pedi
 import { criarLancamentosParcelados } from "@/services/financeiro.service";
 import { getFormasPagamento } from "@/services/formasPagamento.service";
 import { formatBRL, formatM2 } from "@/lib/formatters";
+import { ALIQ_IPI_PEDIDO, calcularValorIpi } from "@/lib/pedidoIpi";
 import { useToast } from "@/components/ui/toast";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
@@ -132,6 +133,7 @@ function NovoPedidoPageInner() {
   const [conta, setConta]           = useState("");
   const [parcelas, setParcelas]     = useState(1);
   const [obs, setObs]               = useState("");
+  const [temIpi, setTemIpi]         = useState(false);
   const [itens, setItens]           = useState<ItemForm[]>([{ ...ITEM_VAZIO }]);
   const [loading, setLoading]       = useState(true);
   const [salvando, setSalvando]     = useState(false);
@@ -225,6 +227,8 @@ function NovoPedidoPageInner() {
 
   const m2Total    = itens.reduce((a, i) => a + calcM2Item(i), 0);
   const valorTotal = itens.reduce((a, i) => a + calcSubtotal(i), 0);
+  const valorIpi   = temIpi ? calcularValorIpi(valorTotal) : 0;
+  const valorComIpiCalc = valorTotal + valorIpi;
   const todosVidroCliente = itens.length > 0 && itens.every(i => i.vidro_cliente);
   const algumVidroCliente = itens.some(i => i.vidro_cliente);
 
@@ -239,13 +243,13 @@ function NovoPedidoPageInner() {
         conta:     prev[i]?.conta     ?? defaultConta,
         formaPgto: prev[i]?.formaPgto ?? defaultForma,
       }));
-      return redistribuirParcelas(novas, valorTotal);
+      return redistribuirParcelas(novas, valorComIpiCalc);
     });
   }, [parcelas]);
 
   useEffect(() => {
-    setParcelasForm(prev => redistribuirParcelas(prev, valorTotal));
-  }, [valorTotal]);
+    setParcelasForm(prev => redistribuirParcelas(prev, valorComIpiCalc));
+  }, [valorComIpiCalc]);
 
   function handlePrimeiraDtPgto(data: string) {
     setParcelasForm(prev => prev.map((p, i) => ({
@@ -260,7 +264,7 @@ function NovoPedidoPageInner() {
   function handleValorParcela(idx: number, valor: number) {
     setParcelasForm(prev => {
       const atualizado = prev.map((p, i) => i === idx ? { ...p, valor, editado: true } : p);
-      return redistribuirParcelas(atualizado, valorTotal, idx);
+      return redistribuirParcelas(atualizado, valorComIpiCalc, idx);
     });
   }
 
@@ -407,13 +411,13 @@ function NovoPedidoPageInner() {
   }
 
   const somaParcelas = parcelasForm.reduce((a, p) => a + p.valor, 0);
-  const difParcelas  = Math.abs(somaParcelas - valorTotal);
+  const difParcelas  = Math.abs(somaParcelas - valorComIpiCalc);
   const parcelasOk   = difParcelas < 0.02;
 
   async function salvar() {
     if (!clienteId) { toast("Selecione um cliente", "err"); return; }
     if (itens.some(i => i.largura === 0 || i.altura === 0)) { toast("Preencha as dimensões de todos os itens", "err"); return; }
-    if (!parcelasOk) { toast(`Soma das parcelas (${formatBRL(somaParcelas)}) difere do total (${formatBRL(valorTotal)})`, "err"); return; }
+    if (!parcelasOk) { toast(`Soma das parcelas (${formatBRL(somaParcelas)}) difere do total (${formatBRL(valorComIpiCalc)})`, "err"); return; }
 
     setSalvando(true);
     try {
@@ -429,6 +433,8 @@ function NovoPedidoPageInner() {
         valores_pgto: parcelasForm.filter(p => p.data && p.valor > 0).map(p => p.valor),
         m2_total: m2Total,
         valor_total: valorTotal,
+        tem_ipi: temIpi,
+        valor_ipi: valorIpi,
         valor_recebido: 0,
         status: todosChapa ? "Em Produção – Corte" : "Aguardando otimização",
         forma_pgto: parcelasForm[0]?.formaPgto || formaPgto,
@@ -552,11 +558,17 @@ function NovoPedidoPageInner() {
             <div style={{ marginTop: "14px", borderTop: "1px solid var(--b1)", paddingTop: "14px" }}>
               <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, marginBottom: "12px", letterSpacing: ".06em" }}>FINANCEIRO</div>
 
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", fontSize: "12px", color: "var(--t2)", cursor: "pointer" }}>
+                <input name="tem_ipi" type="checkbox" checked={temIpi} onChange={e => setTemIpi(e.target.checked)} />
+                Tem IPI ({ALIQ_IPI_PEDIDO}%)
+                {temIpi && <span style={{ fontFamily: "'DM Mono',monospace", color: "var(--warn)", marginLeft: "4px" }}>— {formatBRL(valorIpi)}</span>}
+              </label>
+
               {/* 3 boxes */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "12px" }}>
                 <div style={{ background: "var(--surf2)", borderRadius: "8px", padding: "10px 12px", border: "1px solid var(--b2)" }}>
                   <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: "4px" }}>Total</div>
-                  <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--acc)", fontFamily: "'DM Mono',monospace" }}>{formatBRL(valorTotal)}</div>
+                  <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--acc)", fontFamily: "'DM Mono',monospace" }}>{formatBRL(valorComIpiCalc)}</div>
                 </div>
                 <div style={{ background: "var(--surf2)", borderRadius: "8px", padding: "10px 12px", border: "1px solid var(--b2)" }}>
                   <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: "4px" }}>m² Total</div>
@@ -567,7 +579,7 @@ function NovoPedidoPageInner() {
                     {parcelas > 1 ? `${parcelas}× Parcelas` : "Pagamento"}
                   </div>
                   <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--t1)", fontFamily: "'DM Mono',monospace" }}>
-                    {parcelas > 1 ? formatBRL(valorTotal / parcelas) : (parcelasForm[0]?.formaPgto || formaPgto || "—")}
+                    {parcelas > 1 ? formatBRL(valorComIpiCalc / parcelas) : (parcelasForm[0]?.formaPgto || formaPgto || "—")}
                   </div>
                 </div>
               </div>
@@ -616,9 +628,9 @@ function NovoPedidoPageInner() {
                     </div>
                   ))}
                 </div>
-                {valorTotal > 0 && !parcelasOk && (
+                {valorComIpiCalc > 0 && !parcelasOk && (
                   <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--warn)", fontFamily: "'DM Mono',monospace", background: "rgba(245,158,11,.08)", border: "1px solid rgba(245,158,11,.25)", borderRadius: "6px", padding: "6px 10px" }}>
-                    ⚠ Soma das parcelas ({formatBRL(somaParcelas)}) difere do total ({formatBRL(valorTotal)})
+                    ⚠ Soma das parcelas ({formatBRL(somaParcelas)}) difere do total ({formatBRL(valorComIpiCalc)})
                   </div>
                 )}
               </div>
@@ -648,8 +660,8 @@ function NovoPedidoPageInner() {
                 </div>
               </div>
             )}
-            <div className="sr"><div className="sl">Valor Total</div><div className="sv" style={{ color: "var(--acc)", fontSize: "18px" }}>{formatBRL(valorTotal)}</div></div>
-            {parcelas > 1 && <div className="sr"><div className="sl">Por Parcela</div><div className="sv">{formatBRL(valorTotal / parcelas)}</div></div>}
+            <div className="sr"><div className="sl">Valor Total</div><div className="sv" style={{ color: "var(--acc)", fontSize: "18px" }}>{formatBRL(valorComIpiCalc)}</div></div>
+            {parcelas > 1 && <div className="sr"><div className="sl">Por Parcela</div><div className="sv">{formatBRL(valorComIpiCalc / parcelas)}</div></div>}
             {clienteId && tab && tab.min > 0 && valorTotal < tab.min && (
               <div className="al al-w" style={{ marginTop: "10px" }}>⚠ Pedido abaixo do mínimo de {formatBRL(tab.min)}</div>
             )}
@@ -846,7 +858,7 @@ function NovoPedidoPageInner() {
             <div className="ti"><div className="tl">m² Total</div><div className="tv" style={{ color: "var(--acc2)" }}>{formatM2(m2Total)}</div></div>
             {isMl && <div className="ti"><div className="tl">ML Total</div><div className="tv" style={{ color: "#818cf8" }}>{itens.reduce((a, i) => a + calcMLItem(i), 0).toFixed(3)} ml</div></div>}
             {algumVidroCliente && <div className="ti"><div className="tl">Vidro Cliente</div><div className="tv" style={{ color: "var(--warn)" }}>{itens.filter(i => i.vidro_cliente).length} item(s)</div></div>}
-            <div className="ti"><div className="tl">Valor Total</div><div className="tv" style={{ color: "var(--acc)" }}>{formatBRL(valorTotal)}</div></div>
+            <div className="ti"><div className="tl">Valor Total</div><div className="tv" style={{ color: "var(--acc)" }}>{formatBRL(valorComIpiCalc)}</div></div>
           </div>
         </div>
       </div>

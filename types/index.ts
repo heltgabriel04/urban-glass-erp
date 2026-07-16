@@ -273,6 +273,8 @@ export interface Pedido {
   valores_pgto: number[];
   m2_total: number;
   valor_total: number;
+  tem_ipi: boolean;
+  valor_ipi: number;
   valor_recebido: number;
   status: StatusPedido;
   forma_pgto: string;
