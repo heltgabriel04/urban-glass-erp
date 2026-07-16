@@ -895,7 +895,8 @@ function OtimizadorContent() {
       };
     });
     if (perdaDetalhe.length > 0) {
-      await supabase.from("otimizacao_perda_detalhe").insert(perdaDetalhe as never);
+      const { error: perdaError } = await supabase.from("otimizacao_perda_detalhe").insert(perdaDetalhe as never);
+      if (perdaError) console.error("otimizacao_perda_detalhe insert:", perdaError);
     }
     router.push("/pedidos/" + pedidoRef);
   }
