@@ -92,6 +92,23 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // RBAC: perfil "comercial_operacional" só vê Comercial + Operação +
+  // Cadastros operacionais — sem Dashboard/Financeiro/Contabilidade/Relatórios
+  // (inclui os 4 itens de config financeira que moram no grupo Cadastros).
+  if (role === "comercial_operacional") {
+    const permitidas = [
+      "/orcamentos", "/pedidos",
+      "/otimizador", "/programacao", "/producao", "/compras", "/estoque", "/retalhos", "/qualidade",
+      "/clientes", "/vendedores", "/fornecedores", "/produtos", "/tabelas",
+    ];
+    const podeAcessar = permitidas.some(p => pathname === p || pathname.startsWith(p + "/"));
+    if (!podeAcessar) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/pedidos";
+      return NextResponse.redirect(url);
+    }
+  }
+
   return response;
 }
 

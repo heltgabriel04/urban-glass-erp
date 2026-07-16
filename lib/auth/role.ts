@@ -1,8 +1,8 @@
 // Lê o claim user_role do JWT do Supabase (injetado por hook no banco).
 // Fail-safe: na dúvida, "visitante" (menor privilégio), nunca "admin".
-export type Role = "admin" | "producao" | "visitante" | "financeiro";
+export type Role = "admin" | "producao" | "visitante" | "financeiro" | "comercial_operacional";
 
-const ROLES: Role[] = ["admin", "producao", "visitante", "financeiro"];
+const ROLES: Role[] = ["admin", "producao", "visitante", "financeiro", "comercial_operacional"];
 
 export function roleFromJwt(accessToken: string | undefined | null): Role {
   if (!accessToken) return "visitante";
