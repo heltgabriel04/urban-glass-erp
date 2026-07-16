@@ -65,12 +65,12 @@ perda_incidente as (
 ),
 retalho_salvo as (
   select
-    r.produto_id, p.nome as produto_nome,
+    coalesce(r.produto_id, p.id) as produto_id, p.nome as produto_nome,
     date_trunc('month', r.dt_gerado) as mes_referencia,
     sum(r.m2) as m2_retalho_salvo
   from retalhos r
-  join produtos p on p.id = r.produto_id
-  group by r.produto_id, p.nome, 3
+  join produtos p on p.id = r.produto_id or p.nome = r.produto_nome
+  group by coalesce(r.produto_id, p.id), p.nome, 3
 )
 select
   coalesce(o.produto_id, i.produto_id, s.produto_id)     as produto_id,
