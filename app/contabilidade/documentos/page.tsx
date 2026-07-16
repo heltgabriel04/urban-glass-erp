@@ -369,6 +369,12 @@ export default function DocumentosFiscaisPage() {
     if (ok) load();
   }
 
+  function handleGerarNfMes(grupo: GrupoMesPerdaVidro) {
+    setEditando(null);
+    setValoresIniciaisModal(montarPrefillNfMes(grupo.itens));
+    setModalAberto("perda");
+  }
+
   const tipoModalAtivo: TipoDocumentoFiscal = aba === "cancelamentos" ? "cancelamento" : (aba as TipoDocumentoFiscal);
   const tituloModal: Record<TipoDocumentoFiscal, string> = {
     compra: editando ? "Editar NF Compra/Entrada" : "Nova NF Compra/Entrada",
@@ -392,14 +398,15 @@ export default function DocumentosFiscaisPage() {
           tipo={modalAberto}
           titulo={tituloModal[modalAberto]}
           editando={editando}
+          valoresIniciais={valoresIniciaisModal}
           ano={ano}
           mes={mes}
           fornecedores={fornecedores}
           notasVenda={notasVenda}
           itensEstoque={itensEstoque}
           usuarioEmail={usuarioEmail}
-          onSalvo={() => { setModalAberto(null); setEditando(null); load(); }}
-          onFechar={() => { setModalAberto(null); setEditando(null); }}
+          onSalvo={() => { setModalAberto(null); setEditando(null); setValoresIniciaisModal(undefined); load(); }}
+          onFechar={() => { setModalAberto(null); setEditando(null); setValoresIniciaisModal(undefined); }}
         />
       )}
 
@@ -422,7 +429,7 @@ export default function DocumentosFiscaisPage() {
             </select>
             <input name="ano" className="fc" type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} style={{ width: "90px" }} />
             {mostraNovo && (
-              <button className="btn bp sm" onClick={() => { setEditando(null); setModalAberto(tipoModalAtivo); }}>
+              <button className="btn bp sm" onClick={() => { setEditando(null); setValoresIniciaisModal(undefined); setModalAberto(tipoModalAtivo); }}>
                 + Novo
               </button>
             )}
@@ -435,6 +442,8 @@ export default function DocumentosFiscaisPage() {
           <SecaoSaida resumo={resumoSaida} />
         ) : aba === "cancelamentos" ? (
           <SecaoCancelamentos itens={canceladas} />
+        ) : aba === "perda_vidro" ? (
+          <SecaoPerdaVidro itens={perdaVidro} onGerarNf={handleGerarNfMes} />
         ) : (
           <SecaoDocumentos
             aba={aba}
@@ -590,6 +599,52 @@ function SecaoCancelamentos({ itens }: { itens: NotaCancelada[] }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ─── Seção: Perda de Vidro (mensal, agregada da view) ───────
+function SecaoPerdaVidro({ itens, onGerarNf }: {
+  itens: PerdaMensalVidro[];
+  onGerarNf: (grupo: GrupoMesPerdaVidro) => void;
+}) {
+  const grupos = agruparPorMes(itens);
+
+  if (grupos.length === 0) {
+    return <div className="card" style={{ padding: "40px", textAlign: "center", color: "var(--t3)" }}>Nenhuma perda registrada nos últimos 12 meses.</div>;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+      {grupos.map((grupo) => (
+        <div key={grupo.chaveMs}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--t1)" }}>{grupo.label}</div>
+            <button className="btn bg sm" onClick={() => onGerarNf(grupo)}>Gerar NF do mês</button>
+          </div>
+          <div className="tw">
+            <table>
+              <thead>
+                <tr><th>Tipo de Vidro</th><th>m² Perdido</th><th>Valor Perdido</th></tr>
+              </thead>
+              <tbody>
+                {grupo.itens.map((item) => (
+                  <tr key={`${grupo.chaveMs}-${item.produto_id ?? item.produto_nome}`}>
+                    <td>{item.produto_nome}</td>
+                    <td className="mono">{formatM2(item.m2_perda_total)}</td>
+                    <td className="mono">{formatBRL(item.valor_perda_total)}</td>
+                  </tr>
+                ))}
+                <tr style={{ fontWeight: 700 }}>
+                  <td>Total do mês</td>
+                  <td className="mono">{formatM2(grupo.m2Total)}</td>
+                  <td className="mono">{formatBRL(grupo.valorTotal)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
