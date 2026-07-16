@@ -57,6 +57,7 @@ interface ModalDocProps {
   tipo: TipoDocumentoFiscal;
   titulo: string;
   editando: DocumentoFiscal | null;
+  valoresIniciais?: Partial<DocumentoFiscalInsert>;
   ano: number;
   mes: number;
   fornecedores: Fornecedor[];
@@ -67,9 +68,9 @@ interface ModalDocProps {
   onFechar: () => void;
 }
 
-function ModalDocumento({ tipo, titulo, editando, ano, mes, fornecedores, notasVenda, itensEstoque, usuarioEmail, onSalvo, onFechar }: ModalDocProps) {
+function ModalDocumento({ tipo, titulo, editando, valoresIniciais, ano, mes, fornecedores, notasVenda, itensEstoque, usuarioEmail, onSalvo, onFechar }: ModalDocProps) {
   const { toast } = useToast();
-  const base = editando ?? docVazio(tipo, ano, mes);
+  const base = editando ?? { ...docVazio(tipo, ano, mes), ...valoresIniciais };
   const [form, setForm] = useState<DocumentoFiscalInsert>({ ...base });
   // Só ajuda a pré-preencher o NCM a partir do cadastro do item — não é
   // salvo no documento fiscal (que não tem vínculo a item de estoque),
