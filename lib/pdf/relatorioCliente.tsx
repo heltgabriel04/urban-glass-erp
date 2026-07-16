@@ -158,7 +158,7 @@ export function RelatorioClienteDocument({ dados }: { dados: RelatorioClienteDad
         </View>
 
         {dados.pedidos.length === 0 ? (
-          <Text style={styles.label}>Nenhum pedido registrado para este cliente.</Text>
+          <Text style={styles.label}>Nenhum pedido em aberto no momento.</Text>
         ) : (
           dados.pedidos.map((pr) => {
             const { pedido, totalComIpi, quitado, parcelasPendentes } = pr;

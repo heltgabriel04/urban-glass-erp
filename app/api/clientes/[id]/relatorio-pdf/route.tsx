@@ -75,10 +75,15 @@ export async function GET(
   const totalAberto = totalFaturado - totalRecebido;
   const ticketMedio = pedidos.length > 0 ? totalFaturado / pedidos.length : 0;
 
+  // KPIs refletem o histórico completo do cliente; a listagem detalhada
+  // abaixo, por pedido, so pedidos ainda em aberto — pedidos quitados
+  // não precisam constar no relatório enviado ao cliente.
+  const pedidosEmAberto = pedidos.filter((p) => !p.quitado);
+
   const dados: RelatorioClienteDados = {
     cliente: cliente as Cliente,
     totalFaturado, totalRecebido, totalAberto, ticketMedio,
-    pedidos,
+    pedidos: pedidosEmAberto,
   };
 
   const buffer = await renderToBuffer(<RelatorioClienteDocument dados={dados} />);
