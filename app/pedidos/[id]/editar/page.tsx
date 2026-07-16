@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/client";
 import { getPedidoById, updatePedido, recalcularRecebido } from "@/services/pedidos.service";
 import { getLancamentosPorPedido } from "@/services/financeiro.service";
 import { formatBRL, formatM2 } from "@/lib/formatters";
+import { ALIQ_IPI_PEDIDO, calcularValorIpi, valorComIpi } from "@/lib/pedidoIpi";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
@@ -111,6 +112,7 @@ export default function EditarPedidoPage() {
   const [conta, setConta]           = useState("");
   const [parcelas, setParcelas]     = useState(1);
   const [obs, setObs]               = useState("");
+  const [temIpi, setTemIpi]         = useState(false);
   const [itens, setItens]           = useState<ItemForm[]>([]);
   const [itensDeletados, setItensDeletados] = useState<number[]>([]);
   const [modoPedido, setModoPedido] = useState<ModoPedido>("m2");
@@ -153,6 +155,7 @@ export default function EditarPedidoPage() {
     setConta(pedido.conta ?? "");
     setParcelas(pedido.parcelas ?? 1);
     setObs(pedido.obs ?? "");
+    setTemIpi(pedido.tem_ipi ?? false);
 
     // Detectar modo ML: se todos os itens são vidro_cliente ou produto ml
     const rawItens = (pedido.itens_pedido ?? []) as any[];
@@ -192,7 +195,7 @@ export default function EditarPedidoPage() {
       const datas = pedido.datas_pgto ?? [];
       const vals  = pedido.valores_pgto ?? [];
       setParcelasForm(Array.from({ length: n }, (_, i) => ({
-        data: datas[i] ?? "", valor: vals[i] ?? parseFloat((pedido.valor_total / n).toFixed(2)), editado: false,
+        data: datas[i] ?? "", valor: vals[i] ?? parseFloat((valorComIpi(pedido) / n).toFixed(2)), editado: false,
       })));
     }
 
@@ -218,16 +221,18 @@ export default function EditarPedidoPage() {
 
   const m2Total    = itens.reduce((a, i) => a + calcM2Item(i), 0);
   const valorTotal = itens.reduce((a, i) => a + calcSubtotal(i), 0);
+  const valorIpi   = temIpi ? calcularValorIpi(valorTotal) : 0;
+  const valorComIpiCalc = valorTotal + valorIpi;
   const todosVC    = itens.length > 0 && itens.every(i => i.vidro_cliente);
   const algumVC    = itens.some(i => i.vidro_cliente);
 
   // Redistribuir parcelas quando total muda
   useEffect(() => {
-    setParcelasForm(prev => redistribuirParcelas(prev, valorTotal));
-  }, [valorTotal]);
+    setParcelasForm(prev => redistribuirParcelas(prev, valorComIpiCalc));
+  }, [valorComIpiCalc]);
 
   const somaParcelas = parcelasForm.reduce((a, p) => a + p.valor, 0);
-  const difParcelas  = Math.abs(somaParcelas - valorTotal);
+  const difParcelas  = Math.abs(somaParcelas - valorComIpiCalc);
   const parcelasOk   = difParcelas < 0.02;
 
   // ── tabela de preços ─────────────────────────────────────────────
@@ -348,7 +353,7 @@ export default function EditarPedidoPage() {
         data: primeiraData ? (i === 0 ? primeiraData : addMeses(primeiraData, i)) : "",
         valor: 0, editado: false,
       })),
-      valorTotal,
+      valorComIpiCalc,
     ));
   }
 
@@ -365,7 +370,7 @@ export default function EditarPedidoPage() {
   function handleValorParcela(idx: number, valor: number) {
     setParcelasForm(prev => {
       const atualizado = prev.map((p, i) => i === idx ? { ...p, valor, editado: true } : p);
-      return redistribuirParcelas(atualizado, valorTotal, idx);
+      return redistribuirParcelas(atualizado, valorComIpiCalc, idx);
     });
   }
 
@@ -374,7 +379,7 @@ export default function EditarPedidoPage() {
   async function salvar() {
     if (!clienteId) { toast("Selecione um cliente", "err"); return; }
     if (itens.some(i => i.largura === 0 || i.altura === 0)) { toast("Preencha as dimensões de todos os itens", "err"); return; }
-    if (!parcelasOk) { toast(`Soma das parcelas (${formatBRL(somaParcelas)}) difere do total (${formatBRL(valorTotal)})`, "err"); return; }
+    if (!parcelasOk) { toast(`Soma das parcelas (${formatBRL(somaParcelas)}) difere do total (${formatBRL(valorComIpiCalc)})`, "err"); return; }
 
     setSalvando(true);
 
@@ -391,6 +396,8 @@ export default function EditarPedidoPage() {
       datas_pgto:   parcelasForm.filter(p => p.data && p.valor > 0).map(p => p.data),
       valores_pgto: parcelasForm.filter(p => p.data && p.valor > 0).map(p => p.valor),
       valor_total:  parseFloat(valorTotal.toFixed(2)),
+      tem_ipi:      temIpi,
+      valor_ipi:    valorIpi,
       m2_total:     parseFloat(m2Total.toFixed(4)),
     });
 
@@ -438,7 +445,7 @@ export default function EditarPedidoPage() {
     // reconstruído sempre bate com valorTotal, então nada impedia o insert.
     const lancsAtual = await getLancamentosPorPedido(id);
     const idsParaExcluir = lancsAtual.filter(l => l.status === "A Receber").map(l => l.id);
-    const saldoPendente = parseFloat((valorTotal - valorRecebidoOriginal).toFixed(2));
+    const saldoPendente = parseFloat((valorComIpiCalc - valorRecebidoOriginal).toFixed(2));
     if (idsParaExcluir.length > 0 || saldoPendente > 0.02) {
       if (idsParaExcluir.length > 0) {
         await supabase.from("lancamentos").delete().in("id", idsParaExcluir);
@@ -592,6 +599,11 @@ export default function EditarPedidoPage() {
               <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"10px", textTransform:"uppercase" }}>
                 {parcelas === 1 ? "Pagamento" : `Parcelas (${parcelas}x)`}
               </div>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px", fontSize: "12px", color: "var(--t2)", cursor: "pointer" }}>
+                <input name="tem_ipi" type="checkbox" checked={temIpi} onChange={e => setTemIpi(e.target.checked)} />
+                Tem IPI ({ALIQ_IPI_PEDIDO}%)
+                {temIpi && <span style={{ fontFamily: "'DM Mono',monospace", color: "var(--warn)", marginLeft: "4px" }}>— {formatBRL(valorIpi)}</span>}
+              </label>
               <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
                 {parcelasForm.map((p, idx) => (
                   <div key={idx} style={{ display:"grid", gridTemplateColumns: parcelas > 1 ? "60px 1fr 120px" : "1fr 120px", gap:"8px", alignItems:"center" }}>
@@ -601,9 +613,9 @@ export default function EditarPedidoPage() {
                   </div>
                 ))}
               </div>
-              {valorTotal > 0 && !parcelasOk && (
+              {valorComIpiCalc > 0 && !parcelasOk && (
                 <div style={{ marginTop:"8px", fontSize:"11px", color:"var(--warn, #f59e0b)", fontFamily:"'DM Mono',monospace" }}>
-                  ⚠ Soma das parcelas ({formatBRL(somaParcelas)}) difere do total ({formatBRL(valorTotal)})
+                  ⚠ Soma das parcelas ({formatBRL(somaParcelas)}) difere do total ({formatBRL(valorComIpiCalc)})
                 </div>
               )}
             </div>
@@ -637,13 +649,13 @@ export default function EditarPedidoPage() {
                 </div>
               </div>
             )}
-            <div className="sr"><div className="sl">Valor Total</div><div className="sv" style={{ color:"var(--acc)", fontSize:"18px" }}>{formatBRL(valorTotal)}</div></div>
-            {parcelas > 1 && <div className="sr"><div className="sl">Por Parcela</div><div className="sv">{formatBRL(valorTotal / parcelas)}</div></div>}
+            <div className="sr"><div className="sl">Valor Total</div><div className="sv" style={{ color:"var(--acc)", fontSize:"18px" }}>{formatBRL(valorComIpiCalc)}</div></div>
+            {parcelas > 1 && <div className="sr"><div className="sl">Por Parcela</div><div className="sv">{formatBRL(valorComIpiCalc / parcelas)}</div></div>}
             {clienteId && tab && tab.min > 0 && valorTotal < tab.min && (
               <div className="al al-w" style={{ marginTop:"10px" }}>⚠ Pedido abaixo do mínimo de {formatBRL(tab.min)}</div>
             )}
             <button className="btn bp" style={{ width:"100%", marginTop:"16px", padding:"12px" }} onClick={salvar} disabled={salvando}>
-              {salvando ? "Salvando..." : `✓ Salvar Alterações · ${formatBRL(valorTotal)}`}
+              {salvando ? "Salvando..." : `✓ Salvar Alterações · ${formatBRL(valorComIpiCalc)}`}
             </button>
           </div>
         </div>
@@ -812,7 +824,7 @@ export default function EditarPedidoPage() {
             <div className="ti"><div className="tl">m² Total</div><div className="tv" style={{ color:"var(--acc2)" }}>{formatM2(m2Total)}</div></div>
             {isMl && <div className="ti"><div className="tl">ML Total</div><div className="tv" style={{ color:"#818cf8" }}>{itens.reduce((a, i) => a + calcMLItem(i), 0).toFixed(3)} ml</div></div>}
             {algumVC && <div className="ti"><div className="tl">Vidro Cliente</div><div className="tv" style={{ color:"var(--warn)" }}>{itens.filter(i => i.vidro_cliente).length} item(s)</div></div>}
-            <div className="ti"><div className="tl">Valor Total</div><div className="tv" style={{ color:"var(--acc)" }}>{formatBRL(valorTotal)}</div></div>
+            <div className="ti"><div className="tl">Valor Total</div><div className="tv" style={{ color:"var(--acc)" }}>{formatBRL(valorComIpiCalc)}</div></div>
           </div>
         </div>
       </div>
