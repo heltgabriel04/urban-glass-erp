@@ -146,8 +146,8 @@ export function RelatorioClienteDocument({ dados }: { dados: RelatorioClienteDad
             <Text style={styles.kpiValor}>{formatBRL(dados.totalFaturado)}</Text>
           </View>
           <View style={styles.kpiBox}>
-            <Text style={[styles.kpiValor, { color: VERDE }]}>{formatBRL(dados.totalRecebido)}</Text>
             <Text style={styles.kpiLabel}>Recebido</Text>
+            <Text style={[styles.kpiValor, { color: VERDE }]}>{formatBRL(dados.totalRecebido)}</Text>
           </View>
           <View style={styles.kpiBox}>
             <Text style={styles.kpiLabel}>Em Aberto</Text>
