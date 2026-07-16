@@ -22,7 +22,7 @@ const MOTIVOS = [
 
 const BLANK: QuebraInsert = {
   nc_id: null, pedido_id: null, cliente_id: null,
-  produto_nome: "", espessura: null, cor: null, chapa_referencia: null,
+  produto_nome: "", produto_id: null, espessura: null, cor: null, chapa_referencia: null,
   largura_mm: null, altura_mm: null,
   m2_perdido: 0, custo_m2: null,
   motivo: "", setor: null, maquina: null, responsavel: null,
@@ -39,7 +39,7 @@ export default function QuebrasPage() {
   const [modal, setModal]       = useState(false);
   const [form, setForm]         = useState<QuebraInsert>(BLANK);
   const [pedidos, setPedidos]   = useState<{ id: string; cliente_nome: string }[]>([]);
-  const [produtos, setProdutos] = useState<{ nome: string; custo_m2: number }[]>([]);
+  const [produtos, setProdutos] = useState<{ id: number | null; nome: string; custo_m2: number }[]>([]);
   const [filtroSetor, setFiltroSetor] = useState("todos");
   const [busca, setBusca]       = useState("");
 
@@ -48,7 +48,7 @@ export default function QuebrasPage() {
     supabase.from("pedidos").select("id, clientes(nome)")
       .order("id", { ascending: false }).limit(150)
       .then(({ data }) => setPedidos((data ?? []).map((p: any) => ({ id: p.id, cliente_nome: p.clientes?.nome ?? "—" }))));
-    getEstoque().then(est => setProdutos(est.map((e: any) => ({ nome: e.cod ?? e.produtos?.nome ?? "—", custo_m2: Number(e.custo_m2) }))));
+    getEstoque().then(est => setProdutos(est.map((e: any) => ({ id: e.produto_id ?? null, nome: e.cod ?? e.produtos?.nome ?? "—", custo_m2: Number(e.custo_m2) }))));
   }, []);
 
   async function load() {
@@ -60,7 +60,7 @@ export default function QuebrasPage() {
 
   function handleProdutoChange(nome: string) {
     const prod = produtos.find(p => p.nome === nome);
-    setForm(f => ({ ...f, produto_nome: nome, custo_m2: prod?.custo_m2 ?? null }));
+    setForm(f => ({ ...f, produto_nome: nome, produto_id: prod?.id ?? null, custo_m2: prod?.custo_m2 ?? null }));
   }
 
   function calcM2(): number {
