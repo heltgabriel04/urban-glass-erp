@@ -139,6 +139,14 @@ export default function ClienteDetalhe() {
           {cliente.nome}
           {!cliente.ativo && <span className="chip cr" style={{ marginLeft:"10px", fontSize:"10px" }}>Inativo</span>}
         </div>
+        <a
+          className="btn bg sm"
+          style={{ textDecoration: "none" }}
+          href={`/api/clientes/${cliente.id}/relatorio-pdf`}
+          target="_blank" rel="noopener noreferrer"
+        >
+          📄 Relatório do Cliente
+        </a>
         <button className="btn bg sm" onClick={() => router.push(`/clientes?edit=${cliente.id}`)}>Editar Cliente</button>
       </div>
 
