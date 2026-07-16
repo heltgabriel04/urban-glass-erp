@@ -662,6 +662,22 @@ export interface HistoricoOtimizador {
   created_at: string;
 }
 
+export interface OtimizacaoPerdaDetalhe {
+  id: number;
+  pedido_id: string;
+  produto_id: number | null;
+  produto_nome: string;
+  m2_bruta_chapas: number;
+  m2_pecas: number;
+  m2_retalhos: number;
+  m2_perda: number;
+  custo_m2: number | null;
+  dt_otim: string;
+  created_at: string;
+}
+
+export type OtimizacaoPerdaDetalheInsert = Omit<OtimizacaoPerdaDetalhe, 'id' | 'created_at'>;
+
 // ─── NOTA FISCAL ───────────────────────────────────────────
 export interface NotaFiscal {
   id: number;
@@ -1188,6 +1204,7 @@ export interface Quebra {
   nc_id: number | null;
   pedido_id: string | null;
   cliente_id: number | null;
+  produto_id: number | null;
   produto_nome: string;
   espessura: string | null;
   cor: string | null;
@@ -1374,6 +1391,7 @@ export type Database = {
       formas_pagamento:        { Row: FormaPagamento;       Insert: FormaPagamentoInsert; Update: FormaPagamentoUpdate };
       metas_financeiras:       { Row: MetaFinanceira;       Insert: MetaFinanceiraInsert; Update: MetaFinanceiraUpdate };
       historico_otimizador:    { Row: HistoricoOtimizador                                                     };
+      otimizacao_perda_detalhe: { Row: OtimizacaoPerdaDetalhe; Insert: OtimizacaoPerdaDetalheInsert            };
       tabelas_preco:           { Row: TabelaPreco                                                             };
       tabela_preco_itens:      { Row: TabelaPrecoItem                                                         };
       notas_fiscais:           { Row: NotaFiscal;          Insert: NotaFiscalInsert                           };
