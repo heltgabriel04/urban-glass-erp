@@ -115,6 +115,7 @@ export default function EditarPedidoPage() {
   const [itensDeletados, setItensDeletados] = useState<number[]>([]);
   const [modoPedido, setModoPedido] = useState<ModoPedido>("m2");
   const [parcelasForm, setParcelasForm] = useState<ParcelaForm[]>([]);
+  const [valorRecebidoOriginal, setValorRecebidoOriginal] = useState(0);
   const [totalPedidoInput, setTotalPedidoInput] = useState(0);
   const [valorGeralInput, setValorGeralInput] = useState(0);
 
@@ -137,6 +138,7 @@ export default function EditarPedidoPage() {
 
     if (!pedido) { toast("Pedido não encontrado", "err"); router.back(); return; }
 
+    setValorRecebidoOriginal(pedido.valor_recebido ?? 0);
     setClientes(clis);
     setProdutos(prods);
     setTabelas(tabs);
@@ -426,21 +428,32 @@ export default function EditarPedidoPage() {
     // Recriar lançamentos A Receber — delete e insert em lote em vez de N+N
     // chamadas individuais. recalcularRecebido(id) já roda uma vez no fim,
     // cobrindo o mesmo efeito colateral que cada delete/create faria sozinho.
+    //
+    // Só reconcilia se havia parcela "A Receber" de verdade pra substituir OU
+    // se o total agora excede o que já foi recebido (ex: item novo aumentou
+    // o valor). Sem essa guarda, salvar um pedido já quitado (0 lançamentos
+    // "A Receber") inseria parcelas fantasma — o formulário reconstrói
+    // parcelasForm a partir de pedido.parcelas/valor_total quando não há
+    // nenhuma "A Receber" pra carregar (ver load(), acima), e esse valor
+    // reconstruído sempre bate com valorTotal, então nada impedia o insert.
     const lancsAtual = await getLancamentosPorPedido(id);
     const idsParaExcluir = lancsAtual.filter(l => l.status === "A Receber").map(l => l.id);
-    if (idsParaExcluir.length > 0) {
-      await supabase.from("lancamentos").delete().in("id", idsParaExcluir);
-    }
-    const novasParcelas = parcelasForm
-      .map((p, i) => ({ p, i }))
-      .filter(({ p }) => p.data && p.valor > 0)
-      .map(({ p, i }) => ({
-        tipo: "Entrada", status: "A Receber", vencimento: p.data, valor: p.valor,
-        descricao: parcelas === 1 ? `Recebimento · ${id}` : `Parcela ${i + 1}/${parcelas} · ${id}`,
-        pedido_id: id, cliente_id: clienteId,
-      }));
-    if (novasParcelas.length > 0) {
-      await supabase.from("lancamentos").insert(novasParcelas as never);
+    const saldoPendente = parseFloat((valorTotal - valorRecebidoOriginal).toFixed(2));
+    if (idsParaExcluir.length > 0 || saldoPendente > 0.02) {
+      if (idsParaExcluir.length > 0) {
+        await supabase.from("lancamentos").delete().in("id", idsParaExcluir);
+      }
+      const novasParcelas = parcelasForm
+        .map((p, i) => ({ p, i }))
+        .filter(({ p }) => p.data && p.valor > 0)
+        .map(({ p, i }) => ({
+          tipo: "Entrada", status: "A Receber", vencimento: p.data, valor: p.valor,
+          descricao: parcelas === 1 ? `Recebimento · ${id}` : `Parcela ${i + 1}/${parcelas} · ${id}`,
+          pedido_id: id, cliente_id: clienteId,
+        }));
+      if (novasParcelas.length > 0) {
+        await supabase.from("lancamentos").insert(novasParcelas as never);
+      }
     }
     await recalcularRecebido(id);
 
