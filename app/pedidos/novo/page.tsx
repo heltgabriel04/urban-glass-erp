@@ -666,7 +666,7 @@ function NovoPedidoPageInner() {
               <div className="al al-w" style={{ marginTop: "10px" }}>⚠ Pedido abaixo do mínimo de {formatBRL(tab.min)}</div>
             )}
             <button className="btn bp" style={{ width: "100%", marginTop: "16px", padding: "12px" }} onClick={salvar} disabled={salvando}>
-              {salvando ? "Salvando..." : `✓ Salvar Pedido · ${formatBRL(valorTotal)}`}
+              {salvando ? "Salvando..." : `✓ Salvar Pedido · ${formatBRL(valorComIpiCalc)}`}
             </button>
           </div>
         </div>
