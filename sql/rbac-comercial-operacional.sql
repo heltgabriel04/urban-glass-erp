@@ -60,7 +60,7 @@ insert into public.user_roles (user_id, role)
 select id, 'comercial_operacional'
 from auth.users
 where email = 'costavidalempreendimentos2@gmail.com'
-on conflict (user_id) do update set role = excluded.role, updated_at = now();
+on conflict (user_id) do update set role = excluded.role;
 
 -- ⚠️ O papel só passa a valer em tokens NOVOS: a pessoa precisa
 --    fazer login (ou refazer login, se já tiver sessão aberta).
