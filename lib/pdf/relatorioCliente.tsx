@@ -1,5 +1,5 @@
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
-import { formatDate, formatBRL, formatM2, medidaReal } from "@/lib/formatters";
+import { formatDate, formatBRL } from "@/lib/formatters";
 import { ALIQ_IPI_PEDIDO } from "@/lib/pedidoIpi";
 import type { Cliente, Pedido } from "@/types";
 
@@ -15,8 +15,7 @@ const styles = StyleSheet.create({
   },
   logo: { fontSize: 22, fontWeight: 700, color: AZUL },
   empresaInfo: { fontSize: 8, color: "#444", marginTop: 2 },
-  tituloDoc: { fontSize: 10, color: "#444", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, textAlign: "right" },
-  clienteNomeTop: { fontSize: 16, fontWeight: 700, color: AZUL, textAlign: "right" },
+  tituloDoc: { fontSize: 14, fontWeight: 700, color: AZUL, textAlign: "right" },
   emissao: { fontSize: 9, color: "#333", marginTop: 6, textAlign: "right" },
 
   bloco: { padding: 12, backgroundColor: "#f7f7f9", borderRadius: 6, marginBottom: 14 },
@@ -30,7 +29,7 @@ const styles = StyleSheet.create({
   kpiLabel: { fontSize: 7.5, textTransform: "uppercase", letterSpacing: 0.5, color: "#555", marginBottom: 5 },
   kpiValor: { fontSize: 15, fontWeight: 700 },
 
-  pedidoBloco: { marginBottom: 18 },
+  pedidoBloco: { marginBottom: 22, paddingBottom: 16, borderBottomWidth: 1.5, borderBottomColor: "#c9d3e8" },
   pedidoHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: "#eef1fa", borderRadius: 6, padding: 8, marginBottom: 6 },
   pedidoId: { fontSize: 11, fontWeight: 700, color: AZUL },
   pedidoMeta: { fontSize: 8.5, color: "#444" },
@@ -45,7 +44,7 @@ const styles = StyleSheet.create({
   colNum: { width: "6%", textAlign: "center" },
   colProd: { width: "28%" },
   colDim: { width: "18%" },
-  colMedida: { width: "16%" },
+  colQtd: { width: "16%", textAlign: "center" },
   colUnit: { width: "16%", textAlign: "right" },
   colSub: { width: "16%", textAlign: "right" },
 
@@ -105,7 +104,6 @@ export function RelatorioClienteDocument({ dados }: { dados: RelatorioClienteDad
           </View>
           <View>
             <Text style={styles.tituloDoc}>Relatório do Cliente</Text>
-            <Text style={styles.clienteNomeTop}>{cliente.nome}</Text>
             <Text style={styles.emissao}>Emitido em {formatDate(new Date().toISOString())}</Text>
           </View>
         </View>
@@ -163,9 +161,8 @@ export function RelatorioClienteDocument({ dados }: { dados: RelatorioClienteDad
           <Text style={styles.label}>Nenhum pedido registrado para este cliente.</Text>
         ) : (
           dados.pedidos.map((pr) => {
-            const { pedido, totalComIpi, quitado, isML, parcelasPendentes } = pr;
+            const { pedido, totalComIpi, quitado, parcelasPendentes } = pr;
             const itens = pedido.itens_pedido ?? [];
-            const m2Total = itens.reduce((s, i) => s + medidaReal(i, isML), 0);
             const aberto = totalComIpi - Number(pedido.valor_recebido);
             return (
               <View key={pedido.id} style={styles.pedidoBloco}>
@@ -182,7 +179,7 @@ export function RelatorioClienteDocument({ dados }: { dados: RelatorioClienteDad
                     <Text style={[styles.th, styles.colNum]}>#</Text>
                     <Text style={[styles.th, styles.colProd]}>Produto</Text>
                     <Text style={[styles.th, styles.colDim]}>Dimensões (mm)</Text>
-                    <Text style={[styles.th, styles.colMedida]}>Medida</Text>
+                    <Text style={[styles.th, styles.colQtd]}>Quantidade</Text>
                     <Text style={[styles.th, styles.colUnit]}>Valor Unit.</Text>
                     <Text style={[styles.th, styles.colSub]}>Subtotal</Text>
                   </View>
@@ -191,7 +188,7 @@ export function RelatorioClienteDocument({ dados }: { dados: RelatorioClienteDad
                       <Text style={[styles.td, styles.colNum]}>{i + 1}</Text>
                       <Text style={[styles.td, styles.colProd]}>{item.produto_nome}</Text>
                       <Text style={[styles.td, styles.colDim]}>{item.largura} × {item.altura}</Text>
-                      <Text style={[styles.td, styles.colMedida]}>{medidaReal(item, isML).toFixed(3)} {isML ? "ml" : "m²"}</Text>
+                      <Text style={[styles.td, styles.colQtd]}>{item.quantidade}</Text>
                       <Text style={[styles.td, styles.colUnit]}>{formatBRL(item.valor_m2)}</Text>
                       <Text style={[styles.td, styles.colSub]}>{formatBRL(item.subtotal)}</Text>
                     </View>
@@ -199,10 +196,6 @@ export function RelatorioClienteDocument({ dados }: { dados: RelatorioClienteDad
                 </View>
 
                 <View style={styles.totaisBox}>
-                  <View style={styles.linha}>
-                    <Text style={styles.totaisLabel}>{isML ? "ML Total" : "m² Total"}</Text>
-                    <Text style={styles.totaisValor}>{isML ? `${m2Total.toFixed(2)} ml` : formatM2(m2Total)}</Text>
-                  </View>
                   {pedido.tem_ipi ? (
                     <>
                       <View style={styles.linha}>
