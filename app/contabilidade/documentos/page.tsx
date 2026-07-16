@@ -9,28 +9,31 @@ import { usePrompt } from "@/components/ui/prompt";
 import { Modal } from "@/components/ui/Modal";
 import { Campo } from "@/components/ui/Campo";
 import { supabase } from "@/lib/supabase/client";
-import { formatBRL, formatDate } from "@/lib/formatters";
+import { formatBRL, formatDate, formatM2 } from "@/lib/formatters";
 import {
   getDocumentosFiscais,
   criarDocumentoFiscal,
   atualizarDocumentoFiscal,
   softDeleteDocumentoFiscal,
   uploadAnexoDocumentoFiscal,
+  getPerdaMensalVidro,
 } from "@/services/contabilidadeDocumentos.service";
 import { getResumoNotasSaida, getNotasCanceladas, type ResumoNotasSaida, type NotaCancelada } from "@/services/contabilidadeDashboard.service";
 import { getFornecedores } from "@/services/fornecedores.service";
 import { getNotas } from "@/services/notas.service";
 import { getItensEstoqueGerais } from "@/services/itensEstoqueGerais.service";
-import type { DocumentoFiscal, DocumentoFiscalInsert, Fornecedor, ItemEstoqueGeral, NotaFiscal, TipoDocumentoFiscal } from "@/types";
+import { agruparPorMes, montarPrefillNfMes, type GrupoMesPerdaVidro } from "@/lib/perdaVidro";
+import type { DocumentoFiscal, DocumentoFiscalInsert, Fornecedor, ItemEstoqueGeral, NotaFiscal, PerdaMensalVidro, TipoDocumentoFiscal } from "@/types";
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
-type AbaDocumentos = "compra" | "perda" | "carta_correcao" | "inutilizacao" | "cancelamentos" | "saida";
+type AbaDocumentos = "compra" | "perda" | "perda_vidro" | "carta_correcao" | "inutilizacao" | "cancelamentos" | "saida";
 
 const SUB_ABAS: { id: AbaDocumentos; label: string }[] = [
   { id: "compra", label: "Compra / Entrada" },
   { id: "saida", label: "Saída" },
   { id: "perda", label: "Perda" },
+  { id: "perda_vidro", label: "Perda de Vidro" },
   { id: "cancelamentos", label: "Cancelamentos" },
   { id: "carta_correcao", label: "Carta de Correção" },
   { id: "inutilizacao", label: "Inutilização" },
@@ -318,6 +321,7 @@ export default function DocumentosFiscaisPage() {
   const [docs, setDocs] = useState<DocumentoFiscal[]>([]);
   const [resumoSaida, setResumoSaida] = useState<ResumoNotasSaida | null>(null);
   const [canceladas, setCanceladas] = useState<NotaCancelada[]>([]);
+  const [perdaVidro, setPerdaVidro] = useState<PerdaMensalVidro[]>([]);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [notasVenda, setNotasVenda] = useState<NotaFiscal[]>([]);
   const [itensEstoque, setItensEstoque] = useState<ItemEstoqueGeral[]>([]);
@@ -325,6 +329,7 @@ export default function DocumentosFiscaisPage() {
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState<DocumentoFiscal | null>(null);
   const [modalAberto, setModalAberto] = useState<TipoDocumentoFiscal | null>(null);
+  const [valoresIniciaisModal, setValoresIniciaisModal] = useState<Partial<DocumentoFiscalInsert> | undefined>(undefined);
 
   useEffect(() => {
     getFornecedores(true).then(setFornecedores);
@@ -347,6 +352,8 @@ export default function DocumentosFiscaisPage() {
       ]);
       setDocs(d);
       setNotasVenda(notas.filter((n) => n.status === "autorizada"));
+    } else if (aba === "perda_vidro") {
+      setPerdaVidro(await getPerdaMensalVidro());
     } else {
       const tipo = aba as TipoDocumentoFiscal;
       setDocs(await getDocumentosFiscais({ tipo, competenciaAno: ano, competenciaMes: mes }));
@@ -371,7 +378,7 @@ export default function DocumentosFiscaisPage() {
     inutilizacao: editando ? "Editar Inutilização" : "Nova Inutilização de Numeração",
   };
 
-  const mostraNovo = aba !== "saida";
+  const mostraNovo = aba !== "saida" && aba !== "perda_vidro";
 
   return (
     <AppLayout>
