@@ -162,6 +162,8 @@ export default function OrcamentoDetalhe() {
   if (!orc) return <AppLayout><div className="con" style={{ color: "var(--err)", padding: "32px" }}>Orçamento não encontrado.</div></AppLayout>;
 
   const itens = orc.itens_orcamento ?? [];
+  const isMLGeralItens = itens.length > 0 && itens.every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true);
+  const m2TotalItens = itens.reduce((s: number, i: any) => s + Number(i.m2), 0);
 
   return (
     <>
@@ -643,6 +645,13 @@ export default function OrcamentoDetalhe() {
                 </tr>
                 );
               })}
+              <tr style={{ borderTop: "2px solid #2d5fa6" }}>
+                <td colSpan={3} style={{ padding: "7px 8px", textAlign: "right", fontWeight: 800, color: "#2d5fa6", fontSize: "10px" }}>Total</td>
+                <td style={{ padding: "7px 8px", fontFamily: "monospace", fontSize: "10px", fontWeight: 800, color: "#2d5fa6" }}>
+                  {isMLGeralItens ? `${m2TotalItens.toFixed(2)} ml` : formatM2(m2TotalItens)}
+                </td>
+                <td colSpan={3}></td>
+              </tr>
             </tbody>
           </table>
 
