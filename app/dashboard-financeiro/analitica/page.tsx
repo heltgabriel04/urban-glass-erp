@@ -15,6 +15,7 @@ import FiltroGlobalFinanceiro from "@/components/financeiro/FiltroGlobalFinancei
 import PersonalizarWidgets from "@/components/financeiro/PersonalizarWidgets";
 import { useWidgetsVisiveis } from "@/components/financeiro/useWidgetsVisiveis";
 import { useRealtimeDashboard } from "@/components/financeiro/useRealtimeDashboard";
+import { useFiltroFinanceiro } from "@/components/financeiro/useFiltroFinanceiro";
 
 const WIDGETS_ANALITICA = [
   { key: "comparativo", label: "Comparativo por Período" },
@@ -60,12 +61,13 @@ export default function AnaliticaPage() {
 }
 
 function AnaliticaInner() {
+  const { filtro } = useFiltroFinanceiro();
   const { visivel, toggle, widgets } = useWidgetsVisiveis("analitica", WIDGETS_ANALITICA);
   const [dados, setDados] = useState<Dados | null>(null);
   const [loading, setLoading] = useState(true);
   const { ativo: aoVivo } = useRealtimeDashboard(() => load());
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [filtro.contaId]);
 
   async function load() {
     setLoading(true);
@@ -80,13 +82,13 @@ function AnaliticaInner() {
       despesasPorMes,
       metasAno0, metasAno1,
     ] = await Promise.all([
-      getDRE(anoAtual, mesAtual),
-      getDRE(mesAnteriorDate.getFullYear(), mesAnteriorDate.getMonth() + 1),
-      getDRE(anoAtual - 1, mesAtual),
+      getDRE(anoAtual, mesAtual, 'competencia', filtro.contaId),
+      getDRE(mesAnteriorDate.getFullYear(), mesAnteriorDate.getMonth() + 1, 'competencia', filtro.contaId),
+      getDRE(anoAtual - 1, mesAtual, 'competencia', filtro.contaId),
       getFaturamentoMensal(anoAtual),
       getFaturamentoMensal(anoAtual - 1),
       getFaturamentoMensal(anoAtual - 2),
-      getDespesasPorMes(12),
+      getDespesasPorMes(12, filtro.contaId),
       getMetas(anoAtual),
       getMetas(anoAtual - 1),
     ]);
@@ -137,9 +139,14 @@ function AnaliticaInner() {
         <PersonalizarWidgets widgets={widgets} visivel={visivel} toggle={toggle} />
       </div>
       <NivelTabs ativo="analitica" />
-      <FiltroGlobalFinanceiro mostrarPeriodo={false} mostrarConta={false} />
+      <FiltroGlobalFinanceiro mostrarPeriodo={false} mostrarConta={true} />
 
       <div className="con">
+        {filtro.contaId != null && (
+          <div style={{ fontSize: 11, color: "var(--t3)", padding: "8px 12px", background: "var(--surf2)", borderRadius: 8, marginBottom: 14 }}>
+            Despesas filtradas pela conta selecionada. Receita e metas sempre consideram todas as contas.
+          </div>
+        )}
         {loading || !dados ? <div className="loading">Carregando...</div> : (
           <>
             {/* Comparativo por período */}
@@ -160,8 +167,12 @@ function AnaliticaInner() {
                   <tbody>
                     <LinhaComparativo label="Receita" atual={dados.dreMesAtual.receita} anterior={dados.dreMesAnterior.receita} anoPassado={dados.dreAnoAnterior.receita} />
                     <LinhaComparativo label="Despesas" atual={dados.dreMesAtual.despesasTotal} anterior={dados.dreMesAnterior.despesasTotal} anoPassado={dados.dreAnoAnterior.despesasTotal} inverso />
-                    <LinhaComparativo label="Resultado" atual={dados.dreMesAtual.resultado} anterior={dados.dreMesAnterior.resultado} anoPassado={dados.dreAnoAnterior.resultado} />
-                    <LinhaComparativo label="Margem Líquida" atual={dados.dreMesAtual.margemLiquidaPct} anterior={dados.dreMesAnterior.margemLiquidaPct} anoPassado={dados.dreAnoAnterior.margemLiquidaPct} percentual />
+                    {filtro.contaId == null && (
+                      <>
+                        <LinhaComparativo label="Resultado" atual={dados.dreMesAtual.resultado} anterior={dados.dreMesAnterior.resultado} anoPassado={dados.dreAnoAnterior.resultado} />
+                        <LinhaComparativo label="Margem Líquida" atual={dados.dreMesAtual.margemLiquidaPct} anterior={dados.dreMesAnterior.margemLiquidaPct} anoPassado={dados.dreAnoAnterior.margemLiquidaPct} percentual />
+                      </>
+                    )}
                   </tbody>
                 </table>
               </div>
