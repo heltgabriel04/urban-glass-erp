@@ -249,8 +249,7 @@ export default function OrcamentoDetalhe() {
 
               {/* Resumo em 3 colunas */}
               {(() => {
-                const isML = itens.every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true);
-                const unidade = isML ? "ml" : "m²";
+                const unidade = isMLGeralItens ? "ml" : "m²";
                 const medida = `${Number(orc.m2_total).toFixed(2)} ${unidade}`;
                 return (
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "14px" }}>
