@@ -13,6 +13,7 @@ import {
   getCompras, createCompra, confirmarRecebimento, deletarCompra, anexarXmlNaCompra,
 } from "@/services/compras.service";
 import ImportarXmlCompraModal, { type DadosImportadosXml } from "@/components/ui/ImportarXmlCompraModal";
+import { calcularCustoImportacao, type DadosImportacao } from "@/lib/custoImportacao";
 import { HistoricoPrecoProduto } from "@/components/ui/HistoricoPrecoProduto";
 import type { XmlCompraParseado } from "@/lib/importXmlCompra";
 import type { Compra, Produto, StatusCompra } from "@/types";
@@ -44,6 +45,24 @@ const FORM_VAZIO = {
   obs: "",
 };
 
+// Defaults de creditabilidade pro Lucro Real: PIS/COFINS e ICMS
+// creditáveis; IPI não, até o contador confirmar o enquadramento.
+const IMP_VAZIO: DadosImportacao & { numero_di: string } = {
+  numero_di: "",
+  valor_fob_usd: 0,
+  frete_internacional_usd: 0,
+  seguro_internacional_usd: 0,
+  cambio_usd: 0,
+  ii: 0,
+  ipi_importacao: 0,
+  pis_cofins_importacao: 0,
+  icms_importacao: 0,
+  despesas_aduaneiras: 0,
+  ipi_creditavel: false,
+  pis_cofins_creditavel: true,
+  icms_creditavel: true,
+};
+
 export default function ComprasPage() {
   const { toast } = useToast();
   const confirm = useConfirm();
@@ -59,6 +78,8 @@ export default function ComprasPage() {
   const [expandido, setExpandido]   = useState<string | null>(null);
   const [processando, setProcessando] = useState<string | null>(null);
   const [modalXmlAberto, setModalXmlAberto] = useState(false);
+  const [ehImportacao, setEhImportacao] = useState(false);
+  const [imp, setImp] = useState({ ...IMP_VAZIO });
   const [xmlPendente, setXmlPendente] = useState<{ dados: XmlCompraParseado; xmlFile: File } | null>(null);
 
   useEffect(() => { load(); }, []);
@@ -106,11 +127,20 @@ export default function ComprasPage() {
   }
 
   const valorTotalForm = itens.reduce((a, it) => a + subtotalItem(it), 0);
+  const m2TotalForm = itens.reduce((a, it) => a + (Number(it.chapas) || 0) * (Number(it.m2_por_chapa) || 0), 0);
+  const resumoImp = calcularCustoImportacao(imp, m2TotalForm);
+
+  function aplicarCustoImportacaoAosItens() {
+    setItens(prev => prev.map(it => ({ ...it, custo_unitario_m2: resumoImp.custoM2 })));
+    toast(`Custo de ${formatBRL(resumoImp.custoM2)}/m² aplicado a todos os itens`);
+  }
 
   function resetForm() {
     setForm(FORM_VAZIO);
     setItens([{ ...ITEM_VAZIO }]);
     setXmlPendente(null);
+    setEhImportacao(false);
+    setImp({ ...IMP_VAZIO });
     setShowForm(false);
   }
 
@@ -167,6 +197,26 @@ export default function ComprasPage() {
 
     const valorTotal = itensPayload.reduce((a, it) => a + it.subtotal, 0);
 
+    // Campos de importação só entram no payload com o checkbox marcado —
+    // compra nacional salva exatamente como antes, mesmo se a migração
+    // sql/importacao-compras.sql ainda não tiver rodado no Supabase.
+    const camposImportacao = ehImportacao ? {
+      eh_importacao: true,
+      numero_di: imp.numero_di.trim() || null,
+      valor_fob_usd: imp.valor_fob_usd,
+      frete_internacional_usd: imp.frete_internacional_usd,
+      seguro_internacional_usd: imp.seguro_internacional_usd,
+      cambio_usd: imp.cambio_usd,
+      ii: imp.ii,
+      ipi_importacao: imp.ipi_importacao,
+      pis_cofins_importacao: imp.pis_cofins_importacao,
+      icms_importacao: imp.icms_importacao,
+      despesas_aduaneiras: imp.despesas_aduaneiras,
+      ipi_creditavel: imp.ipi_creditavel,
+      pis_cofins_creditavel: imp.pis_cofins_creditavel,
+      icms_creditavel: imp.icms_creditavel,
+    } : {};
+
     const res = await createCompra({
       fornecedor_id: Number(form.fornecedor_id),
       nf: form.nf.trim() || null,
@@ -174,6 +224,7 @@ export default function ComprasPage() {
       condicao_pgto: form.condicao_pgto.trim() || null,
       valor_total: parseFloat(valorTotal.toFixed(2)),
       obs: form.obs.trim() || null,
+      ...camposImportacao,
     }, itensPayload);
 
     if (!res) { setSalvando(false); toast("Erro ao salvar compra.", "err"); return; }
@@ -324,6 +375,92 @@ export default function ComprasPage() {
                 <input name="condicao_pgto" style={inputStyle} value={form.condicao_pgto} onChange={e => setForm(f => ({ ...f, condicao_pgto: e.target.value }))} placeholder="30/60/90" />
               </Campo>
             </div>
+
+            {/* ── IMPORTAÇÃO ── */}
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px", fontSize: "13px", color: "var(--t2)", cursor: "pointer" }}>
+              <input name="eh_importacao" type="checkbox" checked={ehImportacao} onChange={e => setEhImportacao(e.target.checked)} />
+              Compra importada (custo real via DI)
+            </label>
+
+            {ehImportacao && (
+              <div style={{ background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: "8px", padding: "14px 16px", marginBottom: "16px" }}>
+                <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em", marginBottom: "12px" }}>IMPORTAÇÃO — VALORES DA DI</div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "10px", marginBottom: "12px" }}>
+                  <Campo labelStyle={labelStyle} label="Nº da DI">
+                    <input name="numero_di" style={inputStyle} value={imp.numero_di} onChange={e => setImp(v => ({ ...v, numero_di: e.target.value }))} placeholder="25/1234567-8" />
+                  </Campo>
+                  <Campo labelStyle={labelStyle} label="FOB (USD)">
+                    <CurrencyInput aria-label="FOB (USD)" style={inputStyle} className="" value={imp.valor_fob_usd} onChange={v => setImp(s => ({ ...s, valor_fob_usd: v }))} />
+                  </Campo>
+                  <Campo labelStyle={labelStyle} label="Frete intl. (USD)">
+                    <CurrencyInput aria-label="Frete internacional (USD)" style={inputStyle} className="" value={imp.frete_internacional_usd} onChange={v => setImp(s => ({ ...s, frete_internacional_usd: v }))} />
+                  </Campo>
+                  <Campo labelStyle={labelStyle} label="Seguro intl. (USD)">
+                    <CurrencyInput aria-label="Seguro internacional (USD)" style={inputStyle} className="" value={imp.seguro_internacional_usd} onChange={v => setImp(s => ({ ...s, seguro_internacional_usd: v }))} />
+                  </Campo>
+                  <Campo labelStyle={labelStyle} label="Câmbio (R$/USD)">
+                    <input name="cambio_usd" style={inputStyle} type="number" min="0" step="0.0001" value={imp.cambio_usd || ""} onChange={e => setImp(s => ({ ...s, cambio_usd: parseFloat(e.target.value) || 0 }))} placeholder="5.0000" />
+                  </Campo>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "10px", marginBottom: "12px" }}>
+                  <Campo labelStyle={labelStyle} label="II (R$)">
+                    <CurrencyInput aria-label="II (R$)" style={inputStyle} className="" value={imp.ii} onChange={v => setImp(s => ({ ...s, ii: v }))} />
+                  </Campo>
+                  <Campo labelStyle={labelStyle} label="IPI (R$)">
+                    <CurrencyInput aria-label="IPI importação (R$)" style={inputStyle} className="" value={imp.ipi_importacao} onChange={v => setImp(s => ({ ...s, ipi_importacao: v }))} />
+                  </Campo>
+                  <Campo labelStyle={labelStyle} label="PIS/COFINS (R$)">
+                    <CurrencyInput aria-label="PIS/COFINS importação (R$)" style={inputStyle} className="" value={imp.pis_cofins_importacao} onChange={v => setImp(s => ({ ...s, pis_cofins_importacao: v }))} />
+                  </Campo>
+                  <Campo labelStyle={labelStyle} label="ICMS (R$)">
+                    <CurrencyInput aria-label="ICMS importação (R$)" style={inputStyle} className="" value={imp.icms_importacao} onChange={v => setImp(s => ({ ...s, icms_importacao: v }))} />
+                  </Campo>
+                  <Campo labelStyle={labelStyle} label="Despesas aduaneiras (R$)">
+                    <CurrencyInput aria-label="Despesas aduaneiras (R$)" style={inputStyle} className="" value={imp.despesas_aduaneiras} onChange={v => setImp(s => ({ ...s, despesas_aduaneiras: v }))} />
+                  </Campo>
+                </div>
+
+                <div style={{ display: "flex", gap: "18px", flexWrap: "wrap", marginBottom: "12px" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--t2)", cursor: "pointer" }}>
+                    <input name="ipi_creditavel" type="checkbox" checked={imp.ipi_creditavel} onChange={e => setImp(s => ({ ...s, ipi_creditavel: e.target.checked }))} />
+                    IPI creditável <span style={{ color: "var(--t3)", fontSize: "11px" }}>(confirmar com contador)</span>
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--t2)", cursor: "pointer" }}>
+                    <input name="pis_cofins_creditavel" type="checkbox" checked={imp.pis_cofins_creditavel} onChange={e => setImp(s => ({ ...s, pis_cofins_creditavel: e.target.checked }))} />
+                    PIS/COFINS creditável
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--t2)", cursor: "pointer" }}>
+                    <input name="icms_creditavel" type="checkbox" checked={imp.icms_creditavel} onChange={e => setImp(s => ({ ...s, icms_creditavel: e.target.checked }))} />
+                    ICMS creditável
+                  </label>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "10px", alignItems: "end" }}>
+                  {[
+                    { label: "Valor Aduaneiro", valor: resumoImp.valorAduaneiroBrl, cor: "var(--t1)" },
+                    { label: "Desembolsado", valor: resumoImp.custoDesembolsado, cor: "var(--t1)" },
+                    { label: "Não-Recuperável", valor: resumoImp.custoNaoRecuperavel, cor: "var(--acc)" },
+                    { label: "Créditos Tributários", valor: resumoImp.creditosTributarios, cor: "var(--ok)" },
+                  ].map(box => (
+                    <div key={box.label}>
+                      <div style={labelStyle}>{box.label}</div>
+                      <div style={{ fontSize: "14px", fontWeight: 700, color: box.cor, fontFamily: "'DM Mono', monospace" }}>{formatBRL(box.valor)}</div>
+                    </div>
+                  ))}
+                  <div>
+                    <div style={labelStyle}>Custo real/m² · {m2TotalForm.toFixed(2)} m²</div>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--acc)", fontFamily: "'DM Mono', monospace" }}>{formatBRL(resumoImp.custoM2)}</span>
+                      <button className="btn bp xs" onClick={aplicarCustoImportacaoAosItens} disabled={m2TotalForm <= 0} title={m2TotalForm <= 0 ? "Lance os itens (chapas e m²/chapa) primeiro" : "Preenche o Custo/m² de todos os itens"}>
+                        ↵ Aplicar aos itens
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em", marginBottom: "10px" }}>ITENS</div>
             {itens.map((it, i) => {

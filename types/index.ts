@@ -235,6 +235,22 @@ export interface Compra {
   valor_total: number;
   obs: string | null;
   dt_recebimento: string | null;
+  // Importação (opcionais — só preenchidos quando eh_importacao = true;
+  // ver docs/superpowers/specs/2026-07-17-custo-importacao-design.md)
+  eh_importacao?: boolean;
+  numero_di?: string | null;
+  valor_fob_usd?: number;
+  frete_internacional_usd?: number;
+  seguro_internacional_usd?: number;
+  cambio_usd?: number;
+  ii?: number;
+  ipi_importacao?: number;
+  pis_cofins_importacao?: number;
+  icms_importacao?: number;
+  despesas_aduaneiras?: number;
+  ipi_creditavel?: boolean;
+  pis_cofins_creditavel?: boolean;
+  icms_creditavel?: boolean;
   created_at: string;
   fornecedores?: Pick<Fornecedor, 'id' | 'nome'>;
   compras_itens?: CompraItem[];
