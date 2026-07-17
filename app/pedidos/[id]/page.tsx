@@ -329,6 +329,7 @@ export default function PedidoDetalhe() {
   }
 
   const valorTotalEditado = editItens.reduce((a, i) => a + calcSubtotalItem(i), 0);
+  const valorComIpiEditado = valorTotalEditado + (pedido?.tem_ipi ? calcularValorIpi(valorTotalEditado) : 0);
   const m2TotalEditado    = editItens.reduce((a, i) => a + calcM2Item(i), 0);
 
   async function salvarEdicao() {
@@ -1706,7 +1707,7 @@ export default function PedidoDetalhe() {
                   })}
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", borderTop:"1px solid var(--b1)", paddingTop:"10px", marginTop:"4px" }}>
                     <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>Total calculado · {m2TotalEditado.toFixed(4)} m²</span>
-                    <span style={{ fontSize:"15px", fontWeight:800, color:"var(--acc)", fontFamily:"'DM Mono',monospace" }}>{formatBRL(valorTotalEditado)}</span>
+                    <span style={{ fontSize:"15px", fontWeight:800, color:"var(--acc)", fontFamily:"'DM Mono',monospace" }}>{formatBRL(valorComIpiEditado)}</span>
                   </div>
                 </div>
 
@@ -1892,9 +1893,9 @@ export default function PedidoDetalhe() {
               <div style={{ display:"flex", flexDirection:"column", gap:"6px", fontSize:"11px" }}>
                 <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Valor total</span><strong style={{ fontFamily:"monospace" }}>{formatBRL(totalComIpi)}</strong></div>
                 {pedido.tem_ipi && (
-                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:"11px", color:"var(--t3)", marginBottom:"10px" }}>
-                    <span>IPI ({ALIQ_IPI_PEDIDO}% sobre {formatBRL(pedido.valor_total)})</span>
-                    <span style={{ fontFamily:"'DM Mono',monospace", color:"var(--warn)" }}>{formatBRL(pedido.valor_ipi)}</span>
+                  <div style={{ display:"flex", justifyContent:"space-between" }}>
+                    <span style={{ color:"#333" }}>IPI ({ALIQ_IPI_PEDIDO}% sobre {formatBRL(pedido.valor_total)})</span>
+                    <strong style={{ fontFamily:"monospace" }}>{formatBRL(pedido.valor_ipi)}</strong>
                   </div>
                 )}
                 <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Recebido</span><strong style={{ fontFamily:"monospace", color:"#155724" }}>{formatBRL(pedido.valor_recebido)}</strong></div>
