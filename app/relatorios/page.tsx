@@ -9,6 +9,7 @@ import { getOrcamentos } from "@/services/orcamentos.service";
 import { getAllHistoricoOtimizador } from "@/services/otimizador.service";
 import { getResumoQualidade, getIndicadoresMensais } from "@/services/qualidade.service";
 import { formatBRL, formatPercent, formatDuracao } from "@/lib/formatters";
+import { valorComIpi } from "@/lib/pedidoIpi";
 import { calcStatsEtapas, ETAPAS_FLUXO, calcLeadTime } from "@/lib/producao-stats";
 import { supabase } from "@/lib/supabase/client";
 import type { FinanceiroCliente, FaturamentoMensal, Pedido, Lancamento, IndicadorQualidadeMensal } from "@/types";
@@ -1398,7 +1399,7 @@ export default function RelatoriosPage() {
               {(() => {
                 const taxaRec   = fatTotal > 0 ? recTotal / fatTotal * 100 : 0;
                 const pedAtivos = pedidos.filter(p => !["Entregue", "Cancelado"].includes(p.status));
-                const valAtivos = pedAtivos.reduce((a, p) => a + Number(p.valor_total), 0);
+                const valAtivos = pedAtivos.reduce((a, p) => a + valorComIpi(p), 0);
                 const inadRate  = financeiro.length > 0 ? (devedores.length / financeiro.length * 100) : 0;
                 const mesesAti  = meses.filter(m => m.faturado > 0);
                 const fatMed    = mesesAti.length > 0 ? mesesAti.reduce((a, m) => a + m.faturado, 0) / mesesAti.length : 0;
@@ -1536,7 +1537,7 @@ export default function RelatoriosPage() {
               {/* Pipeline */}
               {(() => {
                 const ativos  = pedidos.filter(p => !["Entregue", "Cancelado"].includes(p.status));
-                const valAtiv = ativos.reduce((a, p) => a + Number(p.valor_total), 0);
+                const valAtiv = ativos.reduce((a, p) => a + valorComIpi(p), 0);
                 return (
                   <>
                     <div style={S.sec}>Pipeline de Produção · Status Atual</div>
@@ -1559,7 +1560,7 @@ export default function RelatoriosPage() {
                 <tbody>
                   {statusCount.map(([status, count], i) => {
                     const grupo  = pedidos.filter(p => p.status === status);
-                    const vTotal = grupo.reduce((a, p) => a + Number(p.valor_total), 0);
+                    const vTotal = grupo.reduce((a, p) => a + valorComIpi(p), 0);
                     const vMed   = count > 0 ? vTotal / count : 0;
                     const isAtiv = !["Entregue", "Cancelado"].includes(status);
                     return (

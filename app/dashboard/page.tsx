@@ -10,6 +10,7 @@ import { getEstoque } from "@/services/estoque.service";
 import { getPedidosSemProgramacao } from "@/services/programacao.service";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatPercent } from "@/lib/formatters";
+import { valorComIpi } from "@/lib/pedidoIpi";
 import type { Pedido, FinanceiroCliente, FaturamentoMensal, EstoqueItem, Compra } from "@/types";
 
 interface ContaPagarMin { valor: number; vencimento: string | null; }
@@ -147,7 +148,7 @@ export default function DashboardPage() {
       const id     = String(p.cliente_id ?? nome);
       if (!map.has(id)) map.set(id, { nome, cidade, total: 0, recebido: 0 });
       const entry = map.get(id)!;
-      entry.total    += Number(p.valor_total);
+      entry.total    += valorComIpi(p);
       entry.recebido += Number(p.valor_recebido);
     });
     return [...map.entries()]

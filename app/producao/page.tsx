@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getPedidos, avancarStatusPedido, retrocederStatusPedido } from "@/services/pedidos.service";
 import { formatBRL, formatDate, formatM2, formatDuracao } from "@/lib/formatters";
+import { valorComIpi } from "@/lib/pedidoIpi";
 import type { Pedido, StatusPedido } from "@/types";
 import { useToast } from "@/components/ui/toast";
 
@@ -96,7 +97,7 @@ export default function ProducaoPage() {
 
   const porCol   = (col: StatusPedido) => pedidos.filter(p => p.status === col);
   const totalM2  = pedidos.reduce((a, p) => a + Number(p.m2_total), 0);
-  const totalVal = pedidos.reduce((a, p) => a + Number(p.valor_total), 0);
+  const totalVal = pedidos.reduce((a, p) => a + valorComIpi(p), 0);
 
   const hoje = new Date();
   const em3dias = new Date(hoje); em3dias.setDate(hoje.getDate() + 3);
@@ -214,7 +215,7 @@ export default function ProducaoPage() {
                           <div className="kbcn">{p.clientes?.nome ?? "—"}</div>
                           <div className="kbcm">
                             <span>{formatM2(p.m2_total)}</span>
-                            <span style={{ color:"var(--acc)" }}>{formatBRL(p.valor_total)}</span>
+                            <span style={{ color:"var(--acc)" }}>{formatBRL(valorComIpi(p))}</span>
                           </div>
                           {p.dt_retirada && (
                             <div style={{ fontSize:"10px", color: retUrgente ? "var(--warn)" : "var(--t3)", marginTop:"4px", fontFamily:"'DM Mono', monospace" }}>
@@ -305,7 +306,7 @@ export default function ProducaoPage() {
                             </span>
                           </td>
                           <td className="mono">{formatM2(p.m2_total)}</td>
-                          <td className="mono">{formatBRL(p.valor_total)}</td>
+                          <td className="mono">{formatBRL(valorComIpi(p))}</td>
                           <td className="mono" style={{ color: urgente ? "var(--warn)" : "var(--t2)", fontWeight: urgente ? 700 : 400 }}>
                             {formatDate(p.dt_retirada)}
                             {urgente && <span style={{ marginLeft:"6px", fontSize:"10px" }}>⚠</span>}

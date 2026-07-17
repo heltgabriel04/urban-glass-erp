@@ -6,6 +6,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { getPedidosPaginado, getPedidosTotais, avancarStatusPedido, retrocederStatusPedido, deletarPedido, type PedidosTotais, type TabPedidos } from "@/services/pedidos.service";
 import { getClientes } from "@/services/clientes.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
+import { valorComIpi } from "@/lib/pedidoIpi";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
@@ -330,7 +331,7 @@ function PedidosPageInner() {
                   </tr>
                 )}
                 {pedidos.map(p => {
-                  const aberto        = p.valor_total - p.valor_recebido;
+                  const aberto        = valorComIpi(p) - p.valor_recebido;
                   const quitado       = aberto <= 0;
                   const finalizado    = ["Entregue","Cancelado"].includes(p.status);
                   const primeiro      = p.status === "Aguardando otimização";
@@ -380,7 +381,7 @@ function PedidosPageInner() {
                       <td className="mono">{formatDate(p.dt_pedido)}</td>
                       <td className="mono">{formatDate(p.dt_retirada)}</td>
                       <td className="mono">{Number(p.m2_total).toFixed(2)} m²</td>
-                      <td className="mono">{formatBRL(p.valor_total)}</td>
+                      <td className="mono">{formatBRL(valorComIpi(p))}</td>
                       <td>
                         <span className="mono" style={{ color: quitado ? "var(--ok)" : "var(--warn)" }}>
                           {formatBRL(p.valor_recebido)}

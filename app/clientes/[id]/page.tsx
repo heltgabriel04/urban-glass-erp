@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatDate, formatPercent } from "@/lib/formatters";
+import { valorComIpi } from "@/lib/pedidoIpi";
 import { registrarRecente } from "@/lib/recentes";
 import { useConfirm } from "@/components/ui/confirm";
 import { Campo } from "@/components/ui/Campo";
@@ -367,7 +368,7 @@ export default function ClienteDetalhe() {
                 </thead>
                 <tbody>
                   {pedidos.map(p => {
-                    const aberto  = Number(p.valor_total) - Number(p.valor_recebido);
+                    const aberto  = valorComIpi(p) - Number(p.valor_recebido);
                     const quitado = aberto <= 0;
                     return (
                       <tr key={p.id}>
@@ -375,7 +376,7 @@ export default function ClienteDetalhe() {
                         <td className="mono">{formatDate(p.dt_pedido)}</td>
                         <td className="mono">{formatDate(p.dt_retirada)}</td>
                         <td className="mono">{Number(p.m2_total).toFixed(2)} m²</td>
-                        <td className="mono">{formatBRL(p.valor_total)}</td>
+                        <td className="mono">{formatBRL(valorComIpi(p))}</td>
                         <td>
                           <span className="mono" style={{ color: quitado ? "var(--ok)" : "var(--warn)" }}>{formatBRL(p.valor_recebido)}</span>
                           {!quitado && <div className="tdim" style={{ color:"var(--err)" }}>− {formatBRL(aberto)}</div>}
