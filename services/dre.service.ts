@@ -59,13 +59,16 @@ function agruparDespesas(rows: Array<{ valor: number; plano_contas: { descricao:
  * confiável entre "dinheiro recebido no período" e "peça entregue no
  * período", que é o que o CMV mede).
  */
-export async function getDRE(ano: number, mes: number | null, regime: RegimeDRE = 'competencia'): Promise<DRE> {
+export async function getDRE(ano: number, mes: number | null, regime: RegimeDRE = 'competencia', contaId?: number | null): Promise<DRE> {
   const { ini, fim } = periodo(ano, mes);
 
   if (regime === 'caixa') {
+    let saidasQuery = supabase.from('baixas_lancamento').select('valor, lancamentos!inner(tipo, natureza, plano_contas(descricao))').is('estornado_em', null).eq('lancamentos.tipo', 'Saída').eq('lancamentos.natureza', 'normal').gte('data', ini).lte('data', fim);
+    if (contaId) saidasQuery = saidasQuery.eq('conta_id', contaId);
+
     const [entradasRes, saidasRes, devolucoesRes] = await Promise.all([
       supabase.from('baixas_lancamento').select('valor, lancamentos!inner(tipo, natureza)').is('estornado_em', null).eq('lancamentos.tipo', 'Entrada').eq('lancamentos.natureza', 'normal').gte('data', ini).lte('data', fim),
-      supabase.from('baixas_lancamento').select('valor, lancamentos!inner(tipo, natureza, plano_contas(descricao))').is('estornado_em', null).eq('lancamentos.tipo', 'Saída').eq('lancamentos.natureza', 'normal').gte('data', ini).lte('data', fim),
+      saidasQuery,
       supabase.from('baixas_lancamento').select('valor, lancamentos!inner(natureza)').is('estornado_em', null).eq('lancamentos.natureza', 'devolucao').gte('data', ini).lte('data', fim),
     ]);
 
@@ -87,9 +90,12 @@ export async function getDRE(ano: number, mes: number | null, regime: RegimeDRE 
     };
   }
 
+  let despesasQuery = supabase.from('lancamentos').select('valor, vencimento, plano_contas(descricao)').eq('tipo', 'Saída').eq('natureza', 'normal').gte('vencimento', ini).lte('vencimento', fim).is('deletado_em', null);
+  if (contaId) despesasQuery = despesasQuery.eq('conta_id', contaId);
+
   const [pedidosRes, despesasRes, devolucoesRes, cmvPeriodo] = await Promise.all([
     supabase.from('pedidos').select('id, valor_total, valor_ipi').neq('status', 'Cancelado').gte('dt_pedido', ini).lte('dt_pedido', fim),
-    supabase.from('lancamentos').select('valor, vencimento, plano_contas(descricao)').eq('tipo', 'Saída').eq('natureza', 'normal').gte('vencimento', ini).lte('vencimento', fim).is('deletado_em', null),
+    despesasQuery,
     supabase.from('lancamentos').select('valor').eq('natureza', 'devolucao').gte('vencimento', ini).lte('vencimento', fim).is('deletado_em', null),
     getCMVPeriodo(ini, fim),
   ]);
