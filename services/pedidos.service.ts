@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
 import type { Pedido, PedidoInsert, PedidoUpdate, ItemPedido, ItemPedidoInsert, StatusPedido } from '@/types';
+import { valorComIpi } from '@/lib/pedidoIpi';
 import { registrarLog } from './log.service';
 import { isChapaInteira } from '@/lib/chapas';
 import { registrarMovimentacao } from './estoqueMovimentacoes.service';
@@ -43,11 +44,11 @@ export async function getPedidosPaginado(
   // Abas financeiras exigem pré-busca de IDs pois PostgREST não compara colunas entre si
   let financialIds: string[] | null = null;
   if (tab === 'aberto' || tab === 'quitado') {
-    const { data: all } = await supabase.from('pedidos').select('id, valor_total, valor_recebido');
-    financialIds = ((all ?? []) as Array<{ id: string; valor_total: number; valor_recebido: number }>)
+    const { data: all } = await supabase.from('pedidos').select('id, valor_total, valor_ipi, valor_recebido');
+    financialIds = ((all ?? []) as Array<{ id: string; valor_total: number; valor_ipi: number; valor_recebido: number }>)
       .filter(r => tab === 'aberto'
-        ? Number(r.valor_recebido) < Number(r.valor_total)
-        : Number(r.valor_recebido) >= Number(r.valor_total))
+        ? Number(r.valor_recebido) < valorComIpi(r)
+        : Number(r.valor_recebido) >= valorComIpi(r))
       .map(r => r.id);
   }
 
@@ -88,16 +89,16 @@ export interface PedidosTotais {
 
 /** Totais para os cards — payload leve, sem joins. Se `busca` for informado, restringe aos pedidos que casam com a pesquisa (ex.: cliente selecionado). */
 export async function getPedidosTotais(busca?: string): Promise<PedidosTotais> {
-  let query = supabase.from('pedidos').select('valor_total, valor_recebido, status');
+  let query = supabase.from('pedidos').select('valor_total, valor_ipi, valor_recebido, status');
   const termo = busca?.trim();
   if (termo) query = query.or(await buildFiltroBuscaOr(termo));
 
   const { data, error } = await query;
   if (error) { console.error('getPedidosTotais:', error); return { count: 0, valorTotal: 0, recebido: 0, emProducao: 0, aguardandoOtim: 0 }; }
-  const rows = (data ?? []) as Array<{ valor_total: number; valor_recebido: number; status: string }>;
+  const rows = (data ?? []) as Array<{ valor_total: number; valor_ipi: number; valor_recebido: number; status: string }>;
   return {
     count:          rows.length,
-    valorTotal:     rows.reduce((a, r) => a + Number(r.valor_total), 0),
+    valorTotal:     rows.reduce((a, r) => a + valorComIpi(r), 0),
     recebido:       rows.reduce((a, r) => a + Number(r.valor_recebido), 0),
     emProducao:     rows.filter(r => r.status.startsWith('Em Produção')).length,
     aguardandoOtim: rows.filter(r => r.status === 'Aguardando otimização').length,
@@ -391,7 +392,7 @@ export async function registrarRecebimento(
   const pedido = await getPedidoById(pedidoId);
   if (!pedido) return null;
 
-  const aberto    = Number(pedido.valor_total) - Number(pedido.valor_recebido);
+  const aberto    = valorComIpi(pedido) - Number(pedido.valor_recebido);
   const aplicado  = Math.min(valor, aberto);
   const excedente = Math.max(0, valor - aberto);
 
@@ -465,7 +466,7 @@ export async function utilizarCreditoEmPedido(
   const creditoDisponivel = await getCreditoCliente(clienteId);
   if (creditoDisponivel <= 0) return null;
 
-  const aberto        = Number(pedido.valor_total) - Number(pedido.valor_recebido);
+  const aberto        = valorComIpi(pedido) - Number(pedido.valor_recebido);
   const valorAplicado = Math.min(valorCredito, creditoDisponivel, aberto);
   if (valorAplicado <= 0.005) return null;
 

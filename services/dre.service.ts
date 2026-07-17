@@ -88,14 +88,14 @@ export async function getDRE(ano: number, mes: number | null, regime: RegimeDRE 
   }
 
   const [pedidosRes, despesasRes, devolucoesRes, cmvPeriodo] = await Promise.all([
-    supabase.from('pedidos').select('id, valor_total').neq('status', 'Cancelado').gte('dt_pedido', ini).lte('dt_pedido', fim),
+    supabase.from('pedidos').select('id, valor_total, valor_ipi').neq('status', 'Cancelado').gte('dt_pedido', ini).lte('dt_pedido', fim),
     supabase.from('lancamentos').select('valor, vencimento, plano_contas(descricao)').eq('tipo', 'Saída').eq('natureza', 'normal').gte('vencimento', ini).lte('vencimento', fim).is('deletado_em', null),
     supabase.from('lancamentos').select('valor').eq('natureza', 'devolucao').gte('vencimento', ini).lte('vencimento', fim).is('deletado_em', null),
     getCMVPeriodo(ini, fim),
   ]);
 
-  const pedidos = (pedidosRes.data ?? []) as Array<{ id: string; valor_total: number }>;
-  const receitaBruta = parseFloat(pedidos.reduce((a, p) => a + (Number(p.valor_total) || 0), 0).toFixed(2));
+  const pedidos = (pedidosRes.data ?? []) as Array<{ id: string; valor_total: number; valor_ipi: number }>;
+  const receitaBruta = parseFloat(pedidos.reduce((a, p) => a + (Number(p.valor_total) || 0) + (Number(p.valor_ipi) || 0), 0).toFixed(2));
   const devolucoes = parseFloat((devolucoesRes.data ?? []).reduce((a, d) => a + Number((d as { valor: number }).valor), 0).toFixed(2));
   const receita = parseFloat((receitaBruta - devolucoes).toFixed(2));
 
