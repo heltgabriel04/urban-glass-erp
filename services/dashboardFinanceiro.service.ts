@@ -111,16 +111,20 @@ export async function getSaldosPorConta(): Promise<SaldoConta[]> {
 export interface MesValor { ano: number; mes: number; valor: number; }
 
 // Despesas (baixas de Saída) somadas por mês, últimos N meses.
-export async function getDespesasPorMes(meses = 6): Promise<MesValor[]> {
+// contaId opcional restringe a uma única conta bancária (mesmo padrão
+// de getSaldoCaixaTotal/getSaldosPorConta neste arquivo).
+export async function getDespesasPorMes(meses = 6, contaId?: number | null): Promise<MesValor[]> {
   const hoje = new Date();
   const inicio = new Date(hoje.getFullYear(), hoje.getMonth() - (meses - 1), 1);
 
-  const { data } = await supabase
+  let query = supabase
     .from('baixas_lancamento')
     .select('valor, data, lancamentos!inner(tipo)')
     .is('estornado_em', null)
     .eq('lancamentos.tipo', 'Saída')
     .gte('data', fmtData(inicio));
+  if (contaId) query = query.eq('conta_id', contaId);
+  const { data } = await query;
 
   const porMes = new Map<string, number>();
   for (const b of (data ?? []) as unknown as { valor: number; data: string }[]) {
