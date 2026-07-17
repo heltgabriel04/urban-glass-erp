@@ -123,4 +123,4 @@ que é a ordem real em que foram escritos e (presumivelmente) rodados.
 | 2026-07-16 | `sql/ajuste-p002.sql` | Ajuste pontual de dados — remove 2 lançamentos "A Receber" órfãos do pedido P-002 | ✅ |
 | 2026-07-16 | `sql/ajuste-metro-linear-para-m2.sql` | Ajuste pontual de dados — converte 11 pedidos (33 itens) de metro linear R$15/ml para m² real R$60/m² | ✅ |
 | 2026-07-16 | `sql/ipi-pedidos.sql` | IPI nos Pedidos — pedidos.tem_ipi, pedidos.valor_ipi | ✅ |
-| 2026-07-17 | `sql/ipi-pedidos-views.sql` | IPI nos Pedidos — views financeiro_clientes/faturamento_mensal somam IPI | ⏳ |
+| 2026-07-17 | `sql/ipi-pedidos-views.sql` | IPI nos Pedidos — views financeiro_clientes/faturamento_mensal somam IPI | ✅ |
