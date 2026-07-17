@@ -146,14 +146,28 @@ importada"** (`eh_importacao`). Marcado, abre a seção "Importação":
 O restante do fluxo (recebimento, conta a pagar, ledger de estoque,
 CMV, DRE, margem) não muda em nada.
 
-## Limitação conhecida (documentada de propósito)
+## Limitações conhecidas (documentadas de propósito)
 
-O rateio "Aplicar aos itens" usa o **mesmo custo/m² pra todos os
-itens** da compra. Se uma compra misturar vidros de valores FOB muito
-diferentes, o rateio ideal seria proporcional ao valor de cada item —
-mas `compras_itens` não tem FOB por item, e pra chapas do mesmo padrão
-o rateio por m² é fiel. Se isso um dia doer na prática, a evolução é
-FOB por item (mudança de schema própria, fora deste escopo).
+1. **Rateio uniforme**: "Aplicar aos itens" usa o **mesmo custo/m² pra
+   todos os itens** da compra. Se uma compra misturar vidros de valores
+   FOB muito diferentes, o rateio ideal seria proporcional ao valor de
+   cada item — mas `compras_itens` não tem FOB por item, e pra chapas
+   do mesmo padrão o rateio por m² é fiel. Se isso um dia doer na
+   prática, a evolução é FOB por item (mudança de schema própria, fora
+   deste escopo).
+
+2. **Conta a pagar da compra importada** (achado da revisão final,
+   2026-07-17): `gerarContaAPagarDaCompra()` continua gerando o título
+   com o `valor_total` da compra — que, depois de "Aplicar aos itens",
+   é o custo **não-recuperável** (ex.: R$ 67.000 no exemplo da spec),
+   não o desembolso real (R$ 84.000, que se divide entre fornecedor no
+   câmbio, tributos no desembaraço e despachante). Ou seja, o título
+   gerado é um constructo contábil, não bate com nenhum documento de
+   pagamento real. Decisão pendente do usuário: manter assim (e ajustar
+   os títulos na mão), pular o título automático pra compras
+   importadas, ou gerar com observação explicativa. A fase 2 (ledger de
+   créditos) vai precisar do split desembolsado/creditável de qualquer
+   forma — decidir junto com ela.
 
 ## Fora de escopo (YAGNI)
 

@@ -127,7 +127,11 @@ export default function ComprasPage() {
   }
 
   const valorTotalForm = itens.reduce((a, it) => a + subtotalItem(it), 0);
-  const m2TotalForm = itens.reduce((a, it) => a + (Number(it.chapas) || 0) * (Number(it.m2_por_chapa) || 0), 0);
+  // Mesmo filtro de validade do handleSalvar — linha meio-preenchida (sem
+  // produto) não pode entrar no divisor do custo/m², senão dilui o rateio.
+  const m2TotalForm = itens
+    .filter(it => it.produto_id && Number(it.chapas) > 0 && Number(it.m2_por_chapa) > 0)
+    .reduce((a, it) => a + Number(it.chapas) * Number(it.m2_por_chapa), 0);
   const resumoImp = calcularCustoImportacao(imp, m2TotalForm);
 
   function aplicarCustoImportacaoAosItens() {
@@ -146,6 +150,11 @@ export default function ComprasPage() {
 
   function handleImportarXml(dados: DadosImportadosXml) {
     setModalXmlAberto(false);
+    // Importar XML substitui o form inteiro — a seção Importação também
+    // volta ao zero, senão valores de DI digitados antes ficariam órfãos
+    // colados numa NF-e que não tem nada a ver com eles.
+    setEhImportacao(false);
+    setImp({ ...IMP_VAZIO });
     setForm({
       fornecedor_id: dados.fornecedorId ? String(dados.fornecedorId) : "",
       nf: dados.xmlDados.numeroNF ?? "",
