@@ -194,6 +194,7 @@ export default function OrcamentoDetalhe() {
           )}
 
           <button className="btn bg sm" onClick={handlePrint}>⎙ PDF</button>
+          <button className="btn bg sm" onClick={() => router.push(`/orcamentos/${id}/editar`)}>✎ Editar Orçamento</button>
 
           {orc.status === "Rascunho" && (
             <>
