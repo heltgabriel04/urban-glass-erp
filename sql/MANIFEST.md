@@ -124,3 +124,4 @@ que é a ordem real em que foram escritos e (presumivelmente) rodados.
 | 2026-07-16 | `sql/ajuste-metro-linear-para-m2.sql` | Ajuste pontual de dados — converte 11 pedidos (33 itens) de metro linear R$15/ml para m² real R$60/m² | ✅ |
 | 2026-07-16 | `sql/ipi-pedidos.sql` | IPI nos Pedidos — pedidos.tem_ipi, pedidos.valor_ipi | ✅ |
 | 2026-07-17 | `sql/ipi-pedidos-views.sql` | IPI nos Pedidos — views financeiro_clientes/faturamento_mensal somam IPI | ✅ |
+| 2026-07-17 | `sql/importacao-compras.sql` | Custo de Importação — câmbio/tributos da DI por compra (14 colunas em compras) | ⏳ |
