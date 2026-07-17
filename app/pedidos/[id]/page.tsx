@@ -10,6 +10,7 @@ import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, upd
 import { getRetiradasPorPedido, calcularSaldoItens, createRetirada } from "@/services/retiradas.service";
 import { getObservacoesPorPedido, createObservacao, deletarObservacao } from "@/services/observacoes.service";
 import { formatBRL, formatDate, formatDuracao, medidaReal } from "@/lib/formatters";
+import { ALIQ_IPI_PEDIDO, calcularValorIpi, valorComIpi } from "@/lib/pedidoIpi";
 import { registrarRecente } from "@/lib/recentes";
 import PedidoTabs from "@/components/pedidos/PedidoTabs";
 import { useToast } from "@/components/ui/toast";
@@ -280,7 +281,7 @@ export default function PedidoDetalhe() {
       setEditParcelas(aReceber.map(l => ({ data: l.vencimento ?? "", valor: l.valor, lancamento_id: l.id })));
     } else {
       const n = pedido.parcelas ?? 1;
-      const valorParcela = parseFloat((pedido.valor_total / n).toFixed(2));
+      const valorParcela = parseFloat((valorComIpi(pedido) / n).toFixed(2));
       const datas = pedido.datas_pgto ?? [];
       setEditParcelas(Array.from({ length: n }, (_, i) => ({ data: datas[i] ?? "", valor: valorParcela })));
     }
@@ -302,7 +303,7 @@ export default function PedidoDetalhe() {
     const primeiraData = editParcelas[0]?.data ?? "";
     setEditParcelas(Array.from({ length: n }, (_, i) => ({
       data: primeiraData ? (i === 0 ? primeiraData : addMeses(primeiraData, i)) : "",
-      valor: pedido ? parseFloat((pedido.valor_total / n).toFixed(2)) : 0,
+      valor: pedido ? parseFloat((valorComIpi(pedido) / n).toFixed(2)) : 0,
     })));
   }
 
@@ -360,6 +361,7 @@ export default function PedidoDetalhe() {
       datas_pgto:   parcelasValidas.map(p => p.data),
       valores_pgto: parcelasValidas.map(p => p.valor),
       valor_total:  parseFloat(valorTotalEditado.toFixed(2)),
+      valor_ipi:    pedido.tem_ipi ? calcularValorIpi(valorTotalEditado) : 0,
       m2_total:     parseFloat(m2TotalEditado.toFixed(4)),
     });
 
@@ -573,7 +575,7 @@ export default function PedidoDetalhe() {
   async function handleAdicionarParcela() {
     if (!pedido) return;
     const totalAReceber = parcelasAReceber.reduce((a, l) => a + l.valor, 0);
-    const restante = parseFloat((Math.max(0, pedido.valor_total - pedido.valor_recebido - totalAReceber)).toFixed(2));
+    const restante = parseFloat((Math.max(0, valorComIpi(pedido) - pedido.valor_recebido - totalAReceber)).toFixed(2));
     await createLancamento({
       tipo: "Entrada",
       descricao: `Recebimento · ${pedido.id}`,
@@ -773,9 +775,10 @@ export default function PedidoDetalhe() {
   if (loading) return <AppLayout><div className="con"><div className="loading">Carregando pedido...</div></div></AppLayout>;
   if (!pedido) return <AppLayout><div className="con"><div style={{ color:"var(--err)", padding:"32px" }}>Pedido não encontrado.</div></div></AppLayout>;
 
-  const aberto       = Number(pedido.valor_total) - Number(pedido.valor_recebido);
+  const totalComIpi  = valorComIpi(pedido);
+  const aberto       = totalComIpi - Number(pedido.valor_recebido);
   const quitado      = aberto <= 0;
-  const pctRec       = pedido.valor_total > 0 ? Math.min(100, (Number(pedido.valor_recebido) / Number(pedido.valor_total)) * 100) : 0;
+  const pctRec       = totalComIpi > 0 ? Math.min(100, (Number(pedido.valor_recebido) / totalComIpi) * 100) : 0;
   const statusIdx    = FLUXO.indexOf(pedido.status);
   const podeAvancar  = !["Entregue","Cancelado"].includes(pedido.status);
   const temItens     = (pedido.itens_pedido?.length ?? 0) > 0;
@@ -1038,7 +1041,7 @@ export default function PedidoDetalhe() {
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"8px", marginBottom:"14px" }}>
                 <div style={{ background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px", border:"1px solid var(--b2)" }}>
                   <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", textTransform:"uppercase", marginBottom:"4px" }}>Total</div>
-                  <div style={{ fontSize:"14px", fontWeight:800, color:"var(--acc)", fontFamily:"'DM Mono',monospace" }}>{formatBRL(pedido.valor_total)}</div>
+                  <div style={{ fontSize:"14px", fontWeight:800, color:"var(--acc)", fontFamily:"'DM Mono',monospace" }}>{formatBRL(totalComIpi)}</div>
                 </div>
                 <div style={{ background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px", border:"1px solid var(--b2)" }}>
                   <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", textTransform:"uppercase", marginBottom:"4px" }}>Recebido</div>
@@ -1049,6 +1052,13 @@ export default function PedidoDetalhe() {
                   <div style={{ fontSize:"14px", fontWeight:800, color: quitado ? "var(--ok)" : "var(--err)", fontFamily:"'DM Mono',monospace" }}>{formatBRL(Math.max(0, aberto))}</div>
                 </div>
               </div>
+
+              {pedido.tem_ipi && (
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:"11px", color:"var(--t3)", marginBottom:"10px" }}>
+                  <span>IPI ({ALIQ_IPI_PEDIDO}% sobre {formatBRL(pedido.valor_total)})</span>
+                  <span style={{ fontFamily:"'DM Mono',monospace", color:"var(--warn)" }}>{formatBRL(pedido.valor_ipi)}</span>
+                </div>
+              )}
 
               {/* Barra de progresso */}
               <div style={{ marginBottom:"16px" }}>
@@ -1880,7 +1890,13 @@ export default function PedidoDetalhe() {
             <div style={{ padding:"12px", background:"#f0f4ff", borderRadius:"8px", borderLeft:"4px solid #2d5fa6" }}>
               <div style={{ fontSize:"9px", fontWeight:700, color:"#2d5fa6", textTransform:"uppercase", letterSpacing:"1.5px", marginBottom:"8px" }}>Condições de Pagamento</div>
               <div style={{ display:"flex", flexDirection:"column", gap:"6px", fontSize:"11px" }}>
-                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Valor total</span><strong style={{ fontFamily:"monospace" }}>{formatBRL(pedido.valor_total)}</strong></div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Valor total</span><strong style={{ fontFamily:"monospace" }}>{formatBRL(totalComIpi)}</strong></div>
+                {pedido.tem_ipi && (
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:"11px", color:"var(--t3)", marginBottom:"10px" }}>
+                    <span>IPI ({ALIQ_IPI_PEDIDO}% sobre {formatBRL(pedido.valor_total)})</span>
+                    <span style={{ fontFamily:"'DM Mono',monospace", color:"var(--warn)" }}>{formatBRL(pedido.valor_ipi)}</span>
+                  </div>
+                )}
                 <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Recebido</span><strong style={{ fontFamily:"monospace", color:"#155724" }}>{formatBRL(pedido.valor_recebido)}</strong></div>
                 <div style={{ display:"flex", justifyContent:"space-between", borderTop:"1px solid #d0daf0", paddingTop:"6px" }}>
                   <span style={{ color: aberto > 0 ? "#c00" : "#155724", fontWeight:700 }}>{aberto > 0 ? "Em aberto" : "✓ Quitado"}</span>
@@ -1892,7 +1908,7 @@ export default function PedidoDetalhe() {
               <div style={{ minWidth:"220px", background:"#f0f4ff", borderRadius:"8px", padding:"12px", border:"1px solid #d0daf0" }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingTop:"10px", borderTop:"2px solid #2d5fa6" }}>
                   <span style={{ fontWeight:700, fontSize:"13px", color:"#2d5fa6" }}>VALOR TOTAL</span>
-                  <span style={{ fontFamily:"monospace", fontWeight:900, fontSize:"18px", color:"#2d5fa6" }}>{formatBRL(pedido.valor_total)}</span>
+                  <span style={{ fontFamily:"monospace", fontWeight:900, fontSize:"18px", color:"#2d5fa6" }}>{formatBRL(totalComIpi)}</span>
                 </div>
               </div>
             </div>
