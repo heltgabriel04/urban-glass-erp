@@ -41,7 +41,7 @@ import Link from "next/link";
 import {
   Link2, Lock, Flag, AlertTriangle, Clock,
   LayoutGrid, BarChart3, Truck, Calendar, Flame, RefreshCw,
-  PlayCircle, CheckCircle2, Star, Zap, Rows3, GitBranch,
+  PlayCircle, CheckCircle2, Star, Zap, Rows3, GitBranch, HelpCircle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -249,6 +249,12 @@ function LegendaCores({ linhas }: { linhas: ProducaoLinha[] }) {
           <span style={{ fontSize: 10, color: "var(--t3)" }}>{h.label}</span>
         </div>
       ))}
+      <div style={{ width: 1, height: 10, background: "var(--b2)" }} />
+      <LegendaGrupo label="DADO" />
+      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+        <HelpCircle size={10} color="var(--warn)" />
+        <span style={{ fontSize: 10, color: "var(--t3)" }}>Horário estimado (fechamento em lote)</span>
+      </div>
     </div>
   );
 }
@@ -297,6 +303,11 @@ function BlocoTooltipContent({ prog }: { prog: ProgramacaoProducao }) {
           label={emAtraso ? "Horas atrasadas" : "Tempo restante"}
           value={formatarDuracao(Math.abs(minutosRestantes))}
         />
+      )}
+      {prog.horario_real_estimado && (
+        <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid var(--b2)", display: "flex", alignItems: "center", gap: 4, color: "var(--warn)", fontSize: 10.5 }}>
+          <HelpCircle size={11} /> Horário estimado — pedido avançado em lote
+        </div>
       )}
       {prog.obs && (
         <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid var(--b2)" }}>
@@ -454,6 +465,11 @@ function BlocoProducao({
           {prog.travado && (
             <span title="Reposicionado manualmente — o auto-agendamento não move este bloco" style={{ display: "inline-flex", flexShrink: 0, opacity: 0.7 }}>
               <Lock size={9} />
+            </span>
+          )}
+          {prog.horario_real_estimado && (
+            <span title="Horário estimado — pedido avançado em lote, não é uma medição real desse bloco" style={{ display: "inline-flex", flexShrink: 0, opacity: 0.7, color: "var(--warn)" }}>
+              <HelpCircle size={9} />
             </span>
           )}
         </div>

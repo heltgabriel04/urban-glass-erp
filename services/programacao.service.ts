@@ -1157,14 +1157,21 @@ export async function reconciliarProgramacaoComPedido(
     const updates: Partial<ProgramacaoProducao> = { status: alvo };
     const retrocedendo = ORDEM_STATUS_PROGRAMACAO[alvo] < ORDEM_STATUS_PROGRAMACAO[bloco.status];
 
+    // horario_real_estimado: esta função carimba TODOS os blocos em aberto de
+    // um pedido de uma vez (avanço de status do pedido), nunca um bloco por
+    // vez — então qualquer dt_inicio_real/dt_fim_real que ela escreva aqui
+    // não é uma observação real desse bloco específico, é um carimbo
+    // administrativo. Ver docs/superpowers/specs/2026-07-20-fechamento-lote-producao-design.md.
     if (retrocedendo) {
-      if (alvo === 'Agendado')    { updates.dt_inicio_real = null; updates.dt_fim_real = null; }
-      if (alvo === 'Em Execução') { updates.dt_inicio_real = toISOLocal(new Date()); updates.dt_fim_real = null; }
+      if (alvo === 'Agendado')    { updates.dt_inicio_real = null; updates.dt_fim_real = null; updates.horario_real_estimado = false; }
+      if (alvo === 'Em Execução') { updates.dt_inicio_real = toISOLocal(new Date()); updates.dt_fim_real = null; updates.horario_real_estimado = true; }
     } else {
-      if (alvo === 'Em Execução' && !bloco.dt_inicio_real) updates.dt_inicio_real = toISOLocal(new Date());
+      if (alvo === 'Em Execução' && !bloco.dt_inicio_real) { updates.dt_inicio_real = toISOLocal(new Date()); updates.horario_real_estimado = true; }
       if (alvo === 'Concluído') {
-        if (!bloco.dt_inicio_real) updates.dt_inicio_real = toISOLocal(new Date());
-        if (!bloco.dt_fim_real)    updates.dt_fim_real    = toISOLocal(new Date());
+        let tocouHorarioReal = false;
+        if (!bloco.dt_inicio_real) { updates.dt_inicio_real = toISOLocal(new Date()); tocouHorarioReal = true; }
+        if (!bloco.dt_fim_real)    { updates.dt_fim_real    = toISOLocal(new Date()); tocouHorarioReal = true; }
+        if (tocouHorarioReal) updates.horario_real_estimado = true;
       }
     }
 
@@ -1471,6 +1478,7 @@ export async function getCalibracaoTempos(): Promise<DadosCalibracao[]> {
     .from('programacao_producao')
     .select('etapa, duracao_estimada_min, dt_inicio_real, dt_fim_real')
     .eq('status', 'Concluído')
+    .eq('horario_real_estimado', false)
     .not('dt_inicio_real', 'is', null)
     .not('dt_fim_real', 'is', null);
 

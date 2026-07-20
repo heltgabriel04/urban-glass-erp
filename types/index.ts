@@ -1349,6 +1349,7 @@ export interface ProgramacaoProducao {
   obs: string | null;
   desconto_setup_min: number | null; // min. de setup economizados por repetir o produto do bloco anterior na mesma linha (motor de recálculo automático)
   travado?: boolean; // reposicionado manualmente (drag/resize) — motor de agendamento automático não deve mover
+  horario_real_estimado: boolean; // true = dt_inicio_real/dt_fim_real vieram de avanço em lote do status do pedido, não de uma ação real nesse bloco específico
   created_at: string;
   updated_at: string;
   pedidos?: {
