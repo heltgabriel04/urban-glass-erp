@@ -153,6 +153,7 @@ export default function ComprasPage() {
 
   function handleImportarXml(dados: DadosImportadosXml) {
     setModalXmlAberto(false);
+    setArquivoSiegRevisao(null);
     // Importar XML substitui o form inteiro — a seção Importação também
     // volta ao zero, senão valores de DI digitados antes ficariam órfãos
     // colados numa NF-e que não tem nada a ver com eles.
