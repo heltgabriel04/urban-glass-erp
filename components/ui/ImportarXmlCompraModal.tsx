@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
 import { Campo } from "./Campo";
 import {
@@ -26,9 +26,14 @@ interface Props {
   onImportar: (dados: DadosImportadosXml) => void;
   onFornecedorCriado: (fornecedor: FornecedorOpt) => void;
   onClose: () => void;
+  // Quando informado, o modal já abre lendo este arquivo automaticamente
+  // (mesmo fluxo de handleFile, sem o usuário escolher no input) — usado
+  // pelo fluxo de importação via SIEG, que já tem o XML em mãos antes de
+  // abrir este modal.
+  arquivoInicial?: File;
 }
 
-export default function ImportarXmlCompraModal({ produtos, fornecedores, onImportar, onFornecedorCriado, onClose }: Props) {
+export default function ImportarXmlCompraModal({ produtos, fornecedores, onImportar, onFornecedorCriado, onClose, arquivoInicial }: Props) {
   const [arquivo, setArquivo]         = useState<File | null>(null);
   const [xmlDados, setXmlDados]       = useState<XmlCompraParseado | null>(null);
   const [fornecedorId, setFornecedorId] = useState<number | null>(null);
@@ -37,6 +42,11 @@ export default function ImportarXmlCompraModal({ produtos, fornecedores, onImpor
   const [lendo, setLendo]             = useState(false);
   const [criandoFornecedor, setCriandoFornecedor] = useState(false);
   const [salvandoFornecedor, setSalvandoFornecedor] = useState(false);
+
+  useEffect(() => {
+    if (arquivoInicial) handleFile(arquivoInicial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleFile(file: File) {
     setErro("");
