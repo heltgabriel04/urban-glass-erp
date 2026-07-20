@@ -13,6 +13,7 @@ import {
   getCompras, createCompra, confirmarRecebimento, deletarCompra, anexarXmlNaCompra,
 } from "@/services/compras.service";
 import ImportarXmlCompraModal, { type DadosImportadosXml } from "@/components/ui/ImportarXmlCompraModal";
+import BuscarNotasRecebidasModal from "@/components/ui/BuscarNotasRecebidasModal";
 import { calcularCustoImportacao, type DadosImportacao } from "@/lib/custoImportacao";
 import { HistoricoPrecoProduto } from "@/components/ui/HistoricoPrecoProduto";
 import type { XmlCompraParseado } from "@/lib/importXmlCompra";
@@ -78,6 +79,8 @@ export default function ComprasPage() {
   const [expandido, setExpandido]   = useState<string | null>(null);
   const [processando, setProcessando] = useState<string | null>(null);
   const [modalXmlAberto, setModalXmlAberto] = useState(false);
+  const [modalSiegAberto, setModalSiegAberto] = useState(false);
+  const [arquivoSiegRevisao, setArquivoSiegRevisao] = useState<File | null>(null);
   const [ehImportacao, setEhImportacao] = useState(false);
   const [imp, setImp] = useState({ ...IMP_VAZIO });
   const [xmlPendente, setXmlPendente] = useState<{ dados: XmlCompraParseado; xmlFile: File } | null>(null);
@@ -331,18 +334,29 @@ export default function ComprasPage() {
         <button className="btn bg sm" onClick={() => setModalXmlAberto(true)}>
           Importar XML
         </button>
+        <button className="btn bg sm" onClick={() => setModalSiegAberto(true)}>
+          🔍 Buscar Notas Recebidas
+        </button>
         <button className="btn bp sm" onClick={() => { setShowForm(v => !v); if (showForm) resetForm(); }}>
           {showForm ? "✕ Cancelar" : "+ Nova Compra"}
         </button>
       </div>
 
-      {modalXmlAberto && (
+      {(modalXmlAberto || arquivoSiegRevisao) && (
         <ImportarXmlCompraModal
           produtos={produtos.map(p => ({ id: p.id, nome: p.nome }))}
           fornecedores={fornecedores}
           onImportar={handleImportarXml}
           onFornecedorCriado={handleFornecedorCriado}
-          onClose={() => setModalXmlAberto(false)}
+          onClose={() => { setModalXmlAberto(false); setArquivoSiegRevisao(null); }}
+          arquivoInicial={arquivoSiegRevisao ?? undefined}
+        />
+      )}
+
+      {modalSiegAberto && (
+        <BuscarNotasRecebidasModal
+          onRevisar={(arquivo) => { setModalSiegAberto(false); setArquivoSiegRevisao(arquivo); }}
+          onClose={() => setModalSiegAberto(false)}
         />
       )}
 
