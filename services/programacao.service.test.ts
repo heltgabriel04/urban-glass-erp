@@ -6,6 +6,7 @@ import {
   duracaoTotalCorte, calcularTempoEstimado,
   duracaoComSetupAdaptativo, refinarComTrocasAdjacentes, decidirCalibracoes,
   statusProgramacaoAlvo, selecionarGargalo, calcularLeadTime, agruparPorPedido,
+  proporcaoHistoricaAberta, projetarDiasFechados, addDays,
 } from "@/services/programacao.service";
 import type { MudancaProposta, DadosCalibracao } from "@/services/programacao.service";
 import type { ProducaoLinha, ConfigTempoProducao } from "@/types";
@@ -556,5 +557,59 @@ describe("agruparPorPedido", () => {
       { pedido_id: "P-004", dt_inicio_previsto: segundaAs(8, 0).toISOString(), pedidos: null },
     ]);
     expect(grupos[0].label).toContain("P-004");
+  });
+});
+
+describe("proporcaoHistoricaAberta", () => {
+  const hoje = segundaAs(0); // 2026-01-05, segunda-feira
+
+  it("sem histórico decidido ainda, assume aberta (1)", () => {
+    expect(proporcaoHistoricaAberta(1, [], hoje, 4)).toBe(1);
+  });
+
+  it("janela zero (sem dias úteis pra olhar), assume aberta (1)", () => {
+    expect(proporcaoHistoricaAberta(1, [], hoje, 0)).toBe(1);
+  });
+
+  it("calcula proporção real com base em dias 'sem_recurso' já decididos", () => {
+    // janela de 4 dias corridos antes de 05/01 (segunda): 01/01 (qui) e 02/01
+    // (sex) são os únicos dias úteis (03/01 sáb e 04/01 dom não contam).
+    // Linha 1 ficou fechada (sem_recurso) só na sexta — 1 de 2 dias úteis.
+    const bloqueios = [
+      { linha_id: 1, dt_inicio: "2026-01-02T00:00:00", dt_fim: "2026-01-02T23:59:59", tipo: "sem_recurso" as const },
+    ];
+    expect(proporcaoHistoricaAberta(1, bloqueios, hoje, 4)).toBe(0.5);
+  });
+
+  it("ignora bloqueios de outra linha ou de outro tipo", () => {
+    const bloqueios = [
+      { linha_id: 2, dt_inicio: "2026-01-02T00:00:00", dt_fim: "2026-01-02T23:59:59", tipo: "sem_recurso" as const },
+      { linha_id: 1, dt_inicio: "2026-01-02T00:00:00", dt_fim: "2026-01-02T23:59:59", tipo: "manutencao" as const },
+    ];
+    expect(proporcaoHistoricaAberta(1, bloqueios, hoje, 4)).toBe(1);
+  });
+});
+
+describe("projetarDiasFechados", () => {
+  const hoje = segundaAs(0); // 2026-01-05, segunda
+
+  it("distribui os dias fechados uniformemente conforme a proporção, sem concentrar no início", () => {
+    const fim = addDays(hoje, 9); // 2026-01-14 — 8 dias úteis no intervalo
+    const resultado = projetarDiasFechados(1, hoje, fim, [], 0.5);
+    expect([...resultado].sort()).toEqual(["2026-01-06", "2026-01-08", "2026-01-12", "2026-01-14"]);
+  });
+
+  it("nunca sobrescreve um dia que já tem decisão explícita", () => {
+    const fim = addDays(hoje, 9);
+    const bloqueios = [
+      { linha_id: 1, dt_inicio: "2026-01-06T00:00:00", dt_fim: "2026-01-06T23:59:59", tipo: "sem_recurso" as const },
+    ];
+    const resultado = projetarDiasFechados(1, hoje, fim, bloqueios, 0.5);
+    expect(resultado.has("2026-01-06")).toBe(false);
+  });
+
+  it("proporção aberta 1 (linha sempre disponível) não projeta nenhum dia fechado", () => {
+    const fim = addDays(hoje, 9);
+    expect(projetarDiasFechados(1, hoje, fim, [], 1).size).toBe(0);
   });
 });

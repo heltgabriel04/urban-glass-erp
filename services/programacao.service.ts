@@ -362,6 +362,70 @@ export function minutosRestantesNoDia(cursor: Date, linha: Pick<ProducaoLinha, '
   return Math.max(0, (fimExpedienteHoje.getTime() - cursor.getTime()) / 60_000);
 }
 
+// ─── CAPACIDADE COMPARTILHADA (2 pessoas alternando Corte/Lapidação) ──
+//
+// bloqueios_linha com tipo 'sem_recurso' já representa "essa linha não tem
+// ninguém alocado nesse dia" (painel de alocação diária em /programacao).
+// Só dias sem NENHUMA decisão explícita (nem 'sem_recurso' em Corte, nem em
+// Lapidação) precisam de projeção — usada só pela cotação de prazo, nunca
+// pelo agendamento real, que sempre respeita só o que foi de fato decidido.
+
+function diaTemDecisaoExplicita(
+  linhaId: number,
+  iso: string,
+  bloqueios: Pick<BloqueioLinha, 'linha_id' | 'dt_inicio' | 'dt_fim' | 'tipo'>[],
+): boolean {
+  return bloqueios.some(b =>
+    b.tipo === 'sem_recurso' && b.linha_id === linhaId &&
+    iso >= b.dt_inicio.slice(0, 10) && iso <= b.dt_fim.slice(0, 10)
+  );
+}
+
+// Proporção de dias úteis, nos últimos `janelaDias` corridos antes de `hoje`,
+// em que a linha esteve REALMENTE aberta (sem decisão 'sem_recurso' nela).
+// Sem nenhuma decisão explícita no histórico ainda, assume aberta (1) — não
+// há dado real pra puxar a estimativa pra baixo.
+export function proporcaoHistoricaAberta(
+  linhaId: number,
+  bloqueios: Pick<BloqueioLinha, 'linha_id' | 'dt_inicio' | 'dt_fim' | 'tipo'>[],
+  hoje: Date,
+  janelaDias: number = 20,
+): number {
+  let diasUteis = 0;
+  let diasFechados = 0;
+  for (let d = addDays(hoje, -janelaDias); d < hoje; d = addDays(d, 1)) {
+    if (d.getDay() === 0 || d.getDay() === 6) continue;
+    diasUteis++;
+    if (diaTemDecisaoExplicita(linhaId, d.toISOString().slice(0, 10), bloqueios)) diasFechados++;
+  }
+  if (diasUteis === 0) return 1;
+  return 1 - diasFechados / diasUteis;
+}
+
+// Projeta dias futuros SEM decisão explícita como fechados pra uma linha, na
+// proporção histórica (`proporcaoAberta`), distribuídos de forma uniforme ao
+// longo do horizonte (acumulador tipo Bresenham) em vez de concentrados no
+// início ou no fim — nunca sobrescreve um dia que já tenha decisão real.
+export function projetarDiasFechados(
+  linhaId: number,
+  dataInicio: Date,
+  dataFim: Date,
+  bloqueios: Pick<BloqueioLinha, 'linha_id' | 'dt_inicio' | 'dt_fim' | 'tipo'>[],
+  proporcaoAberta: number,
+): Set<string> {
+  const proporcaoFechada = Math.max(0, 1 - proporcaoAberta);
+  const fechados = new Set<string>();
+  let acumulado = 0;
+  for (let d = new Date(dataInicio); d <= dataFim; d = addDays(d, 1)) {
+    if (d.getDay() === 0 || d.getDay() === 6) continue;
+    const iso = d.toISOString().slice(0, 10);
+    if (diaTemDecisaoExplicita(linhaId, iso, bloqueios)) continue;
+    acumulado += proporcaoFechada;
+    if (acumulado >= 1) { fechados.add(iso); acumulado -= 1; }
+  }
+  return fechados;
+}
+
 // Escolhe, dentro de uma fila já ordenada por prioridade (score desc), qual
 // tarefa agendar a seguir na linha menos ocupada: a de maior prioridade que
 // ainda caiba no tempo restante do dia (gap-fill); se nenhuma couber, cai de
@@ -734,6 +798,113 @@ export async function reagendar(
   });
 
   return true;
+}
+
+// ─── COTAÇÃO DE PRAZO (dry-run, nunca grava no banco) ───────
+// Motor de cotação: dado um pedido hipotético (ainda não salvo), estima data
+// de conclusão por etapa reaproveitando o mesmo alocarBloco/
+// calcularTempoEstimado que criarProgramacaoPedido usa pra agendar de
+// verdade — a diferença é que aqui nada é escrito, só lido (fila real +
+// projeção de capacidade pra dias futuros sem decisão explícita). Ver
+// docs/superpowers/specs/2026-07-20-capacidade-compartilhada-cotacao-prazo-design.md
+
+export interface CotacaoPrazo {
+  fimCorte: Date | null;
+  fimLapidacao: Date | null;
+  fimSeparacao: Date;
+  dtFinal: Date;
+}
+
+// Tempo de Separação/carregamento — não consome recurso restrito (linha
+// própria), então não passa pelo motor de alocação por hora. Estimativa
+// manual documentada, não um valor calibrado ainda; ajustar quando houver
+// dado real de quanto tempo leva entre "produção pronta" e "caminhão saiu".
+const SEPARACAO_MIN_ESTIMADO = 60;
+
+// Onde a fila real de uma linha termina hoje — ponto de partida da cotação,
+// não uma suposição: lê o mesmo dt_fim_previsto que o Gantt já exibe.
+async function proximoSlotLivre(linhaId: number, agora: Date): Promise<Date> {
+  const { data } = await supabase
+    .from('programacao_producao')
+    .select('dt_fim_previsto')
+    .eq('linha_id', linhaId)
+    .neq('status', 'Cancelado')
+    .not('dt_fim_previsto', 'is', null)
+    .order('dt_fim_previsto', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const fimFila = data?.dt_fim_previsto ? new Date(data.dt_fim_previsto) : null;
+  return fimFila && fimFila > agora ? fimFila : agora;
+}
+
+export async function cotarPrazoPedido(
+  itens: Pick<ItemPedido, 'm2' | 'quantidade' | 'lapidacao' | 'produto_nome'>[],
+  somenteChapas: boolean,
+  config: ConfigTempoProducao[],
+  linhas: ProducaoLinha[],
+  linhaCorteId: number,
+  linhaLapId: number | undefined,
+  calendario: Set<string>,
+  bloqueiosReais: Pick<BloqueioLinha, 'linha_id' | 'dt_inicio' | 'dt_fim' | 'tipo'>[],
+  horizonteProjecaoDias: number = 90,
+): Promise<CotacaoPrazo> {
+  const agora = new Date();
+
+  // Chapa inteira pula Corte/Lapidação (mesma regra de agendarChapaInteira)
+  // — vai direto pra Separação.
+  if (somenteChapas) {
+    const fimSeparacao = new Date(agora.getTime() + SEPARACAO_MIN_ESTIMADO * 60_000);
+    return { fimCorte: null, fimLapidacao: null, fimSeparacao, dtFinal: fimSeparacao };
+  }
+
+  const linhaCorte = linhas.find(l => l.id === linhaCorteId);
+  const linhaLap   = linhaLapId ? linhas.find(l => l.id === linhaLapId) : undefined;
+  if (!linhaCorte) throw new Error('Linha de corte não encontrada.');
+
+  const diasBloqueadosPorLinha = construirDiasBloqueadosPorLinha(linhas, calendario, bloqueiosReais);
+  const fimProjecao = addDays(agora, horizonteProjecaoDias);
+
+  const propAbertaCorte = proporcaoHistoricaAberta(linhaCorteId, bloqueiosReais, agora);
+  for (const iso of projetarDiasFechados(linhaCorteId, agora, fimProjecao, bloqueiosReais, propAbertaCorte)) {
+    diasBloqueadosPorLinha[linhaCorteId]?.add(iso);
+  }
+  if (linhaLapId) {
+    const propAbertaLap = proporcaoHistoricaAberta(linhaLapId, bloqueiosReais, agora);
+    for (const iso of projetarDiasFechados(linhaLapId, agora, fimProjecao, bloqueiosReais, propAbertaLap)) {
+      diasBloqueadosPorLinha[linhaLapId]?.add(iso);
+    }
+  }
+
+  let cursorCorte = await proximoSlotLivre(linhaCorteId, agora);
+  let cursorLap   = linhaLapId ? await proximoSlotLivre(linhaLapId, agora) : agora;
+  let teveLapidacao = false;
+
+  for (const item of itens) {
+    const tempos = calcularTempoEstimado([item], config);
+
+    const { fim: fimCorteItem } = alocarBloco(
+      cursorCorte, Math.max(1, tempos.corte_min), linhaCorte, diasBloqueadosPorLinha[linhaCorteId],
+    );
+    cursorCorte = fimCorteItem;
+
+    if (tempos.tem_lapidacao && linhaLap && linhaLapId) {
+      teveLapidacao = true;
+      const diaMinimoLap = proximoDiaUtil(addDays(cursorCorte, 1), diasBloqueadosPorLinha[linhaLapId]);
+      const inicioCandidato = new Date(Math.max(diaMinimoLap.getTime(), cursorLap.getTime()));
+      const { fim: fimLapItem } = alocarBloco(inicioCandidato, tempos.lapidacao_min, linhaLap, diasBloqueadosPorLinha[linhaLapId]);
+      cursorLap = fimLapItem;
+    }
+  }
+
+  const fimProducao  = new Date(Math.max(cursorCorte.getTime(), cursorLap.getTime()));
+  const fimSeparacao = new Date(fimProducao.getTime() + SEPARACAO_MIN_ESTIMADO * 60_000);
+
+  return {
+    fimCorte: cursorCorte,
+    fimLapidacao: teveLapidacao ? cursorLap : null,
+    fimSeparacao,
+    dtFinal: fimSeparacao,
+  };
 }
 
 // ─── RECÁLCULO AUTOMÁTICO (APS · Fase 3) ────────────────────
@@ -1375,7 +1546,7 @@ export interface BloqueioLinha {
   dt_inicio: string;
   dt_fim: string;
   motivo: string | null;
-  tipo: 'manutencao' | 'recesso' | 'outro';
+  tipo: 'manutencao' | 'recesso' | 'outro' | 'sem_recurso';
   criado_por: string | null;
   created_at: string;
 }

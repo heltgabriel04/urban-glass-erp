@@ -1188,7 +1188,7 @@ function ModalBloqueioLinha({
   }
 
   const tipoLabels: Record<BloqueioLinha['tipo'], string> = {
-    manutencao: "Manutenção", recesso: "Recesso", outro: "Outro",
+    manutencao: "Manutenção", recesso: "Recesso", outro: "Outro", sem_recurso: "Sem pessoa alocada",
   };
 
   return (
@@ -1248,6 +1248,118 @@ function ModalBloqueioLinha({
             {salvando ? "Salvando…" : "Adicionar Bloqueio"}
           </button>
         </div>
+    </Modal>
+  );
+}
+
+// Painel de alocação diária Corte/Lapidação — as 2 pessoas da produção
+// alternam por dia inteiro entre as duas etapas (decisão do gerente, dia a
+// dia). Reaproveita bloqueios_linha (tipo 'sem_recurso') em vez de uma
+// tabela de capacidade nova: marcar "hoje é dia de Corte" = bloquear
+// Lapidação nesse dia (ninguém alocado nela) e desbloquear Corte, e
+// vice-versa. Dias sem decisão ficam "indefinido" — o motor de cotação de
+// prazo projeta esses dias com base no histórico recente; o agendamento
+// real nunca assume nada além do que foi de fato decidido aqui.
+function ModalAlocacaoDiaria({
+  linhas, bloqueios, onFechar, onSalvo,
+}: {
+  linhas: ProducaoLinha[];
+  bloqueios: BloqueioLinha[];
+  onFechar: () => void;
+  onSalvo: () => Promise<void>;
+}) {
+  const linhaCorte = linhas.find(l => l.tipo === "Corte");
+  const linhaLap   = linhas.find(l => l.tipo === "Lapidação");
+  const [salvando, setSalvando] = useState<string | null>(null);
+
+  const dias = Array.from({ length: 14 }, (_, i) => addDays(new Date(), i))
+    .filter(d => d.getDay() !== 0 && d.getDay() !== 6)
+    .slice(0, 10);
+
+  function fechadaNoDia(linhaId: number, iso: string): boolean {
+    return bloqueios.some(b =>
+      b.tipo === "sem_recurso" && b.linha_id === linhaId &&
+      iso >= b.dt_inicio.slice(0, 10) && iso <= b.dt_fim.slice(0, 10)
+    );
+  }
+
+  async function definirDia(dia: Date, estado: "corte" | "lapidacao" | "indefinido") {
+    if (!linhaCorte || !linhaLap) return;
+    const iso = dia.toISOString().slice(0, 10);
+    setSalvando(iso);
+    const ini = new Date(dia); ini.setHours(0, 0, 0, 0);
+    const fim = new Date(dia); fim.setHours(23, 59, 59, 999);
+
+    async function ajustar(linhaId: number, deveEstarFechada: boolean) {
+      const existentes = bloqueios.filter(b =>
+        b.tipo === "sem_recurso" && b.linha_id === linhaId &&
+        iso >= b.dt_inicio.slice(0, 10) && iso <= b.dt_fim.slice(0, 10)
+      );
+      if (deveEstarFechada && existentes.length === 0) {
+        await adicionarBloqueioLinha(linhaId, ini, fim, "Sem pessoa alocada (painel de alocação diária)", "sem_recurso");
+      } else if (!deveEstarFechada) {
+        for (const b of existentes) await removerBloqueioLinha(b.id);
+      }
+    }
+
+    await ajustar(linhaCorte.id, estado === "lapidacao");
+    await ajustar(linhaLap.id, estado === "corte");
+    await onSalvo();
+    setSalvando(null);
+  }
+
+  if (!linhaCorte || !linhaLap) {
+    return (
+      <Modal open onClose={onFechar} title="Alocação diária" width={420}>
+        <div style={{ fontSize: 12, color: "var(--t3)" }}>
+          Precisa de uma linha do tipo Corte e uma do tipo Lapidação cadastradas pra usar este painel.
+        </div>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal open onClose={onFechar} title="Alocação diária — Corte / Lapidação" width={480}>
+      <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 10, lineHeight: 1.4 }}>
+        As 2 pessoas da produção alternam por dia inteiro entre Corte e Lapidação.
+        Defina aqui qual etapa cada dia tem gente alocada — dias sem decisão usam
+        uma projeção histórica só para a cotação de prazo, nunca para o
+        agendamento real.
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 380, overflowY: "auto" }}>
+        {dias.map(dia => {
+          const iso = dia.toISOString().slice(0, 10);
+          const corteFechada = fechadaNoDia(linhaCorte.id, iso);
+          const lapFechada   = fechadaNoDia(linhaLap.id, iso);
+          const estado: "corte" | "lapidacao" | "indefinido" =
+            lapFechada ? "corte" : corteFechada ? "lapidacao" : "indefinido";
+          const label = dia.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
+          return (
+            <div key={iso} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 11, color: "var(--t2)", width: 90, flexShrink: 0, textTransform: "capitalize" }}>{label}</span>
+              <div style={{ display: "flex", gap: 4, flex: 1 }}>
+                {(["corte", "lapidacao", "indefinido"] as const).map(opcao => (
+                  <button key={opcao} disabled={salvando === iso}
+                    onClick={() => definirDia(dia, opcao)}
+                    style={{
+                      flex: 1, padding: "4px 6px", fontSize: 10, fontWeight: 700,
+                      border: `1px solid ${estado === opcao ? "var(--acc)" : "var(--b2)"}`,
+                      borderRadius: 6, cursor: "pointer",
+                      background: estado === opcao ? "color-mix(in srgb, var(--acc) 16%, var(--surf))" : "var(--surf2)",
+                      color: estado === opcao ? "var(--acc)" : "var(--t3)",
+                      opacity: salvando === iso ? 0.5 : 1,
+                    }}>
+                    {opcao === "corte" ? "Corte" : opcao === "lapidacao" ? "Lapidação" : "—"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mft">
+        <button className="btn bg" onClick={onFechar}>Fechar</button>
+      </div>
     </Modal>
   );
 }
@@ -1380,6 +1492,7 @@ export default function ProgramacaoPage() {
   const [bloqueios,    setBloqueios]    = useState<BloqueioLinha[]>([]);
   const [calibracao,   setCalibracao]   = useState<DadosCalibracao[]>([]);
   const [modalBloqueio, setModalBloqueio] = useState<{ id: number; nome: string } | null | "global">(undefined as any);
+  const [modalAlocacaoDiaria, setModalAlocacaoDiaria] = useState(false);
   const [modalRetrabalho, setModalRetrabalho] = useState<ProgramacaoProducao | null>(null);
   // Feedback de toast
   const [toast,        setToast]        = useState("");
@@ -2116,8 +2229,12 @@ export default function ProgramacaoPage() {
               </div>
 
               {/* Legenda */}
-              <div style={{ padding: "6px 14px", borderBottom: "1px solid var(--b1)", background: "var(--surf2)", flexShrink: 0 }}>
+              <div style={{ padding: "6px 14px", borderBottom: "1px solid var(--b1)", background: "var(--surf2)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                 <LegendaCores linhas={linhas} />
+                <button className="btn bg xs" style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 5 }}
+                  onClick={() => setModalAlocacaoDiaria(true)} title="Definir quais dias cada pessoa está em Corte ou Lapidação">
+                  <Calendar size={11} /> Alocação diária
+                </button>
               </div>
 
               {/* Gantt */}
@@ -2714,6 +2831,14 @@ export default function ProgramacaoPage() {
           bloqueiosExistentes={bloqueios}
           onFechar={() => setModalBloqueio(undefined as any)}
           onSalvo={async () => { await load(); await checarSugestaoAutomatica(); }} />
+      )}
+
+      {modalAlocacaoDiaria && (
+        <ModalAlocacaoDiaria
+          linhas={linhas}
+          bloqueios={bloqueios}
+          onFechar={() => setModalAlocacaoDiaria(false)}
+          onSalvo={async () => { await load(); }} />
       )}
 
       {proposta && (
