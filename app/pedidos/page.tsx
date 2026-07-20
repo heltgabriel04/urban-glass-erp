@@ -159,14 +159,9 @@ function PedidosPageInner() {
   }
 
   async function handleDeletar(id: string) {
-    console.log("[DIAG] handleDeletar chamado", { id });
-    const respostaConfirm = await confirm(`Excluir pedido ${id} permanentemente? Esta ação não pode ser desfeita.`, { perigo: true });
-    console.log("[DIAG] confirm() resolveu com", { respostaConfirm });
-    if (!respostaConfirm) return;
+    if (!(await confirm(`Excluir pedido ${id} permanentemente? Esta ação não pode ser desfeita.`, { perigo: true }))) return;
     setDeletando(prev => new Set(prev).add(id));
-    console.log("[DIAG] antes de chamar deletarPedido()");
     const { ok, erro } = await deletarPedido(id);
-    console.log("[DIAG] deletarPedido() retornou", { ok, erro });
     setDeletando(prev => { const n = new Set(prev); n.delete(id); return n; });
     if (ok) { toast(`Pedido ${id} excluído`); load(); }
     else toast(erro ? `Erro ao excluir: ${erro}` : "Erro ao excluir pedido", "err");

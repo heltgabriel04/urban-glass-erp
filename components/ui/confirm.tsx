@@ -25,14 +25,12 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<ConfirmState | null>(null);
 
   const confirm = useCallback((mensagem: string, opts?: ConfirmOptions) => {
-    console.log("[DIAG-confirm] confirm() chamado, abrindo dialog", { mensagem, opts });
     return new Promise<boolean>((resolve) => {
       setState({ mensagem, resolve, ...opts });
     });
   }, []);
 
   function responder(v: boolean) {
-    console.log("[DIAG-confirm] responder() chamado", { v, stackTrace: new Error().stack });
     state?.resolve(v);
     setState(null);
   }

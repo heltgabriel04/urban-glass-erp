@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 // @ts-ignore: CSS module side-effect import type declaration is not available in this project setup
 import "./globals.css";
+import { ThemeProvider } from "@/components/layout/ThemeProvider";
+import { ToastProvider } from "@/components/ui/toast";
+import { ConfirmProvider } from "@/components/ui/confirm";
+import { PromptProvider } from "@/components/ui/prompt";
 
 export const metadata: Metadata = {
   title: "Urban Glass · ERP Industrial v3",
@@ -28,7 +32,22 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="UrbanGlass" />
       </head>
-      <body className="h-full" lang="pt-BR">{children}</body>
+      <body className="h-full" lang="pt-BR">
+        {/* Providers moram aqui, não em AppLayout — cada página renderiza
+            AppLayout dentro do próprio return, então um useConfirm()/useToast()
+            chamado no topo da página nunca enxergaria um Provider que a
+            página mesma cria como filho dela (Context só resolve ancestrais
+            reais). Aqui em cima, toda página é de fato descendente. */}
+        <ThemeProvider>
+          <ToastProvider>
+            <ConfirmProvider>
+              <PromptProvider>
+                {children}
+              </PromptProvider>
+            </ConfirmProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </body>
     </html>
   );
 }
