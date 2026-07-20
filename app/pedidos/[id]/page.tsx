@@ -483,8 +483,10 @@ export default function PedidoDetalhe() {
   }
 
   async function handleDeletarLancamento(lancId: number) {
+    console.log("[DIAG] handleDeletarLancamento chamado", { lancId, pedidoCarregado: !!pedido });
     if (!pedido) return;
     const lanc = lancamentos.find(l => l.id === lancId);
+    console.log("[DIAG] lancamento encontrado?", { lanc });
     if (!lanc) return;
 
     // Lançamento já pago: desfaz o recebimento consolidando com eventuais
@@ -515,9 +517,13 @@ export default function PedidoDetalhe() {
       return;
     }
 
-    if (!(await confirm("Remover esta parcela?", { perigo: true }))) return;
+    console.log("[DIAG] antes de chamar confirm()");
+    const respostaConfirm = await confirm("Remover esta parcela?", { perigo: true });
+    console.log("[DIAG] confirm() resolveu com", { respostaConfirm });
+    if (!respostaConfirm) return;
     setSalvando(true);
     const ok = await deletarLancamento(lancId);
+    console.log("[DIAG] deletarLancamento retornou", { ok });
     if (!ok) { toast("Erro ao remover lançamento", "err"); setSalvando(false); return; }
     await recalcularRecebido(pedido.id);
     toast("Parcela removida");
