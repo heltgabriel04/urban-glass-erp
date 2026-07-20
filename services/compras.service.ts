@@ -32,6 +32,27 @@ export async function getCompras(): Promise<Compra[]> {
   return data as Compra[];
 }
 
+export interface ComprasImportadasFiltro { ano: number; mes: number; }
+
+// Compras importadas (eh_importacao = true) dentro de um mês/ano, pra
+// tela de análise em Contabilidade → Importações. Mesmo shape de
+// getCompras() (fornecedores + itens), só filtrada por período e flag.
+export async function getComprasImportadas(filtro: ComprasImportadasFiltro): Promise<Compra[]> {
+  const ultimoDia = new Date(filtro.ano, filtro.mes, 0).getDate();
+  const inicio = `${filtro.ano}-${String(filtro.mes).padStart(2, '0')}-01`;
+  const fim = `${filtro.ano}-${String(filtro.mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
+
+  const { data, error } = await supabase
+    .from('compras')
+    .select('*, fornecedores ( id, nome ), compras_itens ( *, produtos ( id, nome, cod, chapas_por_colar ) )')
+    .eq('eh_importacao', true)
+    .gte('dt_compra', inicio)
+    .lte('dt_compra', fim)
+    .order('dt_compra', { ascending: false });
+  if (error) { console.error('getComprasImportadas:', error); return []; }
+  return data as Compra[];
+}
+
 export async function createCompra(
   compra: Omit<CompraInsert, 'id' | 'status' | 'dt_recebimento'>,
   itens: Omit<CompraItemInsert, 'compra_id'>[]
