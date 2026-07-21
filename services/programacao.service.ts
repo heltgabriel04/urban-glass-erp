@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
+import { isChapaInteira } from '@/lib/chapas';
 import type {
   ProducaoLinha, ConfigTempoProducao, ProgramacaoProducao,
   ProgramacaoInsert, TempoEstimado, ItemPedido, Pedido, StatusPedido, StatusProgramacao,
@@ -449,21 +450,26 @@ export function formatarDuracao(min: number): string {
 }
 
 // ─── CHAPA INTEIRA — DETECÇÃO AUTOMÁTICA ────────────────────
+//
+// Fonte da dimensão: lotes_estoque (ativo + dimensao_confirmada), não mais
+// produtos.chapa_largura_mm/altura_mm — essas colunas ficam mortas desde a
+// migração de 2026-07-21 (nunca foram populadas em produção; um produto
+// pode ter mais de um lote com dimensões diferentes agora, então uma coluna
+// única em `produtos` não seria suficiente de qualquer forma). Ver
+// lib/chapas.ts (isChapaInteira) e services/lotes.service.ts.
 
 type ItemComDimensoes = {
   quantidade: number; lapidacao: number; produto_nome: string; m2: number;
   largura?: number; altura?: number;
-  produtos?: { chapa_largura_mm: number | null; chapa_altura_mm: number | null } | null;
+  produtos?: { lotes_estoque?: { chapa_largura_mm: number | null; chapa_altura_mm: number | null; ativo: boolean; dimensao_confirmada: boolean }[] } | null;
 };
 
 function isItemChapaInteira(item: ItemComDimensoes): boolean {
-  const cw = item.produtos?.chapa_largura_mm;
-  const ch = item.produtos?.chapa_altura_mm;
-  if (!cw || !ch || !item.largura || !item.altura) return false;
-  const tol = 0.05;
-  const norm = (v: number, ref: number) => Math.abs(v - ref) / ref < tol;
-  return (norm(item.largura, cw) && norm(item.altura, ch))
-      || (norm(item.largura, ch) && norm(item.altura, cw));
+  if (!item.largura || !item.altura) return false;
+  const chapas = (item.produtos?.lotes_estoque ?? [])
+    .filter(l => l.ativo && l.dimensao_confirmada && l.chapa_largura_mm && l.chapa_altura_mm)
+    .map(l => ({ w: l.chapa_largura_mm as number, h: l.chapa_altura_mm as number }));
+  return isChapaInteira(item.largura, item.altura, chapas);
 }
 
 export function isPedidoSomenteChapas(pedido: { itens_pedido?: unknown[] }): boolean {
@@ -544,7 +550,7 @@ export async function getPedidosSemProgramacao(): Promise<Pedido[]> {
     .from('pedidos')
     .select(`id, dt_pedido, dt_retirada, m2_total, valor_total, status, obs,
       clientes ( nome, cidade ),
-      itens_pedido ( id, quantidade, lapidacao, produto_nome, m2, largura, altura, produtos ( chapa_largura_mm, chapa_altura_mm ) )
+      itens_pedido ( id, quantidade, lapidacao, produto_nome, m2, largura, altura, produtos ( lotes_estoque ( chapa_largura_mm, chapa_altura_mm, ativo, dimensao_confirmada ) ) )
     `)
     .in('status', STATUS_ATIVOS)
     .order('dt_retirada', { ascending: true, nullsFirst: false });

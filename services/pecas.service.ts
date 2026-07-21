@@ -75,7 +75,7 @@ export function proximaAcaoPeca(peca: Pick<PedidoPeca, 'status'>): 'corte' | 'la
 export async function gerarPecasDoPedido(pedidoId: string): Promise<{ ok: boolean; criado?: number; erro?: string }> {
   const { data: pedido } = await supabase
     .from('pedidos')
-    .select('id, itens_pedido(id, largura, altura, quantidade, lapidacao)')
+    .select('id, itens_pedido(id, largura, altura, quantidade, lapidacao, produtos(lotes_estoque(chapa_largura_mm, chapa_altura_mm, ativo, dimensao_confirmada)))')
     .eq('id', pedidoId)
     .maybeSingle();
   if (!pedido) return { ok: false, erro: 'Pedido não encontrado.' };
