@@ -6,6 +6,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { getClientes } from "@/services/clientes.service";
 import { createOrcamento, getProximoIdOrcamento, getOrcamentoById } from "@/services/orcamentos.service";
+import { getSaldoPorProduto } from "@/services/lotes.service";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import DateInput from "@/components/ui/DateInput";
@@ -135,13 +136,13 @@ function NovoOrcamentoPageInner() {
   }, [itens.length]);
 
   async function load() {
-    const [clis, prods, tabs, tpcItens, pid, estRows] = await Promise.all([
+    const [clis, prods, tabs, tpcItens, pid, saldoPorProduto] = await Promise.all([
       getClientes(true),
       supabase.from("produtos").select("*").eq("ativo", true).then(r => r.data as Produto[]),
       supabase.from("tabelas_preco").select("*").eq("ativo", true).then(r => r.data as TabelaPreco[]),
       supabase.from("tabela_preco_itens").select("*").then(r => r.data as TabelaPrecoItem[] || []),
       getProximoIdOrcamento(),
-      supabase.from("estoque").select("produto_id, m2_saldo").then(r => r.data ?? []),
+      getSaldoPorProduto(),
     ]);
     setClientes(clis || []);
     setProdutos(prods || []);
@@ -149,7 +150,7 @@ function NovoOrcamentoPageInner() {
     setTabelaItens(tpcItens || []);
     setProximoId(pid);
     const em = new Map<number, number>();
-    (estRows as any[]).forEach((e: any) => { if (e.produto_id != null) em.set(e.produto_id, Number(e.m2_saldo)); });
+    saldoPorProduto.forEach(e => em.set(e.produtoId, e.m2Saldo));
     setEstoque(em);
 
     // m² já comprometidos em outros orçamentos pendentes (Rascunho + Enviado)

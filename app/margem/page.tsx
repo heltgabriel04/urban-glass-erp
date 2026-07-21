@@ -16,10 +16,16 @@ export default function MargemPage() {
     setLoading(false);
   })(); }, []);
 
-  const receitaTotal = linhas.reduce((a, l) => a + l.receita, 0);
-  const custoTotal   = linhas.reduce((a, l) => a + l.custo, 0);
+  // Pedidos com custoIndisponivel (algum lote com custo_m2 ainda não
+  // definido) ficam de fora dos totais de CMV/margem — somar como 0
+  // inflaria a margem exibida. Contados separadamente, nunca escondidos.
+  const disponiveis  = linhas.filter(l => !l.custoIndisponivel);
+  const pendentes    = linhas.filter(l => l.custoIndisponivel);
+  const receitaTotal = disponiveis.reduce((a, l) => a + l.receita, 0);
+  const custoTotal   = disponiveis.reduce((a, l) => a + (l.custo ?? 0), 0);
   const margemTotal  = receitaTotal - custoTotal;
   const margemPctTot = receitaTotal > 0 ? (margemTotal / receitaTotal) * 100 : 0;
+  const receitaPendente = pendentes.reduce((a, l) => a + l.receita, 0);
 
   const filtradas = linhas.filter(l =>
     !busca ||
@@ -27,7 +33,8 @@ export default function MargemPage() {
     l.cliente_nome.toLowerCase().includes(busca.toLowerCase())
   );
 
-  function corMargem(pct: number) {
+  function corMargem(pct: number | null) {
+    if (pct == null) return "var(--t3)";
     if (pct >= 35) return "var(--ok)";
     if (pct >= 15) return "var(--warn)";
     return "var(--err)";
@@ -42,9 +49,18 @@ export default function MargemPage() {
 
       <div className="con">
         <div className="al al-i" style={{ marginBottom: "16px", fontSize: "12px" }}>
-          Margem bruta aproximada: usa o <strong>custo/m² atual</strong> do estoque e <strong>não</strong> inclui
-          lapidação. Itens de vidro do cliente entram com custo zero. Pedidos sem custo cadastrado aparecem marcados.
+          Margem bruta aproximada: usa o <strong>custo médio ponderado atual</strong> entre os lotes de cada produto (método
+          provisório, PEPS ainda em aberto com o contador) e <strong>não</strong> inclui lapidação. Itens de vidro do cliente
+          entram com custo zero. Pedidos sem custo cadastrado aparecem marcados.
         </div>
+
+        {pendentes.length > 0 && (
+          <div className="al al-w" style={{ marginBottom: "16px", fontSize: "12px" }}>
+            ⚠ {pendentes.length} pedido(s) — {formatBRL(receitaPendente)} em receita — com custo <strong>indisponível</strong>:
+            pelo menos um lote do produto ainda não tem custo_m2 definido (ex.: importação recente pendente de decisão do
+            contador sobre ICMS/IPI). Excluídos dos totais de CMV/margem acima até isso ser resolvido.
+          </div>
+        )}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "20px" }}>
           {[
@@ -80,12 +96,22 @@ export default function MargemPage() {
                     <td>{l.cliente_nome}</td>
                     <td className="mono">{formatDate(l.dt_pedido)}</td>
                     <td className="mono">{formatBRL(l.receita)}</td>
-                    <td className="mono" style={{ color: "var(--warn)" }}>
-                      {formatBRL(l.custo)}
-                      {l.semCusto && <span title="Sem custo/m² cadastrado no estoque" style={{ marginLeft: "4px", color: "var(--err)" }}>⚠</span>}
-                    </td>
-                    <td className="mono" style={{ color: corMargem(l.margemPct) }}>{formatBRL(l.margem)}</td>
-                    <td className="mono" style={{ color: corMargem(l.margemPct), fontWeight: 600 }}>{formatPercent(l.margemPct, 1)}</td>
+                    {l.custoIndisponivel ? (
+                      <>
+                        <td className="mono" style={{ color: "var(--t3)" }} colSpan={3}>
+                          <span title="Pelo menos um lote deste produto ainda não tem custo_m2 definido — pendente do contador">⏳ Custo pendente</span>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="mono" style={{ color: "var(--warn)" }}>
+                          {formatBRL(l.custo ?? 0)}
+                          {l.semCusto && <span title="Sem custo/m² cadastrado" style={{ marginLeft: "4px", color: "var(--err)" }}>⚠</span>}
+                        </td>
+                        <td className="mono" style={{ color: corMargem(l.margemPct) }}>{formatBRL(l.margem ?? 0)}</td>
+                        <td className="mono" style={{ color: corMargem(l.margemPct), fontWeight: 600 }}>{formatPercent(l.margemPct ?? 0, 1)}</td>
+                      </>
+                    )}
                   </tr>
                 ))}
               </tbody>

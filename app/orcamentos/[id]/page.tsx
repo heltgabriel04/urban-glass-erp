@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getOrcamentoById, updateOrcamento, aprovarOrcamento, rejeitarOrcamento, uploadArquivoAssinado, deleteArquivoAssinado } from "@/services/orcamentos.service";
+import { getSaldoPorProduto } from "@/services/lotes.service";
 import { formatBRL, formatDate, formatM2 } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
@@ -44,16 +45,14 @@ export default function OrcamentoDetalhe() {
 
   async function load() {
     setLoading(true);
-    const [data, estRows, histPedidos] = await Promise.all([
+    const [data, saldoPorProduto, histPedidos] = await Promise.all([
       getOrcamentoById(id),
-      supabase.from("estoque").select("produto_id, m2_saldo, chapas_saldo").then(r => r.data ?? []),
+      getSaldoPorProduto(),
       supabase.from("pedidos").select("id, m2_total, status, status_history").in("status", ["Finalizado", "Entregue"]).then(r => (r.data ?? []) as Pedido[]),
     ]);
     setOrc(data);
     const em = new Map<number, { m2: number; chapas: number }>();
-    (estRows as any[]).forEach((e: any) => {
-      if (e.produto_id != null) em.set(e.produto_id, { m2: Number(e.m2_saldo), chapas: Number(e.chapas_saldo) });
-    });
+    saldoPorProduto.forEach(e => em.set(e.produtoId, { m2: e.m2Saldo, chapas: e.chapasSaldo }));
     setEstoque(em);
 
     // m² comprometidos em outros orçamentos pendentes (excluindo o atual)

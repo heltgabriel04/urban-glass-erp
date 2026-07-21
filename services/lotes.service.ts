@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
+import { mediaPonderadaCusto, type LoteParaCusto } from '@/lib/custoLote';
 import type { LoteEstoque } from '@/types';
 
 // Único critério de "utilizável pelo otimizador/produção": ativo, com
@@ -54,4 +55,78 @@ export async function getResumoDimensaoPendente(): Promise<ResumoDimensaoPendent
     totalM2: produtos.reduce((s, p) => s + p.m2, 0),
     produtos,
   };
+}
+
+// ─── SALDO AGREGADO POR PRODUTO ──────────────────────────────
+//
+// Soma chapas_saldo/m2_saldo de todos os lotes ATIVOS de cada produto —
+// substitui a leitura direta de `estoque` (1 linha por produto, sem
+// conceito de lote) em telas que só precisam do total, não de dimensão
+// nem custo por lote. Inclui lotes com dimensao_confirmada=false (saldo
+// físico real existe mesmo sem dimensão confirmada — só não é utilizável
+// pelo otimizador, ver getLotesUtilizaveis).
+
+export interface SaldoProduto {
+  produtoId: number;
+  nome: string;
+  chapasSaldo: number;
+  m2Saldo: number;
+}
+
+export async function getSaldoPorProduto(): Promise<SaldoProduto[]> {
+  const { data, error } = await supabase
+    .from('lotes_estoque')
+    .select('produto_id, chapas_saldo, m2_saldo, produtos(nome)')
+    .eq('ativo', true);
+  if (error) { console.error('getSaldoPorProduto:', error); return []; }
+
+  const porProduto = new Map<number, SaldoProduto>();
+  (data as unknown as { produto_id: number; chapas_saldo: number; m2_saldo: number; produtos: { nome: string } | null }[]).forEach(l => {
+    const atual = porProduto.get(l.produto_id) ?? { produtoId: l.produto_id, nome: l.produtos?.nome ?? '—', chapasSaldo: 0, m2Saldo: 0 };
+    atual.chapasSaldo += l.chapas_saldo;
+    atual.m2Saldo += Number(l.m2_saldo);
+    porProduto.set(l.produto_id, atual);
+  });
+  return Array.from(porProduto.values());
+}
+
+// ─── CUSTO MÉDIO (método provisório, ver lib/custoLote.ts) ──
+//
+// Única porta de entrada pra custo/m² de um produto — qualquer service que
+// precisar desse número chama uma destas duas, nunca lê lotes_estoque.custo_m2
+// direto e faz a conta na mão.
+
+export async function calcularCustoMedioProduto(produtoId: number): Promise<number | null> {
+  const { data, error } = await supabase
+    .from('lotes_estoque')
+    .select('custo_m2, m2_saldo')
+    .eq('produto_id', produtoId)
+    .eq('ativo', true)
+    .gt('m2_saldo', 0);
+  if (error) { console.error('calcularCustoMedioProduto:', error); return null; }
+  return mediaPonderadaCusto((data ?? []) as LoteParaCusto[]);
+}
+
+// Versão em lote — 1 query pra todos os produtos, evita N+1 quando o
+// chamador precisa do custo de vários produtos de uma vez (ex.: margem.service.ts).
+// Produto sem nenhum lote ativo com saldo simplesmente não aparece no mapa —
+// tratar ausência (`.get() === undefined`) igual a `null` (indisponível).
+export async function getCustoMedioPorProduto(): Promise<Map<number, number | null>> {
+  const { data, error } = await supabase
+    .from('lotes_estoque')
+    .select('produto_id, custo_m2, m2_saldo')
+    .eq('ativo', true)
+    .gt('m2_saldo', 0);
+  if (error) { console.error('getCustoMedioPorProduto:', error); return new Map(); }
+
+  const porProduto = new Map<number, LoteParaCusto[]>();
+  (data as unknown as { produto_id: number; custo_m2: number | null; m2_saldo: number }[]).forEach(l => {
+    const arr = porProduto.get(l.produto_id) ?? [];
+    arr.push({ custo_m2: l.custo_m2, m2_saldo: Number(l.m2_saldo) });
+    porProduto.set(l.produto_id, arr);
+  });
+
+  const resultado = new Map<number, number | null>();
+  porProduto.forEach((lotes, produtoId) => resultado.set(produtoId, mediaPonderadaCusto(lotes)));
+  return resultado;
 }

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
+import { getSaldoPorProduto } from './lotes.service';
 
 export interface GiroProduto {
   produto_nome: string;
@@ -18,8 +19,8 @@ export interface GiroProduto {
 export async function getGiroEstoque(dias: number): Promise<GiroProduto[]> {
   const desde = new Date(Date.now() - dias * 86400000).toISOString();
 
-  const [estoqueRes, histRes] = await Promise.all([
-    supabase.from('estoque').select('m2_saldo, chapas_saldo, produtos ( nome )'),
+  const [saldoPorProduto, histRes] = await Promise.all([
+    getSaldoPorProduto(),
     supabase.from('historico_otimizador').select('chapas_json, created_at').gte('created_at', desde),
   ]);
 
@@ -34,15 +35,13 @@ export async function getGiroEstoque(dias: number): Promise<GiroProduto[]> {
     }
   }
 
-  return ((estoqueRes.data ?? []) as Array<{ m2_saldo: number; chapas_saldo: number; produtos?: { nome?: string } }>)
+  return saldoPorProduto
     .map(e => {
-      const nome = e.produtos?.nome ?? '—';
-      const m2Saldo = Number(e.m2_saldo) || 0;
-      const consumoM2 = parseFloat((consumo.get(nome) ?? 0).toFixed(2));
-      const giro = m2Saldo > 0 ? parseFloat((consumoM2 / m2Saldo).toFixed(2)) : null;
+      const consumoM2 = parseFloat((consumo.get(e.nome) ?? 0).toFixed(2));
+      const giro = e.m2Saldo > 0 ? parseFloat((consumoM2 / e.m2Saldo).toFixed(2)) : null;
       const consumoDiario = consumoM2 / dias;
-      const coberturaDias = consumoDiario > 0 ? Math.round(m2Saldo / consumoDiario) : null;
-      return { produto_nome: nome, m2Saldo, chapasSaldo: Number(e.chapas_saldo) || 0, consumoM2, giro, coberturaDias };
+      const coberturaDias = consumoDiario > 0 ? Math.round(e.m2Saldo / consumoDiario) : null;
+      return { produto_nome: e.nome, m2Saldo: e.m2Saldo, chapasSaldo: e.chapasSaldo, consumoM2, giro, coberturaDias };
     })
     .sort((a, b) => b.consumoM2 - a.consumoM2);
 }

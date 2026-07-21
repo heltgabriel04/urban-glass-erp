@@ -1,14 +1,16 @@
 import { supabase } from '@/lib/supabase/client';
+import { getCustoMedioPorProduto } from './lotes.service';
 
 export interface MargemPedido {
   pedido_id: string;
   cliente_nome: string;
   dt_pedido: string;
   receita: number;
-  custo: number;       // CMV — custo histórico quando disponível, senão custo_m2 atual
-  margem: number;      // receita − custo
-  margemPct: number;   // margem / receita × 100
-  semCusto: boolean;   // true se nenhum item teve custo (custo_m2 ausente)
+  custo: number | null;        // null = custo indisponível (ver custoIndisponivel)
+  margem: number | null;
+  margemPct: number | null;
+  semCusto: boolean;           // true = nenhum item teve NENHUM dado de custo (nem histórico, nem lote) — comportamento pré-lotes preservado
+  custoIndisponivel: boolean;  // true = pelo menos 1 item depende de um lote com custo_m2 ainda não definido (pendente do contador) — nunca vira 0 silenciosamente
 }
 
 /**
@@ -19,8 +21,13 @@ export interface MargemPedido {
  * O custo/m² usado é, em ordem de prioridade: (1) o custo histórico gravado
  * em estoque_movimentacoes no momento da baixa daquele item específico
  * (chapa inteira avulsa), (2) o custo histórico da otimização daquele pedido
- * + produto (peças cortadas), (3) o custo_m2 ATUAL do estoque, como fallback
- * pra pedidos antigos de antes do livro-razão existir.
+ * + produto (peças cortadas), (3) o custo médio ponderado ATUAL entre os
+ * lotes do produto (calcularCustoMedioProduto/getCustoMedioPorProduto, ver
+ * lib/custoLote.ts — método provisório, PEPS vs médio ainda em aberto com o
+ * contador), como fallback pra pedidos antigos de antes do livro-razão
+ * existir. Se o tier 3 vier `null` (algum lote ativo do produto sem custo_m2
+ * definido) e não houver tier 1/2 pra aquele item, o pedido inteiro fica
+ * marcado `custoIndisponivel` — nunca é tratado como custo zero.
  * Ainda NÃO inclui custo de lapidação/mão de obra.
  */
 /**
@@ -34,8 +41,8 @@ export async function getMargemPorPedido(filtro?: { inicio?: string; fim?: strin
   if (filtro?.inicio) pedidosQuery = pedidosQuery.gte('dt_pedido', filtro.inicio);
   if (filtro?.fim) pedidosQuery = pedidosQuery.lte('dt_pedido', filtro.fim);
 
-  const [estoqueRes, pedidosRes] = await Promise.all([
-    supabase.from('estoque').select('produto_id, custo_m2'),
+  const [custoM2PorProduto, pedidosRes] = await Promise.all([
+    getCustoMedioPorProduto(),
     pedidosQuery,
   ]);
   if (pedidosRes.error) { console.error('getMargemPorPedido:', pedidosRes.error); return []; }
@@ -61,11 +68,6 @@ export async function getMargemPorPedido(filtro?: { inicio?: string; fim?: strin
         .in('origem_id', origemIds)
     : { data: [] as never[] };
 
-  const custoM2PorProduto = new Map<number, number>();
-  for (const e of (estoqueRes.data ?? []) as Array<{ produto_id: number | null; custo_m2: number }>) {
-    if (e.produto_id != null) custoM2PorProduto.set(e.produto_id, Number(e.custo_m2) || 0);
-  }
-
   // 'pedido_chapa': origem_id = item_pedido.id → custo exato daquele item.
   const custoPorItem = new Map<number, number>();
   // 'otimizacao': origem_id = pedido_id → custo da baixa daquele pedido+produto.
@@ -78,30 +80,52 @@ export async function getMargemPorPedido(filtro?: { inicio?: string; fim?: strin
 
   const custoPorPedido = new Map<string, number>();
   const temCustoPorPedido = new Map<string, boolean>();
+  const indisponivelPorPedido = new Map<string, boolean>();
   for (const it of itensData) {
     if (it.vidro_cliente) continue; // cliente trouxe o vidro → sem custo de chapa
-    const custoM2 =
-      custoPorItem.get(it.id) ??
-      (it.produto_id != null ? custoPorPedidoProduto.get(`${it.pedido_id}|${it.produto_id}`) : undefined) ??
-      (it.produto_id != null ? custoM2PorProduto.get(it.produto_id) : undefined) ??
-      0;
-    custoPorPedido.set(it.pedido_id, (custoPorPedido.get(it.pedido_id) ?? 0) + Number(it.m2) * custoM2);
-    if (custoM2 > 0) temCustoPorPedido.set(it.pedido_id, true);
+
+    // Tier 1/2 (histórico real, já gravado no momento da baixa) tem
+    // prioridade e nunca é null aqui (filtrado via .not('custo_unitario_m2', 'is', null)
+    // na query acima) — só cai pro tier 3 (custo médio ATUAL entre lotes)
+    // quando não existe registro histórico pra esse item.
+    const custoHistorico = custoPorItem.get(it.id)
+      ?? (it.produto_id != null ? custoPorPedidoProduto.get(`${it.pedido_id}|${it.produto_id}`) : undefined);
+
+    if (custoHistorico !== undefined) {
+      custoPorPedido.set(it.pedido_id, (custoPorPedido.get(it.pedido_id) ?? 0) + Number(it.m2) * custoHistorico);
+      if (custoHistorico > 0) temCustoPorPedido.set(it.pedido_id, true);
+      continue;
+    }
+
+    const custoAtual = it.produto_id != null ? custoM2PorProduto.get(it.produto_id) : undefined;
+    if (custoAtual == null) {
+      // Sem histórico E sem custo médio atual disponível (produto sem lote
+      // ativo, ou algum lote ativo com custo_m2 ainda não definido) — marca
+      // o pedido inteiro como indisponível em vez de somar 0 silenciosamente.
+      indisponivelPorPedido.set(it.pedido_id, true);
+      continue;
+    }
+    custoPorPedido.set(it.pedido_id, (custoPorPedido.get(it.pedido_id) ?? 0) + Number(it.m2) * custoAtual);
+    if (custoAtual > 0) temCustoPorPedido.set(it.pedido_id, true);
   }
 
   return pedidosData
     .map(p => {
       const receita = Number(p.valor_total) || 0;
-      const custo   = parseFloat((custoPorPedido.get(p.id) ?? 0).toFixed(2));
-      const margem  = parseFloat((receita - custo).toFixed(2));
+      const custoIndisponivel = !!indisponivelPorPedido.get(p.id);
+      const custo   = custoIndisponivel ? null : parseFloat((custoPorPedido.get(p.id) ?? 0).toFixed(2));
+      const margem  = custo == null ? null : parseFloat((receita - custo).toFixed(2));
       return {
         pedido_id:    p.id,
         cliente_nome: p.clientes?.nome ?? '—',
         dt_pedido:    p.dt_pedido,
         receita, custo, margem,
-        margemPct:    receita > 0 ? (margem / receita) * 100 : 0,
-        semCusto:     !temCustoPorPedido.get(p.id),
+        margemPct:    margem == null ? null : (receita > 0 ? (margem / receita) * 100 : 0),
+        semCusto:     !temCustoPorPedido.get(p.id) && !custoIndisponivel,
+        custoIndisponivel,
       };
     })
-    .sort((a, b) => b.margem - a.margem);
+    // Indisponível (margem null) vai pro fim, não pro meio do ranking — não
+    // é "margem zero", é "não sabemos".
+    .sort((a, b) => (b.margem ?? -Infinity) - (a.margem ?? -Infinity));
 }

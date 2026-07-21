@@ -82,7 +82,7 @@ export interface CMVPeriodo {
   /** Vidro não expõe EI/Compras/EF: o ledger de vidro (estoque_movimentacoes)
    *  só guarda saldo/custo ATUAL, não histórico por linha — não dá pra
    *  reconstruir esses valores num período passado sem mexer nele. */
-  vidro: { cmv: number };
+  vidro: { cmv: number; custoIndisponivel: { pedidos: number; receita: number } };
   itensGerais: CMVFamiliaItensGerais;
   cmvTotal: number;
   receita: number;
@@ -108,8 +108,13 @@ export async function getCMVPeriodo(inicio: string, fim: string): Promise<CMVPer
     getInventarioEm(fimFechamento),
   ]);
 
-  const receita = margensPeriodo.reduce((s, m) => s + m.receita, 0);
-  const cmvVidro = margensPeriodo.reduce((s, m) => s + m.custo, 0);
+  // custo indisponível (lote sem custo_m2 definido) nunca vira 0 na soma —
+  // pedido inteiro sai de receita/CMV do período e é contado à parte, pra
+  // não fingir precisão que não existe no fechamento contábil.
+  const margensDisponiveis = margensPeriodo.filter(m => !m.custoIndisponivel);
+  const margensIndisponiveis = margensPeriodo.filter(m => m.custoIndisponivel);
+  const receita = margensDisponiveis.reduce((s, m) => s + m.receita, 0);
+  const cmvVidro = margensDisponiveis.reduce((s, m) => s + (m.custo ?? 0), 0);
 
   const comprasValor = ((entradasRes.data ?? []) as Array<{ quantidade: number; custo_unitario: number | null }>)
     .reduce((s, m) => s + Number(m.quantidade) * Number(m.custo_unitario ?? 0), 0);
@@ -123,7 +128,13 @@ export async function getCMVPeriodo(inicio: string, fim: string): Promise<CMVPer
 
   return {
     inicio, fim,
-    vidro: { cmv: parseFloat(cmvVidro.toFixed(2)) },
+    vidro: {
+      cmv: parseFloat(cmvVidro.toFixed(2)),
+      custoIndisponivel: {
+        pedidos: margensIndisponiveis.length,
+        receita: parseFloat(margensIndisponiveis.reduce((s, m) => s + m.receita, 0).toFixed(2)),
+      },
+    },
     itensGerais: {
       estoqueInicial: parseFloat(estoqueInicial.toFixed(2)),
       compras: parseFloat(comprasValor.toFixed(2)),
