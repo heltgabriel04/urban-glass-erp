@@ -1363,8 +1363,13 @@ export async function atualizarStatusProgramacao(
     .single();
 
   const updates: Partial<ProgramacaoProducao> = { status };
-  if (status === 'Em Execução' && dtReal) updates.dt_inicio_real = toISOLocal(dtReal);
-  if (status === 'Concluído'   && dtReal) updates.dt_fim_real    = toISOLocal(dtReal);
+  // Sempre que esta função grava um horário real, ele vale por definição
+  // (ação específica desse bloco, nunca um carimbo em lote — ver
+  // reconciliarProgramacaoComPedido acima) — precisa derrubar uma marcação
+  // 'estimado' anterior (herdada de um avanço em lote que aconteceu antes
+  // dessa medição real chegar), senão ela ficaria presa em true pra sempre.
+  if (status === 'Em Execução' && dtReal) { updates.dt_inicio_real = toISOLocal(dtReal); updates.horario_real_estimado = false; }
+  if (status === 'Concluído'   && dtReal) { updates.dt_fim_real    = toISOLocal(dtReal); updates.horario_real_estimado = false; }
 
   const { error } = await supabase
     .from('programacao_producao')

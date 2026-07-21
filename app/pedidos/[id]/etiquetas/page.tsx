@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { getPedidoById } from "@/services/pedidos.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
+import { getPecasDoPedido } from "@/services/pecas.service";
 import { isChapaInteira } from "@/lib/chapas";
 import type { Pedido } from "@/types";
 import type { HistoricoOtimizador } from "@/services/otimizador.service";
@@ -226,6 +227,21 @@ export default function EtiquetasPage() {
         const totalGeral = chapas.reduce((s, c) => s + c.placed.length, 0);
         const ets: Etiqueta[] = [];
 
+        // QR por peça (rastreamento físico via scan): as peças em pedido_pecas
+        // foram geradas na mesma ordem de iteração de chapas_json (ver
+        // services/pecas.service.ts, casarPecasComItens) — zipamos por índice,
+        // contando só as peças deste próprio pedido (chapas_json pode conter
+        // peças de outros pedidos numa otimização combinada). Se a contagem não
+        // bater exatamente (plano reotimizado depois da geração das peças, por
+        // exemplo), não arriscamos casar errado: cai pro QR de pedido inteiro.
+        const pecasFisicas = await getPecasDoPedido(id);
+        const totalMinhasPecasNoPlano = chapas.reduce(
+          (s, c) => s + c.placed.filter((p) => ((p as any).pedidoId ?? id) === id).length,
+          0
+        );
+        const usarQrPorPeca = pecasFisicas.length > 0 && pecasFisicas.length === totalMinhasPecasNoPlano;
+        let meuIndex = 0;
+
         // Fila de códigos adicionais por dimensão (largura/altura, em qualquer ordem
         // por causa de peças rotacionadas), para casar com as peças já cortadas.
         const codigoFila = new Map<string, { codigo: string; restante: number }[]>();
@@ -249,6 +265,9 @@ export default function EtiquetasPage() {
         chapas.forEach((chapa, ci) => {
           chapa.placed.forEach((peca, pi) => {
             const pidDaPeca = (peca as any).pedidoId ?? id;
+            const souEu = pidDaPeca === id;
+            const pecaFisica = souEu && usarQrPorPeca ? pecasFisicas[meuIndex] : null;
+            if (souEu) meuIndex++;
             ets.push({
               pedidoId:          pidDaPeca,
               clienteNome:       ped?.clientes?.nome ?? "—",
@@ -261,8 +280,10 @@ export default function EtiquetasPage() {
               totalPecasNaChapa: chapa.placed.length,
               totalPecasGeral:   totalGeral,
               loteCorte:         lote,
-              qrData: `https://urbanglasserp.vercel.app/api/r/${ped?.qr_token}`,
-              codigoAdicional:   pidDaPeca === id ? buscarCodigo(peca.l, peca.a) : null,
+              qrData: pecaFisica
+                ? `https://urbanglasserp.vercel.app/pedidos/${id}/producao/peca/${pecaFisica.qr_token}`
+                : `https://urbanglasserp.vercel.app/api/r/${ped?.qr_token}`,
+              codigoAdicional:   souEu ? buscarCodigo(peca.l, peca.a) : null,
             });
           });
         });

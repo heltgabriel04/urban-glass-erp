@@ -1380,6 +1380,28 @@ export type ProgramacaoInsert = Partial<Pick<ProgramacaoProducao, 'desconto_setu
   'item_pedido_id' | 'predecessor_id'
 >;
 
+// ─── PEÇA FÍSICA (rastreamento por QR) ──────────────────────
+export type StatusPedidoPeca = 'pendente' | 'cortada' | 'lapidada' | 'separada';
+
+export interface PedidoPeca {
+  id: string;
+  pedido_id: string;
+  item_pedido_id: number | null;
+  qr_token: string;
+  ordem: number;
+  chapa_num: number;
+  largura: number;
+  altura: number;
+  precisa_lapidacao: boolean;
+  status: StatusPedidoPeca;
+  dt_corte_real: string | null;
+  dt_lapidacao_real: string | null;
+  dt_separacao_real: string | null;
+  created_at: string;
+  pedidos?: { id: string; clientes?: { nome: string } | null } | null;
+  itens_pedido?: { produto_nome: string } | null;
+}
+
 export interface ProgramacaoHistorico {
   id: string;
   programacao_id: string | null;

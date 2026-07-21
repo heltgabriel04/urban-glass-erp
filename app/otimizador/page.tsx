@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
 import { salvarOtimizacao } from "@/services/otimizador.service";
+import { gerarPecasDoPedido } from "@/services/pecas.service";
 import { updatePedido } from "@/services/pedidos.service";
 import { getEstoque, salvarRetalhos } from "@/services/estoque.service";
 import { registrarMovimentacao, reverterMovimentacao } from "@/services/estoqueMovimentacoes.service";
@@ -819,6 +820,15 @@ function OtimizadorContent() {
       });
     }
     for (const pid of todosPedidos) await updatePedido(pid, { status: "Em Produção – Corte" });
+    // Rastreamento por peça (QR individual): melhor esforço, não bloqueia o
+    // salvamento — pedidos de chapa inteira retornam erro esperado (não usam
+    // esse fluxo) e são ignorados silenciosamente; falhas genuínas só logam.
+    for (const pid of todosPedidos) {
+      const r = await gerarPecasDoPedido(pid);
+      if (!r.ok && r.erro && !r.erro.includes("chapa inteira")) {
+        console.warn(`gerarPecasDoPedido(${pid}):`, r.erro);
+      }
+    }
     if (retalhosGerados.length > 0) {
       const ok = await salvarRetalhos(retalhosGerados.map(fr => ({
         produto_nome: fr.prod, largura: fr.l, altura: fr.a, m2: fr.m2,

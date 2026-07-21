@@ -1,9 +1,9 @@
 # Módulo: APS / Programação da Produção
 
-Última atualização: 2026-07-20
+Última atualização: 2026-07-21
 Status: auditoria concluída; capacidade compartilhada + motor de cotação de
-prazo implementados e pushados; rastreamento por peça (QR individual) ainda
-não iniciado
+prazo implementados e pushados; rastreamento por peça (QR individual)
+implementado e pushado 2026-07-21, SQL pendente rodar
 
 > Nota desta atualização: as seções abaixo foram corrigidas em relação ao
 > documento original entregue em 2026-07-20 — o schema anexo (`pedido_itens`,
@@ -36,8 +36,15 @@ não iniciado
   (Corte OU Lapidação por dia inteiro) via `bloqueios_linha` tipo
   `'sem_recurso'` + painel "Alocação diária" em `/programacao`.
 - **Novo (2026-07-20)**: `cotarPrazoPedido()` — motor de cotação de
-  prazo dry-run (nunca grava no banco), backend only, ainda sem UI de
+  prazo dry-real (nunca grava no banco), backend only, ainda sem UI de
   vendedor.
+- **Novo (2026-07-21)**: rastreamento por peça via QR (`pedido_pecas`) —
+  cada peça do plano de corte (exceto chapa inteira/vidro do cliente/plano
+  Corte Certo externo) ganha QR próprio na etiqueta, escaneado em
+  `/pedidos/[id]/producao/peca/[token]` pra fechar Corte/Lapidação/Separação
+  por medição real em vez de avanço em lote do status do pedido — resolve
+  pela raiz o sub-projeto #2 de `project-fechamento-lote-producao`. Ver
+  `docs/superpowers/specs/2026-07-21-scan-real-pecas-design.md`.
 
 ## Dor principal (o que motivou esta análise)
 
@@ -103,13 +110,13 @@ expor o motor novo.
 
 ## Decisões de modelagem já tomadas
 
-1. **Rastreamento por peça, não por pedido — ainda não implementado.**
-   Decisão mantida: cada peça física deve receber um QR code único,
-   gerado no momento em que o plano de corte é aprovado (antes do corte
-   físico), na sequência do próprio plano. Ainda não construído — une-se
-   ao sub-projeto "scan real" já combinado em sessão anterior (ver
-   `project-fechamento-lote-producao` na memória), que resolve pela raiz
-   um bug de fechamento em lote corrompendo tempos reais de produção.
+1. **Rastreamento por peça, não por pedido — implementado 2026-07-21.**
+   Cada peça física recebe um QR code único, gerado no momento em que o
+   plano de corte é salvo (`gerarPecasDoPedido`, chamado logo após
+   `salvarOtimizacao`), na sequência do próprio plano de corte. Resolve o
+   sub-projeto "scan real" combinado em sessão anterior (ver
+   `project-fechamento-lote-producao` na memória) — bug de fechamento em
+   lote corrompendo tempos reais de produção.
 2. **% de progresso do pedido = m² concluído / m² total planejado**,
    não contagem de peças — ainda não implementado (depende do
    rastreamento por peça acima).
@@ -156,11 +163,9 @@ expor o motor novo.
       `bug-confirm-resolvia-false-sem-popup` e
       `project-fechamento-lote-producao` na memória pra contexto de um
       bug relacionado já corrigido.
-- [ ] Confirmar se o QR/etiqueta hoje já é impressa em sequência que
-      permitiria, sem grande mudança, virar uma etiqueta por peça em
-      vez de uma por pedido (parece que sim, já que a impressão segue
-      a sequência do plano de corte) — verificar quando o rastreamento
-      por peça começar.
+- [x] ~~Confirmar se o QR/etiqueta hoje já é impressa em sequência que
+      permitiria virar uma etiqueta por peça~~ — confirmado 2026-07-21,
+      era só zipar por índice na mesma ordem de `chapas_json` (ver spec).
 - [x] ~~Auditar a lógica atual de "Recalcular Agenda"~~ — feito, ver
       seção de auditoria abaixo.
 - [ ] Confirmar com módulo Fiscal se "chapa inteira" tem tratamento de
@@ -190,8 +195,10 @@ pré-requisito transversal a todas as fases.
    ajuste manual vs. recálculo também já existe (`travado`). O que falta
    aqui é específico: tratamento de atraso detectado automaticamente
    informando a cotação — não iniciado.
-3. **Fase 3 — Rastreamento por peça (QR individual).** Não iniciado.
-   Une-se ao sub-projeto "scan real" da memória do projeto.
+3. **Fase 3 — Rastreamento por peça (QR individual).** ✅ Implementado e
+   pushado 2026-07-21 (`pedido_pecas` + `/pedidos/[id]/producao/peca/[token]`).
+   Falta: rodar `sql/pedido-pecas-scan.sql`, validar scan real com o leitor
+   físico da fábrica.
 4. **Fase 4 — Visual/UX / simulação de freelancer.** Não iniciado,
    depende das fases anteriores.
 
@@ -221,10 +228,12 @@ bugs pré-existentes do motor).
 - `docs/superpowers/specs/2026-07-20-capacidade-compartilhada-cotacao-prazo-design.md`
   — spec da capacidade compartilhada + motor de cotação.
 - `docs/superpowers/specs/2026-07-20-fechamento-lote-producao-design.md`
-  — spec do bug de fechamento em lote (relacionado ao rastreamento por
-  peça futuro).
+  — spec do bug de fechamento em lote (sub-projeto #1, base do #2 abaixo).
+- `docs/superpowers/specs/2026-07-21-scan-real-pecas-design.md` — spec do
+  rastreamento por peça (sub-projeto #2 + Fase 3 deste módulo).
 - `sql/aps-auditoria-achados.sql`, `sql/bloqueio-linha-sem-recurso.sql`
-  — migrations desta rodada, ambas rodadas e confirmadas.
+  — migrations da rodada 2026-07-20, ambas rodadas e confirmadas.
+- `sql/pedido-pecas-scan.sql` — migration de 2026-07-21, **pendente rodar**.
 - `schema_aps_urban_glass.sql` (entregue pelo usuário, fora do
   controle de versão do repo) — schema original; ver decisão #6 acima
   sobre por que não foi implementado como veio.
