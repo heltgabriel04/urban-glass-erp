@@ -5,11 +5,16 @@ import {
   type InteracaoComCliente,
 } from "@/lib/crmAnalytics";
 
-function interacao(over: Partial<InteracaoComCliente>): InteracaoComCliente {
+// data no formato real da coluna (timestamptz) — nunca YYYY-MM-DD puro, pra
+// pegar de verdade o bug de comparar timestamp completo com date pura
+// (dt_criacao de orçamento).
+function interacao(over: Partial<InteracaoComCliente> & { data?: string }): InteracaoComCliente {
+  const dataBase = over.data ?? "2026-07-01";
   return {
     id: 1, cliente_id: 1, clienteNome: "Cliente A",
-    tipo: "ligacao", data: "2026-07-01", proximo_contato: null,
+    tipo: "ligacao", proximo_contato: null,
     ...over,
+    data: dataBase.includes("T") ? dataBase : `${dataBase}T14:30:00+00:00`,
   };
 }
 
@@ -96,6 +101,21 @@ describe("calcularConversaoInteracaoOrcamento", () => {
       90,
     );
     expect(r.detalhes[0].dataInteracao).toBe("2026-06-01");
+  });
+
+  // Regressão: interacoes_cliente.data é timestamptz (string completa,
+  // "2026-06-01T14:30:00+00:00"), dt_criacao de orçamento é date pura
+  // ("2026-06-01"). Comparar as strings cruas faria uma conversão no MESMO
+  // dia parecer "antes" da interação (prefixo de string é sempre "menor"),
+  // excluindo o caso mais comum de follow-up eficaz.
+  it("conta conversão no mesmo dia da interação (timestamp completo vs. date pura)", () => {
+    const r = calcularConversaoInteracaoOrcamento(
+      [interacao({ cliente_id: 1, data: "2026-06-01T14:30:00+00:00" })],
+      [{ cliente_id: 1, dt_criacao: "2026-06-01" }],
+      90,
+    );
+    expect(r.clientesConvertidos).toBe(1);
+    expect(r.detalhes[0].diasParaConverter).toBe(0);
   });
 });
 

@@ -13,18 +13,29 @@ export interface InteracaoComCliente {
   cliente_id: number;
   clienteNome: string;
   tipo: TipoInteracao;
-  data: string; // YYYY-MM-DD
-  proximo_contato: string | null;
+  data: string; // interacoes_cliente.data é timestamptz — string ISO completa
+                // ("2026-07-21T14:30:00+00:00"), não YYYY-MM-DD puro. Todo
+                // cálculo de dia usa soData() abaixo pra normalizar antes de
+                // comparar/somar — comparação de string bruta entre um
+                // timestamp completo e uma data pura (ex.: dt_criacao de
+                // orçamento) dá resultado errado mesmo no mesmo dia.
+  proximo_contato: string | null; // date puro (YYYY-MM-DD), sem componente de hora
 }
 
-function diffDias(deISO: string, ateISO: string): number {
-  const a = new Date(deISO + "T00:00:00");
-  const b = new Date(ateISO + "T00:00:00");
+// Normaliza timestamp completo OU data pura pro mesmo formato YYYY-MM-DD,
+// pra nunca comparar/somar dia com uma string que ainda carrega hora.
+function soData(dataOuTimestamp: string): string {
+  return dataOuTimestamp.slice(0, 10);
+}
+
+function diffDias(de: string, ate: string): number {
+  const a = new Date(soData(de) + "T00:00:00");
+  const b = new Date(soData(ate) + "T00:00:00");
   return Math.round((b.getTime() - a.getTime()) / 86_400_000);
 }
 
-function addDiasISO(dataISO: string, dias: number): string {
-  const d = new Date(dataISO + "T00:00:00");
+function addDiasISO(data: string, dias: number): string {
+  const d = new Date(soData(data) + "T00:00:00");
   d.setDate(d.getDate() + dias);
   return d.toISOString().slice(0, 10);
 }
@@ -109,24 +120,29 @@ export function calcularConversaoInteracaoOrcamento(
   orcamentos: { cliente_id: number; dt_criacao: string }[],
   janelaDias = 90,
 ): ConversaoResultado {
+  // Normaliza pra data pura no momento de guardar — interacoes[].data é
+  // timestamptz, comparar cru contra dt_criacao (date) descartaria conversões
+  // no mesmo dia (string de timestamp completo nunca é "<=" a uma data pura
+  // do mesmo dia).
   const primeiraPorCliente = new Map<number, { data: string; nome: string }>();
   interacoes.forEach(i => {
+    const dataNormalizada = soData(i.data);
     const atual = primeiraPorCliente.get(i.cliente_id);
-    if (!atual || i.data < atual.data) primeiraPorCliente.set(i.cliente_id, { data: i.data, nome: i.clienteNome });
+    if (!atual || dataNormalizada < atual.data) primeiraPorCliente.set(i.cliente_id, { data: dataNormalizada, nome: i.clienteNome });
   });
 
   const detalhes: ConversaoDetalhe[] = [];
   primeiraPorCliente.forEach((info, clienteId) => {
     const janelaFim = addDiasISO(info.data, janelaDias);
     const doCliente = orcamentos
-      .filter(o => o.cliente_id === clienteId && o.dt_criacao >= info.data && o.dt_criacao <= janelaFim)
-      .sort((a, b) => a.dt_criacao.localeCompare(b.dt_criacao));
+      .filter(o => o.cliente_id === clienteId && soData(o.dt_criacao) >= info.data && soData(o.dt_criacao) <= janelaFim)
+      .sort((a, b) => soData(a.dt_criacao).localeCompare(soData(b.dt_criacao)));
     if (doCliente.length > 0) {
       detalhes.push({
         clienteId,
         clienteNome: info.nome,
         dataInteracao: info.data,
-        dataConversao: doCliente[0].dt_criacao,
+        dataConversao: soData(doCliente[0].dt_criacao),
         diasParaConverter: diffDias(info.data, doCliente[0].dt_criacao),
       });
     }
@@ -158,8 +174,9 @@ export function calcularClientesSemContato(
 ): ClienteSemContato[] {
   const ultimaPorCliente = new Map<number, string>();
   interacoes.forEach(i => {
+    const dataNormalizada = soData(i.data);
     const atual = ultimaPorCliente.get(i.cliente_id);
-    if (!atual || i.data > atual) ultimaPorCliente.set(i.cliente_id, i.data);
+    if (!atual || dataNormalizada > atual) ultimaPorCliente.set(i.cliente_id, dataNormalizada);
   });
 
   return clientes
