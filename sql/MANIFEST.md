@@ -125,3 +125,10 @@ que é a ordem real em que foram escritos e (presumivelmente) rodados.
 | 2026-07-16 | `sql/ipi-pedidos.sql` | IPI nos Pedidos — pedidos.tem_ipi, pedidos.valor_ipi | ✅ |
 | 2026-07-17 | `sql/ipi-pedidos-views.sql` | IPI nos Pedidos — views financeiro_clientes/faturamento_mensal somam IPI | ✅ |
 | 2026-07-17 | `sql/importacao-compras.sql` | Custo de Importação — câmbio/tributos da DI por compra (14 colunas em compras) | ✅ |
+| 2026-07-20 | `sql/aps-auditoria-achados.sql` | APS — tabela de achados da auditoria (Tarefa 1) | ✅ |
+| 2026-07-20 | `sql/bloqueio-linha-sem-recurso.sql` | APS — capacidade compartilhada: bloqueios_linha ganha tipo 'sem_recurso' | ✅ |
+| 2026-07-21 | `sql/pedido-pecas-scan.sql` | Rastreamento por peça via QR — tabela pedido_pecas | ✅ |
+| 2026-07-21 | `sql/lotes-estoque.sql` | Migração de estoque pra múltiplos lotes por produto (dimensão real por lote) | ✅ |
+| 2026-07-21 | `sql/lotes-estoque-dimensao-opcional.sql` | lotes_estoque — dimensão/origem_mercadoria nullable + coluna dimensao_confirmada | ✅ |
+| 2026-07-21 | `sql/lotes-estoque-dados-iniciais.sql` | lotes_estoque — backfill dos 5 saldos de `estoque` + lote novo da NF de importação (produto 10) | ✅ |
+| 2026-07-21 | `sql/lotes-estoque-dt-entrada-estimada.sql` | lotes_estoque — coluna dt_entrada_estimada (diferencia data real de aproximada, pra PEPS futuro) | ✅ |

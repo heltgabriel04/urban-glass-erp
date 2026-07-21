@@ -6,6 +6,7 @@ import { isChapaInteira } from '@/lib/chapas';
 import { registrarMovimentacao } from './estoqueMovimentacoes.service';
 import { registrarMovimentoCliente } from './materialCliente.service';
 import { reconciliarProgramacaoComPedido } from './programacao.service';
+import { getLotesUtilizaveis } from './lotes.service';
 
 export async function getPedidos(filtroStatus?: StatusPedido) {
   let query = supabase
@@ -150,6 +151,17 @@ export async function createPedido(pedido: PedidoInsert, itens: ItemPedidoInsert
       .select();
     if (errItens) console.error('createPedido itens:', errItens);
 
+    // Dimensões confirmadas por produto (lotes_estoque) — busca uma vez pra
+    // todos os itens do pedido, não por item (evita N+1).
+    const lotes = await getLotesUtilizaveis();
+    const chapasPorProduto = new Map<number, { w: number; h: number }[]>();
+    lotes.forEach(l => {
+      if (!l.chapa_largura_mm || !l.chapa_altura_mm) return;
+      const arr = chapasPorProduto.get(l.produto_id) ?? [];
+      arr.push({ w: l.chapa_largura_mm, h: l.chapa_altura_mm });
+      chapasPorProduto.set(l.produto_id, arr);
+    });
+
     for (const item of (itensInseridos ?? []) as ItemPedido[]) {
       if (item.vidro_cliente) {
         const res = await registrarMovimentoCliente({
@@ -161,7 +173,8 @@ export async function createPedido(pedido: PedidoInsert, itens: ItemPedidoInsert
         if (!res.ok && !res.jaExistia) console.error('createPedido entrada vidro cliente:', res.motivo);
         continue;
       }
-      if (!isChapaInteira(item.largura, item.altura)) continue;
+      const chapasDoProduto = item.produto_id ? (chapasPorProduto.get(item.produto_id) ?? []) : [];
+      if (!isChapaInteira(item.largura, item.altura, chapasDoProduto)) continue;
       const m2 = (item.largura * item.altura / 1e6) * item.quantidade;
       const res = await registrarMovimentacao({
         produtoId: item.produto_id ?? undefined,

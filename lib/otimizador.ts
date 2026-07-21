@@ -1,9 +1,8 @@
 // ============================================================
 // lib/otimizador.ts — Algoritmo de otimização de corte de vidro
 // ============================================================
-import { CHAPAS_PADRAO, PRODUTO_CHAPA } from "@/lib/chapas";
 
-export interface Peca { l: number; a: number; qtd: number; prod: string; pedidoId?: string; podeRotacionar?: boolean; }
+export interface Peca { l: number; a: number; qtd: number; prod: string; produtoId?: number | null; pedidoId?: string; podeRotacionar?: boolean; }
 export interface PecaPlacada { x: number; y: number; l: number; a: number; idx: number; prod: string; rot: boolean; pedidoId?: string; podeRotacionar?: boolean; }
 export interface EspacoLivre { x: number; y: number; l: number; a: number; }
 /** Um risco de corte guilhotina: "V" = vertical (linha em x=pos), "H" = horizontal (em y=pos).
@@ -1332,22 +1331,27 @@ export function ehGuilhotinavel(placed: PecaPlacada[], W: number, H: number): bo
 
 // ── calcAproveitamento (usa FFD global para estimativa precisa) ────────────────
 
+/**
+ * Estimativa de aproveitamento (%). `dimensaoPorProduto` mapeia nome do
+ * produto → dimensão da chapa a usar (resolvida pelo chamador a partir do
+ * lote escolhido, ver services/lotes.service.ts). Grupo sem entrada no mapa
+ * (produto sem lote utilizável) é excluído do cálculo — não há mais
+ * fallback pra um tamanho padrão.
+ */
 export function calcAproveitamento(
   pecasFlat: Array<{ l: number; a: number; prod: string; pedidoId?: string; podeRotacionar?: boolean }>,
   bord: number, kerf: number,
-  fallbackW = 3300, fallbackH = 2250
+  dimensaoPorProduto: Map<string, { w: number; h: number }>,
 ): number {
   const grupos = new Map<string, typeof pecasFlat>();
   pecasFlat.forEach(p => { const g = grupos.get(p.prod) ?? []; g.push(p); grupos.set(p.prod, g); });
 
   let totA = 0, usedA = 0;
   grupos.forEach((grupo, prodNome) => {
-    const ci2 = PRODUTO_CHAPA[prodNome];
-    const chapa = ci2 !== undefined ? CHAPAS_PADRAO[ci2] : null;
-    const CW = chapa ? chapa.w : fallbackW;
-    const CH = chapa ? chapa.h : fallbackH;
-    const W = CW - bord * 2;
-    const H = CH - bord * 2;
+    const chapa = dimensaoPorProduto.get(prodNome);
+    if (!chapa) return; // sem lote utilizável pra este produto — fora do cálculo
+    const W = chapa.w - bord * 2;
+    const H = chapa.h - bord * 2;
     const chapas = empacotarTodas(W, H, grupo, kerf, 100);
     chapas.forEach(c => {
       totA += W * H;

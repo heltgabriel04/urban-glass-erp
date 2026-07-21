@@ -14,8 +14,10 @@ import { gerarPecasDoPedido } from "@/services/pecas.service";
 import { updatePedido } from "@/services/pedidos.service";
 import { getEstoque, salvarRetalhos } from "@/services/estoque.service";
 import { registrarMovimentacao, reverterMovimentacao } from "@/services/estoqueMovimentacoes.service";
-import type { Produto, Retalho, OtimizacaoPerdaDetalheInsert } from "@/types";
-import { CHAPAS_PADRAO, PRODUTO_CHAPA, isChapaInteira } from "@/lib/chapas";
+import { getLotesUtilizaveis, getResumoDimensaoPendente, type ResumoDimensaoPendente } from "@/services/lotes.service";
+import type { Produto, Retalho, OtimizacaoPerdaDetalheInsert, LoteEstoque } from "@/types";
+import { isChapaInteira } from "@/lib/chapas";
+import { resolverDimensaoPorProduto } from "@/lib/loteResolucao";
 import {
   empacotar, empacotarTodas, calcAproveitamento, derivarCortes,
   type Peca, type ResultadoChapa, type RetalhoGerado,
@@ -103,6 +105,49 @@ function OtimizadorContent() {
   const [chapaAberta, setChapaAberta] = useState(false);
   const [agrupAberta, setAgrupAberta] = useState(false);
 
+  // Lotes por produto (múltiplas dimensões, 2026-07-21): só lotes ativos +
+  // dimensao_confirmada + saldo>0 entram aqui — nunca um default.
+  const [lotesUtilizaveis, setLotesUtilizaveis] = useState<LoteEstoque[]>([]);
+  const [loteEscolhido, setLoteEscolhido]       = useState<Map<number, number>>(new Map()); // produto_id -> lote_id
+  const [resumoPendente, setResumoPendente]     = useState<ResumoDimensaoPendente | null>(null);
+  const [pecasExcluidasInfo, setPecasExcluidasInfo] = useState<Map<string, number>>(new Map()); // produto (nome) -> qtd peças fora do plano
+
+  const lotesPorProdutoMap = useMemo(() => {
+    const m = new Map<number, LoteEstoque[]>();
+    lotesUtilizaveis.forEach(l => { const arr = m.get(l.produto_id) ?? []; arr.push(l); m.set(l.produto_id, arr); });
+    return m;
+  }, [lotesUtilizaveis]);
+
+  // Produtos distintos na lista atual de peças (pra montar o seletor de lote)
+  const produtosDistintosNaLista = useMemo(() => {
+    const vistos = new Map<number, string>();
+    pecas.forEach(p => { if (p.produtoId && !vistos.has(p.produtoId)) vistos.set(p.produtoId, p.prod); });
+    return Array.from(vistos.entries()).map(([produtoId, nome]) => ({ produtoId, nome }));
+  }, [pecas]);
+
+  // Auto-escolhe o lote quando um produto tem exatamente 1 utilizável, e
+  // limpa a escolha de produtos que saíram da lista — sem isso um lote
+  // escolhido antes podia "vazar" pra outro produto se o id colidisse por
+  // acaso (não colide de verdade, mas mantém o estado sempre coerente com
+  // o que está na tela).
+  useEffect(() => {
+    setLoteEscolhido(prev => {
+      const next = new Map<number, number>();
+      produtosDistintosNaLista.forEach(({ produtoId }) => {
+        const lotes = lotesPorProdutoMap.get(produtoId) ?? [];
+        if (lotes.length === 1) next.set(produtoId, lotes[0].id);
+        else if (lotes.some(l => l.id === prev.get(produtoId))) next.set(produtoId, prev.get(produtoId)!);
+      });
+      return next;
+    });
+  }, [produtosDistintosNaLista, lotesPorProdutoMap]);
+
+  async function recarregarLotes() {
+    const [lotes, resumo] = await Promise.all([getLotesUtilizaveis(), getResumoDimensaoPendente()]);
+    setLotesUtilizaveis(lotes);
+    setResumoPendente(resumo);
+  }
+
   // Ref para pecas atual (usado na simulação sem re-render)
   const pecasRef = useRef<Peca[]>([]);
   pecasRef.current = pecas;
@@ -121,6 +166,7 @@ function OtimizadorContent() {
     supabase.from("produtos").select("*").eq("ativo", true).then(({ data }) => {
       setProdutos((data as Produto[]) || []);
     });
+    recarregarLotes();
   }, []);
 
   // Carrega peças a partir do parâmetro ?pecas= na URL (modo AVULSO)
@@ -143,9 +189,10 @@ function OtimizadorContent() {
         items = JSON.parse(atob(pecasParam)) as Array<{ l: number; a: number; qtd: number; prod: string }>;
       }
       if (items.length > 0) {
+        // Modo avulso/teste: sem produto_id real, então sem lote pra resolver —
+        // usa o tamanho de chapa manual (chapaW/chapaH) em vez de lote, único
+        // caso em que isso ainda faz sentido (nunca consome estoque de verdade).
         setPecas(items.map(p => ({ l: p.l, a: p.a, qtd: p.qtd ?? 1, prod: p.prod ?? defaultProd })));
-        const firstProd = items[0]?.prod || defaultProd;
-        if (firstProd) autoSetChapa(firstProd);
         setModoTeste(true);
       }
     } catch { /* URL inválida — ignora */ }
@@ -163,13 +210,12 @@ function OtimizadorContent() {
         if (item.vidro_cliente) { vcCount++; return; } // vidro do cliente: não entra no layout
         const key = `${item.largura}x${item.altura}x${item.produto_nome}`;
         if (map.has(key)) map.get(key)!.qtd += item.quantidade;
-        else map.set(key, { l: item.largura, a: item.altura, qtd: item.quantidade, prod: item.produto_nome, pedidoId: pedidoParam });
+        else map.set(key, { l: item.largura, a: item.altura, qtd: item.quantidade, prod: item.produto_nome, produtoId: item.produto_id ?? null, pedidoId: pedidoParam });
       });
       if (vcCount > 0) setMsg(`ℹ ${vcCount} item(ns) ignorado(s): vidro fornecido pelo cliente (não é estoque nosso).`);
       const carregadas = Array.from(map.values());
       setPecas(carregadas);
       setPedidoRef(pedidoParam);
-      if (carregadas.length > 0) autoSetChapa(carregadas[0].prod);
       const produtosNoPedido = [...new Set(carregadas.map(p => p.prod))];
       buscarSugestoes(pedidoParam, produtosNoPedido, carregadas);
     });
@@ -196,13 +242,22 @@ function OtimizadorContent() {
 
   // Monta flat de peças sem estado
   function montarFlat(pecasList: Peca[], pedidoId: string | null) {
-    const flat: Array<{ l: number; a: number; prod: string; pedidoId?: string; podeRotacionar?: boolean }> = [];
+    const flat: Array<{ l: number; a: number; prod: string; produtoId?: number | null; pedidoId?: string; podeRotacionar?: boolean }> = [];
     pecasList.forEach(p => {
       if (p.l > 0 && p.a > 0)
         for (let q = 0; q < (p.qtd || 1); q++)
-          flat.push({ l: p.l, a: p.a, prod: p.prod, pedidoId: p.pedidoId ?? pedidoId ?? undefined, podeRotacionar: podeRotacionarPorNome(p.prod) });
+          flat.push({ l: p.l, a: p.a, prod: p.prod, produtoId: p.produtoId, pedidoId: p.pedidoId ?? pedidoId ?? undefined, podeRotacionar: podeRotacionarPorNome(p.prod) });
     });
     return flat;
+  }
+
+  // Dimensões confirmadas (lotes ativos + dimensao_confirmada) de um produto —
+  // usado só pra detecção "isso é uma chapa inteira", não pro empacotamento.
+  function chapasConfirmadasDoProduto(produtoId: number | null | undefined): { w: number; h: number }[] {
+    if (!produtoId) return [];
+    return (lotesPorProdutoMap.get(produtoId) ?? [])
+      .filter(l => l.chapa_largura_mm && l.chapa_altura_mm)
+      .map(l => ({ w: l.chapa_largura_mm as number, h: l.chapa_altura_mm as number }));
   }
 
   async function buscarSugestoes(pedidoPrincipal: string, produtosNoPedido: string[], pecasBase: Peca[]) {
@@ -223,7 +278,8 @@ function OtimizadorContent() {
 
     // Calcula aproveitamento base (só o pedido principal)
     const flatBase = montarFlat(pecasBase, pedidoPrincipal);
-    const base = calcAproveitamento(flatBase, bordRef.current, kerfRef.current, chapaWRef.current, chapaHRef.current);
+    const dimensaoBase = resolverDimensaoPorProduto(flatBase, lotesPorProdutoMap, loteEscolhido).dimensaoPorProduto;
+    const base = calcAproveitamento(flatBase, bordRef.current, kerfRef.current, dimensaoBase);
     setAprovBase(base);
 
     const resultados = await Promise.all(
@@ -231,7 +287,9 @@ function OtimizadorContent() {
         const { data: itens } = await supabase.from("itens_pedido").select("*").eq("pedido_id", ped.id);
         if (!itens || itens.length === 0) return null;
 
-        const todosChapa = itens.every((item: any) => isChapaInteira(item.largura, item.altura));
+        const todosChapa = itens.every((item: any) =>
+          isChapaInteira(item.largura, item.altura, chapasConfirmadasDoProduto(item.produto_id))
+        );
         if (todosChapa) return null;
 
         const produtosDoPedido = [...new Set(itens.map((i: any) => i.produto_nome as string))];
@@ -242,13 +300,14 @@ function OtimizadorContent() {
           if (item.vidro_cliente) return; // vidro do cliente: não entra no layout
           const key = `${item.largura}x${item.altura}x${item.produto_nome}`;
           if (map.has(key)) map.get(key)!.qtd += item.quantidade;
-          else map.set(key, { l: item.largura, a: item.altura, qtd: item.quantidade, prod: item.produto_nome, pedidoId: ped.id });
+          else map.set(key, { l: item.largura, a: item.altura, qtd: item.quantidade, prod: item.produto_nome, produtoId: item.produto_id ?? null, pedidoId: ped.id });
         });
 
         const itensDoPedido = Array.from(map.values());
 
         const flatCombinado = [...flatBase, ...montarFlat(itensDoPedido, ped.id)];
-        const aprovCombinado = calcAproveitamento(flatCombinado, bordRef.current, kerfRef.current, chapaWRef.current, chapaHRef.current);
+        const dimensaoCombinada = resolverDimensaoPorProduto(flatCombinado, lotesPorProdutoMap, loteEscolhido).dimensaoPorProduto;
+        const aprovCombinado = calcAproveitamento(flatCombinado, bordRef.current, kerfRef.current, dimensaoCombinada);
         const delta = aprovCombinado - base;
         const dias = diasAte((ped as any).dt_retirada);
 
@@ -288,11 +347,6 @@ function OtimizadorContent() {
   function toggleSugerido(id: string) {
     setPedidosSelecionados(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
     setResultado(null);
-  }
-
-  function autoSetChapa(prodNome: string) {
-    const idx = PRODUTO_CHAPA[prodNome];
-    if (idx !== undefined && CHAPAS_PADRAO[idx]) { setChapaW(CHAPAS_PADRAO[idx].w); setChapaH(CHAPAS_PADRAO[idx].h); }
   }
 
   function drawOpt(r: ResultadoChapa, idx: number, bordMm: number) {
@@ -350,10 +404,14 @@ function OtimizadorContent() {
     ctx.strokeStyle = "#3d4a6a"; ctx.lineWidth = 1; ctx.strokeRect(ox, oy, dW, dH);
   }
 
-  // Executa o algoritmo de otimização para um cenário (com ou sem retalhos)
+  // Executa o algoritmo de otimização para um cenário (com ou sem retalhos).
+  // `dimensaoPorProduto` vem de resolverDimensaoPorProduto — grupo de produto
+  // sem entrada nesse mapa (sem lote utilizável) é pulado por inteiro, sem
+  // dimensão default nenhuma (regra de 2026-07-21).
   function computeScenario(
     flat: Array<{ l: number; a: number; prod: string; pedidoId?: string }>,
     useRetalhos: boolean,
+    dimensaoPorProduto: Map<string, { w: number; h: number }>,
     tmLimitMs = TEMPO_CALCULO_MS
   ): { results: ResultadoChapa[]; aprov: number; chapas: number; retUsados: string[] } {
     const grupos = new Map<string, typeof flat>();
@@ -362,10 +420,10 @@ function OtimizadorContent() {
     const retUsados: string[] = [];
 
     grupos.forEach((grupo, prodNome) => {
-      const ci2 = PRODUTO_CHAPA[prodNome];
-      const chapa = ci2 !== undefined ? CHAPAS_PADRAO[ci2] : null;
-      const CW = chapa ? chapa.w : chapaW;
-      const CH = chapa ? chapa.h : chapaH;
+      const chapa = dimensaoPorProduto.get(prodNome);
+      if (!chapa) return; // sem lote com dimensão confirmada — grupo inteiro fica de fora
+      const CW = chapa.w;
+      const CH = chapa.h;
       const W = CW - bord * 2;
       const H = CH - bord * 2;
       // Reordena as peças da chapa pela sequência real de extração no corte —
@@ -414,17 +472,17 @@ function OtimizadorContent() {
   }
 
   function rodar() {
-    const flat: Array<{ l: number; a: number; prod: string; pedidoId?: string; podeRotacionar?: boolean }> = [];
+    const flat: Array<{ l: number; a: number; prod: string; produtoId?: number | null; pedidoId?: string; podeRotacionar?: boolean }> = [];
     pecas.forEach(p => {
       if (p.l > 0 && p.a > 0)
         for (let q = 0; q < (p.qtd || 1); q++)
-          flat.push({ l: p.l, a: p.a, prod: p.prod, pedidoId: p.pedidoId ?? pedidoRef ?? undefined, podeRotacionar: podeRotacionarPorNome(p.prod) });
+          flat.push({ l: p.l, a: p.a, prod: p.prod, produtoId: p.produtoId, pedidoId: p.pedidoId ?? pedidoRef ?? undefined, podeRotacionar: podeRotacionarPorNome(p.prod) });
     });
     pedidosSugeridos.filter(ps => pedidosSelecionados.has(ps.id)).forEach(ps =>
       ps.itens.forEach(p => {
         if (p.l > 0 && p.a > 0)
           for (let q = 0; q < (p.qtd || 1); q++)
-            flat.push({ l: p.l, a: p.a, prod: p.prod, pedidoId: ps.id, podeRotacionar: podeRotacionarPorNome(p.prod) });
+            flat.push({ l: p.l, a: p.a, prod: p.prod, produtoId: p.produtoId, pedidoId: ps.id, podeRotacionar: podeRotacionarPorNome(p.prod) });
       })
     );
     if (flat.length === 0) return;
@@ -435,8 +493,24 @@ function OtimizadorContent() {
       return;
     }
 
+    // Modo avulso/teste: sem produto_id, usa o tamanho manual (chapaW/chapaH)
+    // como se fosse um "lote" só pra essa simulação. Fluxo real: dimensão
+    // sempre vem de um lote confirmado (resolverDimensaoPorProduto), produto
+    // sem lote utilizável fica de fora do plano — sem default, sem erro.
+    const resolucao = resolverDimensaoPorProduto(flat, lotesPorProdutoMap, loteEscolhido);
+    let dimensaoPorProduto = resolucao.dimensaoPorProduto;
+    if (modoTeste) {
+      dimensaoPorProduto = new Map(resolucao.dimensaoPorProduto);
+      [...new Set(flat.map(p => p.prod))].forEach(nome => {
+        if (!dimensaoPorProduto.has(nome)) dimensaoPorProduto.set(nome, { w: chapaW, h: chapaH });
+      });
+      setPecasExcluidasInfo(new Map());
+    } else {
+      setPecasExcluidasInfo(resolucao.pecasExcluidas);
+    }
+
     // Cenário principal
-    const main = computeScenario(flat, usarRetalhosEstoque);
+    const main = computeScenario(flat, usarRetalhosEstoque, dimensaoPorProduto);
     setResultado(main.results);
     setChapaIdx(0);
     setAprovNum(main.aprov);
@@ -454,7 +528,7 @@ function OtimizadorContent() {
 
     // Comparação automática com/sem retalhos (quando há retalhos disponíveis)
     if (retalhosDisponiveis.length > 0) {
-      const alt = computeScenario(flat, !usarRetalhosEstoque);
+      const alt = computeScenario(flat, !usarRetalhosEstoque, dimensaoPorProduto);
       setComparacaoStats({
         comRetalhos: usarRetalhosEstoque
           ? { aprov: main.aprov, chapas: main.chapas }
@@ -467,13 +541,15 @@ function OtimizadorContent() {
       setComparacaoStats(null);
     }
 
-    const totalPecas = flat.length;
+    const totalExcluidas = Array.from(resolucao.pecasExcluidas.values()).reduce((a, b) => a + b, 0);
+    const totalPecas = flat.length - (modoTeste ? 0 : totalExcluidas);
     const totalPlaced = main.results.reduce((a, r) => a + r.placed.length, 0);
     const naoCouberam = totalPecas - totalPlaced;
     setMsg(
       `${totalPecas} peças · ${main.chapas} chapa(s)` +
       (pedidosSelecionados.size > 0 ? ` · ${pedidosSelecionados.size + 1} pedidos agrupados` : "") +
-      ` · ${naoCouberam > 0 ? naoCouberam + " não couberam" : "✓ Todas alocadas"}`
+      ` · ${naoCouberam > 0 ? naoCouberam + " não couberam" : "✓ Todas alocadas"}` +
+      (!modoTeste && totalExcluidas > 0 ? ` · ⚠ ${totalExcluidas} peça(s) fora do plano — sem lote com dimensão confirmada` : "")
     );
   }
 
@@ -794,6 +870,7 @@ function OtimizadorContent() {
     }
     setResultado(null); setMsg(""); setRetalhosGerados([]); setPedidosSelecionados(new Set()); setRetalhosUsados([]);
     setZerando(false);
+    recarregarLotes(); // reverterMovimentacao mexeu no saldo — lista de lotes utilizáveis pode ter mudado
     toast("Plano zerado.");
   }
 
@@ -815,7 +892,11 @@ function OtimizadorContent() {
         aproveitamento: parseFloat(aprovNum.toFixed(2)), perda: parseFloat(perdaNum.toFixed(2)),
         chapas_usadas: resultado.length, retalhos_gerados: retalhosGerados.length,
         total_pecas: pecasDoPedido.reduce((a, p) => a + (p.qtd || 1), 0),
-        chapa_w: chapaW, chapa_h: chapaH, kerf, borda: bord,
+        // Metadado informativo (o real, por grupo de produto, já está em cada
+        // chapas_json[].W/H) — usa a 1ª chapa do resultado como representante,
+        // em vez do antigo chapaW/chapaH (que não refletia mais o lote real
+        // usado em cada grupo desde a resolução por lote).
+        chapa_w: resultado[0]?.W ?? 0, chapa_h: resultado[0]?.H ?? 0, kerf, borda: bord,
         pecas_json: pecasDoPedido, chapas_json: chapasComPecasDoPedido, usuario: null,
       });
     }
@@ -908,15 +989,22 @@ function OtimizadorContent() {
       const { error: perdaError } = await supabase.from("otimizacao_perda_detalhe").insert(perdaDetalhe as never);
       if (perdaError) console.error("otimizacao_perda_detalhe insert:", perdaError);
     }
+    recarregarLotes();
     router.push("/pedidos/" + pedidoRef);
   }
 
-  function addPeca() { setPecas(p => [...p, { l: 0, a: 0, qtd: 1, prod: "", pedidoId: pedidoRef ?? undefined }]); }
+  function addPeca() { setPecas(p => [...p, { l: 0, a: 0, qtd: 1, prod: "", produtoId: null, pedidoId: pedidoRef ?? undefined }]); }
   function remPeca(i: number) { setPecas(p => p.filter((_, idx) => idx !== i)); }
   function updPeca(i: number, field: keyof Peca, value: string | number) {
     setPecas(p => p.map((pc, idx) => {
       if (idx !== i) return pc;
-      if (field === "prod") autoSetChapa(value as string);
+      if (field === "prod") {
+        // Peça adicionada manualmente: resolve produto_id pelo nome escolhido
+        // no select (produtos já carregados), pra ela também entrar na
+        // resolução de lote como qualquer peça vinda de um pedido real.
+        const produtoId = produtos.find(pr => pr.nome === value)?.id ?? null;
+        return { ...pc, prod: value as string, produtoId };
+      }
       return { ...pc, [field]: value };
     }));
   }
@@ -1036,6 +1124,24 @@ function OtimizadorContent() {
         </div>
       </div>
 
+      {resumoPendente && resumoPendente.totalChapas > 0 && (
+        <div className="con" style={{ paddingBottom: 0 }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap",
+            padding: "10px 14px", background: "rgba(245,158,11,.1)", border: "1px solid var(--warn)",
+            borderRadius: "10px", marginBottom: "10px",
+          }}>
+            <span style={{ fontSize: "16px" }}>⚠</span>
+            <span style={{ fontSize: "12px", color: "var(--warn)", fontWeight: 700 }}>
+              {resumoPendente.totalChapas} chapas ({resumoPendente.totalM2.toFixed(1)} m²) com dimensão pendente de confirmação
+            </span>
+            <span style={{ fontSize: "11px", color: "var(--t3)" }}>
+              — {resumoPendente.produtos.map(p => `${p.nome} (${p.chapas})`).join(", ")} — saldo real em estoque, mas fora de qualquer plano de corte até a dimensão ser confirmada.
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="con">
         <div className="g2" style={{ alignItems: "start", gap: "14px" }}>
 
@@ -1080,10 +1186,19 @@ function OtimizadorContent() {
               </div>
             )}
 
-            {/* Configuração da Chapa — colapsável */}
+            {/* Configuração da Chapa — colapsável. Modo avulso/teste (sem
+                produto_id real): tamanho manual, como sempre foi. Modo real
+                (pedido carregado): dimensão vem de lotes_estoque, nunca de
+                default — 1 lote utilizável usa automático, 2+ exige escolha
+                explícita, 0 exclui o produto do plano (ver indicador acima
+                do formulário e mensagem após rodar). */}
             <div className="card">
-              {collapseHeader("Configuração da Chapa", chapaAberta, () => setChapaAberta(v => !v), `${chapaW} × ${chapaH}`)}
-              {chapaAberta && (
+              {collapseHeader(
+                modoTeste ? "Configuração da Chapa" : "Lote por Produto",
+                chapaAberta, () => setChapaAberta(v => !v),
+                modoTeste ? `${chapaW} × ${chapaH}` : (produtosDistintosNaLista.length > 0 ? `${produtosDistintosNaLista.length} produto(s)` : undefined)
+              )}
+              {chapaAberta && modoTeste && (
                 <div style={{ marginTop: "14px" }}>
                   <div style={{ marginBottom: "12px" }}>
                     <label className="fl" style={{ marginBottom: "6px", display: "block" }}>Tamanho Padrão</label>
@@ -1103,6 +1218,49 @@ function OtimizadorContent() {
                     <Campo label="Largura Chapa (mm)"><input name="chapa_w" type="number" className="fc" value={chapaW} onChange={e => setChapaW(Number(e.target.value))} /></Campo>
                     <Campo label="Altura Chapa (mm)"><input name="chapa_h" type="number" className="fc" value={chapaH} onChange={e => setChapaH(Number(e.target.value))} /></Campo>
                   </div>
+                  <div className="fr">
+                    <Campo label="Folga / Diamante (mm)"><input name="kerf" type="number" className="fc" value={kerf} min={0} max={20} onChange={e => setKerf(Number(e.target.value))} /></Campo>
+                    <Campo label="Borda Lapidação (mm)"><input name="bord" type="number" className="fc" value={bord} min={0} max={30} onChange={e => setBord(Number(e.target.value))} /></Campo>
+                  </div>
+                </div>
+              )}
+              {chapaAberta && !modoTeste && (
+                <div style={{ marginTop: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {produtosDistintosNaLista.length === 0 ? (
+                    <div style={{ fontSize: "12px", color: "var(--t3)" }}>Nenhum produto na lista de peças ainda.</div>
+                  ) : produtosDistintosNaLista.map(({ produtoId, nome }) => {
+                    const lotes = lotesPorProdutoMap.get(produtoId) ?? [];
+                    const excluidas = pecasExcluidasInfo.get(nome) ?? 0;
+                    return (
+                      <div key={produtoId} style={{ padding: "10px 12px", borderRadius: "8px", background: "var(--surf2)", border: "1px solid var(--b1)" }}>
+                        <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--t1)", marginBottom: "6px" }}>{nome}</div>
+                        {lotes.length === 0 && (
+                          <div style={{ fontSize: "11px", color: "var(--err, #f43f5e)" }}>
+                            ⚠ Sem lote com dimensão confirmada{excluidas > 0 ? ` — ${excluidas} peça(s) fora do plano` : ""}.
+                          </div>
+                        )}
+                        {lotes.length === 1 && (
+                          <div style={{ fontSize: "11px", color: "var(--t2)", fontFamily: "'DM Mono', monospace" }}>
+                            {lotes[0].chapa_largura_mm} × {lotes[0].chapa_altura_mm} mm · saldo {lotes[0].chapas_saldo} chapas
+                          </div>
+                        )}
+                        {lotes.length > 1 && (
+                          <select
+                            className="fc" style={{ fontSize: "11px" }}
+                            value={loteEscolhido.get(produtoId) ?? ""}
+                            onChange={e => setLoteEscolhido(prev => new Map(prev).set(produtoId, Number(e.target.value)))}
+                          >
+                            <option value="">Escolher lote ({lotes.length} disponíveis)...</option>
+                            {lotes.map(l => (
+                              <option key={l.id} value={l.id}>
+                                {l.chapa_largura_mm} × {l.chapa_altura_mm} mm · saldo {l.chapas_saldo} chapas · entrada {l.dt_entrada}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    );
+                  })}
                   <div className="fr">
                     <Campo label="Folga / Diamante (mm)"><input name="kerf" type="number" className="fc" value={kerf} min={0} max={20} onChange={e => setKerf(Number(e.target.value))} /></Campo>
                     <Campo label="Borda Lapidação (mm)"><input name="bord" type="number" className="fc" value={bord} min={0} max={30} onChange={e => setBord(Number(e.target.value))} /></Campo>

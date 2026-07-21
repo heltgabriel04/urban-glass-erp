@@ -6,6 +6,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { getPedidoById } from "@/services/pedidos.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { getPecasDoPedido } from "@/services/pecas.service";
+import { getLotesUtilizaveis } from "@/services/lotes.service";
 import { isChapaInteira } from "@/lib/chapas";
 import type { Pedido } from "@/types";
 import type { HistoricoOtimizador } from "@/services/otimizador.service";
@@ -206,11 +207,19 @@ export default function EtiquetasPage() {
         return;
       }
 
-      const [ped, otims] = await Promise.all([
+      const [ped, otims, lotes] = await Promise.all([
         getPedidoById(id),
         getOtimizacoesPorPedido(id),
+        getLotesUtilizaveis(),
       ]);
       setPedido(ped);
+      const chapasPorProduto = new Map<number, { w: number; h: number }[]>();
+      lotes.forEach(l => {
+        if (!l.chapa_largura_mm || !l.chapa_altura_mm) return;
+        const arr = chapasPorProduto.get(l.produto_id) ?? [];
+        arr.push({ w: l.chapa_largura_mm, h: l.chapa_altura_mm });
+        chapasPorProduto.set(l.produto_id, arr);
+      });
 
       if (otims.length > 0 && otims[0].chapas_json) {
         const o = otims[0];
@@ -291,7 +300,7 @@ export default function EtiquetasPage() {
         setEtiquetas(ets);
       } else {
         const itens = ped?.itens_pedido ?? [];
-        if (itens.length > 0 && itens.every(i => isChapaInteira(i.largura, i.altura))) {
+        if (itens.length > 0 && itens.every(i => isChapaInteira(i.largura, i.altura, (i.produto_id ? chapasPorProduto.get(i.produto_id) : undefined) ?? []))) {
           setModoChapa(true);
           const hoje = new Date();
           const dd  = String(hoje.getDate()).padStart(2, "0");

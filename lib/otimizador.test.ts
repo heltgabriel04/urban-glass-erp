@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { empacotar, empacotarTodas, calcAproveitamento, derivarCortes, ehGuilhotinavel, type PecaPlacada } from "@/lib/otimizador";
 
-const prod = "X"; // produto sem chapa padrão → usa fallback nos testes
+const prod = "X"; // nome de produto genérico usado nos testes de empacotamento
 
 function semSobreposicao(placed: PecaPlacada[]): boolean {
   for (let i = 0; i < placed.length; i++) {
@@ -175,18 +175,25 @@ describe("empacotarTodas — cenário 4→3 kEliminate (chapa leve + 3 pesadas)"
 });
 
 describe("calcAproveitamento", () => {
-  it("retorna ~100% quando a peça preenche a chapa de fallback", () => {
-    const aprov = calcAproveitamento([{ l: 3300, a: 2250, prod }], 0, 0);
+  const dimensaoPadrao = new Map([[prod, { w: 3300, h: 2250 }]]);
+
+  it("retorna ~100% quando a peça preenche a chapa do lote", () => {
+    const aprov = calcAproveitamento([{ l: 3300, a: 2250, prod }], 0, 0, dimensaoPadrao);
     expect(aprov).toBeCloseTo(100, 5);
   });
 
   it("fica entre 0 e 100 para preenchimento parcial", () => {
-    const aprov = calcAproveitamento([{ l: 1000, a: 1000, prod }], 0, 0);
+    const aprov = calcAproveitamento([{ l: 1000, a: 1000, prod }], 0, 0, dimensaoPadrao);
     expect(aprov).toBeGreaterThan(0);
     expect(aprov).toBeLessThan(100);
   });
 
   it("retorna 0 para lista vazia", () => {
-    expect(calcAproveitamento([], 0, 0)).toBe(0);
+    expect(calcAproveitamento([], 0, 0, dimensaoPadrao)).toBe(0);
+  });
+
+  it("exclui do cálculo peças de produto sem entrada no mapa de dimensão (sem lote utilizável)", () => {
+    const aprov = calcAproveitamento([{ l: 3300, a: 2250, prod: "sem-lote" }], 0, 0, dimensaoPadrao);
+    expect(aprov).toBe(0);
   });
 });

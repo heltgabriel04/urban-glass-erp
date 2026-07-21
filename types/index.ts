@@ -140,7 +140,12 @@ export interface Produto {
   ativo: boolean;
   obs: string;
   chapas_por_colar?: number | null;   // ficha técnica de embalagem (ex.: 18, 24)
+  /** @deprecated Morta desde a migração pra lotes_estoque (2026-07-21) — um produto
+   * pode ter vários lotes com dimensões diferentes agora. Nunca populada em produção
+   * (sempre null nos 11 produtos existentes); mantida só até decisão de remoção.
+   * Fonte real de dimensão: lotes_estoque.chapa_largura_mm/altura_mm por lote. */
   chapa_largura_mm?: number | null;
+  /** @deprecated Ver chapa_largura_mm acima. */
   chapa_altura_mm?: number | null;
   /** false = vidro direcional/padrão/serigrafado — otimizador nunca gira a peça. */
   pode_rotacionar: boolean;
@@ -1400,6 +1405,30 @@ export interface PedidoPeca {
   created_at: string;
   pedidos?: { id: string; clientes?: { nome: string } | null } | null;
   itens_pedido?: { produto_nome: string } | null;
+}
+
+// ─── LOTE DE ESTOQUE (múltiplas dimensões por produto) ──────
+export interface LoteEstoque {
+  id: number;
+  produto_id: number;
+  origem_tipo: string;
+  origem_id: string | null;
+  origem_mercadoria: '0' | '2' | null;
+  chapa_largura_mm: number | null;
+  chapa_altura_mm: number | null;
+  pode_rotacionar: boolean;
+  chapas_entrada: number;
+  chapas_saldo: number;
+  m2_por_chapa: number | null;
+  m2_saldo: number;
+  custo_m2: number | null;
+  dt_entrada: string;
+  dt_entrada_estimada: boolean;
+  estoque_minimo_chapas: number;
+  ativo: boolean;
+  dimensao_confirmada: boolean;
+  created_at: string;
+  produtos?: { nome: string } | null;
 }
 
 export interface ProgramacaoHistorico {

@@ -7,6 +7,7 @@ import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import { registrarMovimentacao } from "@/services/estoqueMovimentacoes.service";
+import { getResumoDimensaoPendente, type ResumoDimensaoPendente } from "@/services/lotes.service";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import type { EstoqueItem, Produto } from "@/types";
 
@@ -43,8 +44,9 @@ export default function EstoquePage() {
   // Edição
   const [editItem, setEditItem]         = useState<EstoqueItem | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
+  const [resumoPendente, setResumoPendente] = useState<ResumoDimensaoPendente | null>(null);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); getResumoDimensaoPendente().then(setResumoPendente); }, []);
 
   // Reconciliação: a baixa por otimização já é aplicada automaticamente ao salvar
   // o plano de corte (ver app/otimizador/page.tsx). Esta função existe só para
@@ -353,6 +355,22 @@ export default function EstoquePage() {
       </div>
 
       <div className="con">
+
+        {resumoPendente && resumoPendente.totalChapas > 0 && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap",
+            padding: "10px 14px", background: "rgba(245,158,11,.1)", border: "1px solid var(--warn)",
+            borderRadius: "10px", marginBottom: "16px",
+          }}>
+            <span style={{ fontSize: "16px" }}>⚠</span>
+            <span style={{ fontSize: "12px", color: "var(--warn)", fontWeight: 700 }}>
+              {resumoPendente.totalChapas} chapas ({resumoPendente.totalM2.toFixed(1)} m²) com dimensão pendente de confirmação
+            </span>
+            <span style={{ fontSize: "11px", color: "var(--t3)" }}>
+              — {resumoPendente.produtos.map(p => `${p.nome} (${p.chapas})`).join(", ")} — saldo real, mas indisponível pro Otimizador até a dimensão ser confirmada em lotes_estoque.
+            </span>
+          </div>
+        )}
 
         {/* ── FORMULÁRIO DE ENTRADA ── */}
         {showForm && (
