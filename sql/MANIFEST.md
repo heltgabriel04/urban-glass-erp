@@ -133,3 +133,4 @@ que é a ordem real em que foram escritos e (presumivelmente) rodados.
 | 2026-07-21 | `sql/lotes-estoque-dados-iniciais.sql` | lotes_estoque — backfill dos 5 saldos de `estoque` + lote novo da NF de importação (produto 10) | ✅ |
 | 2026-07-21 | `sql/lotes-estoque-dt-entrada-estimada.sql` | lotes_estoque — coluna dt_entrada_estimada (diferencia data real de aproximada, pra PEPS futuro) | ✅ |
 | 2026-07-21 | `sql/estoque-movimentacoes-lote-id.sql` | estoque_movimentacoes — coluna lote_id (baixa de produção do Otimizador decrementa lote específico) | ⏳ |
+| 2026-07-21 | `sql/lotes-estoque-confirma-dimensao-3mais3-incolor.sql` | lotes_estoque — confirma dimensão do lote migrado do produto 15 (Laminado 3+3 Incolor, 3300×2250) | ⏳ |
