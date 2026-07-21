@@ -3,7 +3,7 @@
 Última atualização: 2026-07-21
 Status: auditoria concluída; capacidade compartilhada + motor de cotação de
 prazo implementados e pushados; rastreamento por peça (QR individual)
-implementado e pushado 2026-07-21, SQL pendente rodar
+implementado, pushado e SQL confirmado rodado 2026-07-21
 
 > Nota desta atualização: as seções abaixo foram corrigidas em relação ao
 > documento original entregue em 2026-07-20 — o schema anexo (`pedido_itens`,
@@ -195,10 +195,10 @@ pré-requisito transversal a todas as fases.
    ajuste manual vs. recálculo também já existe (`travado`). O que falta
    aqui é específico: tratamento de atraso detectado automaticamente
    informando a cotação — não iniciado.
-3. **Fase 3 — Rastreamento por peça (QR individual).** ✅ Implementado e
-   pushado 2026-07-21 (`pedido_pecas` + `/pedidos/[id]/producao/peca/[token]`).
-   Falta: rodar `sql/pedido-pecas-scan.sql`, validar scan real com o leitor
-   físico da fábrica.
+3. **Fase 3 — Rastreamento por peça (QR individual).** ✅ Implementado,
+   pushado e SQL confirmado rodado 2026-07-21 (`pedido_pecas` +
+   `/pedidos/[id]/producao/peca/[token]`). Falta: validar scan real com o
+   leitor físico da fábrica.
 4. **Fase 4 — Visual/UX / simulação de freelancer.** Não iniciado,
    depende das fases anteriores.
 
@@ -233,7 +233,7 @@ bugs pré-existentes do motor).
   rastreamento por peça (sub-projeto #2 + Fase 3 deste módulo).
 - `sql/aps-auditoria-achados.sql`, `sql/bloqueio-linha-sem-recurso.sql`
   — migrations da rodada 2026-07-20, ambas rodadas e confirmadas.
-- `sql/pedido-pecas-scan.sql` — migration de 2026-07-21, **pendente rodar**.
+- `sql/pedido-pecas-scan.sql` — migration de 2026-07-21, **confirmada rodada**.
 - `schema_aps_urban_glass.sql` (entregue pelo usuário, fora do
   controle de versão do repo) — schema original; ver decisão #6 acima
   sobre por que não foi implementado como veio.
