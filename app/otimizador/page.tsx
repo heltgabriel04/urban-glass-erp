@@ -12,9 +12,9 @@ import { supabase } from "@/lib/supabase/client";
 import { salvarOtimizacao } from "@/services/otimizador.service";
 import { gerarPecasDoPedido } from "@/services/pecas.service";
 import { updatePedido } from "@/services/pedidos.service";
-import { getEstoque, salvarRetalhos } from "@/services/estoque.service";
+import { salvarRetalhos } from "@/services/estoque.service";
 import { registrarMovimentacao, reverterMovimentacao } from "@/services/estoqueMovimentacoes.service";
-import { getLotesUtilizaveis, getResumoDimensaoPendente, type ResumoDimensaoPendente } from "@/services/lotes.service";
+import { getLotesUtilizaveis, getResumoDimensaoPendente, getCustoMedioPorProduto, type ResumoDimensaoPendente } from "@/services/lotes.service";
 import type { Produto, Retalho, OtimizacaoPerdaDetalheInsert, LoteEstoque } from "@/types";
 import { isChapaInteira } from "@/lib/chapas";
 import { resolverDimensaoPorProduto } from "@/lib/loteResolucao";
@@ -111,6 +111,7 @@ function OtimizadorContent() {
   const [loteEscolhido, setLoteEscolhido]       = useState<Map<number, number>>(new Map()); // produto_id -> lote_id
   const [resumoPendente, setResumoPendente]     = useState<ResumoDimensaoPendente | null>(null);
   const [pecasExcluidasInfo, setPecasExcluidasInfo] = useState<Map<string, number>>(new Map()); // produto (nome) -> qtd peças fora do plano
+  const [loteUsadoPorProdutoNome, setLoteUsadoPorProdutoNome] = useState<Map<string, number>>(new Map()); // produto (nome) -> lote_id usado neste plano (pra baixa real em handleSalvar)
 
   const lotesPorProdutoMap = useMemo(() => {
     const m = new Map<number, LoteEstoque[]>();
@@ -505,8 +506,10 @@ function OtimizadorContent() {
         if (!dimensaoPorProduto.has(nome)) dimensaoPorProduto.set(nome, { w: chapaW, h: chapaH });
       });
       setPecasExcluidasInfo(new Map());
+      setLoteUsadoPorProdutoNome(new Map()); // modo teste nunca chega no handleSalvar — nada a baixar de verdade
     } else {
       setPecasExcluidasInfo(resolucao.pecasExcluidas);
+      setLoteUsadoPorProdutoNome(resolucao.loteUsadoPorProduto);
     }
 
     // Cenário principal
@@ -931,8 +934,12 @@ function OtimizadorContent() {
     });
     for (const [prodNome, consumo] of consumoPorProd.entries()) {
       const prodId = produtos.find(pr => pr.nome === prodNome)?.id;
+      // Lote escolhido pra este produto neste plano (resolverDimensaoPorProduto,
+      // via rodar()) — quando presente, a baixa decrementa o lote específico
+      // em vez do agregado por produto (ver services/lotes.service.ts).
+      const loteId = loteUsadoPorProdutoNome.get(prodNome);
       const res = await registrarMovimentacao({
-        produtoId: prodId, produtoNome: prodNome,
+        produtoId: prodId, produtoNome: prodNome, loteId,
         tipo: "saida_producao", origemTipo: "otimizacao", origemId: pedidoRef,
         chapas: -consumo.chapas, m2: -parseFloat(consumo.m2.toFixed(4)),
       });
@@ -948,11 +955,10 @@ function OtimizadorContent() {
     // Detalhe de perda de otimização por produto — uma vez por rodada, não
     // por pedido (rodada pode combinar vários pedidos; chapas_json duplica
     // as mesmas chapas em cada linha de historico_otimizador por pedido).
-    const estoqueAtual = await getEstoque();
-    const custoPorProdId = new Map<number, number>();
-    for (const e of estoqueAtual) {
-      if (e.produto_id != null) custoPorProdId.set(e.produto_id, Number(e.custo_m2) || 0);
-    }
+    // custo_m2 vem do custo médio ponderado entre lotes (lib/custoLote.ts) —
+    // fica null (não 0) quando algum lote ativo do produto não tem custo
+    // definido, mesma regra usada em margem.service.ts.
+    const custoPorProdId = await getCustoMedioPorProduto();
 
     const perdaPorProd = new Map<string, { bruta: number; pecas: number; retalhos: number }>();
     resultado.forEach(r => {
