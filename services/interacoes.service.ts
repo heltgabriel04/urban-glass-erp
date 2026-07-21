@@ -1,5 +1,25 @@
 import { supabase } from '@/lib/supabase/client';
 import type { InteracaoCliente, InteracaoClienteInsert } from '@/types';
+import type { InteracaoComCliente } from '@/lib/crmAnalytics';
+
+// Todas as interações de todos os clientes, com o nome do cliente já embutido
+// — usada pelos relatórios analíticos de CRM (app/relatorios/page.tsx), não
+// pela página individual do cliente (que usa getInteracoesPorCliente acima).
+export async function getTodasInteracoes(): Promise<InteracaoComCliente[]> {
+  const { data, error } = await supabase
+    .from('interacoes_cliente')
+    .select('id, cliente_id, tipo, data, proximo_contato, clientes(nome)')
+    .order('data', { ascending: false });
+  if (error) { console.error('getTodasInteracoes:', error); return []; }
+  return (data as unknown as Array<InteracaoCliente & { clientes: { nome: string } | null }>).map(i => ({
+    id: i.id,
+    cliente_id: i.cliente_id,
+    clienteNome: i.clientes?.nome ?? '—',
+    tipo: i.tipo,
+    data: i.data,
+    proximo_contato: i.proximo_contato,
+  }));
+}
 
 export async function getInteracoesPorCliente(clienteId: number): Promise<InteracaoCliente[]> {
   const { data, error } = await supabase

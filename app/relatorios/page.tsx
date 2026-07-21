@@ -8,15 +8,22 @@ import { getEstoque } from "@/services/estoque.service";
 import { getOrcamentos } from "@/services/orcamentos.service";
 import { getAllHistoricoOtimizador } from "@/services/otimizador.service";
 import { getResumoQualidade, getIndicadoresMensais } from "@/services/qualidade.service";
+import { getTodasInteracoes } from "@/services/interacoes.service";
+import { getClientes } from "@/services/clientes.service";
 import { formatBRL, formatPercent, formatDuracao } from "@/lib/formatters";
 import { valorComIpi } from "@/lib/pedidoIpi";
 import { calcStatsEtapas, ETAPAS_FLUXO, calcLeadTime } from "@/lib/producao-stats";
+import {
+  calcularFollowUpsAtrasados, calcularVolumePorMes,
+  calcularConversaoInteracaoOrcamento, calcularClientesSemContato,
+  type InteracaoComCliente,
+} from "@/lib/crmAnalytics";
 import { supabase } from "@/lib/supabase/client";
-import type { FinanceiroCliente, FaturamentoMensal, Pedido, Lancamento, IndicadorQualidadeMensal } from "@/types";
+import type { FinanceiroCliente, FaturamentoMensal, Pedido, Lancamento, IndicadorQualidadeMensal, Cliente } from "@/types";
 
 const MESES_ABREV    = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MESES_COMPLETOS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-const TABS = ["Faturamento","Clientes","Pedidos","Produção","Eficiência","Fluxo de Caixa","Estoque","Orçamentos","Fechamento","Qualidade"];
+const TABS = ["Faturamento","Clientes","Pedidos","Produção","Eficiência","Fluxo de Caixa","Estoque","Orçamentos","Fechamento","Qualidade","CRM"];
 
 const STATUS_COR: Record<string, string> = {
   "Aguardando otimização":   "var(--warn)",
@@ -106,6 +113,10 @@ export default function RelatoriosPage() {
   const [mesFechoSel, setMesFechoSel]     = useState<string>("");
   const [qualResumo, setQualResumo]       = useState<{ ncsAbertas: number; ncsCriticas: number; m2PerdidoMes: number; valorPerdidoMes: number; retrabalhosAbertos: number } | null>(null);
   const [qualIndicadores, setQualIndicadores] = useState<IndicadorQualidadeMensal[]>([]);
+  const [interacoes, setInteracoes]       = useState<InteracaoComCliente[]>([]);
+  const [clientesAtivos, setClientesAtivos] = useState<Cliente[]>([]);
+  const [janelaConversao, setJanelaConversao] = useState(90);
+  const [limiarSemContato, setLimiarSemContato] = useState(60);
 
   const hoje     = new Date().toISOString().split("T")[0];
   const dtEmissao = new Date().toLocaleDateString("pt-BR");
@@ -114,7 +125,7 @@ export default function RelatoriosPage() {
 
   async function load() {
     setLoading(true);
-    const [fin, fat, peds, lancs, otimHist, estq, orcs, invRes, qualRes, qualInd] = await Promise.all([
+    const [fin, fat, peds, lancs, otimHist, estq, orcs, invRes, qualRes, qualInd, interacs, clis] = await Promise.all([
       getFinanceiroClientes(),
       getFaturamentoMensal(2026),
       getPedidos(),
@@ -125,6 +136,8 @@ export default function RelatoriosPage() {
       supabase.from("investimentos").select("*").order("data", { ascending: true }),
       getResumoQualidade(),
       getIndicadoresMensais(),
+      getTodasInteracoes(),
+      getClientes(true),
     ]);
     setFinanceiro(fin); setFatMensal(fat); setPedidos(peds);
     setLancamentos(lancs as Lancamento[]);
@@ -134,6 +147,8 @@ export default function RelatoriosPage() {
     setInvestimentos((invRes.data ?? []) as any[]);
     setQualResumo(qualRes);
     setQualIndicadores(qualInd);
+    setInteracoes(interacs);
+    setClientesAtivos(clis);
     setLoading(false);
     const mesAtual = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
     setMesSel(new Date().getMonth() + 1);
@@ -227,6 +242,19 @@ export default function RelatoriosPage() {
   const perdaGeral  = eficienciaMensal.length ? eficienciaMensal.reduce((a, m) => a + m.perdaMedia, 0) / eficienciaMensal.length : 0;
   const totalOtims  = otimHistorico.length;
   const totalRetalh = otimHistorico.reduce((a, h) => a + Number(h.retalhos_gerados), 0);
+
+  // ── CRM: relatórios analíticos (6b) ──────────────────────────────────────
+  const followUpsAtrasados = useMemo(() => calcularFollowUpsAtrasados(interacoes, hoje), [interacoes, hoje]);
+  const volumeInteracoesMes = useMemo(() => calcularVolumePorMes(interacoes), [interacoes]);
+  const conversaoCrm = useMemo(
+    () => calcularConversaoInteracaoOrcamento(interacoes, orcamentos as { cliente_id: number; dt_criacao: string }[], janelaConversao),
+    [interacoes, orcamentos, janelaConversao]
+  );
+  const clientesSemContato = useMemo(
+    () => calcularClientesSemContato(clientesAtivos, interacoes, hoje, limiarSemContato),
+    [clientesAtivos, interacoes, hoje, limiarSemContato]
+  );
+  const maxVolumeMes = Math.max(...volumeInteracoesMes.map(m => m.total), 1);
 
   // ── Tempo por etapa de produção ──────────────────────────────────────────
   const statsEtapas = useMemo(() => calcStatsEtapas(pedidos), [pedidos]);
@@ -1379,6 +1407,141 @@ export default function RelatoriosPage() {
 
                   <div style={{ padding: "12px 16px", background: "var(--surf2)", borderRadius: "10px", border: "1px solid var(--b1)", fontSize: "12px", color: "var(--t3)" }}>
                     Para detalhes completos, acesse o módulo <strong style={{ color: "var(--acc)" }}>Qualidade</strong> na barra lateral: cadastro de NCs, controle de quebras e retrabalhos.
+                  </div>
+                </div>
+              )}
+
+              {/* ══ TAB 10: CRM ══ */}
+              {tabIdx === 10 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  {/* KPIs */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px" }}>
+                    {[
+                      { label: "Follow-ups Atrasados", value: String(followUpsAtrasados.length), color: followUpsAtrasados.length > 0 ? "var(--err)" : "var(--ok)", sub: "próximo contato já vencido" },
+                      { label: "Taxa de Conversão",    value: conversaoCrm.totalClientesComInteracao > 0 ? conversaoCrm.taxaConversao.toFixed(0) + "%" : "—", color: "var(--acc2)", sub: `${conversaoCrm.clientesConvertidos}/${conversaoCrm.totalClientesComInteracao} clientes em ${janelaConversao}d` },
+                      { label: "Clientes sem Contato",  value: String(clientesSemContato.length),      color: clientesSemContato.length > 0 ? "var(--warn)" : "var(--ok)", sub: `≥${limiarSemContato} dias ou nunca` },
+                      { label: "Interações no Período", value: String(interacoes.length),               color: "var(--acc4)", sub: "total registrado" },
+                    ].map(card => (
+                      <div key={card.label} style={{ background: "var(--surf)", border: "1px solid var(--b1)", borderRadius: "12px", padding: "18px 20px" }}>
+                        <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600, marginBottom: "8px" }}>{card.label}</div>
+                        <div style={{ fontSize: "22px", fontWeight: 700, color: card.color, fontFamily: "'DM Mono', monospace", lineHeight: 1.1, marginBottom: "6px" }}>{card.value}</div>
+                        <div style={{ fontSize: "11px", color: "var(--t3)" }}>{card.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                    {/* Volume de interações por mês */}
+                    <div className="card">
+                      <div className="ct">Volume de Interações por Mês</div>
+                      {volumeInteracoesMes.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "30px", color: "var(--t3)", fontSize: "12px" }}>Nenhuma interação registrada ainda.</div>
+                      ) : (
+                        <>
+                          <div style={{ display: "flex", gap: "14px", marginBottom: "10px", flexWrap: "wrap" }}>
+                            {[
+                              { color: "var(--acc)",  label: "Ligação" },
+                              { color: "var(--acc2)", label: "E-mail" },
+                              { color: "var(--acc4)", label: "Reunião" },
+                              { color: "var(--t3)",   label: "Nota" },
+                            ].map(l => (
+                              <div key={l.label} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "10px", color: "var(--t2)" }}>
+                                <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: l.color }} />{l.label}
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{ height: "140px", display: "flex", alignItems: "flex-end", gap: "5px" }}>
+                            {volumeInteracoesMes.map((m) => (
+                              <div key={m.mes} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px" }} title={`${m.mes}: ${m.total} interações`}>
+                                <div style={{ width: "100%", display: "flex", flexDirection: "column-reverse", height: `${Math.max((m.total / maxVolumeMes) * 120, 3)}px`, borderRadius: "2px 2px 0 0", overflow: "hidden" }}>
+                                  {m.ligacao > 0 && <div style={{ width: "100%", flex: m.ligacao, background: "var(--acc)" }} />}
+                                  {m.email > 0   && <div style={{ width: "100%", flex: m.email,   background: "var(--acc2)" }} />}
+                                  {m.reuniao > 0 && <div style={{ width: "100%", flex: m.reuniao, background: "var(--acc4)" }} />}
+                                  {m.nota > 0    && <div style={{ width: "100%", flex: m.nota,    background: "var(--t3)" }} />}
+                                </div>
+                                <div style={{ fontSize: "8px", fontFamily: "'DM Mono', monospace", color: "var(--t3)" }}>{m.mes.slice(5)}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Conversão interação → orçamento */}
+                    <div className="card">
+                      <div className="ct">
+                        Conversão Interação → Orçamento
+                        <select value={janelaConversao} onChange={e => setJanelaConversao(Number(e.target.value))} style={{ marginLeft: "10px", fontSize: "10px", background: "var(--surf2)", color: "var(--t2)", border: "1px solid var(--b1)", borderRadius: "6px", padding: "2px 6px" }}>
+                          <option value={30}>janela 30d</option>
+                          <option value={60}>janela 60d</option>
+                          <option value={90}>janela 90d</option>
+                          <option value={180}>janela 180d</option>
+                        </select>
+                      </div>
+                      {conversaoCrm.detalhes.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "30px", color: "var(--t3)", fontSize: "12px" }}>Nenhuma conversão detectada na janela selecionada.</div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "1px", maxHeight: "180px", overflowY: "auto" }}>
+                          {conversaoCrm.detalhes.map((d) => (
+                            <div key={d.clienteId} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "8px", padding: "8px 10px", borderRadius: "8px", background: "var(--surf2)", border: "1px solid var(--b1)" }}>
+                              <div style={{ fontSize: "12px", color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.clienteNome}</div>
+                              <div style={{ fontSize: "11px", color: "var(--ok)", fontFamily: "'DM Mono', monospace" }}>{d.diasParaConverter}d</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                    {/* Follow-ups atrasados */}
+                    <div className="card">
+                      <div className="ct">Follow-ups Atrasados</div>
+                      {followUpsAtrasados.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "30px", color: "var(--ok)", fontSize: "12px" }}>Nenhum follow-up atrasado. 🎉</div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "1px", maxHeight: "260px", overflowY: "auto" }}>
+                          {followUpsAtrasados.map((f) => (
+                            <div key={f.interacaoId} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: "8px", alignItems: "center", padding: "8px 10px", borderRadius: "8px", background: "var(--surf2)", border: "1px solid var(--b1)" }}>
+                              <div style={{ fontSize: "12px", color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.clienteNome}</div>
+                              <div style={{ fontSize: "10px", color: "var(--t3)" }}>{f.tipo}</div>
+                              <div style={{ fontSize: "11px", color: "var(--err)", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{f.diasAtraso}d</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Clientes sem contato recente */}
+                    <div className="card">
+                      <div className="ct">
+                        Clientes sem Contato Recente
+                        <select value={limiarSemContato} onChange={e => setLimiarSemContato(Number(e.target.value))} style={{ marginLeft: "10px", fontSize: "10px", background: "var(--surf2)", color: "var(--t2)", border: "1px solid var(--b1)", borderRadius: "6px", padding: "2px 6px" }}>
+                          <option value={30}>≥30d</option>
+                          <option value={60}>≥60d</option>
+                          <option value={90}>≥90d</option>
+                          <option value={180}>≥180d</option>
+                        </select>
+                      </div>
+                      {clientesSemContato.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "30px", color: "var(--ok)", fontSize: "12px" }}>Todos os clientes ativos têm contato recente.</div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "1px", maxHeight: "260px", overflowY: "auto" }}>
+                          {clientesSemContato.map((c) => (
+                            <div key={c.clienteId} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "8px", padding: "8px 10px", borderRadius: "8px", background: "var(--surf2)", border: "1px solid var(--b1)" }}>
+                              <div style={{ fontSize: "12px", color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.clienteNome}</div>
+                              <div style={{ fontSize: "11px", color: c.ultimaInteracao ? "var(--warn)" : "var(--t3)", fontFamily: "'DM Mono', monospace" }}>
+                                {c.ultimaInteracao ? `${c.diasSemContato}d` : "nunca"}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ padding: "12px 16px", background: "var(--surf2)", borderRadius: "10px", border: "1px solid var(--b1)", fontSize: "12px", color: "var(--t3)" }}>
+                    Baseado em <strong style={{ color: "var(--acc)" }}>Interações</strong> registradas na página de cada cliente. Sem autoria de usuário registrada — não é possível segmentar por vendedor ainda.
                   </div>
                 </div>
               )}
