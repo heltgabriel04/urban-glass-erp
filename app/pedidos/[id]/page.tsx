@@ -1025,20 +1025,18 @@ export default function PedidoDetalhe() {
           {/* Retiradas */}
           {temItens && (
             <div style={{ border: `1px solid ${corRetiradas.border}`, borderRadius:"10px", overflow:"hidden" }}>
-              <div style={{ background: corRetiradas.bg, padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px" }}>
+              <button onClick={() => setAbrirRetiradas(v => !v)} style={{ width:"100%", background: corRetiradas.bg, padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px", border:"none", cursor:"pointer" }}>
                 <div style={{ display:"flex", gap:"24px", alignItems:"center" }}>
-                  <div>
-                    <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"2px" }}>RETIRADAS</div>
-                    <div style={{ fontSize:"13px", color: corRetiradas.text, fontWeight:700 }}>
-                      {totalPecasRetirado} de {totalPecasPedido} peça(s) retirada(s)
-                    </div>
+                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", display:"flex", alignItems:"center", gap:"6px" }}>
+                    RETIRADAS
+                    <span style={{ transform: abrirRetiradas ? "rotate(180deg)" : "rotate(0deg)", transition:"transform .2s" }}>▾</span>
                   </div>
                   <div style={{ fontSize:"12px", color:"var(--t3)", fontFamily:"'DM Mono', monospace", display:"flex", gap:"16px" }}>
                     <span>Viagens: <strong style={{ color:"var(--t1)" }}>{retiradas.length}</strong></span>
                     <span>Pendente: <strong style={{ color:"var(--t1)" }}>{totalPecasPedido - totalPecasRetirado}</strong></span>
                   </div>
                 </div>
-                <div style={{ display:"flex", gap:"8px", alignItems:"center" }}>
+                <div style={{ display:"flex", gap:"8px", alignItems:"center" }} onClick={e => e.stopPropagation()}>
                   {totalPecasPedido - totalPecasRetirado > 0 && (
                     <button
                       className="btn sm"
@@ -1050,8 +1048,10 @@ export default function PedidoDetalhe() {
                   )}
                   <a href={`/pedidos/${id}/retiradas`} className="btn bg sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>🚚 Ver Retiradas</a>
                 </div>
-              </div>
+              </button>
 
+              {abrirRetiradas && (
+              <>
               {resumoRetiradaPorProduto.length > 0 && (
                 <div className="tw" style={{ borderRadius: 0, borderTop: "none", borderLeft: "none", borderRight: "none" }}>
                   <table>
@@ -1104,6 +1104,8 @@ export default function PedidoDetalhe() {
                     <button className="btn bg sm" onClick={() => setShowRetTudo(false)}>Cancelar</button>
                   </div>
                 </div>
+              )}
+              </>
               )}
             </div>
           )}
