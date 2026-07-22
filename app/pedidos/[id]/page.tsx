@@ -167,7 +167,6 @@ export default function PedidoDetalhe() {
   const [abrirObs,          setAbrirObs]          = useState(false);
   const [abrirItens,        setAbrirItens]        = useState(true);
   const [abrirInformacoes,  setAbrirInformacoes]  = useState(false);
-  const [abrirFinanceiro,   setAbrirFinanceiro]   = useState(false);
   const [abrirDocumentos,   setAbrirDocumentos]   = useState(false);
 
   // Qualidade
@@ -1027,15 +1026,16 @@ export default function PedidoDetalhe() {
             </div>
           )}
 
-          {/* Informações do Pedido + Financeiro — lado a lado, cada um com seu proprio toggle */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"16px" }}>
+          {/* Informações do Pedido + Financeiro — 1 card so, 1 toggle so */}
           <div className="card" style={{ padding:"20px 24px" }}>
             <button onClick={() => setAbrirInformacoes(v => !v)} style={{ width:"100%", display:"flex", alignItems:"center", gap:"8px", marginBottom: abrirInformacoes ? "16px" : 0, background:"none", border:"none", cursor:"pointer", padding:0 }}>
-              <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>INFORMAÇÕES DO PEDIDO</div>
+              <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>INFORMAÇÕES DO PEDIDO E FINANCEIRO</div>
               <span style={{ fontSize:"11px", color:"var(--t3)", transform: abrirInformacoes ? "rotate(180deg)" : "rotate(0deg)", transition:"transform .2s" }}>▾</span>
             </button>
             {abrirInformacoes && (
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"24px" }}>
               <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
+                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em", marginBottom:"2px" }}>INFORMAÇÕES DO PEDIDO</div>
                   <Row label="Cliente"            value={pedido.clientes?.nome ?? "—"} />
                   <Row label="Cidade"             value={pedido.clientes?.cidade ?? "—"} />
                   <Row label="Telefone"           value={pedido.clientes?.tel ?? "—"} />
@@ -1062,17 +1062,9 @@ export default function PedidoDetalhe() {
                   })()}
                   {pedido.obs && <Row label="Observações" value={pedido.obs} />}
               </div>
-            )}
-          </div>
 
-          {/* Financeiro */}
-          <div className="card" style={{ padding:"20px 24px" }}>
-            <button onClick={() => setAbrirFinanceiro(v => !v)} style={{ width:"100%", display:"flex", alignItems:"center", gap:"8px", marginBottom: abrirFinanceiro ? "16px" : 0, background:"none", border:"none", cursor:"pointer", padding:0 }}>
-              <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>FINANCEIRO</div>
-              <span style={{ fontSize:"11px", color:"var(--t3)", transform: abrirFinanceiro ? "rotate(180deg)" : "rotate(0deg)", transition:"transform .2s" }}>▾</span>
-            </button>
-            {abrirFinanceiro && (
-            <>
+              <div>
+                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em", marginBottom:"12px" }}>FINANCEIRO</div>
 
                 {/* Resumo em 3 colunas */}
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"8px", marginBottom:"14px" }}>
@@ -1378,9 +1370,9 @@ export default function PedidoDetalhe() {
                     ✓ Pagamento quitado
                   </div>
                 )}
-            </>
+              </div>
+              </div>
             )}
-          </div>
           </div>
 
           {/* Itens */}
