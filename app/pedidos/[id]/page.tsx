@@ -829,6 +829,16 @@ export default function PedidoDetalhe() {
   const parcelasAReceber = lancamentos.filter(l => l.status === "A Receber").sort((a, b) => (a.vencimento ?? "").localeCompare(b.vencimento ?? ""));
   const lancamentosPagos = lancamentos.filter(l => l.status === "Pago");
 
+  // Boleto só faz sentido anexar quando alguma forma de pagamento do pedido
+  // (a principal ou a de alguma parcela — ex.: PIX de entrada + restante no
+  // boleto) realmente é boleto. Também mostra se já existe boleto anexado,
+  // mesmo que a forma de pagamento tenha mudado depois — nunca esconde um
+  // arquivo já salvo.
+  const mostrarBoleto =
+    (pedido.forma_pgto?.toLowerCase().includes("boleto") ?? false) ||
+    lancamentos.some(l => l.forma_pgto?.toLowerCase().includes("boleto")) ||
+    (pedido.boleto_urls?.length ?? 0) > 0;
+
   const fc: React.CSSProperties = {
     background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: "6px",
     padding: "9px 12px", color: "var(--t1)", fontSize: "13px",
@@ -1524,39 +1534,44 @@ export default function PedidoDetalhe() {
               </div>
             )}
 
-            {/* Boleto */}
-            <button onClick={() => setAbrirBoleto(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px", background: "none", border: "none", borderTop: "1px solid var(--b1)", cursor: "pointer", color: "var(--t1)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <span style={{ fontSize: "12px" }}>🏦</span>
-                <span style={{ fontSize: "10.5px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>BOLETO</span>
-                {(pedido.boleto_urls?.length ?? 0) > 0 && (
-                  <span style={{ fontSize: "10px", background: "rgba(245,158,11,.18)", color: "var(--warn)", borderRadius: "10px", padding: "1px 7px", fontWeight: 700 }}>{pedido.boleto_urls!.length}</span>
-                )}
-              </div>
-              <span style={{ fontSize: "11px", color: "var(--t3)", transform: abrirBoleto ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}>▾</span>
-            </button>
-            {abrirBoleto && (
-              <div style={{ padding: "0 18px 14px" }}>
-                {(pedido.boleto_urls?.length ?? 0) > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "10px" }}>
-                    {pedido.boleto_urls!.map((url, i) => (
-                      <div key={url} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px", background: "rgba(245,158,11,.08)", borderRadius: "7px", border: "1px solid rgba(245,158,11,.25)" }}>
-                        <span style={{ fontSize: "14px" }}>🏦</span>
-                        <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--warn)", fontWeight: 600, fontSize: "12px", textDecoration: "underline" }}>Boleto {i + 1}</a>
-                        <button className="btn bw sm" onClick={() => handleRemoverBoleto(url)} disabled={uploadandoBoleto}>Remover</button>
+            {/* Boleto — só aparece quando alguma forma de pagamento do pedido
+                (principal ou de parcela) é boleto, ou já existe boleto anexado */}
+            {mostrarBoleto && (
+              <>
+                <button onClick={() => setAbrirBoleto(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px", background: "none", border: "none", borderTop: "1px solid var(--b1)", cursor: "pointer", color: "var(--t1)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontSize: "12px" }}>🏦</span>
+                    <span style={{ fontSize: "10.5px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>BOLETO</span>
+                    {(pedido.boleto_urls?.length ?? 0) > 0 && (
+                      <span style={{ fontSize: "10px", background: "rgba(245,158,11,.18)", color: "var(--warn)", borderRadius: "10px", padding: "1px 7px", fontWeight: 700 }}>{pedido.boleto_urls!.length}</span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: "11px", color: "var(--t3)", transform: abrirBoleto ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}>▾</span>
+                </button>
+                {abrirBoleto && (
+                  <div style={{ padding: "0 18px 14px" }}>
+                    {(pedido.boleto_urls?.length ?? 0) > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "10px" }}>
+                        {pedido.boleto_urls!.map((url, i) => (
+                          <div key={url} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px", background: "rgba(245,158,11,.08)", borderRadius: "7px", border: "1px solid rgba(245,158,11,.25)" }}>
+                            <span style={{ fontSize: "14px" }}>🏦</span>
+                            <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--warn)", fontWeight: 600, fontSize: "12px", textDecoration: "underline" }}>Boleto {i + 1}</a>
+                            <button className="btn bw sm" onClick={() => handleRemoverBoleto(url)} disabled={uploadandoBoleto}>Remover</button>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
+                    <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "4px", padding: "12px", border: "2px dashed var(--b2)", borderRadius: "7px", cursor: uploadandoBoleto ? "default" : "pointer", background: "var(--surf2)" }}
+                      onDragOver={e => e.preventDefault()}
+                      onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoBoleto) handleUploadBoleto(fs); }}>
+                      <span style={{ fontSize: "16px" }}>🏦</span>
+                      <span style={{ fontSize: "11px", color: "var(--t3)" }}>{uploadandoBoleto ? "Enviando..." : "Arraste ou clique para anexar boleto (PDF ou imagem)"}</span>
+                      <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple name="arquivo_boleto" style={{ display: "none" }} disabled={uploadandoBoleto}
+                        onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadBoleto(fs); e.target.value = ""; }} />
+                    </label>
                   </div>
                 )}
-                <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "4px", padding: "12px", border: "2px dashed var(--b2)", borderRadius: "7px", cursor: uploadandoBoleto ? "default" : "pointer", background: "var(--surf2)" }}
-                  onDragOver={e => e.preventDefault()}
-                  onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoBoleto) handleUploadBoleto(fs); }}>
-                  <span style={{ fontSize: "16px" }}>🏦</span>
-                  <span style={{ fontSize: "11px", color: "var(--t3)" }}>{uploadandoBoleto ? "Enviando..." : "Arraste ou clique para anexar boleto (PDF ou imagem)"}</span>
-                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple name="arquivo_boleto" style={{ display: "none" }} disabled={uploadandoBoleto}
-                    onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadBoleto(fs); e.target.value = ""; }} />
-                </label>
-              </div>
+              </>
             )}
 
             {/* Comprovante de Pagamento */}
