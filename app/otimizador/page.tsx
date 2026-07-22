@@ -144,6 +144,19 @@ function OtimizadorContent() {
     });
   }, [produtosDistintosNaLista, lotesPorProdutoMap]);
 
+  // Abre "Lote por Produto" sozinho quando algum produto tem 2+ lotes
+  // utilizáveis e nenhum foi escolhido ainda — sem isso a peça some do plano
+  // sem nenhum aviso visível, porque o painel vem fechado por padrão (2026-07-22,
+  // achado no P-066: produto com 2 lotes confirmados ficou de fora até alguém
+  // abrir esse painel manualmente). Só abre, nunca fecha sozinho.
+  useEffect(() => {
+    const temPendente = produtosDistintosNaLista.some(({ produtoId }) => {
+      const lotes = lotesPorProdutoMap.get(produtoId) ?? [];
+      return lotes.length > 1 && !loteEscolhido.has(produtoId);
+    });
+    if (temPendente) setChapaAberta(true);
+  }, [produtosDistintosNaLista, lotesPorProdutoMap, loteEscolhido]);
+
   async function recarregarLotes() {
     const [lotes, resumo] = await Promise.all([getLotesUtilizaveis(), getResumoDimensaoPendente()]);
     setLotesUtilizaveis(lotes);
@@ -549,11 +562,30 @@ function OtimizadorContent() {
     const totalPecas = flat.length - (modoTeste ? 0 : totalExcluidas);
     const totalPlaced = main.results.reduce((a, r) => a + r.placed.length, 0);
     const naoCouberam = totalPecas - totalPlaced;
+
+    // 2 causas bem diferentes de exclusão, cada uma com ação distinta —
+    // usar o mesmo texto pras duas (como era antes) manda o operador medir
+    // chapa quando na verdade só falta escolher entre lotes já confirmados
+    // (achado no P-066, 2026-07-22).
+    let semLoteConfirmado = 0;
+    let semEscolhaDeLote = 0;
+    if (!modoTeste) {
+      const produtoIdPorNome = new Map<string, number | null | undefined>();
+      flat.forEach(p => { if (!produtoIdPorNome.has(p.prod)) produtoIdPorNome.set(p.prod, p.produtoId); });
+      resolucao.pecasExcluidas.forEach((qtd, nome) => {
+        const produtoId = produtoIdPorNome.get(nome);
+        const lotes = produtoId ? (lotesPorProdutoMap.get(produtoId) ?? []) : [];
+        if (lotes.length === 0) semLoteConfirmado += qtd;
+        else semEscolhaDeLote += qtd;
+      });
+    }
+
     setMsg(
       `${totalPecas} peças · ${main.chapas} chapa(s)` +
       (pedidosSelecionados.size > 0 ? ` · ${pedidosSelecionados.size + 1} pedidos agrupados` : "") +
       ` · ${naoCouberam > 0 ? naoCouberam + " não couberam" : "✓ Todas alocadas"}` +
-      (!modoTeste && totalExcluidas > 0 ? ` · ⚠ ${totalExcluidas} peça(s) fora do plano — sem lote com dimensão confirmada` : "")
+      (semLoteConfirmado > 0 ? ` · ⚠ ${semLoteConfirmado} peça(s) fora do plano — sem lote com dimensão confirmada` : "") +
+      (semEscolhaDeLote > 0 ? ` · ⚠ ${semEscolhaDeLote} peça(s) fora do plano — escolha o lote em "Lote por Produto"` : "")
     );
   }
 
