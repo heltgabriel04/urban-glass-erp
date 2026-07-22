@@ -1507,10 +1507,16 @@ export default function PedidoDetalhe() {
             ) : null}
           </div>
 
-          {/* Romaneio / NF-e / Boleto / Observações — um card só, compacto */}
+          {/* Documentos: Romaneio / NF-e / Boleto / Comprovante / Observações */}
           <div className="card" style={{ overflow: "hidden" }}>
+            <button onClick={() => setAbrirDocumentos(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px", background: "none", border: "none", cursor: "pointer", color: "var(--t1)" }}>
+              <div style={{ fontSize: "10.5px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>DOCUMENTOS</div>
+              <span style={{ fontSize: "11px", color: "var(--t3)", transform: abrirDocumentos ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}>▾</span>
+            </button>
+            {abrirDocumentos && (
+            <>
             {/* Romaneio(s) Assinado(s) */}
-            <button onClick={() => setAbrirRomaneio(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px", background: "none", border: "none", cursor: "pointer", color: "var(--t1)" }}>
+            <button onClick={() => setAbrirRomaneio(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px", background: "none", border: "none", borderTop: "1px solid var(--b1)", cursor: "pointer", color: "var(--t1)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <span style={{ fontSize: "12px" }}>📎</span>
                 <span style={{ fontSize: "10.5px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>ROMANEIO(S) ASSINADO(S)</span>
@@ -1753,6 +1759,8 @@ export default function PedidoDetalhe() {
                   </div>
                 )}
               </div>
+            )}
+            </>
             )}
           </div>
         </div>
