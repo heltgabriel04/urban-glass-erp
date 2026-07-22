@@ -136,3 +136,4 @@ que é a ordem real em que foram escritos e (presumivelmente) rodados.
 | 2026-07-21 | `sql/lotes-estoque-confirma-dimensao-3mais3-incolor.sql` | lotes_estoque — confirma dimensão do lote migrado do produto 15 (Laminado 3+3 Incolor, 3300×2250) | ✅ |
 | 2026-07-22 | `sql/lotes-estoque-custo-lote-importado-produto10.sql` | lotes_estoque — custo_m2 do lote importado New Glass (produto 10, lote id=6) = R$94,50/m², ICMS/IPI creditáveis confirmado pelo contador | ✅ |
 | 2026-07-22 | `sql/lotes-estoque-confirma-dimensao-verde-e-incolor-legado.sql` | lotes_estoque — confirma dimensão 3300×2250 do Laminado 4+4 Verde (produto 13) e do lote legado do Laminado 4+4 Incolor (produto 10, id=1); NÃO inclui produtos 17/21 (divergência pendente) | ✅ |
+| 2026-07-22 | `sql/pedido-comprovante-pagamento.sql` | Bucket + coluna comprovante_pagamento_urls — 4o tipo de anexo no pedido (Romaneio/NF-e/Boleto/Comprovante) | ⏳ |
