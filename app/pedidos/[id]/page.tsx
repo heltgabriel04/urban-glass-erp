@@ -1908,7 +1908,7 @@ export default function PedidoDetalhe() {
               <div style={{ fontSize:"28px", fontWeight:900, color:"#2d5fa6", letterSpacing:"-1px" }}>{pedido.id}</div>
               <div style={{ fontSize:"11px", color:"#333", marginTop:"6px" }}>Emissão: <strong>{new Date().toLocaleDateString("pt-BR")}</strong></div>
               <div style={{ fontSize:"11px", color:"#333" }}>Pedido: <strong>{formatDate(pedido.dt_pedido)}</strong></div>
-              <div style={{ fontSize:"9px", color:"#c00", marginTop:"6px", fontStyle:"italic" }}>⚠ Não tem validade fiscal</div>
+              <div style={{ display:"inline-block", marginTop:"6px", padding:"3px 10px", borderRadius:"4px", background:"#fdeaea", borderLeft:"3px solid #c00", fontSize:"9px", color:"#c00", fontWeight:700 }}>⚠ Não tem validade fiscal</div>
             </div>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"12px", marginBottom:"18px" }}>
@@ -1952,7 +1952,14 @@ export default function PedidoDetalhe() {
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"center", color:"#000", fontSize:"10px", fontWeight:700 }}>{i + 1}</td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontWeight:700, color:"#000" }}>{item.produto_nome}</td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontFamily:"monospace", fontSize:"10px", fontWeight:700, color:"#000" }}>{item.largura} × {item.altura}</td>
-                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontFamily:"monospace", fontSize:"10px", fontWeight:700, color:"#000" }}>{medidaReal(item, isML).toFixed(3)} {isML ? "ml" : "m²"}</td>
+                  <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", fontFamily:"monospace", fontSize:"10px", fontWeight:700, color:"#000" }}>
+                    {medidaReal(item, isML).toFixed(3)} {isML ? "ml" : "m²"}
+                    {item.quantidade > 1 && (
+                      <div style={{ fontSize:"8px", fontWeight:400, color:"#666", marginTop:"2px" }}>
+                        ({(medidaReal(item, isML) / item.quantidade).toFixed(3)} {isML ? "ml" : "m²"}/un)
+                      </div>
+                    )}
+                  </td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"center", fontWeight:700, color:"#000" }}>{item.quantidade}</td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"right", fontFamily:"monospace", fontSize:"10px", fontWeight:700, color:"#000" }}>{formatBRL(item.valor_m2)}</td>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"right", fontFamily:"monospace", fontWeight:700, color:"#2d5fa6" }}>{formatBRL(item.subtotal)}</td>
@@ -1965,7 +1972,6 @@ export default function PedidoDetalhe() {
             <div style={{ padding:"12px", background:"#f0f4ff", borderRadius:"8px", borderLeft:"4px solid #2d5fa6" }}>
               <div style={{ fontSize:"9px", fontWeight:700, color:"#2d5fa6", textTransform:"uppercase", letterSpacing:"1.5px", marginBottom:"8px" }}>Condições de Pagamento</div>
               <div style={{ display:"flex", flexDirection:"column", gap:"6px", fontSize:"11px" }}>
-                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Valor total</span><strong style={{ fontFamily:"monospace" }}>{formatBRL(totalComIpi)}</strong></div>
                 {pedido.tem_ipi && (
                   <div style={{ display:"flex", justifyContent:"space-between" }}>
                     <span style={{ color:"#333" }}>IPI ({ALIQ_IPI_PEDIDO}% sobre {formatBRL(pedido.valor_total)})</span>
@@ -1993,10 +1999,15 @@ export default function PedidoDetalhe() {
               <strong style={{ color:"#92400e" }}>Observações:</strong> <span style={{ color:"#333", fontWeight:700 }}>{pedido.obs}</span>
             </div>
           )}
-          <div style={{ textAlign:"left", fontSize:"10px", color:"#333", fontWeight:700, marginTop:"32px" }}>
+          <div style={{ border:"1px dashed #999", borderRadius:"8px", padding:"10px 14px", marginTop:"18px", minHeight:"46px" }}>
+            <div style={{ fontSize:"9px", fontWeight:700, color:"#666", textTransform:"uppercase", letterSpacing:"1px" }}>
+              Observações / Ressalvas <span style={{ fontWeight:400, textTransform:"none", letterSpacing:"normal" }}>(avarias, divergência de quantidade, etc.)</span>
+            </div>
+          </div>
+          <div style={{ textAlign:"left", fontSize:"10px", color:"#333", fontWeight:700, marginTop:"24px" }}>
             Data de saída: ____ / ____ / ______
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"32px", marginBottom:"16px", marginTop:"22px" }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"32px", marginBottom:"16px", marginTop:"50px" }}>
             {["Vendedor / Urban Glass","Recebido por / Comprador","Motorista / Entregador"].map(label => (
               <div key={label} style={{ textAlign:"center" }}>
                 <div style={{ borderTop:"1px solid #999", paddingTop:"8px", fontSize:"10px", color:"#333", fontWeight:700 }}>{label}</div>
@@ -2004,7 +2015,7 @@ export default function PedidoDetalhe() {
             ))}
           </div>
           <div style={{ borderTop:"2px solid #2d5fa6", paddingTop:"8px", display:"flex", justifyContent:"space-between", fontSize:"8px", color:"#333", fontWeight:700 }}>
-            <div>Urban Glass Comércio Ltda · CNPJ 65.668.970/0001-05 · Av. Vereador Raymundo Hargreaves, 1250 – Fontesville – Juiz de Fora/MG</div>
+            <div>Urban Glass Comércio Ltda · CNPJ 65.668.970/0001-05</div>
             <div style={{ color:"#c00", fontStyle:"italic", fontWeight:700 }}>Este documento não substitui a Nota Fiscal Eletrônica</div>
           </div>
         </div>
