@@ -848,9 +848,9 @@ export default function PedidoDetalhe() {
     }));
   })();
   const corRetiradas =
-    totalPecasRetirado === 0          ? { bg: "rgba(255,255,255,.04)", border: "var(--b2)",          text: "var(--t2)"  }
-    : totalPecasRetirado >= totalPecasPedido ? { bg: "rgba(16,185,129,.06)", border: "rgba(16,185,129,.3)", text: "var(--ok)"   }
-    :                                    { bg: "rgba(245,158,11,.08)", border: "rgba(245,158,11,.3)", text: "var(--warn)" };
+    totalPecasRetirado === 0          ? { bg: "var(--surf2)",              border: "var(--b2)",  text: "var(--t2)"   }
+    : totalPecasRetirado >= totalPecasPedido ? { bg: "rgba(16,185,129,.06)", border: "var(--ok)",  text: "var(--ok)"   }
+    :                                    { bg: "rgba(245,158,11,.08)",      border: "var(--warn)", text: "var(--warn)" };
   const bloqueadoSemOtim  = pedido.status === "Aguardando otimização" && !temOtimizacao && !todosVidroCliente && !todosChapa;
 
   const parcelasAReceber = lancamentos.filter(l => l.status === "A Receber").sort((a, b) => (a.vencimento ?? "").localeCompare(b.vencimento ?? ""));
