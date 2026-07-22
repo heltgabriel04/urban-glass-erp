@@ -1110,348 +1110,358 @@ export default function PedidoDetalhe() {
             </div>
           )}
 
-          {/* Grid info + financeiro */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"16px" }}>
-            <div className="card" style={{ padding:"20px 24px" }}>
-              <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, marginBottom:"16px", letterSpacing:".06em" }}>INFORMAÇÕES DO PEDIDO</div>
+          {/* Informações do Pedido */}
+          <div className="card" style={{ padding:"20px 24px" }}>
+            <button onClick={() => setAbrirInformacoes(v => !v)} style={{ width:"100%", display:"flex", alignItems:"center", gap:"8px", marginBottom: abrirInformacoes ? "16px" : 0, background:"none", border:"none", cursor:"pointer", padding:0 }}>
+              <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>INFORMAÇÕES DO PEDIDO</div>
+              <span style={{ fontSize:"11px", color:"var(--t3)", transform: abrirInformacoes ? "rotate(180deg)" : "rotate(0deg)", transition:"transform .2s" }}>▾</span>
+            </button>
+            {abrirInformacoes && (
               <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
-                <Row label="Cliente"            value={pedido.clientes?.nome ?? "—"} />
-                <Row label="Cidade"             value={pedido.clientes?.cidade ?? "—"} />
-                <Row label="Telefone"           value={pedido.clientes?.tel ?? "—"} />
-                <Row label="Data do pedido"     value={formatDate(pedido.dt_pedido)} />
-                <Row label="Retirada prevista"  value={formatDate(pedido.dt_retirada)} />
-                <Row label="Frete"               value={pedido.frete || "Retirada"} />
-                <Row label={(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml total" : "m² total"} value={Number(pedido.m2_total).toFixed(2) + " " + ((pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml" : "m²")} />
-                {pedido.parcelas > 1 && <Row label="Parcelas" value={pedido.parcelas + "×"} />}
-                {(() => {
-                  const lancComissao = lancamentos.find(l => l.tipo === "Saída" && (l as any).vendedor_id != null);
-                  const vend = vendedores.find(v => v.id === pedido.vendedor_id);
-                  if (!pedido.vendedor_id && !lancComissao) return null;
-                  const nome = vend?.nome ?? (lancamentos.find(l => (l as any).vendedor_id != null) as any)?.descricao?.split("—")[1]?.trim() ?? "—";
-                  const pct  = vend ? vend.comissao_pct : null;
-                  const valCom = lancComissao ? lancComissao.valor : null;
-                  return (
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderTop:"1px solid var(--b1)" }}>
-                      <span style={{ fontSize:"12px", color:"var(--t3)" }}>Vendedor</span>
-                      <span style={{ fontSize:"12px", fontWeight:700, color:"var(--warn)", fontFamily:"'DM Mono',monospace" }}>
-                        {nome}{pct != null ? ` · ${pct}%` : ""}{valCom != null ? ` = ${valCom.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}` : ""}
-                      </span>
-                    </div>
-                  );
-                })()}
-                {pedido.obs && <Row label="Observações" value={pedido.obs} />}
+                  <Row label="Cliente"            value={pedido.clientes?.nome ?? "—"} />
+                  <Row label="Cidade"             value={pedido.clientes?.cidade ?? "—"} />
+                  <Row label="Telefone"           value={pedido.clientes?.tel ?? "—"} />
+                  <Row label="Data do pedido"     value={formatDate(pedido.dt_pedido)} />
+                  <Row label="Retirada prevista"  value={formatDate(pedido.dt_retirada)} />
+                  <Row label="Frete"               value={pedido.frete || "Retirada"} />
+                  <Row label={(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml total" : "m² total"} value={Number(pedido.m2_total).toFixed(2) + " " + ((pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml" : "m²")} />
+                  {pedido.parcelas > 1 && <Row label="Parcelas" value={pedido.parcelas + "×"} />}
+                  {(() => {
+                    const lancComissao = lancamentos.find(l => l.tipo === "Saída" && (l as any).vendedor_id != null);
+                    const vend = vendedores.find(v => v.id === pedido.vendedor_id);
+                    if (!pedido.vendedor_id && !lancComissao) return null;
+                    const nome = vend?.nome ?? (lancamentos.find(l => (l as any).vendedor_id != null) as any)?.descricao?.split("—")[1]?.trim() ?? "—";
+                    const pct  = vend ? vend.comissao_pct : null;
+                    const valCom = lancComissao ? lancComissao.valor : null;
+                    return (
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderTop:"1px solid var(--b1)" }}>
+                        <span style={{ fontSize:"12px", color:"var(--t3)" }}>Vendedor</span>
+                        <span style={{ fontSize:"12px", fontWeight:700, color:"var(--warn)", fontFamily:"'DM Mono',monospace" }}>
+                          {nome}{pct != null ? ` · ${pct}%` : ""}{valCom != null ? ` = ${valCom.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}` : ""}
+                        </span>
+                      </div>
+                    );
+                  })()}
+                  {pedido.obs && <Row label="Observações" value={pedido.obs} />}
               </div>
-            </div>
+            )}
+          </div>
 
-            <div className="card" style={{ padding:"20px 24px" }}>
-              {/* Cabeçalho */}
-              <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, marginBottom:"16px", letterSpacing:".06em" }}>FINANCEIRO</div>
+          {/* Financeiro */}
+          <div className="card" style={{ padding:"20px 24px" }}>
+            <button onClick={() => setAbrirFinanceiro(v => !v)} style={{ width:"100%", display:"flex", alignItems:"center", gap:"8px", marginBottom: abrirFinanceiro ? "16px" : 0, background:"none", border:"none", cursor:"pointer", padding:0 }}>
+              <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>FINANCEIRO</div>
+              <span style={{ fontSize:"11px", color:"var(--t3)", transform: abrirFinanceiro ? "rotate(180deg)" : "rotate(0deg)", transition:"transform .2s" }}>▾</span>
+            </button>
+            {abrirFinanceiro && (
+            <>
 
-              {/* Resumo em 3 colunas */}
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"8px", marginBottom:"14px" }}>
-                <div style={{ background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px", border:"1px solid var(--b2)" }}>
-                  <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", textTransform:"uppercase", marginBottom:"4px" }}>Total</div>
-                  <div style={{ fontSize:"14px", fontWeight:800, color:"var(--acc)", fontFamily:"'DM Mono',monospace" }}>{formatBRL(totalComIpi)}</div>
-                </div>
-                <div style={{ background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px", border:"1px solid var(--b2)" }}>
-                  <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", textTransform:"uppercase", marginBottom:"4px" }}>Recebido</div>
-                  <div style={{ fontSize:"14px", fontWeight:800, color: pedido.valor_recebido > 0 ? "var(--ok)" : "var(--t3)", fontFamily:"'DM Mono',monospace" }}>{formatBRL(pedido.valor_recebido)}</div>
-                </div>
-                <div style={{ background: quitado ? "rgba(16,185,129,.08)" : "rgba(244,63,94,.06)", borderRadius:"8px", padding:"10px 12px", border:`1px solid ${quitado ? "rgba(16,185,129,.3)" : "rgba(244,63,94,.2)"}` }}>
-                  <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", textTransform:"uppercase", marginBottom:"4px" }}>{quitado ? "Quitado ✓" : "Em aberto"}</div>
-                  <div style={{ fontSize:"14px", fontWeight:800, color: quitado ? "var(--ok)" : "var(--err)", fontFamily:"'DM Mono',monospace" }}>{formatBRL(Math.max(0, aberto))}</div>
-                </div>
-              </div>
-
-              {pedido.tem_ipi && (
-                <div style={{ display:"flex", justifyContent:"space-between", fontSize:"11px", color:"var(--t3)", marginBottom:"10px" }}>
-                  <span>IPI ({ALIQ_IPI_PEDIDO}% sobre {formatBRL(pedido.valor_total)})</span>
-                  <span style={{ fontFamily:"'DM Mono',monospace", color:"var(--warn)" }}>{formatBRL(pedido.valor_ipi)}</span>
-                </div>
-              )}
-
-              {/* Barra de progresso */}
-              <div style={{ marginBottom:"16px" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", fontSize:"10px", color:"var(--t3)", marginBottom:"5px" }}>
-                  <span>Recebimento</span><span style={{ fontFamily:"'DM Mono',monospace", fontWeight:600 }}>{pctRec.toFixed(0)}%</span>
-                </div>
-                <div style={{ height:"5px", borderRadius:"3px", background:"var(--surf3)", overflow:"hidden" }}>
-                  <div style={{ height:"100%", borderRadius:"3px", width:`${pctRec}%`, background: quitado ? "var(--ok)" : "var(--acc)", transition:"width .3s" }} />
-                </div>
-              </div>
-
-              {/* Parcelas a receber — sempre visível */}
-              {!quitado && (
-                <div style={{ marginBottom:"16px" }}>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"8px" }}>
-                    <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em" }}>A RECEBER</div>
-                    <button
-                      onClick={handleAdicionarParcela}
-                      style={{ fontSize:"11px", background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", cursor:"pointer", padding:"3px 9px", transition:"all 0.15s" }}
-                      onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor="var(--acc)"; b.style.color="var(--acc)"; }}
-                      onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
-                    >+ Parcela</button>
+                {/* Resumo em 3 colunas */}
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"8px", marginBottom:"14px" }}>
+                  <div style={{ background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px", border:"1px solid var(--b2)" }}>
+                    <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", textTransform:"uppercase", marginBottom:"4px" }}>Total</div>
+                    <div style={{ fontSize:"14px", fontWeight:800, color:"var(--acc)", fontFamily:"'DM Mono',monospace" }}>{formatBRL(totalComIpi)}</div>
                   </div>
+                  <div style={{ background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px", border:"1px solid var(--b2)" }}>
+                    <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", textTransform:"uppercase", marginBottom:"4px" }}>Recebido</div>
+                    <div style={{ fontSize:"14px", fontWeight:800, color: pedido.valor_recebido > 0 ? "var(--ok)" : "var(--t3)", fontFamily:"'DM Mono',monospace" }}>{formatBRL(pedido.valor_recebido)}</div>
+                  </div>
+                  <div style={{ background: quitado ? "rgba(16,185,129,.08)" : "rgba(244,63,94,.06)", borderRadius:"8px", padding:"10px 12px", border:`1px solid ${quitado ? "rgba(16,185,129,.3)" : "rgba(244,63,94,.2)"}` }}>
+                    <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", textTransform:"uppercase", marginBottom:"4px" }}>{quitado ? "Quitado ✓" : "Em aberto"}</div>
+                    <div style={{ fontSize:"14px", fontWeight:800, color: quitado ? "var(--ok)" : "var(--err)", fontFamily:"'DM Mono',monospace" }}>{formatBRL(Math.max(0, aberto))}</div>
+                  </div>
+                </div>
 
-                  {parcelasAReceber.length === 0 ? (
-                    <div style={{ padding:"14px 16px", background:"var(--surf2)", borderRadius:"8px", border:"1px dashed var(--b2)", textAlign:"center", fontSize:"12px", color:"var(--t3)" }}>
-                      Nenhuma parcela em aberto — clique em <strong>+ Parcela</strong> para registrar.
+                {pedido.tem_ipi && (
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:"11px", color:"var(--t3)", marginBottom:"10px" }}>
+                    <span>IPI ({ALIQ_IPI_PEDIDO}% sobre {formatBRL(pedido.valor_total)})</span>
+                    <span style={{ fontFamily:"'DM Mono',monospace", color:"var(--warn)" }}>{formatBRL(pedido.valor_ipi)}</span>
+                  </div>
+                )}
+
+                {/* Barra de progresso */}
+                <div style={{ marginBottom:"16px" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:"10px", color:"var(--t3)", marginBottom:"5px" }}>
+                    <span>Recebimento</span><span style={{ fontFamily:"'DM Mono',monospace", fontWeight:600 }}>{pctRec.toFixed(0)}%</span>
+                  </div>
+                  <div style={{ height:"5px", borderRadius:"3px", background:"var(--surf3)", overflow:"hidden" }}>
+                    <div style={{ height:"100%", borderRadius:"3px", width:`${pctRec}%`, background: quitado ? "var(--ok)" : "var(--acc)", transition:"width .3s" }} />
+                  </div>
+                </div>
+
+                {/* Parcelas a receber — sempre visível */}
+                {!quitado && (
+                  <div style={{ marginBottom:"16px" }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"8px" }}>
+                      <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em" }}>A RECEBER</div>
+                      <button
+                        onClick={handleAdicionarParcela}
+                        style={{ fontSize:"11px", background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", cursor:"pointer", padding:"3px 9px", transition:"all 0.15s" }}
+                        onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor="var(--acc)"; b.style.color="var(--acc)"; }}
+                        onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
+                      >+ Parcela</button>
                     </div>
-                  ) : (
-                    <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
-                      {parcelasAReceber.map((l) => {
-                        const pag = pagamentos[l.id];
-                        const marcando = pag?.marcando ?? false;
-                        const valorDigitado = pag?.valorDigitado ?? 0;
-                        const vencido = l.vencimento && l.vencimento < hoje();
-                        const isParcial = valorDigitado > 0 && valorDigitado < l.valor;
-                        const restante  = isParcial ? parseFloat((l.valor - valorDigitado).toFixed(2)) : 0;
+
+                    {parcelasAReceber.length === 0 ? (
+                      <div style={{ padding:"14px 16px", background:"var(--surf2)", borderRadius:"8px", border:"1px dashed var(--b2)", textAlign:"center", fontSize:"12px", color:"var(--t3)" }}>
+                        Nenhuma parcela em aberto — clique em <strong>+ Parcela</strong> para registrar.
+                      </div>
+                    ) : (
+                      <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
+                        {parcelasAReceber.map((l) => {
+                          const pag = pagamentos[l.id];
+                          const marcando = pag?.marcando ?? false;
+                          const valorDigitado = pag?.valorDigitado ?? 0;
+                          const vencido = l.vencimento && l.vencimento < hoje();
+                          const isParcial = valorDigitado > 0 && valorDigitado < l.valor;
+                          const restante  = isParcial ? parseFloat((l.valor - valorDigitado).toFixed(2)) : 0;
+                          return (
+                            <div key={l.id} style={{ background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px", border:`1px solid ${vencido ? "rgba(244,63,94,.3)" : "var(--b2)"}` }}>
+                              {/* linha topo: checkbox + descrição + valor + lixeira */}
+                              <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
+                                <input name={`marcar_pago_${l.id}`}
+                                  type="checkbox"
+                                  disabled={marcando}
+                                  onChange={() => handleMarcarPago(l.id)}
+                                  style={{ width:"16px", height:"16px", accentColor:"var(--ok)", cursor:"pointer", flexShrink:0 }}
+                                  title="Marcar como pago"
+                                />
+                                <div style={{ flex:1, minWidth:0 }}>
+                                  <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                                    {l.descricao}
+                                  </div>
+                                  <div style={{ fontSize:"10px", color: vencido ? "var(--err)" : "var(--t3)", fontFamily:"'DM Mono',monospace", marginTop:"2px" }}>
+                                    {vencido ? "⚠ Vencido · " : "Vence: "}{formatDate(l.vencimento)}
+                                  </div>
+                                </div>
+                                <div style={{ fontSize:"13px", fontWeight:700, color:"var(--t1)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>
+                                  {formatBRL(l.valor)}
+                                </div>
+                                <button
+                                  title="Remover parcela"
+                                  onClick={() => handleDeletarLancamento(l.id)}
+                                  style={{ background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", fontSize:"11px", cursor:"pointer", padding:"3px 7px", transition:"all 0.15s", lineHeight:1, flexShrink:0 }}
+                                  onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="rgba(244,63,94,.15)"; b.style.borderColor="var(--err)"; b.style.color="var(--err)"; }}
+                                  onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="transparent"; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
+                                >🗑</button>
+                              </div>
+
+                              {/* campos inline 2×2: data/conta · forma/valor */}
+                              <div style={{ marginTop:"10px", display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px" }}>
+                                <div>
+                                  <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Data pgto</div>
+                                  <DateInput
+                                    value={pag?.dataPagamento ?? hoje()}
+                                    onChange={v => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], dataPagamento: v } }))}
+                                  />
+                                </div>
+                                <div>
+                                  <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Conta</div>
+                                  <select name="pag"
+                                    value={pag?.conta ?? ""}
+                                    onChange={e => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], conta: e.target.value } }))}
+                                    style={{ ...fc, fontSize:"12px", padding:"7px 8px" }}
+                                  >
+                                    <option value="">— Conta —</option>
+                                    {CONTAS.map(c => <option key={c} value={c}>{c}</option>)}
+                                  </select>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Forma pgto</div>
+                                  <select name="pag"
+                                    value={pag?.formaPgto ?? ""}
+                                    onChange={e => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], formaPgto: e.target.value } }))}
+                                    style={{ ...fc, fontSize:"12px", padding:"7px 8px" }}
+                                  >
+                                    <option value="">— Forma —</option>
+                                    {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
+                                  </select>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Valor pago</div>
+                                  <CurrencyInput
+                                    value={valorDigitado}
+                                    onChange={v => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], valorDigitado: v } }))}
+                                    placeholder={formatBRL(l.valor)}
+                                    style={{ margin:0, fontSize:"12px", padding:"7px 8px" }}
+                                  />
+                                </div>
+                              </div>
+
+                              {isParcial && (
+                                <div style={{ marginTop:"8px", fontSize:"11px", color:"var(--warn)", fontFamily:"'DM Mono',monospace", background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)", borderRadius:"6px", padding:"6px 10px" }}>
+                                  ⚡ Parcial — saldo de {formatBRL(restante)} será gerado automaticamente
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── HISTÓRICO DE PAGAMENTOS JÁ FEITOS ── */}
+                {lancamentosPagos.length > 0 && (
+                  <div style={{ marginBottom:"16px" }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"8px" }}>
+                      <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em" }}>HISTÓRICO PAGO</div>
+                      <div style={{ fontSize:"10px", color:"var(--t3)" }}>clique para editar</div>
+                    </div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
+                      {lancamentosPagos.map(l => {
+                        const ed = editandoPago[l.id];
+                        const isEditing = !!ed;
                         return (
-                          <div key={l.id} style={{ background:"var(--surf2)", borderRadius:"8px", padding:"10px 12px", border:`1px solid ${vencido ? "rgba(244,63,94,.3)" : "var(--b2)"}` }}>
-                            {/* linha topo: checkbox + descrição + valor + lixeira */}
-                            <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
-                              <input name={`marcar_pago_${l.id}`}
-                                type="checkbox"
-                                disabled={marcando}
-                                onChange={() => handleMarcarPago(l.id)}
-                                style={{ width:"16px", height:"16px", accentColor:"var(--ok)", cursor:"pointer", flexShrink:0 }}
-                                title="Marcar como pago"
-                              />
-                              <div style={{ flex:1, minWidth:0 }}>
-                                <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                                  {l.descricao}
-                                </div>
-                                <div style={{ fontSize:"10px", color: vencido ? "var(--err)" : "var(--t3)", fontFamily:"'DM Mono',monospace", marginTop:"2px" }}>
-                                  {vencido ? "⚠ Vencido · " : "Vence: "}{formatDate(l.vencimento)}
-                                </div>
-                              </div>
-                              <div style={{ fontSize:"13px", fontWeight:700, color:"var(--t1)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>
+                          <div
+                            key={l.id}
+                            style={{
+                              background: isEditing ? "var(--surf3)" : "var(--surf2)",
+                              borderRadius:"8px",
+                              border: `1px solid ${isEditing ? "var(--acc)" : "var(--b2)"}`,
+                              overflow:"hidden",
+                              transition:"border-color 0.15s, background 0.15s",
+                            }}
+                          >
+                            {/* Linha principal — clicável para editar */}
+                            <div
+                              onClick={() => { if (!isEditing) abrirEdicaoPago(l); }}
+                              style={{
+                                display:"flex", alignItems:"center", gap:"8px",
+                                padding:"9px 12px",
+                                cursor: isEditing ? "default" : "pointer",
+                              }}
+                              onMouseEnter={e => { if (!isEditing) (e.currentTarget as HTMLDivElement).style.background = "var(--surf3)"; }}
+                              onMouseLeave={e => { if (!isEditing) (e.currentTarget as HTMLDivElement).style.background = ""; }}
+                            >
+                              <span style={{ fontSize:"11px", color:"var(--ok)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>✓ Pago</span>
+                              <span style={{ fontSize:"13px", color:"var(--ok)", fontFamily:"'DM Mono',monospace", fontWeight:600, flex:1 }}>
                                 {formatBRL(l.valor)}
-                              </div>
+                              </span>
+                              {/* Badges conta + forma */}
+                              {l.forma_pgto && (
+                                <span style={{
+                                  fontSize:"10px", color:"var(--warn)", fontFamily:"'DM Mono',monospace",
+                                  background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)",
+                                  borderRadius:"4px", padding:"2px 7px", flexShrink:0, fontWeight:600,
+                                }}>
+                                  {l.forma_pgto}
+                                </span>
+                              )}
+                              {l.conta && (
+                                <span style={{
+                                  fontSize:"10px", color:"var(--acc2)", fontFamily:"'DM Mono',monospace",
+                                  background:"rgba(0,200,255,.08)", border:"1px solid rgba(0,200,255,.2)",
+                                  borderRadius:"4px", padding:"2px 7px", flexShrink:0, fontWeight:600,
+                                }}>
+                                  {l.conta}
+                                </span>
+                              )}
+                              <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>
+                                {formatDate(l.vencimento)}
+                              </span>
+                              {!isEditing && (
+                                <span style={{ fontSize:"10px", color:"var(--t3)", opacity:0.6 }} title="Clique para editar">✏</span>
+                              )}
                               <button
-                                title="Remover parcela"
-                                onClick={() => handleDeletarLancamento(l.id)}
+                                title="Remover"
+                                onClick={e => { e.stopPropagation(); handleDeletarLancamento(l.id); }}
                                 style={{ background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", fontSize:"11px", cursor:"pointer", padding:"3px 7px", transition:"all 0.15s", lineHeight:1, flexShrink:0 }}
                                 onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="rgba(244,63,94,.15)"; b.style.borderColor="var(--err)"; b.style.color="var(--err)"; }}
                                 onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="transparent"; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
                               >🗑</button>
                             </div>
 
-                            {/* campos inline 2×2: data/conta · forma/valor */}
-                            <div style={{ marginTop:"10px", display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px" }}>
-                              <div>
-                                <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Data pgto</div>
-                                <DateInput
-                                  value={pag?.dataPagamento ?? hoje()}
-                                  onChange={v => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], dataPagamento: v } }))}
-                                />
-                              </div>
-                              <div>
-                                <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Conta</div>
-                                <select name="pag"
-                                  value={pag?.conta ?? ""}
-                                  onChange={e => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], conta: e.target.value } }))}
-                                  style={{ ...fc, fontSize:"12px", padding:"7px 8px" }}
-                                >
-                                  <option value="">— Conta —</option>
-                                  {CONTAS.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
-                              </div>
-                              <div>
-                                <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Forma pgto</div>
-                                <select name="pag"
-                                  value={pag?.formaPgto ?? ""}
-                                  onChange={e => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], formaPgto: e.target.value } }))}
-                                  style={{ ...fc, fontSize:"12px", padding:"7px 8px" }}
-                                >
-                                  <option value="">— Forma —</option>
-                                  {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
-                                </select>
-                              </div>
-                              <div>
-                                <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Valor pago</div>
-                                <CurrencyInput
-                                  value={valorDigitado}
-                                  onChange={v => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], valorDigitado: v } }))}
-                                  placeholder={formatBRL(l.valor)}
-                                  style={{ margin:0, fontSize:"12px", padding:"7px 8px" }}
-                                />
-                              </div>
-                            </div>
-
-                            {isParcial && (
-                              <div style={{ marginTop:"8px", fontSize:"11px", color:"var(--warn)", fontFamily:"'DM Mono',monospace", background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)", borderRadius:"6px", padding:"6px 10px" }}>
-                                ⚡ Parcial — saldo de {formatBRL(restante)} será gerado automaticamente
+                            {/* Painel de edição inline — expande ao clicar */}
+                            {isEditing && (
+                              <div style={{
+                                borderTop:"1px solid var(--b2)",
+                                padding:"12px 12px 10px",
+                                background:"var(--surf2)",
+                                display:"flex", flexDirection:"column", gap:"10px",
+                              }}>
+                                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px" }}>
+                                  <div>
+                                    <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, marginBottom:"4px", textTransform:"uppercase", letterSpacing:".04em" }}>Valor</div>
+                                    <CurrencyInput
+                                      value={ed.valor}
+                                      onChange={v => setEditandoPago(prev => ({ ...prev, [l.id]: { ...prev[l.id], valor: v } }))}
+                                      placeholder="R$ 0,00"
+                                      style={{ margin:0, fontSize:"12px", padding:"6px 8px" }}
+                                    />
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, marginBottom:"4px", textTransform:"uppercase", letterSpacing:".04em" }}>Data</div>
+                                    <DateInput
+                                      value={ed.data}
+                                      onChange={v => setEditandoPago(prev => ({ ...prev, [l.id]: { ...prev[l.id], data: v } }))}
+                                    />
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, marginBottom:"4px", textTransform:"uppercase", letterSpacing:".04em" }}>Conta</div>
+                                    <select name="ed_conta"
+                                      value={ed.conta}
+                                      onChange={e => setEditandoPago(prev => ({ ...prev, [l.id]: { ...prev[l.id], conta: e.target.value } }))}
+                                      style={{ ...fc, fontSize:"12px", padding:"6px 8px" }}
+                                    >
+                                      <option value="">— Selecione —</option>
+                                      {CONTAS.map(o => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, marginBottom:"4px", textTransform:"uppercase", letterSpacing:".04em" }}>Forma</div>
+                                    <select name="ed_forma_pgto"
+                                      value={ed.formaPgto}
+                                      onChange={e => setEditandoPago(prev => ({ ...prev, [l.id]: { ...prev[l.id], formaPgto: e.target.value } }))}
+                                      style={{ ...fc, fontSize:"12px", padding:"6px 8px" }}
+                                    >
+                                      <option value="">— Forma —</option>
+                                      {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
+                                    </select>
+                                  </div>
+                                </div>
+                                <div style={{ display:"flex", gap:"6px", justifyContent:"flex-end" }}>
+                                  <button
+                                    className="btn bg sm"
+                                    onClick={() => cancelarEdicaoPago(l.id)}
+                                  >
+                                    Cancelar
+                                  </button>
+                                  <button
+                                    className="btn bp sm"
+                                    onClick={() => handleSalvarEdicaoPago(l.id)}
+                                    disabled={ed.salvando}
+                                  >
+                                    {ed.salvando ? "Salvando..." : "✓ Salvar"}
+                                  </button>
+                                </div>
                               </div>
                             )}
                           </div>
                         );
                       })}
                     </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── HISTÓRICO DE PAGAMENTOS JÁ FEITOS ── */}
-              {lancamentosPagos.length > 0 && (
-                <div style={{ marginBottom:"16px" }}>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"8px" }}>
-                    <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em" }}>HISTÓRICO PAGO</div>
-                    <div style={{ fontSize:"10px", color:"var(--t3)" }}>clique para editar</div>
                   </div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
-                    {lancamentosPagos.map(l => {
-                      const ed = editandoPago[l.id];
-                      const isEditing = !!ed;
-                      return (
-                        <div
-                          key={l.id}
-                          style={{
-                            background: isEditing ? "var(--surf3)" : "var(--surf2)",
-                            borderRadius:"8px",
-                            border: `1px solid ${isEditing ? "var(--acc)" : "var(--b2)"}`,
-                            overflow:"hidden",
-                            transition:"border-color 0.15s, background 0.15s",
-                          }}
-                        >
-                          {/* Linha principal — clicável para editar */}
-                          <div
-                            onClick={() => { if (!isEditing) abrirEdicaoPago(l); }}
-                            style={{
-                              display:"flex", alignItems:"center", gap:"8px",
-                              padding:"9px 12px",
-                              cursor: isEditing ? "default" : "pointer",
-                            }}
-                            onMouseEnter={e => { if (!isEditing) (e.currentTarget as HTMLDivElement).style.background = "var(--surf3)"; }}
-                            onMouseLeave={e => { if (!isEditing) (e.currentTarget as HTMLDivElement).style.background = ""; }}
-                          >
-                            <span style={{ fontSize:"11px", color:"var(--ok)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>✓ Pago</span>
-                            <span style={{ fontSize:"13px", color:"var(--ok)", fontFamily:"'DM Mono',monospace", fontWeight:600, flex:1 }}>
-                              {formatBRL(l.valor)}
-                            </span>
-                            {/* Badges conta + forma */}
-                            {l.forma_pgto && (
-                              <span style={{
-                                fontSize:"10px", color:"var(--warn)", fontFamily:"'DM Mono',monospace",
-                                background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)",
-                                borderRadius:"4px", padding:"2px 7px", flexShrink:0, fontWeight:600,
-                              }}>
-                                {l.forma_pgto}
-                              </span>
-                            )}
-                            {l.conta && (
-                              <span style={{
-                                fontSize:"10px", color:"var(--acc2)", fontFamily:"'DM Mono',monospace",
-                                background:"rgba(0,200,255,.08)", border:"1px solid rgba(0,200,255,.2)",
-                                borderRadius:"4px", padding:"2px 7px", flexShrink:0, fontWeight:600,
-                              }}>
-                                {l.conta}
-                              </span>
-                            )}
-                            <span style={{ fontSize:"11px", color:"var(--t3)", fontFamily:"'DM Mono',monospace", flexShrink:0 }}>
-                              {formatDate(l.vencimento)}
-                            </span>
-                            {!isEditing && (
-                              <span style={{ fontSize:"10px", color:"var(--t3)", opacity:0.6 }} title="Clique para editar">✏</span>
-                            )}
-                            <button
-                              title="Remover"
-                              onClick={e => { e.stopPropagation(); handleDeletarLancamento(l.id); }}
-                              style={{ background:"transparent", border:"1px solid var(--b2)", borderRadius:"5px", color:"var(--t3)", fontSize:"11px", cursor:"pointer", padding:"3px 7px", transition:"all 0.15s", lineHeight:1, flexShrink:0 }}
-                              onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="rgba(244,63,94,.15)"; b.style.borderColor="var(--err)"; b.style.color="var(--err)"; }}
-                              onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background="transparent"; b.style.borderColor="var(--b2)"; b.style.color="var(--t3)"; }}
-                            >🗑</button>
-                          </div>
+                )}
 
-                          {/* Painel de edição inline — expande ao clicar */}
-                          {isEditing && (
-                            <div style={{
-                              borderTop:"1px solid var(--b2)",
-                              padding:"12px 12px 10px",
-                              background:"var(--surf2)",
-                              display:"flex", flexDirection:"column", gap:"10px",
-                            }}>
-                              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px" }}>
-                                <div>
-                                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, marginBottom:"4px", textTransform:"uppercase", letterSpacing:".04em" }}>Valor</div>
-                                  <CurrencyInput
-                                    value={ed.valor}
-                                    onChange={v => setEditandoPago(prev => ({ ...prev, [l.id]: { ...prev[l.id], valor: v } }))}
-                                    placeholder="R$ 0,00"
-                                    style={{ margin:0, fontSize:"12px", padding:"6px 8px" }}
-                                  />
-                                </div>
-                                <div>
-                                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, marginBottom:"4px", textTransform:"uppercase", letterSpacing:".04em" }}>Data</div>
-                                  <DateInput
-                                    value={ed.data}
-                                    onChange={v => setEditandoPago(prev => ({ ...prev, [l.id]: { ...prev[l.id], data: v } }))}
-                                  />
-                                </div>
-                                <div>
-                                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, marginBottom:"4px", textTransform:"uppercase", letterSpacing:".04em" }}>Conta</div>
-                                  <select name="ed_conta"
-                                    value={ed.conta}
-                                    onChange={e => setEditandoPago(prev => ({ ...prev, [l.id]: { ...prev[l.id], conta: e.target.value } }))}
-                                    style={{ ...fc, fontSize:"12px", padding:"6px 8px" }}
-                                  >
-                                    <option value="">— Selecione —</option>
-                                    {CONTAS.map(o => <option key={o} value={o}>{o}</option>)}
-                                  </select>
-                                </div>
-                                <div>
-                                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, marginBottom:"4px", textTransform:"uppercase", letterSpacing:".04em" }}>Forma</div>
-                                  <select name="ed_forma_pgto"
-                                    value={ed.formaPgto}
-                                    onChange={e => setEditandoPago(prev => ({ ...prev, [l.id]: { ...prev[l.id], formaPgto: e.target.value } }))}
-                                    style={{ ...fc, fontSize:"12px", padding:"6px 8px" }}
-                                  >
-                                    <option value="">— Forma —</option>
-                                    {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
-                                  </select>
-                                </div>
-                              </div>
-                              <div style={{ display:"flex", gap:"6px", justifyContent:"flex-end" }}>
-                                <button
-                                  className="btn bg sm"
-                                  onClick={() => cancelarEdicaoPago(l.id)}
-                                >
-                                  Cancelar
-                                </button>
-                                <button
-                                  className="btn bp sm"
-                                  onClick={() => handleSalvarEdicaoPago(l.id)}
-                                  disabled={ed.salvando}
-                                >
-                                  {ed.salvando ? "Salvando..." : "✓ Salvar"}
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                {/* Crédito */}
+                {creditoCliente > 0.005 && !quitado && (
+                  <div style={{ marginBottom:"10px", padding:"10px 12px", background:"rgba(0,200,255,.07)", border:"1px solid rgba(0,200,255,.25)", borderRadius:"8px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"10px" }}>
+                    <div>
+                      <div style={{ fontSize:"11px", fontWeight:700, color:"var(--acc2)" }}>Crédito disponível do cliente</div>
+                      <div style={{ fontSize:"13px", fontWeight:700, color:"var(--t1)", fontFamily:"'DM Mono', monospace" }}>{formatBRL(creditoCliente)}</div>
+                    </div>
+                    <button className="btn bg sm" onClick={handleUsarCredito} disabled={salvando}>Aplicar crédito</button>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Crédito */}
-              {creditoCliente > 0.005 && !quitado && (
-                <div style={{ marginBottom:"10px", padding:"10px 12px", background:"rgba(0,200,255,.07)", border:"1px solid rgba(0,200,255,.25)", borderRadius:"8px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"10px" }}>
-                  <div>
-                    <div style={{ fontSize:"11px", fontWeight:700, color:"var(--acc2)" }}>Crédito disponível do cliente</div>
-                    <div style={{ fontSize:"13px", fontWeight:700, color:"var(--t1)", fontFamily:"'DM Mono', monospace" }}>{formatBRL(creditoCliente)}</div>
+                {quitado && (
+                  <div style={{ padding:"10px", background:"rgba(0,200,100,.08)", borderRadius:"8px", color:"var(--ok)", fontSize:"13px", textAlign:"center" }}>
+                    ✓ Pagamento quitado
                   </div>
-                  <button className="btn bg sm" onClick={handleUsarCredito} disabled={salvando}>Aplicar crédito</button>
-                </div>
-              )}
-
-              {quitado && (
-                <div style={{ padding:"10px", background:"rgba(0,200,100,.08)", borderRadius:"8px", color:"var(--ok)", fontSize:"13px", textAlign:"center" }}>
-                  ✓ Pagamento quitado
-                </div>
-              )}
-            </div>
+                )}
+            </>
+            )}
           </div>
 
           {/* Itens */}
