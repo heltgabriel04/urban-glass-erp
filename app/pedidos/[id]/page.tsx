@@ -921,6 +921,18 @@ export default function PedidoDetalhe() {
             </button>
           )}
         </div>
+        <div className="tb no-print" style={{ borderTop:"none", paddingTop:0, flexWrap:"wrap", rowGap:"10px" }}>
+          <div style={{ fontSize:"13px", color:"var(--t2)", fontWeight:600 }}>{pedido.clientes?.nome ?? "—"}</div>
+          <div style={{ flex:1 }} />
+          <div style={{ display:"flex", gap:"18px", fontSize:"12px", fontFamily:"'DM Mono', monospace" }}>
+            <span style={{ color:"var(--t3)" }}>Total <strong style={{ color:"var(--t1)" }}>{formatBRL(totalComIpi)}</strong></span>
+            <span style={{ color:"var(--t3)" }}>Recebido <strong style={{ color: pedido.valor_recebido > 0 ? "var(--ok)" : "var(--t3)" }}>{formatBRL(pedido.valor_recebido)}</strong></span>
+            <span style={{ color:"var(--t3)" }}>{quitado ? "Quitado ✓" : "Em aberto"} <strong style={{ color: quitado ? "var(--ok)" : "var(--warn)" }}>{formatBRL(Math.max(0, aberto))}</strong></span>
+            {temItens && (
+              <span style={{ color:"var(--t3)" }}>Retirada <strong style={{ color: totalPecasRetirado >= totalPecasPedido ? "var(--ok)" : "var(--warn)" }}>{totalPecasRetirado}/{totalPecasPedido} peças</strong></span>
+            )}
+          </div>
+        </div>
         <PedidoTabs id={id} temItens={temItens} />
 
         <div className="con no-print" style={{ display:"flex", flexDirection:"column", gap:"20px" }}>
