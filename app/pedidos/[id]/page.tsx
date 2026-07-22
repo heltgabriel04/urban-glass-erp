@@ -1025,8 +1025,8 @@ export default function PedidoDetalhe() {
           {/* Retiradas */}
           {temItens && (
             <div style={{ border: `1px solid ${corRetiradas.border}`, borderRadius:"10px", overflow:"hidden" }}>
-              <button onClick={() => setAbrirRetiradas(v => !v)} style={{ width:"100%", background: corRetiradas.bg, padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px", border:"none", cursor:"pointer" }}>
-                <div style={{ display:"flex", gap:"24px", alignItems:"center" }}>
+              <div style={{ width:"100%", background: corRetiradas.bg, padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px" }}>
+                <button onClick={() => setAbrirRetiradas(v => !v)} style={{ display:"flex", gap:"24px", alignItems:"center", background:"none", border:"none", cursor:"pointer", padding:0 }}>
                   <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", display:"flex", alignItems:"center", gap:"6px" }}>
                     RETIRADAS
                     <span style={{ transform: abrirRetiradas ? "rotate(180deg)" : "rotate(0deg)", transition:"transform .2s" }}>▾</span>
@@ -1035,8 +1035,8 @@ export default function PedidoDetalhe() {
                     <span>Viagens: <strong style={{ color:"var(--t1)" }}>{retiradas.length}</strong></span>
                     <span>Pendente: <strong style={{ color:"var(--t1)" }}>{totalPecasPedido - totalPecasRetirado}</strong></span>
                   </div>
-                </div>
-                <div style={{ display:"flex", gap:"8px", alignItems:"center" }} onClick={e => e.stopPropagation()}>
+                </button>
+                <div style={{ display:"flex", gap:"8px", alignItems:"center" }}>
                   {totalPecasPedido - totalPecasRetirado > 0 && (
                     <button
                       className="btn sm"
@@ -1048,7 +1048,7 @@ export default function PedidoDetalhe() {
                   )}
                   <a href={`/pedidos/${id}/retiradas`} className="btn bg sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>🚚 Ver Retiradas</a>
                 </div>
-              </button>
+              </div>
 
               {abrirRetiradas && (
               <>
