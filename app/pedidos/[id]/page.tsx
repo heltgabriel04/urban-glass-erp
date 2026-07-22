@@ -9,7 +9,7 @@ import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, updateNaoConformidade } from "@/services/qualidade.service";
 import { getRetiradasPorPedido, calcularSaldoItens, createRetirada } from "@/services/retiradas.service";
 import { getObservacoesPorPedido, createObservacao, deletarObservacao } from "@/services/observacoes.service";
-import { formatBRL, formatDate, formatDuracao, medidaReal } from "@/lib/formatters";
+import { formatBRL, formatDate, formatDuracao, formatM2, medidaReal } from "@/lib/formatters";
 import { ALIQ_IPI_PEDIDO, calcularValorIpi, valorComIpi } from "@/lib/pedidoIpi";
 import { registrarRecente } from "@/lib/recentes";
 import PedidoTabs from "@/components/pedidos/PedidoTabs";
@@ -820,6 +820,28 @@ export default function PedidoDetalhe() {
   const saldoRetiradas     = calcularSaldoItens(pedido.itens_pedido ?? [], retiradas);
   const totalPecasPedido   = saldoRetiradas.reduce((a, s) => a + s.quantidade_total, 0);
   const totalPecasRetirado = saldoRetiradas.reduce((a, s) => a + s.quantidade_retirada, 0);
+
+  // Resumo por vidro (agrupado por produto) — m² e quantidade, total/retirado/
+  // pendente, pra acompanhar o que falta retirar sem precisar entrar em
+  // "Ver Retiradas". Cada item de saldoRetiradas já tem largura/altura/
+  // quantidade próprias, então o m² de cada linha é recalculado aqui.
+  const resumoRetiradaPorProduto = (() => {
+    const mapa = new Map<string, { produto_nome: string; m2Total: number; qtdTotal: number; m2Retirado: number; qtdRetirada: number }>();
+    saldoRetiradas.forEach(s => {
+      const m2Item = (s.largura * s.altura) / 1e6;
+      const atual = mapa.get(s.produto_nome) ?? { produto_nome: s.produto_nome, m2Total: 0, qtdTotal: 0, m2Retirado: 0, qtdRetirada: 0 };
+      atual.m2Total += m2Item * s.quantidade_total;
+      atual.qtdTotal += s.quantidade_total;
+      atual.m2Retirado += m2Item * s.quantidade_retirada;
+      atual.qtdRetirada += s.quantidade_retirada;
+      mapa.set(s.produto_nome, atual);
+    });
+    return Array.from(mapa.values()).map(r => ({
+      ...r,
+      m2Pendente: r.m2Total - r.m2Retirado,
+      qtdPendente: r.qtdTotal - r.qtdRetirada,
+    }));
+  })();
   const corRetiradas =
     totalPecasRetirado === 0          ? { bg: "rgba(255,255,255,.04)", border: "var(--b2)",          text: "var(--t2)"  }
     : totalPecasRetirado >= totalPecasPedido ? { bg: "rgba(16,185,129,.06)", border: "rgba(16,185,129,.3)", text: "var(--ok)"   }
@@ -1012,6 +1034,37 @@ export default function PedidoDetalhe() {
                   <a href={`/pedidos/${id}/retiradas`} className="btn bg sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>🚚 Ver Retiradas</a>
                 </div>
               </div>
+
+              {resumoRetiradaPorProduto.length > 0 && (
+                <div className="tw" style={{ borderRadius: 0, borderTop: "none", borderLeft: "none", borderRight: "none" }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Vidro</th>
+                        <th>m² Total</th>
+                        <th>Vidros Total</th>
+                        <th>m² Retirado</th>
+                        <th>Vidros Retirado</th>
+                        <th>m² Pendente</th>
+                        <th>Vidros Pendente</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {resumoRetiradaPorProduto.map(r => (
+                        <tr key={r.produto_nome}>
+                          <td style={{ fontWeight: 600 }}>{r.produto_nome}</td>
+                          <td className="mono">{formatM2(r.m2Total)}</td>
+                          <td className="mono">{r.qtdTotal}</td>
+                          <td className="mono" style={{ color: "var(--ok)" }}>{formatM2(r.m2Retirado)}</td>
+                          <td className="mono" style={{ color: "var(--ok)" }}>{r.qtdRetirada}</td>
+                          <td className="mono" style={{ color: r.m2Pendente > 0 ? "var(--warn)" : "var(--ok)" }}>{formatM2(r.m2Pendente)}</td>
+                          <td className="mono" style={{ color: r.qtdPendente > 0 ? "var(--warn)" : "var(--ok)" }}>{r.qtdPendente}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
               {showRetTudo && (
                 <div style={{ background:"var(--surf2)", borderTop:`1px solid ${corRetiradas.border}`, padding:"14px 18px", display:"flex", flexWrap:"wrap", gap:"10px", alignItems:"flex-end" }}>

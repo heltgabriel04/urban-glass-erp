@@ -9,7 +9,7 @@ import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import DateInput from "@/components/ui/DateInput";
 import { Campo } from "@/components/ui/Campo";
-import { formatDate, formatM2 } from "@/lib/formatters";
+import { formatDate } from "@/lib/formatters";
 import type { Pedido, RetiradaPedido, SaldoItemRetirada } from "@/types";
 
 function hoje() { return new Date().toISOString().split("T")[0]; }
@@ -64,27 +64,6 @@ export default function RetiradasPedidoPage() {
     () => pedido ? calcularSaldoItens(pedido.itens_pedido ?? [], retiradas) : [],
     [pedido, retiradas]
   );
-
-  // Resumo por vidro (agrupado por produto) — m² e quantidade, total/retirado/
-  // pendente. Cada item de `saldo` já tem largura/altura/quantidade próprias,
-  // então o m² de cada linha é recalculado aqui (não vem pronto do saldo).
-  const resumoPorProduto = useMemo(() => {
-    const mapa = new Map<string, { produto_nome: string; m2Total: number; qtdTotal: number; m2Retirado: number; qtdRetirada: number }>();
-    saldo.forEach(s => {
-      const m2Item = (s.largura * s.altura) / 1e6;
-      const atual = mapa.get(s.produto_nome) ?? { produto_nome: s.produto_nome, m2Total: 0, qtdTotal: 0, m2Retirado: 0, qtdRetirada: 0 };
-      atual.m2Total += m2Item * s.quantidade_total;
-      atual.qtdTotal += s.quantidade_total;
-      atual.m2Retirado += m2Item * s.quantidade_retirada;
-      atual.qtdRetirada += s.quantidade_retirada;
-      mapa.set(s.produto_nome, atual);
-    });
-    return Array.from(mapa.values()).map(r => ({
-      ...r,
-      m2Pendente: r.m2Total - r.m2Retirado,
-      qtdPendente: r.qtdTotal - r.qtdRetirada,
-    }));
-  }, [saldo]);
 
   const saldoForm: SaldoItemRetirada[] = useMemo(
     () => pedido ? calcularSaldoItens(pedido.itens_pedido ?? [], editandoId ? retiradas.filter(r => r.id !== editandoId) : retiradas) : [],
@@ -235,41 +214,6 @@ export default function RetiradasPedidoPage() {
               <div style={{ fontSize: "12px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", display: "flex", gap: "16px" }}>
                 <span>Viagens: <strong style={{ color: "var(--t1)" }}>{retiradas.length}</strong></span>
                 <span>Pendente: <strong style={{ color: "var(--t1)" }}>{totalPecasPedido - totalPecasRetirado}</strong></span>
-              </div>
-            </div>
-          )}
-
-          {/* ─── Resumo por Vidro (m² e quantidade, por produto) ─── */}
-          {resumoPorProduto.length > 0 && (
-            <div className="card">
-              <div className="ct">Resumo por Vidro</div>
-              <div className="tw">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Vidro</th>
-                      <th>m² Total</th>
-                      <th>Vidros Total</th>
-                      <th>m² Retirado</th>
-                      <th>Vidros Retirado</th>
-                      <th>m² Pendente</th>
-                      <th>Vidros Pendente</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {resumoPorProduto.map(r => (
-                      <tr key={r.produto_nome}>
-                        <td style={{ fontWeight: 600 }}>{r.produto_nome}</td>
-                        <td className="mono">{formatM2(r.m2Total)}</td>
-                        <td className="mono">{r.qtdTotal}</td>
-                        <td className="mono" style={{ color: "var(--ok)" }}>{formatM2(r.m2Retirado)}</td>
-                        <td className="mono" style={{ color: "var(--ok)" }}>{r.qtdRetirada}</td>
-                        <td className="mono" style={{ color: r.m2Pendente > 0 ? "var(--warn)" : "var(--ok)" }}>{formatM2(r.m2Pendente)}</td>
-                        <td className="mono" style={{ color: r.qtdPendente > 0 ? "var(--warn)" : "var(--ok)" }}>{r.qtdPendente}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             </div>
           )}
