@@ -1994,9 +1994,16 @@ export default function PedidoDetalhe() {
             </div>
           )}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"32px", marginBottom:"16px", marginTop:"32px" }}>
-            {["Vendedor / Urban Glass","Recebido por / Comprador","Motorista / Entregador"].map(label => (
+            {[
+              { label: "Vendedor / Urban Glass" },
+              { label: "Recebido por / Comprador", comData: true },
+              { label: "Motorista / Entregador" },
+            ].map(({ label, comData }) => (
               <div key={label} style={{ textAlign:"center" }}>
                 <div style={{ borderTop:"1px solid #999", paddingTop:"8px", fontSize:"10px", color:"#333", fontWeight:700 }}>{label}</div>
+                {comData && (
+                  <div style={{ borderTop:"1px solid #999", marginTop:"22px", paddingTop:"8px", fontSize:"10px", color:"#333", fontWeight:700 }}>Data de saída: ____ / ____ / ______</div>
+                )}
               </div>
             ))}
           </div>
