@@ -17,7 +17,6 @@ const TABS: Tab[] = [
   { label: "Retiradas", slug: "retiradas", precisaItens: true },
   { label: "Etiquetas", slug: "etiquetas", precisaItens: true },
   { label: "Plano de Corte", slug: "plano", precisaItens: true },
-  { label: "Produção", slug: "producao" },
 ];
 
 export default function PedidoTabs({ id, temItens }: { id: string; temItens: boolean }) {
