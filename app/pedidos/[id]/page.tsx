@@ -1442,15 +1442,18 @@ export default function PedidoDetalhe() {
 
           {/* Itens */}
           <div className="card" style={{ padding:"20px 24px" }}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px" }}>
-              <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>ITENS DO PEDIDO ({pedido.itens_pedido?.length ?? 0})</div>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: abrirItens ? "16px" : 0 }}>
+              <button onClick={() => setAbrirItens(v => !v)} style={{ display:"flex", alignItems:"center", gap:"10px", background:"none", border:"none", cursor:"pointer", padding:0 }}>
+                <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>ITENS DO PEDIDO ({pedido.itens_pedido?.length ?? 0})</div>
+                <span style={{ fontSize:"11px", color:"var(--t3)", transform: abrirItens ? "rotate(180deg)" : "rotate(0deg)", transition:"transform .2s" }}>▾</span>
+              </button>
               {temItens && !todosVidroCliente && !todosChapa && (
                 <a href={"/otimizador?pedido=" + pedido.id} className="btn bg xs">◈ Otimizar Corte</a>
               )}
             </div>
-            {!temItens ? (
+            {abrirItens && !temItens ? (
               <div style={{ color:"var(--t3)", padding:"24px 0", textAlign:"center" }}>Nenhum item registrado neste pedido.</div>
-            ) : (
+            ) : abrirItens ? (
               <div className="tw">
                 <table>
                   <thead>
@@ -1477,7 +1480,7 @@ export default function PedidoDetalhe() {
                   </tbody>
                 </table>
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* Romaneio / NF-e / Boleto / Observações — um card só, compacto */}
