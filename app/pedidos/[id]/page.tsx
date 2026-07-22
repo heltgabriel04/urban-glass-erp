@@ -7,9 +7,9 @@ import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, g
 import { getLancamentosPorPedido, deletarLancamento, createLancamento, updateLancamento } from "@/services/financeiro.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, updateNaoConformidade } from "@/services/qualidade.service";
-import { getRetiradasPorPedido, calcularSaldoItens, createRetirada } from "@/services/retiradas.service";
+import { getRetiradasPorPedido, calcularSaldoItens } from "@/services/retiradas.service";
 import { getObservacoesPorPedido, createObservacao, deletarObservacao } from "@/services/observacoes.service";
-import { formatBRL, formatDate, formatDuracao, formatM2, medidaReal } from "@/lib/formatters";
+import { formatBRL, formatDate, formatDuracao, medidaReal } from "@/lib/formatters";
 import { ALIQ_IPI_PEDIDO, calcularValorIpi, valorComIpi } from "@/lib/pedidoIpi";
 import { registrarRecente } from "@/lib/recentes";
 import PedidoTabs from "@/components/pedidos/PedidoTabs";
@@ -168,7 +168,6 @@ export default function PedidoDetalhe() {
   const [abrirItens,        setAbrirItens]        = useState(true);
   const [abrirInformacoes,  setAbrirInformacoes]  = useState(false);
   const [abrirFinanceiro,   setAbrirFinanceiro]   = useState(false);
-  const [abrirRetiradas,    setAbrirRetiradas]    = useState(false);
   const [abrirDocumentos,   setAbrirDocumentos]   = useState(false);
 
   // Qualidade
@@ -193,13 +192,6 @@ export default function PedidoDetalhe() {
 
   // Estado de edição inline dos lançamentos já pagos
   const [editandoPago, setEditandoPago] = useState<Record<number, EdicaoPago>>({});
-
-  // Retirada rápida (registrar tudo de uma vez)
-  const [showRetTudo, setShowRetTudo]   = useState(false);
-  const [retTudoData, setRetTudoData]   = useState(hoje());
-  const [retTudoMot,  setRetTudoMot]    = useState("");
-  const [retTudoVei,  setRetTudoVei]    = useState("");
-  const [salvandoRet, setSalvandoRet]   = useState(false);
 
 
   useEffect(() => { load(); }, [id]);
@@ -657,24 +649,6 @@ export default function PedidoDetalhe() {
     else toast("Erro ao excluir observação", "err");
   }
 
-  async function handleRetTudo() {
-    if (!pedido) return;
-    const itensPendentes = calcularSaldoItens(pedido.itens_pedido ?? [], retiradas)
-      .filter(s => s.quantidade_pendente > 0)
-      .map(s => ({ item_pedido_id: s.item_pedido_id, quantidade: s.quantidade_pendente, obs: null }));
-    if (itensPendentes.length === 0) { toast("Nenhuma peça pendente", "warn"); return; }
-    setSalvandoRet(true);
-    const res = await createRetirada(id, { dt_retirada: retTudoData, motorista: retTudoMot || null, veiculo: retTudoVei || null, obs: null }, itensPendentes);
-    setSalvandoRet(false);
-    if (!res.ok) { toast(res.erro ?? "Erro ao registrar retirada", "err"); return; }
-    toast(`✓ ${itensPendentes.reduce((a, i) => a + i.quantidade, 0)} peça(s) registrada(s) como retirada`);
-    setShowRetTudo(false);
-    setRetTudoMot("");
-    setRetTudoVei("");
-    setRetTudoData(hoje());
-    await load();
-  }
-
   async function handleAvancar() {
     if (!pedido) return;
     if (pedido.status === "Aguardando otimização" && otimizacoes.length === 0 && !todosVidroCliente && !todosChapa) {
@@ -826,31 +800,6 @@ export default function PedidoDetalhe() {
   const totalPecasPedido   = saldoRetiradas.reduce((a, s) => a + s.quantidade_total, 0);
   const totalPecasRetirado = saldoRetiradas.reduce((a, s) => a + s.quantidade_retirada, 0);
 
-  // Resumo por vidro (agrupado por produto) — m² e quantidade, total/retirado/
-  // pendente, pra acompanhar o que falta retirar sem precisar entrar em
-  // "Ver Retiradas". Cada item de saldoRetiradas já tem largura/altura/
-  // quantidade próprias, então o m² de cada linha é recalculado aqui.
-  const resumoRetiradaPorProduto = (() => {
-    const mapa = new Map<string, { produto_nome: string; m2Total: number; qtdTotal: number; m2Retirado: number; qtdRetirada: number }>();
-    saldoRetiradas.forEach(s => {
-      const m2Item = (s.largura * s.altura) / 1e6;
-      const atual = mapa.get(s.produto_nome) ?? { produto_nome: s.produto_nome, m2Total: 0, qtdTotal: 0, m2Retirado: 0, qtdRetirada: 0 };
-      atual.m2Total += m2Item * s.quantidade_total;
-      atual.qtdTotal += s.quantidade_total;
-      atual.m2Retirado += m2Item * s.quantidade_retirada;
-      atual.qtdRetirada += s.quantidade_retirada;
-      mapa.set(s.produto_nome, atual);
-    });
-    return Array.from(mapa.values()).map(r => ({
-      ...r,
-      m2Pendente: r.m2Total - r.m2Retirado,
-      qtdPendente: r.qtdTotal - r.qtdRetirada,
-    }));
-  })();
-  const corRetiradas =
-    totalPecasRetirado === 0          ? { bg: "var(--surf2)",              border: "var(--b2)",  text: "var(--t2)"   }
-    : totalPecasRetirado >= totalPecasPedido ? { bg: "rgba(16,185,129,.06)", border: "var(--ok)",  text: "var(--ok)"   }
-    :                                    { bg: "rgba(245,158,11,.08)",      border: "var(--warn)", text: "var(--warn)" };
   const bloqueadoSemOtim  = pedido.status === "Aguardando otimização" && !temOtimizacao && !todosVidroCliente && !todosChapa;
 
   const parcelasAReceber = lancamentos.filter(l => l.status === "A Receber").sort((a, b) => (a.vencimento ?? "").localeCompare(b.vencimento ?? ""));
@@ -1021,94 +970,6 @@ export default function PedidoDetalhe() {
               );
             })()}
           </div>
-
-          {/* Retiradas */}
-          {temItens && (
-            <div style={{ border: `1px solid ${corRetiradas.border}`, borderRadius:"10px", overflow:"hidden" }}>
-              <div style={{ width:"100%", background: corRetiradas.bg, padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px" }}>
-                <button onClick={() => setAbrirRetiradas(v => !v)} style={{ display:"flex", gap:"24px", alignItems:"center", background:"none", border:"none", cursor:"pointer", padding:0 }}>
-                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", display:"flex", alignItems:"center", gap:"6px" }}>
-                    RETIRADAS
-                    <span style={{ transform: abrirRetiradas ? "rotate(180deg)" : "rotate(0deg)", transition:"transform .2s" }}>▾</span>
-                  </div>
-                  <div style={{ fontSize:"12px", color:"var(--t3)", fontFamily:"'DM Mono', monospace", display:"flex", gap:"16px" }}>
-                    <span>Viagens: <strong style={{ color:"var(--t1)" }}>{retiradas.length}</strong></span>
-                    <span>Pendente: <strong style={{ color:"var(--t1)" }}>{totalPecasPedido - totalPecasRetirado}</strong></span>
-                  </div>
-                </button>
-                <div style={{ display:"flex", gap:"8px", alignItems:"center" }}>
-                  {totalPecasPedido - totalPecasRetirado > 0 && (
-                    <button
-                      className="btn sm"
-                      onClick={() => { setShowRetTudo(v => !v); setRetTudoData(hoje()); }}
-                      style={{ background: showRetTudo ? "rgba(99,102,241,.18)" : "rgba(99,102,241,.08)", border:"1px solid var(--acc)", color:"var(--acc)", fontWeight:700, whiteSpace:"nowrap" }}
-                    >
-                      ✓ Retirar tudo
-                    </button>
-                  )}
-                  <a href={`/pedidos/${id}/retiradas`} className="btn bg sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>🚚 Ver Retiradas</a>
-                </div>
-              </div>
-
-              {abrirRetiradas && (
-              <>
-              {resumoRetiradaPorProduto.length > 0 && (
-                <div className="tw" style={{ borderRadius: 0, borderTop: "none", borderLeft: "none", borderRight: "none" }}>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Vidro</th>
-                        <th>m² Total</th>
-                        <th>Vidros Total</th>
-                        <th>m² Retirado</th>
-                        <th>Vidros Retirado</th>
-                        <th>m² Pendente</th>
-                        <th>Vidros Pendente</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {resumoRetiradaPorProduto.map(r => (
-                        <tr key={r.produto_nome}>
-                          <td style={{ fontWeight: 600 }}>{r.produto_nome}</td>
-                          <td className="mono">{formatM2(r.m2Total)}</td>
-                          <td className="mono">{r.qtdTotal}</td>
-                          <td className="mono" style={{ color: "var(--ok)" }}>{formatM2(r.m2Retirado)}</td>
-                          <td className="mono" style={{ color: "var(--ok)" }}>{r.qtdRetirada}</td>
-                          <td className="mono" style={{ color: r.m2Pendente > 0 ? "var(--warn)" : "var(--ok)" }}>{formatM2(r.m2Pendente)}</td>
-                          <td className="mono" style={{ color: r.qtdPendente > 0 ? "var(--warn)" : "var(--ok)" }}>{r.qtdPendente}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {showRetTudo && (
-                <div style={{ background:"var(--surf2)", borderTop:`1px solid ${corRetiradas.border}`, padding:"14px 18px", display:"flex", flexWrap:"wrap", gap:"10px", alignItems:"flex-end" }}>
-                  <div style={{ display:"flex", flexDirection:"column", gap:"4px", minWidth:"130px" }}>
-                    <label style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600 }}>Data da retirada</label>
-                    <DateInput value={retTudoData} onChange={setRetTudoData} />
-                  </div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:"4px", flex:"1 1 140px" }}>
-                    <label style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600 }}>Motorista (opcional)</label>
-                    <input name="ret_tudo_mot" value={retTudoMot} onChange={e => setRetTudoMot(e.target.value)} placeholder="—" style={{ background:"var(--surf3)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"7px 10px", color:"var(--t1)", fontSize:"13px", outline:"none" }} />
-                  </div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:"4px", flex:"1 1 140px" }}>
-                    <label style={{ fontSize:"11px", color:"var(--t3)", fontWeight:600 }}>Veículo (opcional)</label>
-                    <input name="ret_tudo_vei" value={retTudoVei} onChange={e => setRetTudoVei(e.target.value)} placeholder="—" style={{ background:"var(--surf3)", border:"1px solid var(--b2)", borderRadius:"6px", padding:"7px 10px", color:"var(--t1)", fontSize:"13px", outline:"none" }} />
-                  </div>
-                  <div style={{ display:"flex", gap:"8px" }}>
-                    <button className="btn bp sm" onClick={handleRetTudo} disabled={salvandoRet} style={{ whiteSpace:"nowrap" }}>
-                      {salvandoRet ? "Salvando..." : `✓ Confirmar retirada de ${totalPecasPedido - totalPecasRetirado} peça(s)`}
-                    </button>
-                    <button className="btn bg sm" onClick={() => setShowRetTudo(false)}>Cancelar</button>
-                  </div>
-                </div>
-              )}
-              </>
-              )}
-            </div>
-          )}
 
           {/* Informações do Pedido */}
           <div className="card" style={{ padding:"20px 24px" }}>
