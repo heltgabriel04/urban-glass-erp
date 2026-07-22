@@ -165,7 +165,7 @@ export default function PedidoDetalhe() {
   const [abrirBoleto,       setAbrirBoleto]       = useState(false);
   const [abrirComprovante,  setAbrirComprovante]  = useState(false);
   const [abrirObs,          setAbrirObs]          = useState(false);
-  const [abrirItens,        setAbrirItens]        = useState(true);
+  const [abrirItens,        setAbrirItens]        = useState(false);
   const [abrirInformacoes,  setAbrirInformacoes]  = useState(false);
   const [abrirDocumentos,   setAbrirDocumentos]   = useState(false);
 
