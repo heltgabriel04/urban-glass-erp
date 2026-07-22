@@ -26,7 +26,13 @@ export interface PedidosPagina {
   total: number;
 }
 
-export type TabPedidos = "todos" | "ativos" | "aberto" | "quitado" | "entregue" | "cancelado";
+// Dois filtros independentes — status de produção/fluxo (StatusPedido) e
+// status financeiro (derivado de valor_recebido vs. valor_total+IPI, não
+// existe coluna própria pra isso). Aplicáveis juntos (AND), nunca um
+// substituindo o outro — ex.: produção "Entregue" + pagamento "Aberto" é
+// uma combinação real e válida que precisa ser filtrável.
+export type StatusProducaoFiltro  = "todos" | StatusPedido;
+export type StatusPagamentoFiltro = "todos" | "aberto" | "quitado";
 
 /** Monta a condição OR (nº pedido, status ou nome de cliente) para o filtro textual de `pedidos`. */
 async function buildFiltroBuscaOr(termo: string): Promise<string> {
@@ -40,14 +46,17 @@ async function buildFiltroBuscaOr(termo: string): Promise<string> {
 
 /** Lista paginada com busca e aba financeira/status server-side. */
 export async function getPedidosPaginado(
-  { limit, offset, busca, tab }: { limit: number; offset: number; busca?: string; tab?: TabPedidos }
+  { limit, offset, busca, statusProducao, statusPagamento }: {
+    limit: number; offset: number; busca?: string;
+    statusProducao?: StatusProducaoFiltro; statusPagamento?: StatusPagamentoFiltro;
+  }
 ): Promise<PedidosPagina> {
-  // Abas financeiras exigem pré-busca de IDs pois PostgREST não compara colunas entre si
+  // Filtro de pagamento exige pré-busca de IDs pois PostgREST não compara colunas entre si
   let financialIds: string[] | null = null;
-  if (tab === 'aberto' || tab === 'quitado') {
+  if (statusPagamento === 'aberto' || statusPagamento === 'quitado') {
     const { data: all } = await supabase.from('pedidos').select('id, valor_total, valor_ipi, valor_recebido');
     financialIds = ((all ?? []) as Array<{ id: string; valor_total: number; valor_ipi: number; valor_recebido: number }>)
-      .filter(r => tab === 'aberto'
+      .filter(r => statusPagamento === 'aberto'
         ? Number(r.valor_recebido) < valorComIpi(r)
         : Number(r.valor_recebido) >= valorComIpi(r))
       .map(r => r.id);
@@ -58,16 +67,11 @@ export async function getPedidosPaginado(
     .select(`*, clientes ( id, nome, cidade, tel )`, { count: 'exact' })
     .order('created_at', { ascending: false });
 
-  if (tab === 'ativos') {
-    query = query
-      .neq('status', 'Entregue')
-      .neq('status', 'Finalizado')
-      .neq('status', 'Cancelado');
-  } else if (tab === 'entregue') {
-    query = query.in('status', ['Entregue', 'Finalizado']);
-  } else if (tab === 'cancelado') {
-    query = query.eq('status', 'Cancelado');
-  } else if (financialIds !== null) {
+  if (statusProducao && statusProducao !== 'todos') {
+    query = query.eq('status', statusProducao);
+  }
+
+  if (financialIds !== null) {
     if (financialIds.length === 0) return { rows: [], total: 0 };
     query = query.in('id', financialIds);
   }

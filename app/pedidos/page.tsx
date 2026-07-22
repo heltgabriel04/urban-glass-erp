@@ -3,14 +3,28 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
-import { getPedidosPaginado, getPedidosTotais, avancarStatusPedido, retrocederStatusPedido, deletarPedido, type PedidosTotais, type TabPedidos } from "@/services/pedidos.service";
+import { getPedidosPaginado, getPedidosTotais, avancarStatusPedido, retrocederStatusPedido, deletarPedido, type PedidosTotais, type StatusProducaoFiltro, type StatusPagamentoFiltro } from "@/services/pedidos.service";
 import { getClientes } from "@/services/clientes.service";
 import { formatBRL, formatDate } from "@/lib/formatters";
 import { valorComIpi } from "@/lib/pedidoIpi";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
-import type { Pedido, Cliente } from "@/types";
+import type { Pedido, Cliente, StatusPedido } from "@/types";
+
+// Mesma ordem do fluxo real (services/pedidos.service.ts) — cada status vira
+// uma opção própria no seletor de produção, em vez de agrupado numa aba só.
+const STATUS_PRODUCAO_OPCOES: StatusPedido[] = [
+  "Aguardando otimização",
+  "Em Produção – Corte",
+  "Qualidade (Corte)",
+  "Em Produção – Lapidação",
+  "Qualidade (Lapidação)",
+  "Separação",
+  "Finalizado",
+  "Entregue",
+  "Cancelado",
+];
 
 const CHIP: Record<string, string> = {
   "Aguardando otimização":    "chip cy",
@@ -54,7 +68,8 @@ function PedidosPageInner() {
   const [pedidos, setPedidos]             = useState<Pedido[]>([]);
   const [loading, setLoading]             = useState(true);
   const [filtro, setFiltro]               = useState(searchParams.get("q") ?? "");
-  const [tab, setTab]                     = useState<TabPedidos>((searchParams.get("tab") as TabPedidos) || "todos");
+  const [statusProducao, setStatusProducao]   = useState<StatusProducaoFiltro>((searchParams.get("producao") as StatusProducaoFiltro) || "todos");
+  const [statusPagamento, setStatusPagamento] = useState<StatusPagamentoFiltro>((searchParams.get("pagamento") as StatusPagamentoFiltro) || "todos");
   const [page, setPage]                   = useState(Number(searchParams.get("page") ?? 0)); // 0-based
   const [total, setTotal]                 = useState(0);
   const [totais, setTotais]               = useState<PedidosTotais>({ count: 0, valorTotal: 0, recebido: 0, emProducao: 0, aguardandoOtim: 0 });
@@ -67,22 +82,24 @@ function PedidosPageInner() {
 
   useEffect(() => { getClientes().then(setClientes); }, []);
 
-  // Recarrega ao mudar página, busca ou aba (busca com debounce de 300ms).
-  // A URL é atualizada (sem novo histórico) junto, para que "Voltar" do detalhe do pedido
-  // retorne para esta mesma busca/aba/página em vez de resetar os filtros.
+  // Recarrega ao mudar página, busca ou algum dos 2 filtros (busca com debounce
+  // de 300ms). A URL é atualizada (sem novo histórico) junto, para que "Voltar"
+  // do detalhe do pedido retorne para esta mesma busca/filtros/página em vez
+  // de resetar tudo.
   useEffect(() => {
     const t = setTimeout(() => {
       load();
       const params = new URLSearchParams();
       if (filtro.trim()) params.set("q", filtro.trim());
-      if (tab !== "todos") params.set("tab", tab);
+      if (statusProducao !== "todos") params.set("producao", statusProducao);
+      if (statusPagamento !== "todos") params.set("pagamento", statusPagamento);
       if (page > 0) params.set("page", String(page));
       const qs = params.toString();
       router.replace(qs ? `/pedidos?${qs}` : "/pedidos", { scroll: false });
     }, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, filtro, tab]);
+  }, [page, filtro, statusProducao, statusPagamento]);
 
   const termoBusca = filtro.trim().toLowerCase();
   const sugestoesClientes = termoBusca.length === 0 ? [] : clientes
@@ -98,7 +115,7 @@ function PedidosPageInner() {
   async function load() {
     setLoading(true);
     const [{ rows, total: tot }, totaisFiltrados] = await Promise.all([
-      getPedidosPaginado({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, busca: filtro, tab }),
+      getPedidosPaginado({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, busca: filtro, statusProducao, statusPagamento }),
       getPedidosTotais(filtro),
     ]);
     setPedidos(rows);
@@ -285,22 +302,36 @@ function PedidosPageInner() {
           </div>
         </div>
 
-        {/* Tabs de filtro */}
-        <div style={{ display: "flex", gap: "4px", borderBottom: "1px solid var(--b1)", marginBottom: "16px" }}>
-          {([
-            { key: "todos",    label: "Todos" },
-            { key: "ativos",   label: "Em Produção" },
-            { key: "aberto",   label: "Em Aberto" },
-            { key: "quitado",  label: "Quitados" },
-            { key: "entregue", label: "Entregues" },
-            { key: "cancelado",label: "Cancelados" },
-          ] as { key: TabPedidos; label: string }[]).map(t => (
-            <button key={t.key} onClick={() => { setTab(t.key); setPage(0); }} style={{
-              padding: "8px 16px", fontSize: "12px", fontWeight: 700, border: "none", cursor: "pointer",
-              background: "transparent", borderBottom: tab === t.key ? "2px solid var(--acc)" : "2px solid transparent",
-              color: tab === t.key ? "var(--acc)" : "var(--t3)", marginBottom: "-1px", letterSpacing: "0.04em",
-            }}>{t.label}</button>
-          ))}
+        {/* Filtros — 2 seletores independentes, aplicáveis juntos (ex.: produção
+            "Entregue" + pagamento "Aberto" é uma combinação real e válida) */}
+        <div style={{ display: "flex", gap: "16px", marginBottom: "16px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <label style={{ fontSize: "10px", fontWeight: 700, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              Status de Produção
+            </label>
+            <select
+              value={statusProducao}
+              onChange={e => { setStatusProducao(e.target.value as StatusProducaoFiltro); setPage(0); }}
+              style={{ padding: "8px 12px", fontSize: "12px", fontWeight: 600, borderRadius: "6px", border: "1px solid var(--b2)", background: "var(--surf2)", color: "var(--t1)", cursor: "pointer", minWidth: "200px" }}
+            >
+              <option value="todos">Todos</option>
+              {STATUS_PRODUCAO_OPCOES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <label style={{ fontSize: "10px", fontWeight: 700, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              Status de Pagamento
+            </label>
+            <select
+              value={statusPagamento}
+              onChange={e => { setStatusPagamento(e.target.value as StatusPagamentoFiltro); setPage(0); }}
+              style={{ padding: "8px 12px", fontSize: "12px", fontWeight: 600, borderRadius: "6px", border: "1px solid var(--b2)", background: "var(--surf2)", color: "var(--t1)", cursor: "pointer", minWidth: "160px" }}
+            >
+              <option value="todos">Todos</option>
+              <option value="aberto">Em Aberto</option>
+              <option value="quitado">Quitado</option>
+            </select>
+          </div>
         </div>
 
         {loading ? (
