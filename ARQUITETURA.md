@@ -10,7 +10,7 @@ módulo afeta outro módulo, ela ganha uma linha aqui apontando para onde
 está detalhada. Não duplicar o detalhe completo aqui — só o link e o
 porquê de importar.
 
-Última atualização: 2026-07-20
+Última atualização: 2026-07-22
 
 ---
 
@@ -20,8 +20,8 @@ porquê de importar.
 |---|---|---|---|
 | APS / Programação | Em construção (ver `modulos/aps.md`) — auditoria concluída, capacidade compartilhada + motor de cotação de prazo já implementados e pushados (2026-07-20) | Responder prazo de entrega ao cliente na hora — resolvido no backend, falta UI e validação com dado real | Alta — em implementação ativa |
 | Fiscal (NF-e) | Não documentado ainda | — | A definir |
-| Estoque | Não documentado ainda | — | A definir |
-| Financeiro / Precificação | Não documentado ainda | Módulo de custo/precificação em construção, decisões pendentes de contador (PEPS vs média ponderada, ICMS-ST/DIFAL) | A definir |
+| Estoque | Não documentado ainda | **Pendência aberta**: produtos 17 (Reflecta 4+4 Incolor, lote id=4) e 21 (Refletivo 4+4, lote id=5) seguem com `dimensao_confirmada=false` — `m2_por_chapa` gravado (7,869 e 7,704) diverge do padrão 3300×2250 (7,425) usado nos demais laminados, então a dimensão NÃO foi assumida por igualdade. Aguardando o dono da empresa confirmar se mediu esses dois especificamente. Enquanto isso, o Otimizador exclui os dois do plano de corte (ver `sql/lotes-estoque-confirma-dimensao-verde-e-incolor-legado.sql`). | A definir |
+| Financeiro / Precificação | Não documentado ainda | Custeio de vidro por lote: PEPS confirmado pelo contador como método definitivo (2026-07-22, `lib/custoLote.ts`), substituindo a média ponderada provisória. Ressalva permanente: 5 lotes legados têm `dt_entrada_estimada=true`, então a ordem PEPS entre eles não é 100% confiável (aviso visível em `/margem` e `/contabilidade/estoque` quando isso acontece). | A definir |
 | Cut Optimizer (nesting) | Não documentado ainda | — | A definir |
 | Kanban de Produção | Não documentado ainda | — | A definir |
 
