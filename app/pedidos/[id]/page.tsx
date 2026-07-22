@@ -1981,7 +1981,7 @@ export default function PedidoDetalhe() {
             </div>
             <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"flex-end" }}>
               <div style={{ minWidth:"220px", background:"#f0f4ff", borderRadius:"8px", padding:"12px", border:"1px solid #d0daf0" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingTop:"10px", borderTop:"2px solid #2d5fa6" }}>
+                <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:"4px", paddingTop:"10px", borderTop:"2px solid #2d5fa6" }}>
                   <span style={{ fontWeight:700, fontSize:"13px", color:"#2d5fa6" }}>VALOR TOTAL</span>
                   <span style={{ fontFamily:"monospace", fontWeight:900, fontSize:"18px", color:"#2d5fa6" }}>{formatBRL(totalComIpi)}</span>
                 </div>
