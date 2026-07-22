@@ -3,7 +3,7 @@
 import { useEffect, useId, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
-import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido, uploadRomaneioAssinado, deleteRomaneioAssinado, uploadNfe, deleteNfe, uploadBoleto, deleteBoleto } from "@/services/pedidos.service";
+import { getPedidoById, avancarStatusPedido, recalcularRecebido, updatePedido, getCreditoCliente, atualizarCreditoCliente, utilizarCreditoEmPedido, uploadRomaneioAssinado, deleteRomaneioAssinado, uploadNfe, deleteNfe, uploadBoleto, deleteBoleto, uploadComprovantePagamento, deleteComprovantePagamento } from "@/services/pedidos.service";
 import { getLancamentosPorPedido, deletarLancamento, createLancamento, updateLancamento } from "@/services/financeiro.service";
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, updateNaoConformidade } from "@/services/qualidade.service";
@@ -159,9 +159,11 @@ export default function PedidoDetalhe() {
   const [uploadandoRomaneio, setUploadandoRomaneio] = useState(false);
   const [uploadandoNfe,     setUploadandoNfe]     = useState(false);
   const [uploadandoBoleto,  setUploadandoBoleto]  = useState(false);
+  const [uploadandoComprovante, setUploadandoComprovante] = useState(false);
   const [abrirRomaneio,     setAbrirRomaneio]     = useState(false);
   const [abrirNfe,          setAbrirNfe]          = useState(false);
   const [abrirBoleto,       setAbrirBoleto]       = useState(false);
+  const [abrirComprovante,  setAbrirComprovante]  = useState(false);
   const [abrirObs,          setAbrirObs]          = useState(false);
 
   // Qualidade
@@ -764,6 +766,31 @@ export default function PedidoDetalhe() {
     const restantes = (pedido.boleto_urls ?? []).filter(u => u !== url);
     await updatePedido(id, { boleto_urls: restantes.length > 0 ? restantes : null } as any);
     toast("Boleto removido");
+    await load();
+  }
+
+  async function handleUploadComprovante(files: File[]) {
+    if (!pedido || files.length === 0) return;
+    setUploadandoComprovante(true);
+    const { urls, erro } = await uploadComprovantePagamento(id, files);
+    if (urls.length > 0) {
+      const existentes = pedido.comprovante_pagamento_urls ?? [];
+      await updatePedido(id, { comprovante_pagamento_urls: [...existentes, ...urls] } as any);
+      toast(urls.length > 1 ? `${urls.length} comprovantes salvos` : "Comprovante salvo");
+      await load();
+    } else {
+      toast(`Erro ao enviar comprovante${erro ? `: ${erro}` : ""}`, "err");
+    }
+    setUploadandoComprovante(false);
+  }
+
+  async function handleRemoverComprovante(url: string) {
+    if (!pedido) return;
+    if (!(await confirm("Remover este comprovante?", { perigo: true }))) return;
+    await deleteComprovantePagamento(url);
+    const restantes = (pedido.comprovante_pagamento_urls ?? []).filter(u => u !== url);
+    await updatePedido(id, { comprovante_pagamento_urls: restantes.length > 0 ? restantes : null } as any);
+    toast("Comprovante removido");
     await load();
   }
 
@@ -1528,6 +1555,41 @@ export default function PedidoDetalhe() {
                   <span style={{ fontSize: "11px", color: "var(--t3)" }}>{uploadandoBoleto ? "Enviando..." : "Arraste ou clique para anexar boleto (PDF ou imagem)"}</span>
                   <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple name="arquivo_boleto" style={{ display: "none" }} disabled={uploadandoBoleto}
                     onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadBoleto(fs); e.target.value = ""; }} />
+                </label>
+              </div>
+            )}
+
+            {/* Comprovante de Pagamento */}
+            <button onClick={() => setAbrirComprovante(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px", background: "none", border: "none", borderTop: "1px solid var(--b1)", cursor: "pointer", color: "var(--t1)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "12px" }}>💳</span>
+                <span style={{ fontSize: "10.5px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>COMPROVANTE DE PAGAMENTO</span>
+                {(pedido.comprovante_pagamento_urls?.length ?? 0) > 0 && (
+                  <span style={{ fontSize: "10px", background: "rgba(34,197,94,.15)", color: "var(--ok)", borderRadius: "10px", padding: "1px 7px", fontWeight: 700 }}>{pedido.comprovante_pagamento_urls!.length}</span>
+                )}
+              </div>
+              <span style={{ fontSize: "11px", color: "var(--t3)", transform: abrirComprovante ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}>▾</span>
+            </button>
+            {abrirComprovante && (
+              <div style={{ padding: "0 18px 14px" }}>
+                {(pedido.comprovante_pagamento_urls?.length ?? 0) > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "10px" }}>
+                    {pedido.comprovante_pagamento_urls!.map((url, i) => (
+                      <div key={url} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px", background: "rgba(34,197,94,.08)", borderRadius: "7px", border: "1px solid rgba(34,197,94,.25)" }}>
+                        <span style={{ fontSize: "14px" }}>💳</span>
+                        <a href={url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: "var(--ok)", fontWeight: 600, fontSize: "12px", textDecoration: "underline" }}>Comprovante {i + 1}</a>
+                        <button className="btn bw sm" onClick={() => handleRemoverComprovante(url)} disabled={uploadandoComprovante}>Remover</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "4px", padding: "12px", border: "2px dashed var(--b2)", borderRadius: "7px", cursor: uploadandoComprovante ? "default" : "pointer", background: "var(--surf2)" }}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length > 0 && !uploadandoComprovante) handleUploadComprovante(fs); }}>
+                  <span style={{ fontSize: "16px" }}>💳</span>
+                  <span style={{ fontSize: "11px", color: "var(--t3)" }}>{uploadandoComprovante ? "Enviando..." : "Arraste ou clique para anexar comprovante de pagamento (PDF ou imagem)"}</span>
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple name="arquivo_comprovante" style={{ display: "none" }} disabled={uploadandoComprovante}
+                    onChange={e => { const fs = Array.from(e.target.files ?? []); if (fs.length > 0) handleUploadComprovante(fs); e.target.value = ""; }} />
                 </label>
               </div>
             )}
