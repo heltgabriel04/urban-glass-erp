@@ -9,7 +9,7 @@ import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, updateNaoConformidade } from "@/services/qualidade.service";
 import { getRetiradasPorPedido, calcularSaldoItens } from "@/services/retiradas.service";
 import { getObservacoesPorPedido, createObservacao, deletarObservacao } from "@/services/observacoes.service";
-import { formatBRL, formatDate, formatDuracao, medidaReal } from "@/lib/formatters";
+import { formatBRL, formatDate, formatDuracao, formatM2, medidaReal } from "@/lib/formatters";
 import { ALIQ_IPI_PEDIDO, calcularValorIpi, valorComIpi } from "@/lib/pedidoIpi";
 import { registrarRecente } from "@/lib/recentes";
 import PedidoTabs from "@/components/pedidos/PedidoTabs";
@@ -800,6 +800,28 @@ export default function PedidoDetalhe() {
   const totalPecasPedido   = saldoRetiradas.reduce((a, s) => a + s.quantidade_total, 0);
   const totalPecasRetirado = saldoRetiradas.reduce((a, s) => a + s.quantidade_retirada, 0);
 
+  // Resumo por vidro (agrupado por produto) — m² e quantidade, total/retirado/
+  // pendente, pra acompanhar o que falta retirar. Cada item de saldoRetiradas
+  // já tem largura/altura/quantidade próprias, então o m² de cada linha é
+  // recalculado aqui.
+  const resumoRetiradaPorProduto = (() => {
+    const mapa = new Map<string, { produto_nome: string; m2Total: number; qtdTotal: number; m2Retirado: number; qtdRetirada: number }>();
+    saldoRetiradas.forEach(s => {
+      const m2Item = (s.largura * s.altura) / 1e6;
+      const atual = mapa.get(s.produto_nome) ?? { produto_nome: s.produto_nome, m2Total: 0, qtdTotal: 0, m2Retirado: 0, qtdRetirada: 0 };
+      atual.m2Total += m2Item * s.quantidade_total;
+      atual.qtdTotal += s.quantidade_total;
+      atual.m2Retirado += m2Item * s.quantidade_retirada;
+      atual.qtdRetirada += s.quantidade_retirada;
+      mapa.set(s.produto_nome, atual);
+    });
+    return Array.from(mapa.values()).map(r => ({
+      ...r,
+      m2Pendente: r.m2Total - r.m2Retirado,
+      qtdPendente: r.qtdTotal - r.qtdRetirada,
+    }));
+  })();
+
   const bloqueadoSemOtim  = pedido.status === "Aguardando otimização" && !temOtimizacao && !todosVidroCliente && !todosChapa;
 
   const parcelasAReceber = lancamentos.filter(l => l.status === "A Receber").sort((a, b) => (a.vencimento ?? "").localeCompare(b.vencimento ?? ""));
@@ -870,6 +892,7 @@ export default function PedidoDetalhe() {
             </button>
           )}
         </div>
+        <PedidoTabs id={id} temItens={temItens} />
         <div className="tb no-print" style={{ borderTop:"none", paddingTop:0, flexWrap:"wrap", rowGap:"10px" }}>
           <div style={{ fontSize:"13px", color:"var(--t2)", fontWeight:600 }}>{pedido.clientes?.nome ?? "—"}</div>
           <div style={{ flex:1 }} />
@@ -882,9 +905,43 @@ export default function PedidoDetalhe() {
             )}
           </div>
         </div>
-        <PedidoTabs id={id} temItens={temItens} />
 
         <div className="con no-print" style={{ display:"flex", flexDirection:"column", gap:"20px" }}>
+
+          {/* Progresso */}
+          <div className="card" style={{ padding:"20px 24px" }}>
+            {(() => {
+              const history = (pedido.status_history ?? []) as { status: string; desde: string }[];
+              return (
+                <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"center", width:"100%" }}>
+                  {FLUXO.map((step, i) => {
+                    const done    = i < statusIdx;
+                    const current = i === statusIdx;
+                    const last    = i === FLUXO.length - 1;
+                    const dur     = duracaoEtapa(history, step);
+                    return (
+                      <div key={step} style={{ display:"flex", alignItems:"flex-start", flex: last ? "0 0 auto" : "1 1 0", minWidth:0 }}>
+                        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"5px", width:"84px", flexShrink:0 }}>
+                          <div style={{ width:"26px", height:"26px", borderRadius:"50%", background: done ? "var(--ok)" : current ? "var(--acc)" : "var(--surf3)", border: current ? "2px solid var(--acc)" : "2px solid transparent", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"10px", fontWeight:700, color: done || current ? "#000" : "var(--t3)", flexShrink:0 }}>
+                            {done ? "✓" : i + 1}
+                          </div>
+                          <div style={{ fontSize:"9px", textAlign:"center", lineHeight:1.3, color: current ? "var(--acc)" : done ? "var(--ok)" : "var(--t3)", fontWeight: current ? 700 : 500, fontFamily:"'DM Mono', monospace", wordBreak:"break-word" }}>
+                            {step}
+                          </div>
+                          {dur && (
+                            <div style={{ fontSize:"8px", color: current ? "var(--acc)" : "var(--t3)", fontFamily:"'DM Mono', monospace", background: current ? "rgba(99,102,241,.1)" : "var(--surf3)", borderRadius:"4px", padding:"1px 5px", whiteSpace:"nowrap" }}>
+                              {current ? "⏱ " : ""}{dur}
+                            </div>
+                          )}
+                        </div>
+                        {!last && <div style={{ flex:"1 1 auto", height:"2px", marginTop:"12px", background: done ? "var(--ok)" : "var(--surf3)", minWidth:"8px" }} />}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
 
           {bloqueadoSemOtim && (
             <div style={{ background:"rgba(245,158,11,.1)", border:"1px solid var(--warn)", borderRadius:"10px", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px" }}>
@@ -936,40 +993,39 @@ export default function PedidoDetalhe() {
             </div>
           )}
 
-          {/* Progresso */}
-          <div className="card" style={{ padding:"20px 24px" }}>
-            {(() => {
-              const history = (pedido.status_history ?? []) as { status: string; desde: string }[];
-              return (
-                <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"center", width:"100%" }}>
-                  {FLUXO.map((step, i) => {
-                    const done    = i < statusIdx;
-                    const current = i === statusIdx;
-                    const last    = i === FLUXO.length - 1;
-                    const dur     = duracaoEtapa(history, step);
-                    return (
-                      <div key={step} style={{ display:"flex", alignItems:"flex-start", flex: last ? "0 0 auto" : "1 1 0", minWidth:0 }}>
-                        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"5px", width:"84px", flexShrink:0 }}>
-                          <div style={{ width:"26px", height:"26px", borderRadius:"50%", background: done ? "var(--ok)" : current ? "var(--acc)" : "var(--surf3)", border: current ? "2px solid var(--acc)" : "2px solid transparent", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"10px", fontWeight:700, color: done || current ? "#000" : "var(--t3)", flexShrink:0 }}>
-                            {done ? "✓" : i + 1}
-                          </div>
-                          <div style={{ fontSize:"9px", textAlign:"center", lineHeight:1.3, color: current ? "var(--acc)" : done ? "var(--ok)" : "var(--t3)", fontWeight: current ? 700 : 500, fontFamily:"'DM Mono', monospace", wordBreak:"break-word" }}>
-                            {step}
-                          </div>
-                          {dur && (
-                            <div style={{ fontSize:"8px", color: current ? "var(--acc)" : "var(--t3)", fontFamily:"'DM Mono', monospace", background: current ? "rgba(99,102,241,.1)" : "var(--surf3)", borderRadius:"4px", padding:"1px 5px", whiteSpace:"nowrap" }}>
-                              {current ? "⏱ " : ""}{dur}
-                            </div>
-                          )}
-                        </div>
-                        {!last && <div style={{ flex:"1 1 auto", height:"2px", marginTop:"12px", background: done ? "var(--ok)" : "var(--surf3)", minWidth:"8px" }} />}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-          </div>
+          {resumoRetiradaPorProduto.length > 0 && (
+            <div className="card" style={{ padding:"20px 24px" }}>
+              <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, marginBottom:"16px", letterSpacing:".06em" }}>RESUMO POR VIDRO — RETIRADA</div>
+              <div className="tw">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Vidro</th>
+                      <th>m² Total</th>
+                      <th>Vidros Total</th>
+                      <th>m² Retirado</th>
+                      <th>Vidros Retirado</th>
+                      <th>m² Pendente</th>
+                      <th>Vidros Pendente</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resumoRetiradaPorProduto.map(r => (
+                      <tr key={r.produto_nome}>
+                        <td style={{ fontWeight: 600 }}>{r.produto_nome}</td>
+                        <td className="mono">{formatM2(r.m2Total)}</td>
+                        <td className="mono">{r.qtdTotal}</td>
+                        <td className="mono" style={{ color: "var(--ok)" }}>{formatM2(r.m2Retirado)}</td>
+                        <td className="mono" style={{ color: "var(--ok)" }}>{r.qtdRetirada}</td>
+                        <td className="mono" style={{ color: r.m2Pendente > 0 ? "var(--warn)" : "var(--ok)" }}>{formatM2(r.m2Pendente)}</td>
+                        <td className="mono" style={{ color: r.qtdPendente > 0 ? "var(--warn)" : "var(--ok)" }}>{r.qtdPendente}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Informações do Pedido */}
           <div className="card" style={{ padding:"20px 24px" }}>
