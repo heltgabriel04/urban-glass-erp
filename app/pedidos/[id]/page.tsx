@@ -893,14 +893,14 @@ export default function PedidoDetalhe() {
           )}
         </div>
         <PedidoTabs id={id} temItens={temItens} />
-        <div className="tb no-print" style={{ display:"grid", gridTemplateColumns:"1fr auto 1fr", alignItems:"center", paddingTop:"18px", paddingBottom:"18px", rowGap:"10px" }}>
-          <div style={{ fontSize:"13px", color:"var(--t2)", fontWeight:600 }}>{pedido.clientes?.nome ?? "—"}</div>
+        <div className="tb no-print" style={{ display:"grid", gridTemplateColumns:"1fr auto 1fr", alignItems:"center", paddingTop:"18px", paddingBottom:"18px", rowGap:"10px", background:"var(--surf2)" }}>
+          <div style={{ fontSize:"16px", color:"var(--t1)", fontWeight:800 }}>{pedido.clientes?.nome ?? "—"}</div>
           <div style={{ display:"flex", gap:"18px", fontSize:"12px", fontFamily:"'DM Mono', monospace", justifySelf:"center" }}>
-            <span style={{ color:"var(--t3)" }}>Total <strong style={{ color:"var(--t1)" }}>{formatBRL(totalComIpi)}</strong></span>
-            <span style={{ color:"var(--t3)" }}>Recebido <strong style={{ color: pedido.valor_recebido > 0 ? "var(--ok)" : "var(--t3)" }}>{formatBRL(pedido.valor_recebido)}</strong></span>
-            <span style={{ color:"var(--t3)" }}>{quitado ? "Quitado ✓" : "Em aberto"} <strong style={{ color: quitado ? "var(--ok)" : "var(--warn)" }}>{formatBRL(Math.max(0, aberto))}</strong></span>
+            <span style={{ color:"var(--t2)" }}>Total <strong style={{ color:"var(--t1)" }}>{formatBRL(totalComIpi)}</strong></span>
+            <span style={{ color:"var(--t2)" }}>Recebido <strong style={{ color: pedido.valor_recebido > 0 ? "var(--ok)" : "var(--t2)" }}>{formatBRL(pedido.valor_recebido)}</strong></span>
+            <span style={{ color:"var(--t2)" }}>{quitado ? "Quitado ✓" : "Em aberto"} <strong style={{ color: quitado ? "var(--ok)" : "var(--warn)" }}>{formatBRL(Math.max(0, aberto))}</strong></span>
             {temItens && (
-              <span style={{ color:"var(--t3)" }}>Retirada <strong style={{ color: totalPecasRetirado >= totalPecasPedido ? "var(--ok)" : "var(--warn)" }}>{totalPecasRetirado}/{totalPecasPedido} peças</strong></span>
+              <span style={{ color:"var(--t2)" }}>Retirada <strong style={{ color: totalPecasRetirado >= totalPecasPedido ? "var(--ok)" : "var(--warn)" }}>{totalPecasRetirado}/{totalPecasPedido} peças</strong></span>
             )}
           </div>
           <div />

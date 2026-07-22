@@ -23,9 +23,9 @@ export default function PedidoTabs({ id, temItens }: { id: string; temItens: boo
   const pathname = usePathname();
 
   return (
-    <div className="no-print" style={{ padding: "10px 26px 0", background: "var(--surf)" }}>
+    <div className="no-print" style={{ padding: "10px 26px 0", background: "var(--surf)", borderBottom: "1px solid var(--b1)" }}>
       <Breadcrumb items={[{ label: "Pedidos", href: "/pedidos" }, { label: id }]} />
-      <div style={{ display: "flex", gap: "2px", overflowX: "auto" }}>
+      <div style={{ display: "flex", gap: "2px", flexWrap: "wrap" }}>
         {TABS.map(t => {
           const href = t.slug ? `/pedidos/${id}/${t.slug}` : `/pedidos/${id}`;
           const ativo = pathname === href;
