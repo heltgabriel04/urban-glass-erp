@@ -165,6 +165,11 @@ export default function PedidoDetalhe() {
   const [abrirBoleto,       setAbrirBoleto]       = useState(false);
   const [abrirComprovante,  setAbrirComprovante]  = useState(false);
   const [abrirObs,          setAbrirObs]          = useState(false);
+  const [abrirItens,        setAbrirItens]        = useState(true);
+  const [abrirInformacoes,  setAbrirInformacoes]   = useState(false);
+  const [abrirFinanceiro,   setAbrirFinanceiro]    = useState(false);
+  const [abrirRetiradas,    setAbrirRetiradas]     = useState(false);
+  const [abrirDocumentos,   setAbrirDocumentos]    = useState(false);
 
   // Qualidade
   const [ncs, setNcs]               = useState<NaoConformidade[]>([]);
