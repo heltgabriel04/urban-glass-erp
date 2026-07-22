@@ -26,6 +26,8 @@ export default function MargemPage() {
   const margemTotal  = receitaTotal - custoTotal;
   const margemPctTot = receitaTotal > 0 ? (margemTotal / receitaTotal) * 100 : 0;
   const receitaPendente = pendentes.reduce((a, l) => a + l.receita, 0);
+  const comDataEstimada = disponiveis.filter(l => l.envolveDataEstimada);
+  const receitaDataEstimada = comDataEstimada.reduce((a, l) => a + l.receita, 0);
 
   const filtradas = linhas.filter(l =>
     !busca ||
@@ -49,16 +51,25 @@ export default function MargemPage() {
 
       <div className="con">
         <div className="al al-i" style={{ marginBottom: "16px", fontSize: "12px" }}>
-          Margem bruta aproximada: usa o <strong>custo médio ponderado atual</strong> entre os lotes de cada produto (método
-          provisório, PEPS ainda em aberto com o contador) e <strong>não</strong> inclui lapidação. Itens de vidro do cliente
-          entram com custo zero. Pedidos sem custo cadastrado aparecem marcados.
+          Margem bruta aproximada: usa <strong>PEPS</strong> (consumo dos lotes de cada produto por ordem de entrada, mais
+          antigo primeiro — método definitivo confirmado pelo contador) e <strong>não</strong> inclui lapidação. Itens de
+          vidro do cliente entram com custo zero. Pedidos sem custo cadastrado aparecem marcados.
         </div>
 
         {pendentes.length > 0 && (
           <div className="al al-w" style={{ marginBottom: "16px", fontSize: "12px" }}>
             ⚠ {pendentes.length} pedido(s) — {formatBRL(receitaPendente)} em receita — com custo <strong>indisponível</strong>:
-            pelo menos um lote do produto ainda não tem custo_m2 definido (ex.: importação recente pendente de decisão do
-            contador sobre ICMS/IPI). Excluídos dos totais de CMV/margem acima até isso ser resolvido.
+            a fila PEPS precisou de um lote do produto que ainda não tem custo_m2 definido (ex.: importação recente pendente
+            de decisão do contador). Excluídos dos totais de CMV/margem acima até isso ser resolvido.
+          </div>
+        )}
+
+        {comDataEstimada.length > 0 && (
+          <div className="al al-i" style={{ marginBottom: "16px", fontSize: "12px" }}>
+            ℹ {comDataEstimada.length} pedido(s) — {formatBRL(receitaDataEstimada)} em receita — com custo PEPS calculado
+            usando pelo menos um lote com <strong>data de entrada estimada</strong> (migrado do saldo antigo, sem data real
+            de nota fiscal): a ordem exata de consumo entre lotes de data estimada não é garantida, só é 100% confiável
+            quando envolve lotes com data real.
           </div>
         )}
 

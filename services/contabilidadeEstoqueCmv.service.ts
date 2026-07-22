@@ -82,7 +82,12 @@ export interface CMVPeriodo {
   /** Vidro não expõe EI/Compras/EF: o ledger de vidro (estoque_movimentacoes)
    *  só guarda saldo/custo ATUAL, não histórico por linha — não dá pra
    *  reconstruir esses valores num período passado sem mexer nele. */
-  vidro: { cmv: number; custoIndisponivel: { pedidos: number; receita: number } };
+  vidro: {
+    cmv: number;
+    custoIndisponivel: { pedidos: number; receita: number };
+    /** pedidos cujo custo PEPS (tier 3) consumiu algum lote com dt_entrada_estimada — aviso, não exclusão (ver lib/custoLote.ts) */
+    dataEstimada: { pedidos: number };
+  };
   itensGerais: CMVFamiliaItensGerais;
   cmvTotal: number;
   receita: number;
@@ -113,6 +118,7 @@ export async function getCMVPeriodo(inicio: string, fim: string): Promise<CMVPer
   // não fingir precisão que não existe no fechamento contábil.
   const margensDisponiveis = margensPeriodo.filter(m => !m.custoIndisponivel);
   const margensIndisponiveis = margensPeriodo.filter(m => m.custoIndisponivel);
+  const margensComDataEstimada = margensDisponiveis.filter(m => m.envolveDataEstimada);
   const receita = margensDisponiveis.reduce((s, m) => s + m.receita, 0);
   const cmvVidro = margensDisponiveis.reduce((s, m) => s + (m.custo ?? 0), 0);
 
@@ -134,6 +140,7 @@ export async function getCMVPeriodo(inicio: string, fim: string): Promise<CMVPer
         pedidos: margensIndisponiveis.length,
         receita: parseFloat(margensIndisponiveis.reduce((s, m) => s + m.receita, 0).toFixed(2)),
       },
+      dataEstimada: { pedidos: margensComDataEstimada.length },
     },
     itensGerais: {
       estoqueInicial: parseFloat(estoqueInicial.toFixed(2)),

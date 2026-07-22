@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
-import { getCustoMedioPorProduto } from './lotes.service';
+import { getLotesParaCustoPorProduto } from './lotes.service';
+import { custoPeps } from '@/lib/custoLote';
 
 export interface MargemPedido {
   pedido_id: string;
@@ -11,6 +12,7 @@ export interface MargemPedido {
   margemPct: number | null;
   semCusto: boolean;           // true = nenhum item teve NENHUM dado de custo (nem histórico, nem lote) — comportamento pré-lotes preservado
   custoIndisponivel: boolean;  // true = pelo menos 1 item depende de um lote com custo_m2 ainda não definido (pendente do contador) — nunca vira 0 silenciosamente
+  envolveDataEstimada: boolean; // true = o custo PEPS de pelo menos 1 item (tier 3) consumiu algum lote com dt_entrada_estimada — ordem de fila não 100% confiável pra esses casos (ver lib/custoLote.ts)
 }
 
 /**
@@ -21,13 +23,15 @@ export interface MargemPedido {
  * O custo/m² usado é, em ordem de prioridade: (1) o custo histórico gravado
  * em estoque_movimentacoes no momento da baixa daquele item específico
  * (chapa inteira avulsa), (2) o custo histórico da otimização daquele pedido
- * + produto (peças cortadas), (3) o custo médio ponderado ATUAL entre os
- * lotes do produto (calcularCustoMedioProduto/getCustoMedioPorProduto, ver
- * lib/custoLote.ts — método provisório, PEPS vs médio ainda em aberto com o
- * contador), como fallback pra pedidos antigos de antes do livro-razão
- * existir. Se o tier 3 vier `null` (algum lote ativo do produto sem custo_m2
- * definido) e não houver tier 1/2 pra aquele item, o pedido inteiro fica
- * marcado `custoIndisponivel` — nunca é tratado como custo zero.
+ * + produto (peças cortadas), (3) custo PEPS ATUAL entre os lotes do produto
+ * (custoPeps, ver lib/custoLote.ts — método definitivo confirmado pelo
+ * contador em 2026-07-22), como fallback pra pedidos antigos de antes do
+ * livro-razão existir. Se o tier 3 vier `null` (a fila PEPS precisou de um
+ * lote sem custo_m2 definido) e não houver tier 1/2 pra aquele item, o
+ * pedido inteiro fica marcado `custoIndisponivel` — nunca é tratado como
+ * custo zero. Se o tier 3 tocar algum lote com dt_entrada_estimada=true, o
+ * pedido fica marcado `envolveDataEstimada` (aviso, não bloqueio — a fila
+ * PEPS entre lotes de data estimada não é garantidamente a ordem real).
  * Ainda NÃO inclui custo de lapidação/mão de obra.
  */
 /**
@@ -41,8 +45,8 @@ export async function getMargemPorPedido(filtro?: { inicio?: string; fim?: strin
   if (filtro?.inicio) pedidosQuery = pedidosQuery.gte('dt_pedido', filtro.inicio);
   if (filtro?.fim) pedidosQuery = pedidosQuery.lte('dt_pedido', filtro.fim);
 
-  const [custoM2PorProduto, pedidosRes] = await Promise.all([
-    getCustoMedioPorProduto(),
+  const [lotesPorProduto, pedidosRes] = await Promise.all([
+    getLotesParaCustoPorProduto(),
     pedidosQuery,
   ]);
   if (pedidosRes.error) { console.error('getMargemPorPedido:', pedidosRes.error); return []; }
@@ -81,12 +85,13 @@ export async function getMargemPorPedido(filtro?: { inicio?: string; fim?: strin
   const custoPorPedido = new Map<string, number>();
   const temCustoPorPedido = new Map<string, boolean>();
   const indisponivelPorPedido = new Map<string, boolean>();
+  const dataEstimadaPorPedido = new Map<string, boolean>();
   for (const it of itensData) {
     if (it.vidro_cliente) continue; // cliente trouxe o vidro → sem custo de chapa
 
     // Tier 1/2 (histórico real, já gravado no momento da baixa) tem
     // prioridade e nunca é null aqui (filtrado via .not('custo_unitario_m2', 'is', null)
-    // na query acima) — só cai pro tier 3 (custo médio ATUAL entre lotes)
+    // na query acima) — só cai pro tier 3 (PEPS ATUAL entre lotes)
     // quando não existe registro histórico pra esse item.
     const custoHistorico = custoPorItem.get(it.id)
       ?? (it.produto_id != null ? custoPorPedidoProduto.get(`${it.pedido_id}|${it.produto_id}`) : undefined);
@@ -97,16 +102,19 @@ export async function getMargemPorPedido(filtro?: { inicio?: string; fim?: strin
       continue;
     }
 
-    const custoAtual = it.produto_id != null ? custoM2PorProduto.get(it.produto_id) : undefined;
-    if (custoAtual == null) {
-      // Sem histórico E sem custo médio atual disponível (produto sem lote
-      // ativo, ou algum lote ativo com custo_m2 ainda não definido) — marca
+    const resultadoPeps = it.produto_id != null
+      ? custoPeps(lotesPorProduto.get(it.produto_id) ?? [], Number(it.m2))
+      : { custoM2: null, envolveDataEstimada: false };
+    if (resultadoPeps.custoM2 == null) {
+      // Sem histórico E sem custo PEPS disponível (produto sem lote ativo,
+      // ou a fila PEPS precisou de um lote sem custo_m2 definido) — marca
       // o pedido inteiro como indisponível em vez de somar 0 silenciosamente.
       indisponivelPorPedido.set(it.pedido_id, true);
       continue;
     }
-    custoPorPedido.set(it.pedido_id, (custoPorPedido.get(it.pedido_id) ?? 0) + Number(it.m2) * custoAtual);
-    if (custoAtual > 0) temCustoPorPedido.set(it.pedido_id, true);
+    custoPorPedido.set(it.pedido_id, (custoPorPedido.get(it.pedido_id) ?? 0) + Number(it.m2) * resultadoPeps.custoM2);
+    if (resultadoPeps.custoM2 > 0) temCustoPorPedido.set(it.pedido_id, true);
+    if (resultadoPeps.envolveDataEstimada) dataEstimadaPorPedido.set(it.pedido_id, true);
   }
 
   return pedidosData
@@ -123,6 +131,7 @@ export async function getMargemPorPedido(filtro?: { inicio?: string; fim?: strin
         margemPct:    margem == null ? null : (receita > 0 ? (margem / receita) * 100 : 0),
         semCusto:     !temCustoPorPedido.get(p.id) && !custoIndisponivel,
         custoIndisponivel,
+        envolveDataEstimada: !!dataEstimadaPorPedido.get(p.id),
       };
     })
     // Indisponível (margem null) vai pro fim, não pro meio do ranking — não

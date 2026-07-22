@@ -14,9 +14,10 @@ import { gerarPecasDoPedido } from "@/services/pecas.service";
 import { updatePedido } from "@/services/pedidos.service";
 import { salvarRetalhos } from "@/services/estoque.service";
 import { registrarMovimentacao, reverterMovimentacao } from "@/services/estoqueMovimentacoes.service";
-import { getLotesUtilizaveis, getResumoDimensaoPendente, getCustoMedioPorProduto, type ResumoDimensaoPendente } from "@/services/lotes.service";
+import { getLotesUtilizaveis, getResumoDimensaoPendente, getLotesParaCustoPorProduto, type ResumoDimensaoPendente } from "@/services/lotes.service";
 import type { Produto, Retalho, OtimizacaoPerdaDetalheInsert, LoteEstoque } from "@/types";
 import { isChapaInteira } from "@/lib/chapas";
+import { custoPeps } from "@/lib/custoLote";
 import { resolverDimensaoPorProduto } from "@/lib/loteResolucao";
 import {
   empacotar, empacotarTodas, calcAproveitamento, derivarCortes,
@@ -955,10 +956,14 @@ function OtimizadorContent() {
     // Detalhe de perda de otimização por produto — uma vez por rodada, não
     // por pedido (rodada pode combinar vários pedidos; chapas_json duplica
     // as mesmas chapas em cada linha de historico_otimizador por pedido).
-    // custo_m2 vem do custo médio ponderado entre lotes (lib/custoLote.ts) —
-    // fica null (não 0) quando algum lote ativo do produto não tem custo
-    // definido, mesma regra usada em margem.service.ts.
-    const custoPorProdId = await getCustoMedioPorProduto();
+    // custo_m2 vem do custo PEPS (lib/custoLote.ts), custeando a mesma
+    // quantidade de chapas novas (consumoPorProd) que acabou de ser baixada
+    // acima — fica null (não 0) quando a fila PEPS precisa de um lote sem
+    // custo definido, mesma regra usada em margem.service.ts.
+    const produtoIdsEnvolvidos = Array.from(consumoPorProd.keys())
+      .map(nome => produtos.find(pr => pr.nome === nome)?.id)
+      .filter((id): id is number => id != null);
+    const lotesPorProdutoCusto = await getLotesParaCustoPorProduto(produtoIdsEnvolvidos);
 
     const perdaPorProd = new Map<string, { bruta: number; pecas: number; retalhos: number }>();
     resultado.forEach(r => {
@@ -979,6 +984,10 @@ function OtimizadorContent() {
       if (Math.abs(m2Perda) > 0.01 && v.bruta === 0) {
         console.warn(`Perda de otimização suspeita para "${prodNome}": bruta=0 mas pecas/retalhos > 0.`);
       }
+      const m2ConsumidoNovo = consumoPorProd.get(prodNome)?.m2 ?? 0;
+      const custoResultado = produtoId != null
+        ? custoPeps(lotesPorProdutoCusto.get(produtoId) ?? [], m2ConsumidoNovo)
+        : { custoM2: null, envolveDataEstimada: false };
       return {
         pedido_id: pedidoRef,
         produto_id: produtoId,
@@ -987,7 +996,7 @@ function OtimizadorContent() {
         m2_pecas: parseFloat(v.pecas.toFixed(4)),
         m2_retalhos: parseFloat(v.retalhos.toFixed(4)),
         m2_perda: m2Perda,
-        custo_m2: produtoId != null ? (custoPorProdId.get(produtoId) ?? null) : null,
+        custo_m2: custoResultado.custoM2,
         dt_otim: hoje,
       };
     });

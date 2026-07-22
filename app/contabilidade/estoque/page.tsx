@@ -540,8 +540,13 @@ export default function EstoqueGeralPage() {
                     <div style={{ fontSize: "11px", color: "var(--t3)", marginBottom: "14px" }}>CMV por pedido entregue — EI/Compras/EF não se aplicam (ledger de vidro só guarda custo atual)</div>
                     <div style={{ fontSize: "24px", fontWeight: 700, fontFamily: "'DM Mono', monospace", color: "var(--t1)" }}>{formatBRL(cmv.vidro.cmv)}</div>
                     {cmv.vidro.custoIndisponivel.pedidos > 0 && (
-                      <div style={{ fontSize: "11px", color: "var(--warn)", marginTop: "8px" }} title="Lote com custo_m2 ainda não definido (ex.: importação pendente de decisão do contador) — excluído deste CMV, não tratado como custo zero">
+                      <div style={{ fontSize: "11px", color: "var(--warn)", marginTop: "8px" }} title="A fila PEPS precisou de um lote com custo_m2 ainda não definido (ex.: importação pendente de decisão do contador) — excluído deste CMV, não tratado como custo zero">
                         ⚠ {cmv.vidro.custoIndisponivel.pedidos} pedido(s) — {formatBRL(cmv.vidro.custoIndisponivel.receita)} em receita — fora deste CMV: custo pendente de definição
+                      </div>
+                    )}
+                    {cmv.vidro.dataEstimada.pedidos > 0 && (
+                      <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "8px" }} title="Custo PEPS calculado usando pelo menos um lote com dt_entrada_estimada=true (migrado do saldo antigo, sem data real de nota fiscal) — ordem de consumo entre esses lotes não é garantida">
+                        ℹ {cmv.vidro.dataEstimada.pedidos} pedido(s) neste CMV usaram lote(s) com data de entrada estimada — ordem PEPS não 100% confiável
                       </div>
                     )}
                   </div>

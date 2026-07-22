@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
-import { mediaPonderadaCusto, type LoteParaCusto } from '@/lib/custoLote';
+import { custoPeps, type LoteParaCustoPeps, type ResultadoCustoPeps } from '@/lib/custoLote';
 import type { LoteEstoque } from '@/types';
 
 // Único critério de "utilizável pelo otimizador/produção": ativo, com
@@ -90,43 +90,43 @@ export async function getSaldoPorProduto(): Promise<SaldoProduto[]> {
   return Array.from(porProduto.values());
 }
 
-// ─── CUSTO MÉDIO (método provisório, ver lib/custoLote.ts) ──
+// ─── CUSTO PEPS (definitivo, ver lib/custoLote.ts) ───────────
 //
 // Única porta de entrada pra custo/m² de um produto — qualquer service que
-// precisar desse número chama uma destas duas, nunca lê lotes_estoque.custo_m2
+// precisar desse número chama uma destas, nunca lê lotes_estoque.custo_m2
 // direto e faz a conta na mão.
 
-export async function calcularCustoMedioProduto(produtoId: number): Promise<number | null> {
-  const { data, error } = await supabase
+// Busca única dos lotes ativos com saldo de 1 ou mais produtos, já ordenados
+// por dt_entrada asc (base do PEPS). Sem `produtoIds`, traz todos — usado
+// quando o chamador precisa do custo de vários produtos de uma vez (ex.:
+// margem.service.ts) e prefere resolver o PEPS de cada item em memória a
+// fazer 1 query por item.
+export async function getLotesParaCustoPorProduto(produtoIds?: number[]): Promise<Map<number, LoteParaCustoPeps[]>> {
+  let query = supabase
     .from('lotes_estoque')
-    .select('custo_m2, m2_saldo')
-    .eq('produto_id', produtoId)
+    .select('produto_id, custo_m2, m2_saldo, dt_entrada, dt_entrada_estimada')
     .eq('ativo', true)
-    .gt('m2_saldo', 0);
-  if (error) { console.error('calcularCustoMedioProduto:', error); return null; }
-  return mediaPonderadaCusto((data ?? []) as LoteParaCusto[]);
-}
+    .gt('m2_saldo', 0)
+    .order('dt_entrada', { ascending: true });
+  if (produtoIds && produtoIds.length > 0) query = query.in('produto_id', produtoIds);
 
-// Versão em lote — 1 query pra todos os produtos, evita N+1 quando o
-// chamador precisa do custo de vários produtos de uma vez (ex.: margem.service.ts).
-// Produto sem nenhum lote ativo com saldo simplesmente não aparece no mapa —
-// tratar ausência (`.get() === undefined`) igual a `null` (indisponível).
-export async function getCustoMedioPorProduto(): Promise<Map<number, number | null>> {
-  const { data, error } = await supabase
-    .from('lotes_estoque')
-    .select('produto_id, custo_m2, m2_saldo')
-    .eq('ativo', true)
-    .gt('m2_saldo', 0);
-  if (error) { console.error('getCustoMedioPorProduto:', error); return new Map(); }
+  const { data, error } = await query;
+  if (error) { console.error('getLotesParaCustoPorProduto:', error); return new Map(); }
 
-  const porProduto = new Map<number, LoteParaCusto[]>();
-  (data as unknown as { produto_id: number; custo_m2: number | null; m2_saldo: number }[]).forEach(l => {
+  const porProduto = new Map<number, LoteParaCustoPeps[]>();
+  (data as unknown as { produto_id: number; custo_m2: number | null; m2_saldo: number; dt_entrada: string; dt_entrada_estimada: boolean }[]).forEach(l => {
     const arr = porProduto.get(l.produto_id) ?? [];
-    arr.push({ custo_m2: l.custo_m2, m2_saldo: Number(l.m2_saldo) });
+    arr.push({ custo_m2: l.custo_m2, m2_saldo: Number(l.m2_saldo), dt_entrada: l.dt_entrada, dt_entrada_estimada: l.dt_entrada_estimada });
     porProduto.set(l.produto_id, arr);
   });
+  return porProduto;
+}
 
-  const resultado = new Map<number, number | null>();
-  porProduto.forEach((lotes, produtoId) => resultado.set(produtoId, mediaPonderadaCusto(lotes)));
-  return resultado;
+// Custo PEPS de consumir `m2Consumido` m² de 1 produto — busca os lotes e
+// delega pra custoPeps(). Prefira getLotesParaCustoPorProduto() + custoPeps()
+// direto quando precisar do custo de vários itens do mesmo produto (evita
+// refazer a mesma query).
+export async function calcularCustoPepsProduto(produtoId: number, m2Consumido: number): Promise<ResultadoCustoPeps> {
+  const lotesPorProduto = await getLotesParaCustoPorProduto([produtoId]);
+  return custoPeps(lotesPorProduto.get(produtoId) ?? [], m2Consumido);
 }
