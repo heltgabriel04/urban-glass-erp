@@ -597,6 +597,35 @@ export async function deleteBoleto(url: string): Promise<boolean> {
   return true;
 }
 
+// ─── Storage: Comprovante de pagamento ─────────────────────────────────
+const BUCKET_COMPROVANTE_PAGAMENTO = 'comprovantes-pagamento-pedidos';
+
+export async function uploadComprovantePagamento(pedidoId: string, files: File[]): Promise<{ urls: string[]; erro?: string }> {
+  const urls: string[] = [];
+  for (const file of files) {
+    const ext  = file.name.split('.').pop() ?? 'pdf';
+    const path = `${pedidoId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage.from(BUCKET_COMPROVANTE_PAGAMENTO).upload(path, file, { upsert: false });
+    if (error) { console.error('uploadComprovantePagamento:', error); return { urls, erro: error.message }; }
+    const { data } = supabase.storage.from(BUCKET_COMPROVANTE_PAGAMENTO).getPublicUrl(path);
+    urls.push(data.publicUrl);
+  }
+  if (urls.length > 0) {
+    registrarLog({ acao: "anexou", tabela: "pedidos", registro_id: pedidoId, descricao: `Anexou ${urls.length} comprovante(s) de pagamento em ${pedidoId}` });
+  }
+  return { urls };
+}
+
+export async function deleteComprovantePagamento(url: string): Promise<boolean> {
+  const marker = `/${BUCKET_COMPROVANTE_PAGAMENTO}/`;
+  const idx = url.indexOf(marker);
+  if (idx === -1) return false;
+  const path = url.slice(idx + marker.length);
+  const { error } = await supabase.storage.from(BUCKET_COMPROVANTE_PAGAMENTO).remove([path]);
+  if (error) { console.error('deleteComprovantePagamento:', error); return false; }
+  return true;
+}
+
 export async function getProximoIdPedido(): Promise<string> {
   const { data } = await supabase
     .from('pedidos')
