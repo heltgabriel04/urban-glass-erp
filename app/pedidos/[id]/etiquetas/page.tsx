@@ -60,9 +60,14 @@ function QRCode({ data, size = 72 }: { data: string; size?: number }) {
   );
 }
 
-function EtiquetaCard({ et, num }: { et: Etiqueta; num: number }) {
+function EtiquetaCard({ et, num, selecionada, onToggle }: { et: Etiqueta; num: number; selecionada: boolean; onToggle: () => void }) {
   return (
-    <div className="etiqueta">
+    <div className="etiqueta-wrap" style={{ opacity: selecionada ? 1 : 0.4 }}>
+      <label className="et-check-row">
+        <input type="checkbox" checked={selecionada} onChange={onToggle} />
+        {selecionada ? "Será impressa" : "Não será impressa"}
+      </label>
+      <div className={selecionada ? "etiqueta" : "etiqueta etiqueta-oculta"}>
       <div className="et-topo">
         <div className="et-empresa">URBAN GLASS</div>
         <div className="et-seq">#{String(num).padStart(3, "0")}</div>
@@ -124,6 +129,7 @@ function EtiquetaCard({ et, num }: { et: Etiqueta; num: number }) {
           <div className="et-qrlbl">ESCANEAR</div>
         </div>
       </div>
+      </div>
     </div>
   );
 }
@@ -142,6 +148,11 @@ export default function EtiquetasPage() {
   const [modoVidroCliente, setModoVidroCliente] = useState(false);
   const [modoCorteCerto, setModoCorteCerto] = useState(false);
   const [chapasDisponiveis, setChapasDisponiveis] = useState<number[]>([]);
+  // Seleção de quais etiquetas imprimir — chave é o índice em `etiquetas`
+  // (estável independente do filtro de chapa aplicado na visualização).
+  // Todas começam selecionadas: 1 clique em "Imprimir" continua imprimindo
+  // tudo, igual ao comportamento de antes; a seleção só serve pra excluir.
+  const [selecionadas, setSelecionadas] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     async function load() {
@@ -390,10 +401,43 @@ export default function EtiquetasPage() {
     load();
   }, [id]);
 
+  // Toda vez que as etiquetas são (re)carregadas, volta a seleção pra "todas"
+  useEffect(() => {
+    setSelecionadas(new Set(etiquetas.map((_, i) => i)));
+  }, [etiquetas]);
+
+  function toggleSelecao(indice: number) {
+    setSelecionadas(prev => {
+      const next = new Set(prev);
+      if (next.has(indice)) next.delete(indice); else next.add(indice);
+      return next;
+    });
+  }
+
+  // Índice original preservado através do filtro de chapa, pra seleção não se
+  // perder ao trocar o filtro (marcar na Chapa 1, ver Chapa 2, voltar pra
+  // Chapa 1 — continua marcado).
+  const etiquetasComIndice = etiquetas.map((et, i) => ({ et, i }));
   const etiquetasFiltradas =
     filtroChapa === "todas"
-      ? etiquetas
-      : etiquetas.filter((e) => e.chapaNum === filtroChapa);
+      ? etiquetasComIndice
+      : etiquetasComIndice.filter(({ et }) => et.chapaNum === filtroChapa);
+
+  function selecionarTodasVisiveis() {
+    setSelecionadas(prev => {
+      const next = new Set(prev);
+      etiquetasFiltradas.forEach(({ i }) => next.add(i));
+      return next;
+    });
+  }
+  function limparSelecaoVisiveis() {
+    setSelecionadas(prev => {
+      const next = new Set(prev);
+      etiquetasFiltradas.forEach(({ i }) => next.delete(i));
+      return next;
+    });
+  }
+  const totalSelecionadasVisiveis = etiquetasFiltradas.filter(({ i }) => selecionadas.has(i)).length;
 
   if (loading)
     return (
@@ -439,6 +483,11 @@ export default function EtiquetasPage() {
           padding: 7px 16px; border-radius: 4px; border: none;
           background: #3dffa0; color: #000; font-weight: 700; cursor: pointer; font-size: 12px; font-family: Arial;
         }
+        .btn-sel {
+          padding: 6px 12px; border-radius: 4px; border: 1px solid #444;
+          background: #222; color: #ccc; cursor: pointer; font-size: 11px; font-family: Arial;
+        }
+        .btn-sel:hover { border-color: #3dffa0; color: #3dffa0; }
         .filtro-wrap { display: flex; align-items: center; gap: 6px; color: #aaa; font-size: 11px; }
         .filtro-wrap select {
           background: #222; border: 1px solid #444; border-radius: 4px;
@@ -455,6 +504,16 @@ export default function EtiquetasPage() {
           padding: 24px;
           display: flex; flex-direction: column; align-items: center; gap: 20px;
         }
+
+        .etiqueta-wrap {
+          display: flex; flex-direction: column; align-items: center; gap: 6px;
+        }
+        .et-check-row {
+          display: flex; align-items: center; gap: 6px;
+          font-size: 11px; color: #ccc; font-family: Arial;
+          cursor: pointer; user-select: none;
+        }
+        .et-check-row input { cursor: pointer; }
 
         .etiqueta {
           width: 500px; height: 250px;
@@ -530,6 +589,8 @@ export default function EtiquetasPage() {
 
         @media print {
           .toolbar, .info-bar { display: none !important; }
+          .et-check-row { display: none !important; }
+          .etiqueta-oculta { display: none !important; }
 
           @page {
             size: 100mm 50mm landscape;
@@ -619,8 +680,11 @@ export default function EtiquetasPage() {
           </div>
         )}
 
+        <button className="btn-sel" onClick={selecionarTodasVisiveis}>Selecionar todas</button>
+        <button className="btn-sel" onClick={limparSelecaoVisiveis}>Limpar seleção</button>
+
         <button className="btn-print" onClick={() => window.print()}>
-          🖨 Imprimir
+          🖨 Imprimir selecionadas ({totalSelecionadasVisiveis})
         </button>
       </div>
 
@@ -648,8 +712,8 @@ export default function EtiquetasPage() {
             Nenhuma peça encontrada nesta otimização.
           </div>
         ) : (
-          etiquetasFiltradas.map((et, i) => (
-            <EtiquetaCard key={i} et={et} num={i + 1} />
+          etiquetasFiltradas.map(({ et, i }, pos) => (
+            <EtiquetaCard key={i} et={et} num={pos + 1} selecionada={selecionadas.has(i)} onToggle={() => toggleSelecao(i)} />
           ))
         )}
       </div>
