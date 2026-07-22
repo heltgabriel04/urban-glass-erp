@@ -1027,7 +1027,8 @@ export default function PedidoDetalhe() {
             </div>
           )}
 
-          {/* Informações do Pedido */}
+          {/* Informações do Pedido + Financeiro — lado a lado, cada um com seu proprio toggle */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"16px" }}>
           <div className="card" style={{ padding:"20px 24px" }}>
             <button onClick={() => setAbrirInformacoes(v => !v)} style={{ width:"100%", display:"flex", alignItems:"center", gap:"8px", marginBottom: abrirInformacoes ? "16px" : 0, background:"none", border:"none", cursor:"pointer", padding:0 }}>
               <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>INFORMAÇÕES DO PEDIDO</div>
@@ -1379,6 +1380,7 @@ export default function PedidoDetalhe() {
                 )}
             </>
             )}
+          </div>
           </div>
 
           {/* Itens */}
