@@ -1027,7 +1027,7 @@ export default function PedidoDetalhe() {
           )}
 
           {/* Informações do Pedido + Financeiro — 1 card so, 1 toggle so */}
-          <div className="card" style={{ padding:"20px 24px" }}>
+          <div className="card" style={{ padding:"20px 24px", cursor: abrirInformacoes ? "default" : "pointer" }} onClick={abrirInformacoes ? undefined : () => setAbrirInformacoes(true)}>
             <button onClick={() => setAbrirInformacoes(v => !v)} style={{ width:"100%", display:"flex", alignItems:"center", gap:"8px", marginBottom: abrirInformacoes ? "16px" : 0, background:"none", border:"none", cursor:"pointer", padding:0 }}>
               <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>INFORMAÇÕES DO PEDIDO E FINANCEIRO</div>
               <span style={{ fontSize:"11px", color:"var(--t3)", transform: abrirInformacoes ? "rotate(180deg)" : "rotate(0deg)", transition:"transform .2s" }}>▾</span>
@@ -1376,7 +1376,7 @@ export default function PedidoDetalhe() {
           </div>
 
           {/* Itens */}
-          <div className="card" style={{ padding:"20px 24px" }}>
+          <div className="card" style={{ padding:"20px 24px", cursor: abrirItens ? "default" : "pointer" }} onClick={abrirItens ? undefined : () => setAbrirItens(true)}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: abrirItens ? "16px" : 0 }}>
               <button onClick={() => setAbrirItens(v => !v)} style={{ display:"flex", alignItems:"center", gap:"10px", background:"none", border:"none", cursor:"pointer", padding:0 }}>
                 <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>ITENS DO PEDIDO ({pedido.itens_pedido?.length ?? 0})</div>
@@ -1419,7 +1419,7 @@ export default function PedidoDetalhe() {
           </div>
 
           {/* Documentos: Romaneio / NF-e / Boleto / Comprovante / Observações */}
-          <div className="card" style={{ overflow: "hidden" }}>
+          <div className="card" style={{ overflow: "hidden", cursor: abrirDocumentos ? "default" : "pointer" }} onClick={abrirDocumentos ? undefined : () => setAbrirDocumentos(true)}>
             <button onClick={() => setAbrirDocumentos(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px", background: "none", border: "none", cursor: "pointer", color: "var(--t1)" }}>
               <div style={{ fontSize: "10.5px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>DOCUMENTOS</div>
               <span style={{ fontSize: "11px", color: "var(--t3)", transform: abrirDocumentos ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}>▾</span>
