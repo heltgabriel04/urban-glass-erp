@@ -344,6 +344,7 @@ export default function EstoquePage() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          <a href="/estoque/caixas" className="btn bg sm" style={{ textDecoration: "none" }}>🗃 Ver Caixas</a>
           <button className="btn bg sm" onClick={handleSincronizarBaixas} disabled={sincronizando}
             title="A baixa por otimização já é automática. Use apenas se suspeitar de pendências — é idempotente.">
             {sincronizando ? "↺ Reconciliando…" : "↺ Reconciliar"}
