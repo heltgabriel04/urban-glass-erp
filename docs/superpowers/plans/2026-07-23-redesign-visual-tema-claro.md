@@ -373,6 +373,8 @@ Em `app/globals.css`, dentro do bloco `[data-theme="light"]`, substituir as 2 li
 
 (troquei as referências de `var(--b2)` por `var(--b1)` pra usar a borda já aliviada da Task 2 — o `--b2` ficaria forte demais numa tabela densa; e o zebra usa `rgba(15,23,42,...)`, tingido de slate em vez de preto puro, coerente com `--card-shadow` da Task 2.)
 
+**Atenção**: existe uma SEGUNDA regra `[data-theme="light"] tbody tr:hover td { background: rgba(0,0,0,.025); }` mais acima no arquivo (perto de `.ni.active`/`.sb-logo-wrap:hover`, sem `!important`) — achado da revisão da Task 2. Essa segunda regra não tem `!important`, então a de cima (a que você está editando aqui, com `!important`) é a que sempre vence e renderiza de verdade. Edite só a linha desta Step (a do bloco `.tw`/`thead th`/`tbody td`/`nth-child(even)`/`hover` com `!important`) — a outra fica como está, não é bug (só uma regra sobrescrita, sem efeito visual), e não faz parte desta task.
+
 - [ ] **Step 3: Verificar**
 
 Run: `npx tsc --noEmit` — Expected: limpo.
