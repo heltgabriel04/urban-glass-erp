@@ -17,7 +17,10 @@ import AutocompleteInput from "@/components/ui/AutocompleteInput";
 import { Campo } from "@/components/ui/Campo";
 import ImportarMedidasModal from "@/components/ui/ImportarMedidasModal";
 import type { MedidaImportada } from "@/lib/importPlanilhaMedidas";
-import type { Cliente, Produto, TabelaPreco, TabelaPrecoItem, ItemPedidoInsert, PedidoInsert, Vendedor } from "@/types";
+import type { Cliente, Produto, TabelaPreco, TabelaPrecoItem, ItemPedidoInsert, PedidoInsert, Vendedor, LoteEstoque } from "@/types";
+import { isChapaInteira } from "@/lib/chapas";
+import { getLotesUtilizaveis } from "@/services/lotes.service";
+import { filtrarCaixasCandidatas, resolverCaixaParaVenda, type ResolucaoCaixa } from "@/lib/caixaEstoque";
 
 type ModoPedido = "m2" | "ml";
 
@@ -55,18 +58,6 @@ const ITEM_VAZIO: ItemForm = {
   codigo_adicional: "",
 };
 
-const CHAPAS_DIMS = [
-  { w: 3300, h: 2250 }, { w: 2250, h: 3300 },
-  { w: 3660, h: 2140 }, { w: 2140, h: 3660 },
-  { w: 2150, h: 3660 }, { w: 3660, h: 2150 },
-];
-
-function isChapaInteira(largura: number, altura: number): boolean {
-  return CHAPAS_DIMS.some(c =>
-    Math.abs(largura - c.w) < 50 && Math.abs(altura - c.h) < 50
-  );
-}
-
 function arredondarParaMultiplo50(v: number): number {
   if (v % 50 === 0) return v;
   return Math.ceil(v / 50) * 50;
@@ -100,6 +91,20 @@ function redistribuirParcelas(parcelas: ParcelaForm[], valorTotal: number, idxEd
     if (p.editado && i !== idxEditado) return p;
     return { ...p, valor: i === lastFreeIdx ? parseFloat((valorBase + diff).toFixed(2)) : valorBase };
   });
+}
+
+function resolverCaixaDoItem(
+  lotesEstoque: LoteEstoque[],
+  caixaEscolhida: Record<number, number>,
+  indice: number,
+  produtoId: number | null,
+  largura: number,
+  altura: number,
+  quantidade: number,
+): ResolucaoCaixa | null {
+  const candidatas = filtrarCaixasCandidatas(lotesEstoque, produtoId, largura, altura);
+  if (candidatas.length === 0) return null;
+  return resolverCaixaParaVenda(candidatas, caixaEscolhida[indice], quantidade);
 }
 
 export default function NovoPedidoPage() {
@@ -142,11 +147,13 @@ function NovoPedidoPageInner() {
   const [modoPedido, setModoPedido] = useState<ModoPedido>("m2");
   const [modalImportar, setModalImportar] = useState(false);
   const [parcelasForm, setParcelasForm] = useState<ParcelaForm[]>([{ data: "", valor: 0, editado: false, conta: "", formaPgto: "" }]);
+  const [lotesEstoque, setLotesEstoque] = useState<LoteEstoque[]>([]);
+  const [caixaEscolhida, setCaixaEscolhida] = useState<Record<number, number>>({});
 
   useEffect(() => { load(); }, []);
 
   async function load() {
-    const [clis, prods, tabs, itens, pid, vends, formasPg] = await Promise.all([
+    const [clis, prods, tabs, itens, pid, vends, formasPg, lotes] = await Promise.all([
       getClientes(true),
       supabase.from("produtos").select("*").eq("ativo", true).then(r => r.data as Produto[]),
       supabase.from("tabelas_preco").select("*").eq("ativo", true).then(r => r.data as TabelaPreco[]),
@@ -154,6 +161,7 @@ function NovoPedidoPageInner() {
       getProximoIdPedido(),
       supabase.from("vendedores").select("id, nome, comissao_pct").eq("ativo", true).order("nome").then(r => r.data ?? []),
       getFormasPagamento(true),
+      getLotesUtilizaveis(),
     ]);
     setClientes(clis || []);
     setProdutos(prods || []);
@@ -163,6 +171,7 @@ function NovoPedidoPageInner() {
     setProximoId(pid);
     setItens([{ ...ITEM_VAZIO }]);
     if (formasPg.length > 0) setFormasPagamento(formasPg.map(f => f.nome));
+    setLotesEstoque(lotes);
 
     const duplicarDe = searchParams.get("duplicarDe");
     if (duplicarDe) {
@@ -419,9 +428,32 @@ function NovoPedidoPageInner() {
     if (itens.some(i => i.largura === 0 || i.altura === 0)) { toast("Preencha as dimensões de todos os itens", "err"); return; }
     if (!parcelasOk) { toast(`Soma das parcelas (${formatBRL(somaParcelas)}) difere do total (${formatBRL(valorComIpiCalc)})`, "err"); return; }
 
+    const caixaEscolhidaPorItem = new Map<number, number>();
+    for (let i = 0; i < itens.length; i++) {
+      const item = itens[i];
+      if (item.vidro_cliente) continue;
+      const resolucao = resolverCaixaDoItem(lotesEstoque, caixaEscolhida, i, item.produto_id, item.largura, item.altura, item.quantidade);
+      if (!resolucao) continue; // não é chapa inteira — sem caixa envolvida
+      if (!resolucao.ok) {
+        if (resolucao.motivo === "multiplas_candidatas") {
+          toast(`Item ${i + 1}: escolha de qual caixa retirar antes de salvar`, "err");
+        } else if (resolucao.motivo === "saldo_insuficiente") {
+          toast(`Item ${i + 1}: a caixa escolhida só tem ${resolucao.saldo} chapas, o item precisa de ${resolucao.necessario} — divida em mais de um item ou escolha outra caixa`, "err");
+        }
+        return;
+      }
+      caixaEscolhidaPorItem.set(i, resolucao.caixaId);
+    }
+
     setSalvando(true);
     try {
-      const todosChapa = itens.every(i => isChapaInteira(i.largura, i.altura));
+      const todosChapa = itens.every(i => {
+        if (!i.produto_id) return false;
+        const dims = lotesEstoque
+          .filter(l => l.produto_id === i.produto_id && l.chapa_largura_mm != null && l.chapa_altura_mm != null)
+          .map(l => ({ w: l.chapa_largura_mm!, h: l.chapa_altura_mm! }));
+        return isChapaInteira(i.largura, i.altura, dims);
+      });
 
       const pedido: PedidoInsert = {
         id: proximoId,
@@ -457,7 +489,7 @@ function NovoPedidoPageInner() {
         codigo_adicional: i.codigo_adicional || null,
       }));
 
-      const result = await createPedido(pedido, itensInsert);
+      const result = await createPedido(pedido, itensInsert, caixaEscolhidaPorItem);
       await criarLancamentosParcelados({ pedidoId: proximoId, clienteId, parcelas: parcelasForm });
       if (vendedorId) {
         const vendedor = vendedores.find(v => v.id === vendedorId);
@@ -742,6 +774,30 @@ function NovoPedidoPageInner() {
               </div>
             ) : null;
 
+            const resolucaoCaixa = resolverCaixaDoItem(lotesEstoque, caixaEscolhida, i, item.produto_id, item.largura, item.altura, item.quantidade);
+
+            const seletorCaixa = resolucaoCaixa && !resolucaoCaixa.ok && resolucaoCaixa.motivo === "multiplas_candidatas" ? (
+              <div style={{ marginTop: "4px", paddingLeft: "2px" }}>
+                <select
+                  className="fc"
+                  style={{ fontSize: "11px", height: "24px", width: "auto" }}
+                  value={caixaEscolhida[i] ?? ""}
+                  onChange={e => setCaixaEscolhida(prev => ({ ...prev, [i]: Number(e.target.value) }))}
+                >
+                  <option value="" disabled>Escolha a caixa ({resolucaoCaixa.candidatas.length} disponíveis)</option>
+                  {resolucaoCaixa.candidatas.map(c => (
+                    <option key={c.id} value={c.id}>{c.codigo} · saldo {c.chapas_saldo} chapas</option>
+                  ))}
+                </select>
+              </div>
+            ) : null;
+
+            const avisoSaldoCaixa = resolucaoCaixa && !resolucaoCaixa.ok && resolucaoCaixa.motivo === "saldo_insuficiente" ? (
+              <div style={{ fontSize: "11px", color: "var(--err)", fontFamily: "'DM Mono',monospace", padding: "3px 4px", marginTop: "2px" }}>
+                ⚠ Caixa selecionada só tem {resolucaoCaixa.saldo} chapas — item precisa de {resolucaoCaixa.necessario}
+              </div>
+            ) : null;
+
             return (
               <div key={i} style={{ marginBottom: "10px" }}>
                 {item.vidro_cliente && (
@@ -822,6 +878,8 @@ function NovoPedidoPageInner() {
                       </div>
                     )}
                     {avisoMarjem}
+                    {seletorCaixa}
+                    {avisoSaldoCaixa}
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px", paddingLeft: "2px" }}>
                       <span style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>Código</span>
                       <input name={`item_codigo_adicional_${i}`}
