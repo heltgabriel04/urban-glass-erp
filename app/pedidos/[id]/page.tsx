@@ -20,6 +20,7 @@ import { Campo } from "@/components/ui/Campo";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import MetricCard from "@/components/ui/MetricCard";
+import Icon from "@/components/ui/Icon";
 import type { Pedido, Lancamento, Vendedor, NaoConformidade, NaoConformidadeInsert, TipoNC, GravidadeNC, StatusNaoConformidade, RetiradaPedido, PedidoObservacao } from "@/types";
 import type { HistoricoOtimizador } from "@/services/otimizador.service";
 import { supabase } from "@/lib/supabase/client";
@@ -49,6 +50,12 @@ const CHIP: Record<string, string> = {
   "Finalizado":              "chip cg",
   "Entregue":                "chip cg",
   "Cancelado":               "chip cr",
+};
+
+const PEDIDO_IC = {
+  documento: ["M10 1.5H3.5a.5.5 0 00-.5.5v12a.5.5 0 00.5.5h9a.5.5 0 00.5-.5V5.5L10 1.5z", "M10 1.5v4h4", "M5.5 8h5", "M5.5 10.5h5", "M5.5 13h2.5"],
+  caixa:     ["M2 2h4v4H2z", "M10 2h4v4h-4z", "M2 10h4v4H2z", "M10 10h4v4h-4z"],
+  clipe:     ["M5 9V4.8a2.3 2.3 0 114.6 0v6.4a3.8 3.8 0 11-7.6 0V6"],
 };
 
 const FLUXO = [
@@ -1027,9 +1034,10 @@ export default function PedidoDetalhe() {
 
           {/* Informações do Pedido + Financeiro — 1 card so, 1 toggle so */}
           <div className="card" style={{ padding:"20px 24px", cursor:"pointer" }} onClick={() => setAbrirInformacoes(v => !v)}>
-            <button style={{ width:"100%", display:"flex", alignItems:"center", gap:"8px", marginBottom: abrirInformacoes ? "16px" : 0, background:"none", border:"none", cursor:"pointer", padding:0 }}>
+            <button style={{ width:"100%", display:"flex", alignItems:"center", gap:"8px", marginBottom: abrirInformacoes ? "16px" : 0, background:"none", border:"none", cursor:"pointer", padding:0, color:"var(--t3)" }}>
+              <Icon d={PEDIDO_IC.documento} size={15} />
               <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>INFORMAÇÕES DO PEDIDO E FINANCEIRO</div>
-              <span style={{ fontSize:"11px", color:"var(--t3)", transform: abrirInformacoes ? "rotate(180deg)" : "rotate(0deg)", transition:"transform .2s" }}>▾</span>
+              <span style={{ fontSize:"11px", color:"var(--t3)", transform: abrirInformacoes ? "rotate(180deg)" : "rotate(0deg)", transition:"transform .2s", marginLeft:"auto" }}>▾</span>
             </button>
             {abrirInformacoes && (
               <div onClick={(e) => e.stopPropagation()} style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"24px", cursor:"default" }}>
@@ -1377,8 +1385,10 @@ export default function PedidoDetalhe() {
           {/* Itens */}
           <div className="card" style={{ padding:"20px 24px", cursor:"pointer" }} onClick={() => setAbrirItens(v => !v)}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: abrirItens ? "16px" : 0 }}>
-              <button style={{ display:"flex", alignItems:"center", gap:"10px", background:"none", border:"none", cursor:"pointer", padding:0 }}>
-                <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>ITENS DO PEDIDO ({pedido.itens_pedido?.length ?? 0})</div>
+              <button style={{ display:"flex", alignItems:"center", gap:"10px", background:"none", border:"none", cursor:"pointer", padding:0, color:"var(--t3)" }}>
+                <Icon d={PEDIDO_IC.caixa} size={15} />
+                <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>ITENS DO PEDIDO</div>
+                <span className="nbdg blue">{pedido.itens_pedido?.length ?? 0}</span>
                 <span style={{ fontSize:"11px", color:"var(--t3)", transform: abrirItens ? "rotate(180deg)" : "rotate(0deg)", transition:"transform .2s" }}>▾</span>
               </button>
               {temItens && !todosVidroCliente && !todosChapa && (
@@ -1420,7 +1430,10 @@ export default function PedidoDetalhe() {
           {/* Documentos: Romaneio / NF-e / Boleto / Comprovante / Observações */}
           <div className="card" style={{ overflow: "hidden", cursor:"pointer" }} onClick={() => setAbrirDocumentos(v => !v)}>
             <button style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px", background: "none", border: "none", cursor: "pointer", color: "var(--t1)" }}>
-              <div style={{ fontSize: "10.5px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>DOCUMENTOS</div>
+              <div style={{ display:"flex", alignItems:"center", gap:"8px", color:"var(--t3)" }}>
+                <Icon d={PEDIDO_IC.clipe} size={15} />
+                <div style={{ fontSize: "10.5px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>DOCUMENTOS</div>
+              </div>
               <span style={{ fontSize: "11px", color: "var(--t3)", transform: abrirDocumentos ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}>▾</span>
             </button>
             {abrirDocumentos && (
