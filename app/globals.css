@@ -32,7 +32,7 @@
   --surf1: var(--surf); /* alias usado nos módulos */
 
   --r:  10px;
-  --r2: 14px;
+  --r2: 12px;
   --r3: 20px; /* hero cards, modais grandes */
   --sh: 0 4px 32px rgba(0,0,0,.5);
   --sh2: 0 2px 12px rgba(0,0,0,.3);
@@ -834,16 +834,16 @@ textarea.fc { resize: vertical; min-height: 64px; }
    2026-07-14-tema-claro-neutro-semantico-design.md pro mapeamento
    completo e o porquê de cada valor. */
 [data-theme="light"] {
-  --bg:    #FAFAFA;
+  --bg:    #F4F7FA;
   --surf:  #FFFFFF;
   --surf1: #FFFFFF;
-  --surf2: #F4F4F5;
-  --surf3: #EFEFF1;
-  --surf4: #E4E4E7;
+  --surf2: #EEF2F7;
+  --surf3: #E6ECF3;
+  --surf4: #DCE4EE;
 
-  --b1: #C4C4CC;
-  --b2: #A1A1AA;
-  --b3: #71717A;
+  --b1: #CBD5E1;
+  --b2: #94A3B8;
+  --b3: #64748B;
   /* Ajuste 2026-07-14: --b1 (borda de card) estava sutil demais contra
      --bg/--surf; escala inteira desceu um degrau pra manter distinção
      entre b1/b2/b3. --card-shadow só existe no tema claro de propósito
@@ -854,35 +854,38 @@ textarea.fc { resize: vertical; min-height: 64px; }
      contra --bg/--surf quase-brancos, sem perder a hierarquia t1>t2>t3.
      --b1 e --card-shadow também reforçados, pra destacar mais a borda/
      sombra dos cards contra o fundo (que é quase igual ao --surf). */
-  --card-shadow: 0 2px 6px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06);
+  --card-shadow: 0 1px 2px rgba(15,23,42,.04), 0 2px 8px rgba(15,23,42,.06);
 
-  --acc:  #4F46E5;
-  --acc2: #2563EB;
+  --acc:  #2563EB;
+  --acc2: #0EA5E9;
   --acc3: #C2410C;
   --acc4: #7C3AED;
   --acc5: #D97706;
-  --acc-strong: #4338CA; /* variação mais funda do --acc — gradiente do MetricCard hero */
+  --acc-strong: #1D4ED8;
 
   --ok:   #16A34A;
   --warn: #D97706;
   --err:  #DC2626;
 
-  --t1: #18181B;
-  --t2: #52525B;
-  --t3: #71717A;
-  --t4: #D4D4D8;
+  --t1: #1E293B;
+  --t2: #475569;
+  --t3: #64748B;
+  --t4: #CBD5E1;
+
+  --sb-bg: #1E293B;
+  --sb-hover: #334155;
 
   --sh: 0 4px 32px rgba(0,0,0,.1);
 }
 
 /* Ajustes de componentes para tema claro */
 [data-theme="light"] .bp { color: #fff; }
-[data-theme="light"] .bp:hover { background: #4338CA; box-shadow: 0 0 18px rgba(79,70,229,.25); }
+[data-theme="light"] .bp:hover { background: #4338CA; box-shadow: 0 0 18px rgba(37,99,235,.25); }
 [data-theme="light"] .bs { color: #fff; }
 [data-theme="light"] .bs:hover { background: #1D4ED8; }
 
-[data-theme="light"] .ni.active { background: rgba(79,70,229,.09); }
-[data-theme="light"] .sb-logo-wrap:hover { background: rgba(79,70,229,.06) !important; }
+[data-theme="light"] .ni.active { background: rgba(37,99,235,.09); }
+[data-theme="light"] .sb-logo-wrap:hover { background: rgba(37,99,235,.06) !important; }
 [data-theme="light"] .sb:hover { box-shadow: 4px 0 24px rgba(0,0,0,.12) !important; }
 
 [data-theme="light"] tbody tr:hover td { background: rgba(0,0,0,.025); }
@@ -897,7 +900,7 @@ textarea.fc { resize: vertical; min-height: 64px; }
 
 [data-theme="light"] .nbdg.blue { color: #fff; }
 
-[data-theme="light"] .add-il:hover { background: rgba(79,70,229,.07); }
+[data-theme="light"] .add-il:hover { background: rgba(37,99,235,.07); }
 
 [data-theme="light"] .mov { background: rgba(0,0,0,.45); }
 
