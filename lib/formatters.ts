@@ -83,3 +83,9 @@ export function formatDuracao(ms: number): string {
   if (hours > 0) return `${hours}h`;
   return `${mins}min`;
 }
+
+/** Percentual concluído (0–100), sem NaN/Infinity quando total <= 0 */
+export function pctConcluido(concluido: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.min(100, Math.round((concluido / total) * 100));
+}

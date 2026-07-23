@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatM2, formatPercent, gerarId, labelDiff, formatDuracao, formatBRL } from "@/lib/formatters";
+import { formatM2, formatPercent, gerarId, labelDiff, formatDuracao, formatBRL, pctConcluido } from "@/lib/formatters";
 
 describe("formatM2 / formatPercent", () => {
   it("formata m² (toFixed usa ponto)", () => {
@@ -43,5 +43,20 @@ describe("formatDuracao", () => {
     expect(formatDuracao(45 * 60000)).toBe("45min");
     expect(formatDuracao(3 * 3600000)).toBe("3h");
     expect(formatDuracao((24 + 4) * 3600000)).toBe("1d 4h");
+  });
+});
+
+describe("pctConcluido", () => {
+  it("calcula percentual arredondado", () => {
+    expect(pctConcluido(5, 10)).toBe(50);
+    expect(pctConcluido(1, 3)).toBe(33);
+  });
+  it("total zero ou negativo retorna 0 (evita NaN/Infinity)", () => {
+    expect(pctConcluido(5, 0)).toBe(0);
+    expect(pctConcluido(0, 0)).toBe(0);
+    expect(pctConcluido(5, -1)).toBe(0);
+  });
+  it("nunca passa de 100, mesmo com dado inconsistente", () => {
+    expect(pctConcluido(15, 10)).toBe(100);
   });
 });
