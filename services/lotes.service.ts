@@ -130,3 +130,19 @@ export async function calcularCustoPepsProduto(produtoId: number, m2Consumido: n
   const lotesPorProduto = await getLotesParaCustoPorProduto([produtoId]);
   return custoPeps(lotesPorProduto.get(produtoId) ?? [], m2Consumido);
 }
+
+// ─── LISTA DE CAIXAS (Estoque > Caixas) ──────────────────────
+//
+// Diferente de getLotesUtilizaveis (que só traz ativo+dimensão
+// confirmada+saldo>0, pro Otimizador/venda direta), esta traz TODAS as
+// linhas — inclusive esgotadas e com dimensão pendente — pra tela de
+// gestão de caixas poder mostrar/filtrar por qualquer status.
+export async function getTodasCaixas(): Promise<LoteEstoque[]> {
+  const { data, error } = await supabase
+    .from('lotes_estoque')
+    .select('*, produtos(nome)')
+    .order('produto_id', { ascending: true })
+    .order('dt_entrada', { ascending: true });
+  if (error) { console.error('getTodasCaixas:', error); return []; }
+  return data as LoteEstoque[];
+}
