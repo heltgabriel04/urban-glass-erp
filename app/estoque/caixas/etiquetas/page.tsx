@@ -219,7 +219,7 @@ export default function EtiquetasCaixasPage() {
             flex-shrink: 0;
           }
           .et-corpo { padding: 3px 4px 3px 4px; gap: 6px; }
-          .et-dir img { width: 64px !important; height: 64px !important; }
+          .et-dir svg { width: 64px !important; height: 64px !important; }
 
           .et-empresa { font-size: 9pt; letter-spacing: 2px; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .et-seq     { font-size: 7pt; color: #ccc !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
