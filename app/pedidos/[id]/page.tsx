@@ -1027,13 +1027,13 @@ export default function PedidoDetalhe() {
           )}
 
           {/* Informações do Pedido + Financeiro — 1 card so, 1 toggle so */}
-          <div className="card" style={{ padding:"20px 24px", cursor: abrirInformacoes ? "default" : "pointer" }} onClick={abrirInformacoes ? undefined : () => setAbrirInformacoes(true)}>
-            <button onClick={() => setAbrirInformacoes(v => !v)} style={{ width:"100%", display:"flex", alignItems:"center", gap:"8px", marginBottom: abrirInformacoes ? "16px" : 0, background:"none", border:"none", cursor:"pointer", padding:0 }}>
+          <div className="card" style={{ padding:"20px 24px", cursor:"pointer" }} onClick={() => setAbrirInformacoes(v => !v)}>
+            <button style={{ width:"100%", display:"flex", alignItems:"center", gap:"8px", marginBottom: abrirInformacoes ? "16px" : 0, background:"none", border:"none", cursor:"pointer", padding:0 }}>
               <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>INFORMAÇÕES DO PEDIDO E FINANCEIRO</div>
               <span style={{ fontSize:"11px", color:"var(--t3)", transform: abrirInformacoes ? "rotate(180deg)" : "rotate(0deg)", transition:"transform .2s" }}>▾</span>
             </button>
             {abrirInformacoes && (
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"24px" }}>
+              <div onClick={(e) => e.stopPropagation()} style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"24px", cursor:"default" }}>
               <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
                   <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em", marginBottom:"2px" }}>INFORMAÇÕES DO PEDIDO</div>
                   <Row label="Cliente"            value={pedido.clientes?.nome ?? "—"} />
@@ -1376,20 +1376,20 @@ export default function PedidoDetalhe() {
           </div>
 
           {/* Itens */}
-          <div className="card" style={{ padding:"20px 24px", cursor: abrirItens ? "default" : "pointer" }} onClick={abrirItens ? undefined : () => setAbrirItens(true)}>
+          <div className="card" style={{ padding:"20px 24px", cursor:"pointer" }} onClick={() => setAbrirItens(v => !v)}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: abrirItens ? "16px" : 0 }}>
-              <button onClick={() => setAbrirItens(v => !v)} style={{ display:"flex", alignItems:"center", gap:"10px", background:"none", border:"none", cursor:"pointer", padding:0 }}>
+              <button style={{ display:"flex", alignItems:"center", gap:"10px", background:"none", border:"none", cursor:"pointer", padding:0 }}>
                 <div style={{ fontSize:"11px", color:"var(--t3)", fontWeight:700, letterSpacing:".06em" }}>ITENS DO PEDIDO ({pedido.itens_pedido?.length ?? 0})</div>
                 <span style={{ fontSize:"11px", color:"var(--t3)", transform: abrirItens ? "rotate(180deg)" : "rotate(0deg)", transition:"transform .2s" }}>▾</span>
               </button>
               {temItens && !todosVidroCliente && !todosChapa && (
-                <a href={"/otimizador?pedido=" + pedido.id} className="btn bg xs">◈ Otimizar Corte</a>
+                <a href={"/otimizador?pedido=" + pedido.id} className="btn bg xs" onClick={(e) => e.stopPropagation()}>◈ Otimizar Corte</a>
               )}
             </div>
             {abrirItens && !temItens ? (
-              <div style={{ color:"var(--t3)", padding:"24px 0", textAlign:"center" }}>Nenhum item registrado neste pedido.</div>
+              <div onClick={(e) => e.stopPropagation()} style={{ color:"var(--t3)", padding:"24px 0", textAlign:"center", cursor:"default" }}>Nenhum item registrado neste pedido.</div>
             ) : abrirItens ? (
-              <div className="tw">
+              <div className="tw" onClick={(e) => e.stopPropagation()} style={{ cursor:"default" }}>
                 <table>
                   <thead>
                     <tr><th>#</th><th>Produto</th><th>Dimensão</th><th>Medida</th><th>Quantidade</th><th>Preço Unitário</th><th>Vidro Cliente</th><th>Subtotal</th></tr>
@@ -1419,13 +1419,13 @@ export default function PedidoDetalhe() {
           </div>
 
           {/* Documentos: Romaneio / NF-e / Boleto / Comprovante / Observações */}
-          <div className="card" style={{ overflow: "hidden", cursor: abrirDocumentos ? "default" : "pointer" }} onClick={abrirDocumentos ? undefined : () => setAbrirDocumentos(true)}>
-            <button onClick={() => setAbrirDocumentos(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px", background: "none", border: "none", cursor: "pointer", color: "var(--t1)" }}>
+          <div className="card" style={{ overflow: "hidden", cursor:"pointer" }} onClick={() => setAbrirDocumentos(v => !v)}>
+            <button style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px", background: "none", border: "none", cursor: "pointer", color: "var(--t1)" }}>
               <div style={{ fontSize: "10.5px", color: "var(--t3)", fontWeight: 700, letterSpacing: ".06em" }}>DOCUMENTOS</div>
               <span style={{ fontSize: "11px", color: "var(--t3)", transform: abrirDocumentos ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}>▾</span>
             </button>
             {abrirDocumentos && (
-            <>
+            <div onClick={(e) => e.stopPropagation()} style={{ cursor:"default" }}>
             {/* Romaneio(s) Assinado(s) */}
             <button onClick={() => setAbrirRomaneio(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px", background: "none", border: "none", borderTop: "1px solid var(--b1)", cursor: "pointer", color: "var(--t1)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1671,7 +1671,7 @@ export default function PedidoDetalhe() {
                 )}
               </div>
             )}
-            </>
+            </div>
             )}
           </div>
         </div>
