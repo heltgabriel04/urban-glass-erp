@@ -895,6 +895,30 @@ textarea.fc { resize: vertical; min-height: 64px; }
 [data-theme="light"] .sb-logo-wrap:hover { background: rgba(37,99,235,.06) !important; }
 [data-theme="light"] .sb:hover { box-shadow: 4px 0 24px rgba(0,0,0,.12) !important; }
 
+/* A sidebar ficou com fundo escuro nos dois temas (--sb-bg/--sb-hover, Task 7),
+   mas os tokens --t1/--t2/--t3 do tema claro (Task 2) foram recalibrados pro
+   fundo claro do resto da UI — ficam quase ilegíveis sobre o fundo escuro da
+   própria sidebar. Cores dedicadas abaixo, só pro tema claro.
+   Observação: Sidebar.tsx tem seu próprio <style> local com classes reais
+   (.sb-logo-name, .sb-logo-sub, .sb-ft-ver) que não têm equivalente em
+   globals.css (.logo-name/.logo-ver/.ver-tag daqui não são usadas em nenhum
+   componente) — as regras abaixo cobrem as duas para não deixar a correção
+   sem efeito visual; a especificidade extra do [data-theme] garante que
+   ganhem da declaração local independente da ordem no documento. */
+[data-theme="light"] .sb .ni        { color: #CBD5E1; }
+[data-theme="light"] .sb .ni:hover  { color: #FFFFFF; }
+/* .ni.active mantém var(--acc) (#2563EB): azul sobre o slate escuro da
+   sidebar já é legível (~2.7:1, reforçado por fundo+borda de destaque),
+   mesmo padrão do tema escuro (que também usa --acc pro texto ativo). */
+[data-theme="light"] .sb-logo-name,
+[data-theme="light"] .logo-name     { color: #FFFFFF; }
+[data-theme="light"] .ns,
+[data-theme="light"] .sb-logo-sub,
+[data-theme="light"] .logo-ver,
+[data-theme="light"] .sb-ft-ver,
+[data-theme="light"] .ver-tag       { color: #94A3B8; }
+[data-theme="light"] .ns:hover      { color: #E2E8F0 !important; }
+
 [data-theme="light"] tbody tr:hover td { background: rgba(0,0,0,.025); }
 
 [data-theme="light"] .cg { background: rgba(22,163,74,.12);  color: #15803D; border-color: rgba(22,163,74,.35); }
