@@ -5,23 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { NAV_ROUTES } from "@/lib/navRoutes";
-
-/* ─── SVG icon system ────────────────────────────────────────
-   Todos os paths são 16×16, stroke-based, strokeWidth 1.5     */
-function Icon({ d, size = 15 }: { d: string | string[]; size?: number }) {
-  const paths = Array.isArray(d) ? d : [d];
-  return (
-    <svg
-      width={size} height={size}
-      viewBox="0 0 16 16" fill="none"
-      stroke="currentColor" strokeWidth="1.5"
-      strokeLinecap="round" strokeLinejoin="round"
-      style={{ flexShrink: 0 }}
-    >
-      {paths.map((p, i) => <path key={i} d={p} />)}
-    </svg>
-  );
-}
+import Icon from "@/components/ui/Icon";
 
 const IC = {
   dashboard:   ["M2 2h5v5H2z", "M9 2h5v5H9z", "M2 9h5v5H2z", "M9 9h5v5H9z"],
