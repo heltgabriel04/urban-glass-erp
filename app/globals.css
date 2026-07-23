@@ -45,9 +45,9 @@ html, body { height: 100%; }
 body {
   background: var(--bg);
   color: var(--t1);
-  font-family: 'DM Mono', monospace;
+  font-family: 'Inter', sans-serif;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 400;
   overflow: hidden;
 }
 
@@ -111,7 +111,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
 }
 
 .logo-name {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 16px;
   font-weight: 800;
   letter-spacing: -0.5px;
@@ -196,7 +196,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
 }
 
 .tb-title {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.3px;
@@ -313,7 +313,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
 .card-sm { padding: 14px; }
 
 .ct {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-weight: 700;
   font-size: 13px;
   margin-bottom: 14px;
@@ -654,7 +654,7 @@ textarea.fc { resize: vertical; min-height: 64px; }
 }
 
 .mhd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
-.mtit { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; }
+.mtit { font-family: 'Inter', sans-serif; font-size: 16px; font-weight: 700; }
 .mcl {
   background: var(--surf2);
   border: 1px solid var(--b2);
@@ -677,7 +677,7 @@ textarea.fc { resize: vertical; min-height: 64px; }
 .sr:last-child { border-bottom: none; }
 .sl { font-size: 12px; color: var(--t2); }
 .sl small { display: block; font-size: 10px; color: var(--t3); margin-top: 1px; font-family: 'DM Mono', monospace; }
-.sv { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px; }
+.sv { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 14px; }
 
 /* ─── TOTALS BAR ─────────────────────────────────────────── */
 .totbar {
@@ -693,7 +693,7 @@ textarea.fc { resize: vertical; min-height: 64px; }
 }
 .ti { display: flex; flex-direction: column; gap: 3px; }
 .tl { font-size: 9px; color: var(--t3); text-transform: uppercase; letter-spacing: 1.5px; font-family: 'DM Mono', monospace; }
-.tv { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 16px; }
+.tv { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; }
 
 /* ─── ALERTS ─────────────────────────────────────────────── */
 .al { padding: 10px 13px; border-radius: var(--r); display: flex; gap: 9px; font-size: 12px; margin-bottom: 9px; }
@@ -799,7 +799,7 @@ textarea.fc { resize: vertical; min-height: 64px; }
 /* ─── OTIMIZADOR ─────────────────────────────────────────── */
 .rs  { display: grid; grid-template-columns: repeat(4,1fr); gap: 9px; margin-bottom: 12px; }
 .rsi { background: var(--surf2); border: 1px solid var(--b1); border-radius: var(--r); padding: 12px; text-align: center; }
-.rsv { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 19px; margin-bottom: 3px; }
+.rsv { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 19px; margin-bottom: 3px; }
 .rsl { font-size: 9px; color: var(--t3); text-transform: uppercase; letter-spacing: 1.2px; font-family: 'DM Mono', monospace; }
 
 .cvw { background: var(--surf3); border: 1px solid var(--b2); border-radius: var(--r); padding: 10px; position: relative; }
@@ -962,3 +962,13 @@ textarea.fc { resize: vertical; min-height: 64px; }
   .g3, .g4 { grid-template-columns: 1fr; }
 }
 [data-theme="light"] .sr { border-bottom-color: var(--b2); }
+
+/* ─── ESCALA TIPOGRÁFICA (redesign 2026-07-23) ──────────────
+   Inter pra tudo que não é número; DM Mono continua reservado
+   pra valores monetários/quantidade/data (ver .mono, .kpi-v etc). */
+.tx-h1   { font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 600; color: var(--t1); }
+.tx-h2   { font-family: 'Inter', sans-serif; font-size: 22px; font-weight: 600; color: var(--t1); }
+.tx-sub  { font-family: 'Inter', sans-serif; font-size: 16px; font-weight: 600; color: var(--t1); }
+.tx-body { font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 400; color: var(--t1); }
+.tx-sec  { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 400; color: var(--t2); }
+.tx-aux  { font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500; color: var(--t3); }
