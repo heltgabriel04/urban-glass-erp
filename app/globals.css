@@ -979,3 +979,18 @@ textarea.fc { resize: vertical; min-height: 64px; }
 .tx-body { font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 400; color: var(--t1); }
 .tx-sec  { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 400; color: var(--t2); }
 .tx-aux  { font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500; color: var(--t3); }
+
+/* ─── TOOLTIP GENÉRICO (hover) ───────────────────────────────
+   Mesmo padrão visual do tooltip da Sidebar (.ni[data-tip]),
+   só que como par de classes reutilizável em qualquer tela. */
+.tt-wrap { position: relative; display: inline-flex; }
+.tt-pop {
+  position: absolute; bottom: 100%; left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  background: var(--t1); color: var(--surf);
+  font-size: 11px; padding: 5px 9px; border-radius: 6px;
+  white-space: nowrap; opacity: 0; pointer-events: none;
+  transition: opacity .2s; z-index: 20;
+  font-family: 'Inter', sans-serif;
+}
+.tt-wrap:hover .tt-pop { opacity: 1; }

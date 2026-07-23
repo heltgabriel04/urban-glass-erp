@@ -56,6 +56,26 @@ const PEDIDO_IC = {
   documento: ["M10 1.5H3.5a.5.5 0 00-.5.5v12a.5.5 0 00.5.5h9a.5.5 0 00.5-.5V5.5L10 1.5z", "M10 1.5v4h4", "M5.5 8h5", "M5.5 10.5h5", "M5.5 13h2.5"],
   caixa:     ["M2 2h4v4H2z", "M10 2h4v4h-4z", "M2 10h4v4H2z", "M10 10h4v4h-4z"],
   clipe:     ["M5 9V4.8a2.3 2.3 0 114.6 0v6.4a3.8 3.8 0 11-7.6 0V6"],
+  otimizacao:["M5.5 3.5a2 2 0 100 3 2 2 0 000-3z", "M5.5 9.5a2 2 0 100 3 2 2 0 000-3z", "M7.5 5l7 6", "M7.5 11l7-6"],
+  corte:     ["M3.5 3.5l9 9", "M12.5 3.5l-9 9", "M3.5 3.5a1 1 0 102 0 1 1 0 00-2 0z", "M3.5 12.5a1 1 0 102 0 1 1 0 00-2 0z"],
+  qualidade: ["M8 1.5L2 4.5v4c0 3 2.5 5.5 6 6 3.5-.5 6-3 6-6v-4L8 1.5z", "M5.5 8l2 2 3-3"],
+  lapidacao: ["M8 1.5l1 4 4 1-4 1-1 4-1-4-4-1 4-1 1-4z"],
+  separacao: ["M2 8h4.5", "M4.5 5.5L2 8l2.5 2.5", "M14 8H9.5", "M11.5 5.5L14 8l-2.5 2.5"],
+  finalizado:["M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13z", "M5.2 8.2l2 2 3.6-4"],
+  entregue:  ["M1.5 4.5h7v6h-7z", "M8.5 7h3l2 2.5v1.5h-5z", "M4 13a1.3 1.3 0 100-2.6 1.3 1.3 0 000 2.6z", "M11.5 13a1.3 1.3 0 100-2.6 1.3 1.3 0 000 2.6z"],
+  olho:      ["M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z", "M8 6.3a1.7 1.7 0 100 3.4 1.7 1.7 0 000-3.4z"],
+  etiqueta:  ["M2 2h6l6 6-6 6-6-6z", "M5.5 5.5a1.1 1.1 0 102.2 0 1.1 1.1 0 00-2.2 0z"],
+};
+
+const ETAPA_IC: Record<string, string | string[]> = {
+  "Aguardando otimização":   PEDIDO_IC.otimizacao,
+  "Em Produção – Corte":     PEDIDO_IC.corte,
+  "Qualidade (Corte)":       PEDIDO_IC.qualidade,
+  "Em Produção – Lapidação": PEDIDO_IC.lapidacao,
+  "Qualidade (Lapidação)":   PEDIDO_IC.qualidade,
+  "Separação":               PEDIDO_IC.separacao,
+  "Finalizado":              PEDIDO_IC.finalizado,
+  "Entregue":                PEDIDO_IC.entregue,
 };
 
 const FLUXO = [
@@ -96,6 +116,11 @@ function duracaoEtapa(history: { status: string; desde: string }[], step: string
   const from = new Date(history[idx].desde).getTime();
   const to   = idx < history.length - 1 ? new Date(history[idx + 1].desde).getTime() : Date.now();
   return formatDuracao(to - from);
+}
+
+function dataEtapa(history: { status: string; desde: string }[], step: string): string | null {
+  const found = history.find(h => h.status === step);
+  return found ? formatDate(found.desde) : null;
 }
 
 function addMeses(dateStr: string, meses: number): string {
@@ -914,32 +939,33 @@ export default function PedidoDetalhe() {
         <div className="con no-print" style={{ display:"flex", flexDirection:"column", gap:"20px" }}>
 
           {/* Progresso */}
-          <div className="card" style={{ padding:"20px 24px" }}>
+          <div className="card" style={{ padding:"16px 24px" }}>
             {(() => {
               const history = (pedido.status_history ?? []) as { status: string; desde: string }[];
               return (
-                <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"center", width:"100%" }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"center", width:"100%" }}>
                   {FLUXO.map((step, i) => {
                     const done    = i < statusIdx;
                     const current = i === statusIdx;
                     const last    = i === FLUXO.length - 1;
                     const dur     = duracaoEtapa(history, step);
+                    const dataIni = dataEtapa(history, step);
                     return (
-                      <div key={step} style={{ display:"flex", alignItems:"flex-start", flex: last ? "0 0 auto" : "1 1 0", minWidth:0 }}>
-                        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"5px", width:"84px", flexShrink:0 }}>
-                          <div style={{ width:"26px", height:"26px", borderRadius:"50%", background: done ? "var(--ok)" : current ? "var(--acc)" : "var(--surf3)", border: current ? "2px solid var(--acc)" : "2px solid transparent", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"10px", fontWeight:700, color: done || current ? "#000" : "var(--t3)", flexShrink:0 }}>
-                            {done ? "✓" : i + 1}
+                      <div key={step} style={{ display:"flex", alignItems:"center", flex: last ? "0 0 auto" : "1 1 0", minWidth:0 }}>
+                        <div className="tt-wrap" style={{ flexDirection:"column", alignItems:"center", gap:"4px", width:"76px", flexShrink:0 }}>
+                          <div style={{ width:"28px", height:"28px", borderRadius:"50%", background: done ? "var(--ok)" : current ? "var(--acc)" : "var(--surf3)", border: current ? "2px solid var(--acc)" : "2px solid transparent", display:"flex", alignItems:"center", justifyContent:"center", color: done || current ? "#fff" : "var(--t3)", flexShrink:0, transition:"background 0.2s, border-color 0.2s" }}>
+                            <Icon d={ETAPA_IC[step] ?? PEDIDO_IC.otimizacao} size={14} />
                           </div>
-                          <div style={{ fontSize:"9px", textAlign:"center", lineHeight:1.3, color: current ? "var(--acc)" : done ? "var(--ok)" : "var(--t3)", fontWeight: current ? 700 : 500, fontFamily:"'DM Mono', monospace", wordBreak:"break-word" }}>
+                          <div className="tx-aux" style={{ textAlign:"center", lineHeight:1.25, color: current ? "var(--acc)" : done ? "var(--ok)" : "var(--t3)", fontWeight: current ? 700 : 500, wordBreak:"break-word" }}>
                             {step}
                           </div>
-                          {dur && (
-                            <div style={{ fontSize:"8px", color: current ? "var(--acc)" : "var(--t3)", fontFamily:"'DM Mono', monospace", background: current ? "rgba(99,102,241,.1)" : "var(--surf3)", borderRadius:"4px", padding:"1px 5px", whiteSpace:"nowrap" }}>
-                              {current ? "⏱ " : ""}{dur}
+                          {(dataIni || dur) && (
+                            <div className="tt-pop">
+                              {dataIni ?? "—"}{dur ? ` · ${dur}` : ""}
                             </div>
                           )}
                         </div>
-                        {!last && <div style={{ flex:"1 1 auto", height:"2px", marginTop:"12px", background: done ? "var(--ok)" : "var(--surf3)", minWidth:"8px" }} />}
+                        {!last && <div style={{ flex:"1 1 auto", height:"2px", marginTop:"14px", background: done ? "var(--ok)" : "var(--surf3)", minWidth:"8px", transition:"background 0.2s" }} />}
                       </div>
                     );
                   })}
