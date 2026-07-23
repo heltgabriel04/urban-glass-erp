@@ -305,7 +305,7 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile }: Props) {
                         className={`ni${ativo ? " active" : ""}`}
                         onClick={onCloseMobile}
                       >
-                        <Icon d={item.icon} size={15} />
+                        <Icon d={item.icon} size={18} />
                         <span className="ni-label">{item.label}</span>
                         {ativo && <span className="ni-active-dot" />}
                       </Link>
