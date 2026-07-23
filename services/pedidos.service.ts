@@ -159,60 +159,65 @@ export async function createPedido(
       .select();
     if (errItens) console.error('createPedido itens:', errItens);
 
+    const itensParaBaixa = (itensInseridos ?? []) as ItemPedido[];
+
     // caixaEscolhidaPorItem foi montado pelo caller (app/pedidos/novo/page.tsx)
     // indexado contra `itens`, mas é lido abaixo por índice contra
     // itensInseridos — se o insert não devolver o mesmo tamanho/ordem, o
     // índice não é confiável e o débito de estoque pode cair na caixa física
-    // errada. Não bloqueia o pedido já criado: loga e pula a resolução por
-    // índice inteira.
-    if ((itensInseridos ?? []).length !== itens.length) {
+    // errada. Não bloqueia o pedido já criado nem a entrada de vidro do
+    // cliente (que não depende desse índice): loga uma vez e pula só a
+    // resolução de caixa por índice para os itens que não são vidro_cliente.
+    const indiceCaixaConfiavel = itensParaBaixa.length === itens.length;
+    if (!indiceCaixaConfiavel) {
       console.error(
-        `createPedido: itensInseridos (${(itensInseridos ?? []).length}) diverge de itens (${itens.length}) para o pedido ${(data as Pedido).id} — pulando resolução de caixa por índice`
+        `createPedido: itensInseridos (${itensParaBaixa.length}) diverge de itens (${itens.length}) para o pedido ${(data as Pedido).id} — pulando resolução de caixa por índice`
       );
-    } else {
-      // Lotes ativos/confirmados de todos os produtos — busca uma vez pra
-      // todos os itens do pedido, não por item (evita N+1).
-      const lotes = await getLotesUtilizaveis();
+    }
 
-      const itensParaBaixa = (itensInseridos ?? []) as ItemPedido[];
-      for (let i = 0; i < itensParaBaixa.length; i++) {
-        const item = itensParaBaixa[i];
-        if (item.vidro_cliente) {
-          const res = await registrarMovimentoCliente({
-            pedido_id: (data as Pedido).id, cliente_id: pedido.cliente_id, item_pedido_id: item.id,
-            tipo: 'entrada', descricao: item.produto_nome,
-            largura: item.largura, altura: item.altura, quantidade: item.quantidade,
-            nc_id: null, obs: null,
-          });
-          if (!res.ok && !res.jaExistia) console.error('createPedido entrada vidro cliente:', res.motivo);
-          continue;
-        }
+    // Lotes ativos/confirmados de todos os produtos — busca uma vez pra
+    // todos os itens do pedido, não por item (evita N+1).
+    const lotes = indiceCaixaConfiavel ? await getLotesUtilizaveis() : [];
 
-        const candidatas = filtrarCaixasCandidatas(lotes, item.produto_id, item.largura, item.altura);
-        if (candidatas.length === 0) continue; // não é chapa inteira — nada a debitar de caixa
-
-        // índice `i` só é confiável contra caixaEscolhidaPorItem por causa do guard acima.
-        const resolucao = resolverCaixaParaVenda(candidatas, caixaEscolhidaPorItem.get(i), item.quantidade);
-        if (!resolucao.ok) {
-          // Já validado no preflight de app/pedidos/novo/page.tsx antes do
-          // submit — só chega aqui se o estoque mudou entre a validação e o
-          // envio (corrida rara). Não bloqueia o pedido já criado: loga e
-          // segue, mesmo comportamento de erro de movimentação já existente
-          // logo abaixo.
-          console.error('createPedido resolução de caixa falhou:', resolucao);
-          continue;
-        }
-
-        const m2 = (item.largura * item.altura / 1e6) * item.quantidade;
-        const res = await registrarMovimentacao({
-          produtoId: item.produto_id ?? undefined,
-          produtoNome: item.produto_nome,
-          loteId: resolucao.caixaId,
-          tipo: 'saida_producao', origemTipo: 'pedido_chapa', origemId: String(item.id),
-          chapas: -item.quantidade, m2: -parseFloat(m2.toFixed(4)),
+    for (let i = 0; i < itensParaBaixa.length; i++) {
+      const item = itensParaBaixa[i];
+      if (item.vidro_cliente) {
+        const res = await registrarMovimentoCliente({
+          pedido_id: (data as Pedido).id, cliente_id: pedido.cliente_id, item_pedido_id: item.id,
+          tipo: 'entrada', descricao: item.produto_nome,
+          largura: item.largura, altura: item.altura, quantidade: item.quantidade,
+          nc_id: null, obs: null,
         });
-        if (!res.ok && !res.jaExistia) console.error('createPedido baixa chapa inteira:', res.motivo);
+        if (!res.ok && !res.jaExistia) console.error('createPedido entrada vidro cliente:', res.motivo);
+        continue;
       }
+
+      if (!indiceCaixaConfiavel) continue;
+
+      const candidatas = filtrarCaixasCandidatas(lotes, item.produto_id, item.largura, item.altura);
+      if (candidatas.length === 0) continue; // não é chapa inteira — nada a debitar de caixa
+
+      // índice `i` só é confiável contra caixaEscolhidaPorItem por causa do guard acima.
+      const resolucao = resolverCaixaParaVenda(candidatas, caixaEscolhidaPorItem.get(i), item.quantidade);
+      if (!resolucao.ok) {
+        // Já validado no preflight de app/pedidos/novo/page.tsx antes do
+        // submit — só chega aqui se o estoque mudou entre a validação e o
+        // envio (corrida rara). Não bloqueia o pedido já criado: loga e
+        // segue, mesmo comportamento de erro de movimentação já existente
+        // logo abaixo.
+        console.error('createPedido resolução de caixa falhou:', resolucao);
+        continue;
+      }
+
+      const m2 = (item.largura * item.altura / 1e6) * item.quantidade;
+      const res = await registrarMovimentacao({
+        produtoId: item.produto_id ?? undefined,
+        produtoNome: item.produto_nome,
+        loteId: resolucao.caixaId,
+        tipo: 'saida_producao', origemTipo: 'pedido_chapa', origemId: String(item.id),
+        chapas: -item.quantidade, m2: -parseFloat(m2.toFixed(4)),
+      });
+      if (!res.ok && !res.jaExistia) console.error('createPedido baixa chapa inteira:', res.motivo);
     }
   }
 
