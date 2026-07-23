@@ -295,7 +295,19 @@ function NovoPedidoPageInner() {
   }
 
   function addItem() { setItens(i => [...i, { ...ITEM_VAZIO }]); }
-  function remItem(i: number) { setItens(items => items.filter((_, idx) => idx !== i)); }
+  function remItem(i: number) {
+    setItens(items => items.filter((_, idx) => idx !== i));
+    setCaixaEscolhida(prev => {
+      const next: Record<number, number> = {};
+      for (const [key, value] of Object.entries(prev)) {
+        const k = Number(key);
+        if (k < i) next[k] = value;
+        else if (k > i) next[k - 1] = value;
+        // k === i: entrada do item removido, descartada
+      }
+      return next;
+    });
+  }
 
   function handleImportarMedidas(medidas: MedidaImportada[], produtoId: number | null) {
     const prod = produtoId ? produtos.find(p => p.id === produtoId) : undefined;
