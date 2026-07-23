@@ -265,13 +265,14 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
 
 /* ─── BUTTONS ────────────────────────────────────────────── */
 .btn {
+  height: 40px;
   padding: 8px 16px;
   border-radius: var(--r);
   border: none;
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
-  font-family: 'DM Mono', monospace;
+  font-family: 'Inter', sans-serif;
   transition: all 0.12s;
   display: inline-flex;
   align-items: center;
@@ -298,8 +299,8 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
 
 .bor { background: rgba(245,158,11,.15); color: var(--warn); border: 1px solid rgba(245,158,11,.3); }
 
-.sm { padding: 5px 12px;  font-size: 12px; }
-.xs { padding: 3px 9px;   font-size: 11px; }
+.sm { height: 32px; padding: 5px 12px;  font-size: 12px; }
+.xs { height: 26px; padding: 3px 9px;   font-size: 11px; }
 
 /* ─── CARDS ─────────────────────────────────────────────── */
 .card {
@@ -880,9 +881,12 @@ textarea.fc { resize: vertical; min-height: 64px; }
 
 /* Ajustes de componentes para tema claro */
 [data-theme="light"] .bp { color: #fff; }
-[data-theme="light"] .bp:hover { background: #4338CA; box-shadow: 0 0 18px rgba(37,99,235,.25); }
+[data-theme="light"] .bp:hover { background: var(--acc-strong); box-shadow: 0 0 18px rgba(37,99,235,.25); }
 [data-theme="light"] .bs { color: #fff; }
-[data-theme="light"] .bs:hover { background: #1D4ED8; }
+[data-theme="light"] .bs:hover { background: #0284C7; }
+
+[data-theme="light"] .bg { background: var(--surf); color: var(--t1); border-color: var(--b1); }
+[data-theme="light"] .bg:hover { border-color: var(--b2); background: var(--surf2); }
 
 [data-theme="light"] .ni.active { background: rgba(37,99,235,.09); }
 [data-theme="light"] .sb-logo-wrap:hover { background: rgba(37,99,235,.06) !important; }
