@@ -900,7 +900,7 @@ textarea.fc { resize: vertical; min-height: 64px; }
 [data-theme="light"] .cg { background: rgba(22,163,74,.12);  color: #15803D; border-color: rgba(22,163,74,.35); }
 [data-theme="light"] .cy { background: rgba(217,119,6,.12);  color: #B45309; border-color: rgba(217,119,6,.35); }
 [data-theme="light"] .cr { background: rgba(220,38,38,.12);  color: #B91C1C; border-color: rgba(220,38,38,.35); }
-[data-theme="light"] .cb { background: rgba(37,99,235,.12);  color: #1D4ED8; border-color: rgba(37,99,235,.35); }
+[data-theme="light"] .cb { background: rgba(37,99,235,.12);  color: var(--acc-strong); border-color: rgba(37,99,235,.35); }
 [data-theme="light"] .cp { background: rgba(124,58,237,.12); color: #6D28D9; border-color: rgba(124,58,237,.35); }
 [data-theme="light"] .co { background: rgba(194,65,12,.12);  color: #9A3412; border-color: rgba(194,65,12,.35); }
 [data-theme="light"] .cgr { background: rgba(0,0,0,.05); color: var(--t3); }
