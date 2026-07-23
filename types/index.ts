@@ -1431,7 +1431,7 @@ export interface LoteEstoque {
   created_at: string;
   codigo: string;
   qr_token: string;
-  produtos?: { nome: string } | null;
+  produtos?: Pick<Produto, 'nome' | 'espessura' | 'cor'> | null;
 }
 
 export interface ProgramacaoHistorico {

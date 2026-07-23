@@ -146,3 +146,19 @@ export async function getTodasCaixas(): Promise<LoteEstoque[]> {
   if (error) { console.error('getTodasCaixas:', error); return []; }
   return data as LoteEstoque[];
 }
+
+// ─── ETIQUETAS (Estoque > Caixas > Imprimir) ─────────────────
+//
+// Busca direta por IDs, sem os filtros de getLotesUtilizaveis/
+// getTodasCaixas — mesmo padrão de app/retalhos/etiquetas/page.tsx
+// (busca só o que foi selecionado pra imprimir, preservando a
+// ordem de seleção é responsabilidade de quem chama).
+export async function getCaixasPorIds(ids: number[]): Promise<LoteEstoque[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from('lotes_estoque')
+    .select('*, produtos(nome, espessura, cor)')
+    .in('id', ids);
+  if (error) { console.error('getCaixasPorIds:', error); return []; }
+  return data as LoteEstoque[];
+}
