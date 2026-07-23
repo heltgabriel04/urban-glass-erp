@@ -3,12 +3,15 @@ import { resolverDimensaoPorProduto } from "@/lib/loteResolucao";
 import type { LoteEstoque } from "@/types";
 
 function lote(over: Partial<LoteEstoque>): LoteEstoque {
+  const id = over.id ?? 1;
   return {
-    id: 1, produto_id: 10, origem_tipo: "compra", origem_id: null, origem_mercadoria: null,
+    id, produto_id: 10, origem_tipo: "compra", origem_id: null, origem_mercadoria: null,
     chapa_largura_mm: 3660, chapa_altura_mm: 2140, pode_rotacionar: true,
     chapas_entrada: 10, chapas_saldo: 10, m2_por_chapa: 7.8324, m2_saldo: 78.324,
     custo_m2: null, dt_entrada: "2026-07-20", dt_entrada_estimada: false,
     estoque_minimo_chapas: 0, ativo: true, dimensao_confirmada: true, created_at: "2026-07-20",
+    codigo: `CX-${String(id).padStart(6, '0')}`,
+    qr_token: `550e8400-e29b-41d4-a716-${String(id).padStart(12, '0')}`,
     ...over,
   };
 }

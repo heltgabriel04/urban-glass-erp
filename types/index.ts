@@ -1429,6 +1429,8 @@ export interface LoteEstoque {
   ativo: boolean;
   dimensao_confirmada: boolean;
   created_at: string;
+  codigo: string;
+  qr_token: string;
   produtos?: { nome: string } | null;
 }
 
