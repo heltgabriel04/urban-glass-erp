@@ -1005,21 +1005,32 @@ export default function PedidoDetalhe() {
           )}
 
           {temOtimizacao && ultimaOtim && (
-            <div style={{ background:"rgba(16,185,129,.06)", border:"1px solid rgba(16,185,129,.3)", borderRadius:"10px", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px" }}>
-              <div style={{ display:"flex", gap:"24px", alignItems:"center" }}>
+            <div className="card" style={{ padding:"16px 24px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"16px", flexWrap:"wrap" }}>
+              <div style={{ display:"flex", gap:"32px", alignItems:"center", flexWrap:"wrap" }}>
                 <div>
-                  <div style={{ fontSize:"10px", color:"var(--t3)", fontWeight:600, letterSpacing:".06em", marginBottom:"2px" }}>PLANO DE CORTE</div>
-                  <div style={{ fontSize:"13px", color:"var(--ok)", fontWeight:700 }}>✓ Otimização gerada</div>
+                  <div className="tx-sub" style={{ marginBottom:"2px" }}>Plano de Corte</div>
+                  <div style={{ fontSize:"13px", color:"var(--ok)", fontWeight:600 }}>✓ Otimização concluída</div>
                 </div>
-                <div style={{ fontSize:"12px", color:"var(--t3)", fontFamily:"'DM Mono', monospace", display:"flex", gap:"16px" }}>
-                  <span>Aproveitamento: <strong style={{ color:"var(--ok)" }}>{ultimaOtim.aproveitamento}%</strong></span>
-                  <span>Chapas: <strong style={{ color:"var(--t1)" }}>{ultimaOtim.chapas_usadas}</strong></span>
-                  <span>Data: <strong style={{ color:"var(--t1)" }}>{formatDate(ultimaOtim.dt_otim)}</strong></span>
+                <div className="met">
+                  <div className="met-l">Aproveitamento</div>
+                  <div className="met-v" style={{ color:"var(--ok)" }}>{ultimaOtim.aproveitamento}%</div>
+                </div>
+                <div className="met">
+                  <div className="met-l">Chapas</div>
+                  <div className="met-v">{ultimaOtim.chapas_usadas}</div>
+                </div>
+                <div className="met">
+                  <div className="met-l">Retalhos</div>
+                  <div className="met-v">{ultimaOtim.retalhos_gerados}</div>
+                </div>
+                <div className="met">
+                  <div className="met-l">Data</div>
+                  <div className="met-v">{formatDate(ultimaOtim.dt_otim)}</div>
                 </div>
               </div>
               <div style={{ display:"flex", gap:"8px" }}>
-                <a href={"/pedidos/" + pedido.id + "/plano"} className="btn bg sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>◈ Ver Plano</a>
-                <a href={"/pedidos/" + pedido.id + "/etiquetas"} className="btn bg sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}>🏷 Etiquetas</a>
+                <a href={"/pedidos/" + pedido.id + "/plano"} className="btn bp sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}><Icon d={PEDIDO_IC.olho} size={13} /> Visualizar Plano</a>
+                <a href={"/pedidos/" + pedido.id + "/etiquetas"} className="btn bg sm" style={{ whiteSpace:"nowrap", textDecoration:"none" }}><Icon d={PEDIDO_IC.etiqueta} size={13} /> Etiquetas</a>
               </div>
             </div>
           )}
