@@ -21,7 +21,7 @@
 
 | Arquivo | Ação | Responsabilidade |
 |---|---|---|
-| `sql/carga-estoque-caixas-2026-07-23.sql` | criar | migração de dados única: zera caixas antigas, insere 12 caixas novas, atualiza agregado `estoque`, registra ajuste na auditoria |
+| `sql/carga-estoque-caixas-2026-07-23.sql` | criar | migração de dados única: zera caixas antigas, insere 15 caixas novas, atualiza agregado `estoque`, registra ajuste na auditoria |
 
 ---
 
@@ -49,7 +49,7 @@ UPDATE lotes_estoque
 SET chapas_saldo = 0, m2_saldo = 0, ativo = false
 WHERE id IN (1, 2, 3, 4, 5, 6);
 
--- ── 2. Insere as 12 caixas novas ────────────────────────────
+-- ── 2. Insere as 15 caixas novas ────────────────────────────
 -- Laminado 4+4 Incolor (produto 10) — 3660×2140, 6 caixas fechadas
 INSERT INTO lotes_estoque
   (produto_id, origem_tipo, chapa_largura_mm, chapa_altura_mm, chapas_entrada, chapas_saldo, m2_saldo, custo_m2, dt_entrada, dt_entrada_estimada, dimensao_confirmada, ativo)
@@ -184,6 +184,6 @@ git commit -m "docs: script de carga real do estoque atual (sub-projeto 2 de 3, 
 
 - [ ] **Step 1: Avisar o usuário**
 
-Este script precisa ser copiado e executado manualmente pelo usuário no Supabase SQL Editor. Depois de rodar, conferir visualmente em `/estoque` (produto 10 deve mostrar 118 chapas / ~917,70 m², produto 13 = 31/230,18, produto 15 = 58/430,65, produto 17 = 45/352,46, produto 21 = 0) e em `/estoque/caixas` (12 caixas novas ativas, as 6 antigas devem sumir da lista — ficaram `ativo=false`, e a tela hoje não filtra por inativo, então **conferir se `/estoque/caixas` deveria excluir `ativo=false`** — ver nota abaixo).
+Este script precisa ser copiado e executado manualmente pelo usuário no Supabase SQL Editor. Depois de rodar, conferir visualmente em `/estoque` (produto 10 deve mostrar 118 chapas / ~917,70 m², produto 13 = 31/230,18, produto 15 = 58/430,65, produto 17 = 45/352,46, produto 21 = 0) e em `/estoque/caixas` (15 caixas novas ativas, as 6 antigas devem sumir da lista — ficaram `ativo=false`, e a tela hoje não filtra por inativo, então **conferir se `/estoque/caixas` deveria excluir `ativo=false`** — ver nota abaixo).
 
-**Nota de acompanhamento (não é uma task nova, é uma observação a resolver na hora da verificação manual)**: `app/estoque/caixas/page.tsx` (sub-projeto 1) usa `getTodasCaixas()`, que traz **todas** as linhas de `lotes_estoque` sem filtrar `ativo` — então as 6 caixas antigas zeradas (`ativo=false`, saldo 0) vão aparecer na lista como "esgotada" junto com as 12 novas, em vez de somem da tela. Isso é esperado do jeito que a Task 6 do sub-projeto 1 foi implementada (ela não distingue `ativo`) — não é um bug desta migração, mas vale confirmar com o usuário, depois de rodar o SQL, se ele quer que caixas `ativo=false` fiquem ocultas por padrão nessa lista (ajuste pequeno, fora do escopo deste plano).
+**Nota de acompanhamento (não é uma task nova, é uma observação a resolver na hora da verificação manual)**: `app/estoque/caixas/page.tsx` (sub-projeto 1) usa `getTodasCaixas()`, que traz **todas** as linhas de `lotes_estoque` sem filtrar `ativo` — então as 6 caixas antigas zeradas (`ativo=false`, saldo 0) vão aparecer na lista como "esgotada" junto com as 15 novas, em vez de somem da tela. Isso é esperado do jeito que a Task 6 do sub-projeto 1 foi implementada (ela não distingue `ativo`) — não é um bug desta migração, mas vale confirmar com o usuário, depois de rodar o SQL, se ele quer que caixas `ativo=false` fiquem ocultas por padrão nessa lista (ajuste pequeno, fora do escopo deste plano).

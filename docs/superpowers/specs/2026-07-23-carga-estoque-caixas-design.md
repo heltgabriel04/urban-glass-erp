@@ -54,7 +54,7 @@ A tabela agregada `estoque` (legada, ainda a única lida por `app/estoque/page.t
 - 3660×2140mm → 7,8324 m²/chapa
 - 3300×2250mm → 7,425 m²/chapa
 
-### 2. Caixas novas (12 linhas em `lotes_estoque`)
+### 2. Caixas novas (15 linhas em `lotes_estoque`)
 
 | Produto | Medida | Qtd caixas | Entrada/Saldo cada | `dt_entrada` | `dt_entrada_estimada` |
 |---|---|---|---|---|---|

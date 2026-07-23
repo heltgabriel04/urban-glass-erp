@@ -12,7 +12,7 @@ UPDATE lotes_estoque
 SET chapas_saldo = 0, m2_saldo = 0, ativo = false
 WHERE id IN (1, 2, 3, 4, 5, 6);
 
--- ── 2. Insere as 12 caixas novas ────────────────────────────
+-- ── 2. Insere as 15 caixas novas (6+1+3+2+3, ver spec) ──────
 -- Laminado 4+4 Incolor (produto 10) — 3660×2140, 6 caixas fechadas
 INSERT INTO lotes_estoque
   (produto_id, origem_tipo, chapa_largura_mm, chapa_altura_mm, chapas_entrada, chapas_saldo, m2_saldo, custo_m2, dt_entrada, dt_entrada_estimada, dimensao_confirmada, ativo)
