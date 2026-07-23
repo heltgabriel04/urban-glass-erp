@@ -9,7 +9,7 @@ import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, updateNaoConformidade } from "@/services/qualidade.service";
 import { getRetiradasPorPedido, calcularSaldoItens } from "@/services/retiradas.service";
 import { getObservacoesPorPedido, createObservacao, deletarObservacao } from "@/services/observacoes.service";
-import { formatBRL, formatDate, formatDuracao, formatM2, medidaReal } from "@/lib/formatters";
+import { formatBRL, formatDate, formatDuracao, formatM2, medidaReal, pctConcluido } from "@/lib/formatters";
 import { ALIQ_IPI_PEDIDO, calcularValorIpi, valorComIpi } from "@/lib/pedidoIpi";
 import { registrarRecente } from "@/lib/recentes";
 import PedidoTabs from "@/components/pedidos/PedidoTabs";
@@ -1043,6 +1043,7 @@ export default function PedidoDetalhe() {
                   <thead>
                     <tr>
                       <th>Vidro</th>
+                      <th>Progresso</th>
                       <th>m² Total</th>
                       <th>Vidros Total</th>
                       <th>m² Retirado</th>
@@ -1052,9 +1053,17 @@ export default function PedidoDetalhe() {
                     </tr>
                   </thead>
                   <tbody>
-                    {resumoRetiradaPorProduto.map(r => (
+                    {resumoRetiradaPorProduto.map(r => {
+                      const pct = pctConcluido(r.qtdRetirada, r.qtdTotal);
+                      return (
                       <tr key={r.produto_nome}>
                         <td style={{ fontWeight: 600 }}>{r.produto_nome}</td>
+                        <td style={{ minWidth:"120px" }}>
+                          <div className="prg" style={{ height:"6px", marginBottom:"3px" }}>
+                            <div className="prg-f" style={{ width: `${pct}%`, background: pct >= 100 ? "var(--ok)" : "var(--acc)" }} />
+                          </div>
+                          <span className="tx-aux">{pct}%</span>
+                        </td>
                         <td className="mono">{formatM2(r.m2Total)}</td>
                         <td className="mono">{r.qtdTotal}</td>
                         <td className="mono" style={{ color: "var(--ok)" }}>{formatM2(r.m2Retirado)}</td>
@@ -1062,7 +1071,8 @@ export default function PedidoDetalhe() {
                         <td className="mono" style={{ color: r.m2Pendente > 0 ? "var(--warn)" : "var(--ok)" }}>{formatM2(r.m2Pendente)}</td>
                         <td className="mono" style={{ color: r.qtdPendente > 0 ? "var(--warn)" : "var(--ok)" }}>{r.qtdPendente}</td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
