@@ -8,7 +8,7 @@ import { getLancamentosPorPedido, deletarLancamento, createLancamento, updateLan
 import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, updateNaoConformidade } from "@/services/qualidade.service";
 import { getRetiradasPorPedido, calcularSaldoItens } from "@/services/retiradas.service";
-import { getObservacoesPorPedido, createObservacao, deletarObservacao } from "@/services/observacoes.service";
+import { getObservacoesPorPedido, createObservacao, deletarObservacao, updateObservacao } from "@/services/observacoes.service";
 import { formatBRL, formatDate, formatDuracao, formatM2, medidaReal, pctConcluido } from "@/lib/formatters";
 import { ALIQ_IPI_PEDIDO, calcularValorIpi, valorComIpi } from "@/lib/pedidoIpi";
 import { registrarRecente } from "@/lib/recentes";
@@ -184,6 +184,8 @@ export default function PedidoDetalhe() {
   const [observacoes, setObservacoes]   = useState<PedidoObservacao[]>([]);
   const [novaObs, setNovaObs]           = useState("");
   const [salvandoObs, setSalvandoObs]   = useState(false);
+  const [editandoObsId, setEditandoObsId] = useState<string | null>(null);
+  const [textoEditadoObs, setTextoEditadoObs] = useState("");
   const [clientes, setClientes]         = useState<{ id: number; nome: string }[]>([]);
   const [vendedores, setVendedores]     = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
   const [creditoCliente, setCreditoCliente] = useState(0);
@@ -679,6 +681,29 @@ export default function PedidoDetalhe() {
     const ok = await deletarObservacao(obsId, id);
     if (ok) setObservacoes(prev => prev.filter(o => o.id !== obsId));
     else toast("Erro ao excluir observação", "err");
+  }
+
+  function handleIniciarEdicaoObservacao(obs: PedidoObservacao) {
+    setEditandoObsId(obs.id);
+    setTextoEditadoObs(obs.texto);
+  }
+
+  function handleCancelarEdicaoObservacao() {
+    setEditandoObsId(null);
+    setTextoEditadoObs("");
+  }
+
+  async function handleSalvarEdicaoObservacao(obsId: string) {
+    const texto = textoEditadoObs.trim();
+    if (!texto) return;
+    const ok = await updateObservacao(obsId, id, texto);
+    if (ok) {
+      setObservacoes(prev => prev.map(o => o.id === obsId ? { ...o, texto } : o));
+      setEditandoObsId(null);
+      setTextoEditadoObs("");
+    } else {
+      toast("Erro ao editar observação", "err");
+    }
   }
 
   async function handleAvancar() {
@@ -1710,20 +1735,54 @@ export default function PedidoDetalhe() {
                   <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                     {observacoes.map(o => (
                       <div key={o.id} style={{ background: "var(--surf2)", borderRadius: "7px", padding: "8px 12px", border: "1px solid var(--b2)" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
-                          <div style={{ fontSize: "12px", color: "var(--t1)", whiteSpace: "pre-wrap", flex: 1 }}>{o.texto}</div>
-                          <button
-                            title="Excluir observação"
-                            onClick={() => handleExcluirObservacao(o.id)}
-                            style={{ background: "transparent", border: "1px solid var(--b2)", borderRadius: "5px", color: "var(--t3)", fontSize: "10px", cursor: "pointer", padding: "2px 6px", flexShrink: 0, transition: "all 0.15s" }}
-                            onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
-                            onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
-                          >🗑</button>
-                        </div>
-                        <div style={{ fontSize: "9.5px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", marginTop: "5px" }}>
-                          {new Date(o.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                          {o.usuario_email ? ` · ${o.usuario_email}` : ""}
-                        </div>
+                        {editandoObsId === o.id ? (
+                          <>
+                            <textarea
+                              className="fc"
+                              value={textoEditadoObs}
+                              onChange={e => setTextoEditadoObs(e.target.value)}
+                              rows={2}
+                              style={{ width: "100%", resize: "vertical", fontSize: "12px" }}
+                              autoFocus
+                            />
+                            <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end", marginTop: "6px" }}>
+                              <button className="btn bg sm" onClick={handleCancelarEdicaoObservacao}>Cancelar</button>
+                              <button
+                                className="btn bp sm"
+                                onClick={() => handleSalvarEdicaoObservacao(o.id)}
+                                disabled={!textoEditadoObs.trim()}
+                              >
+                                Salvar
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                              <div style={{ fontSize: "12px", color: "var(--t1)", whiteSpace: "pre-wrap", flex: 1 }}>{o.texto}</div>
+                              <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
+                                <button
+                                  title="Editar observação"
+                                  onClick={() => handleIniciarEdicaoObservacao(o)}
+                                  style={{ background: "transparent", border: "1px solid var(--b2)", borderRadius: "5px", color: "var(--t3)", fontSize: "10px", cursor: "pointer", padding: "2px 6px", transition: "all 0.15s" }}
+                                  onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(122,132,158,.15)"; b.style.borderColor = "var(--t3)"; b.style.color = "var(--t1)"; }}
+                                  onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
+                                >✏️</button>
+                                <button
+                                  title="Excluir observação"
+                                  onClick={() => handleExcluirObservacao(o.id)}
+                                  style={{ background: "transparent", border: "1px solid var(--b2)", borderRadius: "5px", color: "var(--t3)", fontSize: "10px", cursor: "pointer", padding: "2px 6px", transition: "all 0.15s" }}
+                                  onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "rgba(244,63,94,.15)"; b.style.borderColor = "var(--err)"; b.style.color = "var(--err)"; }}
+                                  onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.borderColor = "var(--b2)"; b.style.color = "var(--t3)"; }}
+                                >🗑</button>
+                              </div>
+                            </div>
+                            <div style={{ fontSize: "9.5px", color: "var(--t3)", fontFamily: "'DM Mono',monospace", marginTop: "5px" }}>
+                              {new Date(o.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                              {o.usuario_email ? ` · ${o.usuario_email}` : ""}
+                            </div>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>
