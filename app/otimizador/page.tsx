@@ -127,7 +127,12 @@ function OtimizadorContent() {
     return Array.from(vistos.entries()).map(([produtoId, nome]) => ({ produtoId, nome }));
   }, [pecas]);
 
-  // Auto-escolhe o lote quando um produto tem exatamente 1 utilizável, e
+  // Auto-escolhe o lote quando um produto tem exatamente 1 utilizável, ou
+  // quando tem 2+ com a MESMA dimensão de chapa e exatamente 1 já está com a
+  // caixa aberta (chapas_saldo < chapas_entrada) — prioriza gastar a caixa já
+  // aberta antes de começar uma fechada, mesma lógica de estoque físico.
+  // Se as dimensões forem diferentes, ou houver 0/2+ caixas abertas, continua
+  // exigindo escolha manual (não dá pra adivinhar qual chapa cortar). Também
   // limpa a escolha de produtos que saíram da lista — sem isso um lote
   // escolhido antes podia "vazar" pra outro produto se o id colidisse por
   // acaso (não colide de verdade, mas mantém o estado sempre coerente com
@@ -137,8 +142,14 @@ function OtimizadorContent() {
       const next = new Map<number, number>();
       produtosDistintosNaLista.forEach(({ produtoId }) => {
         const lotes = lotesPorProdutoMap.get(produtoId) ?? [];
-        if (lotes.length === 1) next.set(produtoId, lotes[0].id);
-        else if (lotes.some(l => l.id === prev.get(produtoId))) next.set(produtoId, prev.get(produtoId)!);
+        if (lotes.length === 1) { next.set(produtoId, lotes[0].id); return; }
+        if (lotes.some(l => l.id === prev.get(produtoId))) { next.set(produtoId, prev.get(produtoId)!); return; }
+
+        const mesmaDimensao = lotes.every(l => l.chapa_largura_mm === lotes[0].chapa_largura_mm && l.chapa_altura_mm === lotes[0].chapa_altura_mm);
+        if (mesmaDimensao) {
+          const abertos = lotes.filter(l => l.chapas_saldo < l.chapas_entrada);
+          if (abertos.length === 1) next.set(produtoId, abertos[0].id);
+        }
       });
       return next;
     });
@@ -1284,6 +1295,18 @@ function OtimizadorContent() {
               )}
               {chapaAberta && !modoTeste && (
                 <div style={{ marginTop: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {(() => {
+                    const pendentes = produtosDistintosNaLista.filter(({ produtoId }) => {
+                      const lotes = lotesPorProdutoMap.get(produtoId) ?? [];
+                      return lotes.length > 1 && !loteEscolhido.has(produtoId);
+                    });
+                    if (pendentes.length === 0) return null;
+                    return (
+                      <div style={{ padding: "10px 12px", borderRadius: "8px", background: "rgba(244,63,94,.1)", border: "1px solid var(--err, #f43f5e)", fontSize: "12px", fontWeight: 700, color: "var(--err, #f43f5e)" }}>
+                        ⚠ Escolha o lote de {pendentes.map(p => p.nome).join(", ")} antes de calcular — sem isso essas peças ficam fora do plano, sem aviso ao salvar.
+                      </div>
+                    );
+                  })()}
                   {produtosDistintosNaLista.length === 0 ? (
                     <div style={{ fontSize: "12px", color: "var(--t3)" }}>Nenhum produto na lista de peças ainda.</div>
                   ) : produtosDistintosNaLista.map(({ produtoId, nome }) => {
