@@ -149,6 +149,74 @@ export async function getPecasDoPedido(pedidoId: string): Promise<PedidoPeca[]> 
   return (data ?? []) as PedidoPeca[];
 }
 
+// ─── CONSISTÊNCIA (plano salvo em chapas_json vs itens atuais) ──
+//
+// gerarPecasDoPedido casa o chapas_json congelado no momento em que o
+// otimizador rodou com os itens_pedido ATUAIS. Se o pedido for editado depois
+// dessa rodada, o casamento fica incompleto — gerarPecasDoPedido retorna
+// ok:true mesmo criando menos peças do que a soma de itens_pedido.quantidade,
+// sem sinalizar isso em lugar nenhum. Esta função só lê e compara, não corrige.
+
+export interface ItemPecaComFalta {
+  item_pedido_id: number;
+  produto_nome: string;
+  quantidade_esperada: number;
+  pecas_criadas: number;
+  faltando: number;
+}
+
+export interface ConsistenciaPecas {
+  pedidoId: string;
+  totalEsperado: number;
+  totalCriado: number;
+  pecasOrfas: number; // peças com item_pedido_id null — não casaram com nenhum item atual
+  itensComFalta: ItemPecaComFalta[];
+}
+
+export function compararConsistenciaPecas(
+  itens: Pick<ItemPedido, 'id' | 'produto_nome' | 'quantidade'>[],
+  pecas: Pick<PedidoPeca, 'item_pedido_id'>[],
+): Omit<ConsistenciaPecas, 'pedidoId'> {
+  const contagemPorItem = new Map<number, number>();
+  let pecasOrfas = 0;
+  for (const peca of pecas) {
+    if (peca.item_pedido_id === null) { pecasOrfas++; continue; }
+    contagemPorItem.set(peca.item_pedido_id, (contagemPorItem.get(peca.item_pedido_id) ?? 0) + 1);
+  }
+
+  const itensComFalta: ItemPecaComFalta[] = [];
+  let totalEsperado = 0;
+  for (const item of itens) {
+    totalEsperado += item.quantidade;
+    const criadas = contagemPorItem.get(item.id) ?? 0;
+    if (criadas < item.quantidade) {
+      itensComFalta.push({
+        item_pedido_id: item.id,
+        produto_nome: item.produto_nome,
+        quantidade_esperada: item.quantidade,
+        pecas_criadas: criadas,
+        faltando: item.quantidade - criadas,
+      });
+    }
+  }
+
+  return { totalEsperado, totalCriado: pecas.length - pecasOrfas, pecasOrfas, itensComFalta };
+}
+
+export async function verificarConsistenciaPecas(pedidoId: string): Promise<ConsistenciaPecas | null> {
+  const { data: pedido } = await supabase
+    .from('pedidos')
+    .select('itens_pedido(id, produto_nome, quantidade)')
+    .eq('id', pedidoId)
+    .maybeSingle();
+  if (!pedido) return null;
+
+  const itens = (pedido as unknown as { itens_pedido: Pick<ItemPedido, 'id' | 'produto_nome' | 'quantidade'>[] }).itens_pedido ?? [];
+  const pecas = await getPecasDoPedido(pedidoId);
+  const comparacao = compararConsistenciaPecas(itens, pecas);
+  return { pedidoId, ...comparacao };
+}
+
 // ─── CONFIRMAÇÃO DE ETAPA (o coração do scan) ───────────────
 //
 // Fecha programacao_producao pelo evento real de peça, não pelo avanço
