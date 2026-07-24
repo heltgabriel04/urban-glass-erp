@@ -42,3 +42,14 @@ export async function deletarObservacao(id: string, pedidoId: string): Promise<b
   });
   return true;
 }
+
+export async function updateObservacao(id: string, pedidoId: string, texto: string): Promise<boolean> {
+  const { error } = await supabase.from('pedido_observacoes').update({ texto } as never).eq('id', id);
+  if (error) { console.error('updateObservacao:', error); return false; }
+
+  registrarLog({
+    acao: "editou", tabela: "pedido_observacoes", registro_id: id,
+    descricao: `Editou observação do pedido ${pedidoId}`,
+  });
+  return true;
+}
