@@ -16,7 +16,9 @@ import CurrencyInput from "@/components/ui/CurrencyInput";
 import AutocompleteInput from "@/components/ui/AutocompleteInput";
 import { Campo } from "@/components/ui/Campo";
 import ImportarMedidasModal from "@/components/ui/ImportarMedidasModal";
+import ImportarPdfModal from "@/components/ui/ImportarPdfModal";
 import type { MedidaImportada } from "@/lib/importPlanilhaMedidas";
+import type { ItemPdfImportado } from "@/lib/importPdfOrcamento";
 import type { Cliente, Produto, TabelaPreco, TabelaPrecoItem, ItemPedidoInsert, PedidoInsert, Vendedor, LoteEstoque } from "@/types";
 import { isChapaInteira } from "@/lib/chapas";
 import { getLotesUtilizaveis } from "@/services/lotes.service";
@@ -146,6 +148,7 @@ function NovoPedidoPageInner() {
   const [valorGeralInput, setValorGeralInput] = useState(0);
   const [modoPedido, setModoPedido] = useState<ModoPedido>("m2");
   const [modalImportar, setModalImportar] = useState(false);
+  const [modalImportarPdf, setModalImportarPdf] = useState(false);
   const [parcelasForm, setParcelasForm] = useState<ParcelaForm[]>([{ data: "", valor: 0, editado: false, conta: "", formaPgto: "" }]);
   const [lotesEstoque, setLotesEstoque] = useState<LoteEstoque[]>([]);
   const [caixaEscolhida, setCaixaEscolhida] = useState<Record<number, number>>({});
@@ -307,6 +310,48 @@ function NovoPedidoPageInner() {
       }
       return next;
     });
+  }
+
+  function handleImportarPdf(itens: ItemPdfImportado[], produtoOverride: number | null) {
+    const novos: ItemForm[] = itens.map(item => {
+      let prodId = produtoOverride;
+      if (prodId === null) {
+        const found = produtos.find(p =>
+          p.nome.toLowerCase().includes(item.produto_nome.toLowerCase()) ||
+          item.produto_nome.toLowerCase().includes(p.nome.toLowerCase())
+        );
+        prodId = found?.id ?? null;
+      }
+      const prod = prodId ? produtos.find(p => p.id === prodId) : undefined;
+      const { valor: valorTab, margem } = prodId ? getPrecoProduto(prodId) : { valor: 0, margem: 0 };
+
+      // Back-calcula valor_m2 a partir do total do PDF para que o sistema mostre o mesmo total,
+      // independente do arredondamento de dimensões (múltiplo de 50) usado pelo sistema.
+      let valorM2Final = item.valor_m2 > 0 ? item.valor_m2 : valorTab;
+      if (item.total_pdf > 0 && item.largura > 0 && item.altura > 0 && item.quantidade > 0) {
+        const lArred = arredondarParaMultiplo50(item.largura);
+        const aArred = arredondarParaMultiplo50(item.altura);
+        const m2Sistema = (lArred / 1000) * (aArred / 1000) * item.quantidade;
+        if (m2Sistema > 0) valorM2Final = item.total_pdf / m2Sistema;
+      }
+
+      return {
+        ...ITEM_VAZIO,
+        produto_id: prodId,
+        produto_nome: prod?.nome ?? item.produto_nome,
+        largura: item.largura,
+        altura: item.altura,
+        quantidade: item.quantidade,
+        valor_m2: valorM2Final,
+        preco_base: valorTab || item.valor_m2,
+        margem_prod: margem,
+      };
+    });
+    setItens(prev => {
+      const base = prev.length === 1 && prev[0].largura === 0 && prev[0].altura === 0 && prev[0].produto_id === null ? [] : prev;
+      return [...base, ...novos];
+    });
+    setModalImportarPdf(false);
   }
 
   function handleImportarMedidas(medidas: MedidaImportada[], produtoId: number | null) {
@@ -722,6 +767,7 @@ function NovoPedidoPageInner() {
               <button style={!isMl ? toggleAtivo : toggleInativo} onClick={() => handleModoPedido("m2")}>m²</button>
               <button style={isMl ? { ...toggleAtivo, background: "#6366f1", borderColor: "#6366f1" } : toggleInativo} onClick={() => handleModoPedido("ml")}>ml</button>
             </div>
+            <button className="btn bg xs" onClick={() => setModalImportarPdf(true)} title="Reimporta um orçamento/pedido que este sistema já exportou como PDF">⇪ Importar PDF</button>
             <button className="btn bg xs" onClick={() => setModalImportar(true)}>⇪ Importar Medidas</button>
             <button className="btn bp xs" onClick={addItem}>+ Item</button>
           </div>
@@ -933,6 +979,13 @@ function NovoPedidoPageInner() {
         </div>
       </div>
 
+      {modalImportarPdf && (
+        <ImportarPdfModal
+          produtos={produtos.map(p => ({ id: p.id, nome: p.nome }))}
+          onImportar={handleImportarPdf}
+          onClose={() => setModalImportarPdf(false)}
+        />
+      )}
       {modalImportar && (
         <ImportarMedidasModal
           produtos={produtos.map(p => ({ id: p.id, nome: p.nome }))}
