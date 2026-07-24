@@ -1,3 +1,5 @@
+import path from "path";
+import { pathToFileURL } from "url";
 import type { MedidaImportada } from "./importPlanilhaMedidas";
 
 export interface TextItem {
@@ -83,6 +85,15 @@ export async function parseRelacaoVidrosPdf(buffer: Buffer): Promise<MedidaImpor
   }
 
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+
+  // Sem isso, o pdfjs tenta descobrir sozinho o caminho do worker (modo "fake
+  // worker" em Node) e falha na Vercel: "Cannot find module
+  // '.../pdfjs-dist/legacy/build/pdf.worker.mjs'" — mesmo problema já
+  // resolvido em app/api/orcamentos/import-pdf/route.ts, mesmo fix aqui.
+  pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(
+    path.resolve(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs")
+  ).href;
+
   const data = new Uint8Array(buffer);
   const doc = await pdfjs.getDocument({ data }).promise;
 
