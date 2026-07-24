@@ -70,6 +70,18 @@ export function interpretarLinha(linha: TextItem[]): MedidaImportada | null {
  * bundle do navegador.
  */
 export async function parseRelacaoVidrosPdf(buffer: Buffer): Promise<MedidaImportada[]> {
+  // pdfjs (mesmo no build "legacy" pensado pra Node) referencia DOMMatrix em
+  // alguns PDFs (ex.: com padrões de preenchimento/sombreamento nas células
+  // da tabela) mesmo só extraindo texto, não renderizando — Node não tem
+  // esse global (nem local nem no runtime serverless da Vercel, confirmado
+  // em produção: "ReferenceError: DOMMatrix is not defined"). Polyfill via
+  // @napi-rs/canvas (binário nativo, implementação real, não um stub) antes
+  // de importar o pdfjs.
+  if (typeof (globalThis as any).DOMMatrix === "undefined") {
+    const { DOMMatrix, Path2D, ImageData } = await import("@napi-rs/canvas");
+    Object.assign(globalThis, { DOMMatrix, Path2D, ImageData });
+  }
+
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const data = new Uint8Array(buffer);
   const doc = await pdfjs.getDocument({ data }).promise;
