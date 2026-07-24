@@ -912,6 +912,17 @@ function OtimizadorContent() {
 
   async function handleSalvar() {
     if (!resultado || !pedidoRef) return;
+    // resultado pode ser um array vazio (nenhuma chapa) quando 100% das peças
+    // ficaram fora do plano — ex.: produto com múltiplos lotes ativos sem
+    // nenhum escolhido em "Lote por Produto" (resolverDimensaoPorProduto exclui
+    // a peça inteira nesse caso). []  é truthy, então o guard acima não pega
+    // isso; sem este check o plano vazio era salvo normalmente e o pedido virava
+    // "Em Produção – Corte" com 0 chapas/0 peças, sem nenhum erro visível.
+    const totalPlacedPecas = resultado.reduce((a, r) => a + r.placed.length, 0);
+    if (totalPlacedPecas === 0) {
+      toast('Nenhuma peça foi alocada — nada pra salvar. Confira se falta escolher o lote em "Lote por Produto".', "err");
+      return;
+    }
     setSalvando(true);
     const hoje = new Date().toISOString().split("T")[0];
     const todosPedidos = [pedidoRef, ...Array.from(pedidosSelecionados)];
