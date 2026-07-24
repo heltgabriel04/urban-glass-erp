@@ -176,7 +176,7 @@ export default function Sidebar({ mobileOpen = false, onCloseMobile }: Props) {
           text-decoration: none; user-select: none; position: relative;
           font-size: 12.5px; font-family: 'DM Mono', monospace;
         }
-        .ni:hover { color: var(--t1); background: var(--surf2); border-left-color: var(--b3); }
+        .ni:hover { color: var(--t1); background: var(--sb-hover, var(--surf2)); border-left-color: var(--b3); }
         .ni.active { color: var(--acc); background: rgba(61,255,160,.05); border-left-color: var(--acc); }
         [data-theme="light"] .ni.active { background: rgba(13,150,104,.08); }
 
