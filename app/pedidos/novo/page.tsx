@@ -312,9 +312,9 @@ function NovoPedidoPageInner() {
     });
   }
 
-  function handleImportarPdf(itens: ItemPdfImportado[], produtoOverride: number | null) {
+  function handleImportarPdf(itens: ItemPdfImportado[], overridesPorTipo: Map<string, number | null>) {
     const novos: ItemForm[] = itens.map(item => {
-      let prodId = produtoOverride;
+      let prodId = overridesPorTipo.size === 1 ? [...overridesPorTipo.values()][0] : (overridesPorTipo.get(item.produto_nome) ?? null);
       if (prodId === null) {
         const found = produtos.find(p =>
           p.nome.toLowerCase().includes(item.produto_nome.toLowerCase()) ||
@@ -354,21 +354,24 @@ function NovoPedidoPageInner() {
     setModalImportarPdf(false);
   }
 
-  function handleImportarMedidas(medidas: MedidaImportada[], produtoId: number | null) {
-    const prod = produtoId ? produtos.find(p => p.id === produtoId) : undefined;
-    const { valor, margem } = produtoId ? getPrecoProduto(produtoId) : { valor: 0, margem: 0 };
-    const novos: ItemForm[] = medidas.map(m => ({
-      ...ITEM_VAZIO,
-      produto_id: produtoId,
-      produto_nome: prod?.nome ?? "",
-      largura: m.largura,
-      altura: m.altura,
-      quantidade: m.quantidade,
-      valor_m2: valor,
-      preco_base: valor,
-      margem_prod: margem,
-      codigo_adicional: m.codigo ?? "",
-    }));
+  function handleImportarMedidas(medidas: MedidaImportada[], overridesPorTipo: Map<string, number | null>) {
+    const novos: ItemForm[] = medidas.map(m => {
+      const produtoId = overridesPorTipo.size === 1 ? [...overridesPorTipo.values()][0] : (m.tipo ? overridesPorTipo.get(m.tipo) ?? null : null);
+      const prod = produtoId ? produtos.find(p => p.id === produtoId) : undefined;
+      const { valor, margem } = produtoId ? getPrecoProduto(produtoId) : { valor: 0, margem: 0 };
+      return {
+        ...ITEM_VAZIO,
+        produto_id: produtoId,
+        produto_nome: prod?.nome ?? "",
+        largura: m.largura,
+        altura: m.altura,
+        quantidade: m.quantidade,
+        valor_m2: valor,
+        preco_base: valor,
+        margem_prod: margem,
+        codigo_adicional: m.codigo ?? "",
+      };
+    });
     setItens(prev => {
       const base = prev.length === 1 && prev[0].largura === 0 && prev[0].altura === 0 && prev[0].produto_id === null ? [] : prev;
       return [...base, ...novos];

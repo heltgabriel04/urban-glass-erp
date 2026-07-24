@@ -61,4 +61,25 @@ describe("parseLinhasMedidas", () => {
     const [item] = parseLinhasMedidas(rows);
     expect(item.codigo).toBeUndefined();
   });
+
+  it("lê a coluna Tipo e leva pro campo tipo de cada peça", () => {
+    const rows = [
+      ["LARGURA", "ALTURA", "QUANTIDADE", "TIPO"],
+      [978, 1451, 4, "Laminado Refletivo, 8mm"],
+      [1043, 507, 1, "Temperado Incolor, 10mm"],
+    ];
+    expect(parseLinhasMedidas(rows)).toEqual([
+      { largura: 978, altura: 1451, quantidade: 4, tipo: "Laminado Refletivo, 8mm" },
+      { largura: 1043, altura: 507, quantidade: 1, tipo: "Temperado Incolor, 10mm" },
+    ]);
+  });
+
+  it("planilha sem coluna de tipo/produto/vidro deixa tipo undefined", () => {
+    const rows = [
+      ["LARGURA", "ALTURA"],
+      [900, 950],
+    ];
+    const [item] = parseLinhasMedidas(rows);
+    expect(item.tipo).toBeUndefined();
+  });
 });

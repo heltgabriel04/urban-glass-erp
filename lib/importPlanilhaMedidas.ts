@@ -5,6 +5,10 @@ export interface MedidaImportada {
   /** Código extra por peça (ex.: planilha própria do cliente) — vai pro campo
    *  `codigo_adicional` do item e aparece na etiqueta impressa. */
   codigo?: string;
+  /** Tipo/produto de vidro detectado na origem (coluna "Tipo"/"Produto"/"Vidro"
+   *  da planilha, quando existir), usado pra agrupar itens de tipos diferentes
+   *  na hora de escolher o produto do sistema na importação. */
+  tipo?: string;
 }
 
 function normalizar(s: string): string {
@@ -27,12 +31,14 @@ export function parseLinhasMedidas(rows: unknown[][]): MedidaImportada[] {
   const idxAltura  = header.findIndex(h => h.includes("alt"));
   const idxQtd     = header.findIndex(h => h.includes("quant") || h === "qtd" || h === "qtde");
   const idxCodigo  = header.findIndex(h => h.includes("cod"));
+  const idxTipo    = header.findIndex(h => h.includes("tipo") || h.includes("produto") || h.includes("vidro"));
   const temCabecalho = idxLargura >= 0 || idxAltura >= 0;
 
   const li = idxLargura >= 0 ? idxLargura : 0;
   const ai = idxAltura  >= 0 ? idxAltura  : 1;
   const qi = idxQtd;
   const ci = idxCodigo;
+  const ti = idxTipo;
 
   const out: MedidaImportada[] = [];
   for (let r = temCabecalho ? 1 : 0; r < rows.length; r++) {
@@ -42,7 +48,8 @@ export function parseLinhasMedidas(rows: unknown[][]): MedidaImportada[] {
     if (largura <= 0 || altura <= 0) continue;
     const qtdBruta = qi >= 0 ? Math.round(Number(row[qi]) || 0) : 1;
     const codigo = ci >= 0 ? String(row[ci] ?? "").trim() : "";
-    out.push({ largura, altura, quantidade: qtdBruta > 0 ? qtdBruta : 1, codigo: codigo || undefined });
+    const tipo   = ti >= 0 ? String(row[ti] ?? "").trim() : "";
+    out.push({ largura, altura, quantidade: qtdBruta > 0 ? qtdBruta : 1, codigo: codigo || undefined, tipo: tipo || undefined });
   }
   return out;
 }

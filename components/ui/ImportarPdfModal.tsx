@@ -12,9 +12,11 @@ interface ProdutoOpt {
 
 interface Props {
   produtos: ProdutoOpt[];
-  onImportar: (itens: ItemPdfImportado[], produtoOverride: number | null) => void;
+  onImportar: (itens: ItemPdfImportado[], overridesPorTipo: Map<string, number | null>) => void;
   onClose: () => void;
 }
+
+const CHAVE_UNICA = "__unico__";
 
 async function lerTextoPdf(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
@@ -51,7 +53,8 @@ export default function ImportarPdfModal({ produtos, onImportar, onClose }: Prop
   const arquivoFieldId = useId();
   const produtoFieldId = useId();
   const [itens, setItens]             = useState<ItemPdfImportado[] | null>(null);
-  const [produtoOverride, setProduto] = useState<number | null>(null);
+  const [produtoUnico, setProdutoUnico] = useState<number | null>(null);
+  const [overridesPorTipo, setOverridesPorTipo] = useState<Map<string, number | null>>(new Map());
   const [erro, setErro]               = useState("");
   const [nomeArquivo, setNomeArquivo] = useState("");
   const [lendo, setLendo]             = useState(false);
@@ -70,6 +73,9 @@ export default function ImportarPdfModal({ produtos, onImportar, onClose }: Prop
         setErro("Nenhum item com dimensões foi encontrado no PDF. Verifique se é um pedido/orçamento exportado por este sistema.");
       } else {
         setItens(lidos);
+        setProdutoUnico(null);
+        const tipos = [...new Set(lidos.map(i => i.produto_nome).filter(Boolean))];
+        setOverridesPorTipo(new Map(tipos.map(t => [t, null])));
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -82,6 +88,14 @@ export default function ImportarPdfModal({ produtos, onImportar, onClose }: Prop
   const produtosUnicos = itens
     ? [...new Set(itens.map(i => i.produto_nome).filter(Boolean))]
     : [];
+
+  function handleImportar() {
+    if (!itens) return;
+    const overrides = produtosUnicos.length >= 2
+      ? overridesPorTipo
+      : new Map([[CHAVE_UNICA, produtoUnico]]);
+    onImportar(itens, overrides);
+  }
 
   return (
     <Modal open onClose={onClose} title="Importar PDF de Pedido/Orçamento" width="640px">
@@ -113,25 +127,50 @@ export default function ImportarPdfModal({ produtos, onImportar, onClose }: Prop
               <strong>{itens.length}</strong> item(s) encontrado(s) em <em>{nomeArquivo}</em> · <strong>{totalQtd}</strong> peça(s) no total
             </div>
 
-            {produtosUnicos.length > 0 && (
-              <div style={{ marginBottom: "12px", fontSize: "12px", color: "var(--t2)", background: "var(--surf2)", borderRadius: "8px", padding: "8px 12px", border: "1px solid var(--b2)" }}>
-                <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, marginBottom: "4px", textTransform: "uppercase", letterSpacing: ".05em" }}>Produto(s) detectado(s) no PDF</div>
-                {produtosUnicos.map(n => (
-                  <div key={n} style={{ fontFamily: "'DM Mono',monospace", fontSize: "11px" }}>{n}</div>
+            {produtosUnicos.length >= 2 ? (
+              <div style={{ marginBottom: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                <div style={{ fontSize: "11px", color: "var(--t3)" }}>
+                  Encontrados {produtosUnicos.length} produtos diferentes no PDF — escolha o produto do sistema pra cada um (opcional):
+                </div>
+                {produtosUnicos.map(nome => (
+                  <div key={nome} className="fg">
+                    <label className="fl">{nome}</label>
+                    <select className="fc" value={overridesPorTipo.get(nome) ?? ""} onChange={e => {
+                      const valor = e.target.value ? Number(e.target.value) : null;
+                      setOverridesPorTipo(prev => new Map(prev).set(nome, valor));
+                    }}>
+                      <option value="">— Manter produto detectado no PDF —</option>
+                      {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                    </select>
+                  </div>
                 ))}
+                <div style={{ fontSize: "11px", color: "var(--t3)" }}>
+                  Se deixar em branco, o sistema tentará encontrar o produto pelo nome. Você poderá ajustar linha por linha depois.
+                </div>
               </div>
-            )}
+            ) : (
+              <>
+                {produtosUnicos.length > 0 && (
+                  <div style={{ marginBottom: "12px", fontSize: "12px", color: "var(--t2)", background: "var(--surf2)", borderRadius: "8px", padding: "8px 12px", border: "1px solid var(--b2)" }}>
+                    <div style={{ fontSize: "10px", color: "var(--t3)", fontWeight: 600, marginBottom: "4px", textTransform: "uppercase", letterSpacing: ".05em" }}>Produto(s) detectado(s) no PDF</div>
+                    {produtosUnicos.map(n => (
+                      <div key={n} style={{ fontFamily: "'DM Mono',monospace", fontSize: "11px" }}>{n}</div>
+                    ))}
+                  </div>
+                )}
 
-            <div className="fg" style={{ marginBottom: "16px" }}>
-              <label className="fl" htmlFor={produtoFieldId}>Substituir produto de todos os itens por (opcional)</label>
-              <select id={produtoFieldId} className="fc" value={produtoOverride ?? ""} onChange={e => setProduto(e.target.value ? Number(e.target.value) : null)}>
-                <option value="">— Manter produto detectado no PDF —</option>
-                {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-              </select>
-              <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "4px" }}>
-                Se deixar em branco, o sistema tentará encontrar o produto pelo nome. Você poderá ajustar linha por linha depois.
-              </div>
-            </div>
+                <div className="fg" style={{ marginBottom: "16px" }}>
+                  <label className="fl" htmlFor={produtoFieldId}>Substituir produto de todos os itens por (opcional)</label>
+                  <select id={produtoFieldId} className="fc" value={produtoUnico ?? ""} onChange={e => setProdutoUnico(e.target.value ? Number(e.target.value) : null)}>
+                    <option value="">— Manter produto detectado no PDF —</option>
+                    {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                  </select>
+                  <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "4px" }}>
+                    Se deixar em branco, o sistema tentará encontrar o produto pelo nome. Você poderá ajustar linha por linha depois.
+                  </div>
+                </div>
+              </>
+            )}
 
             <div style={{ maxHeight: "200px", overflowY: "auto", border: "1px solid var(--b1)", borderRadius: "8px", marginBottom: "16px" }}>
               <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 78px 75px 85px 72px 80px", gap: "4px", padding: "6px 10px", background: "var(--surf2)", borderBottom: "1px solid var(--b1)", position: "sticky", top: 0 }}>
@@ -163,7 +202,7 @@ export default function ImportarPdfModal({ produtos, onImportar, onClose }: Prop
           <button
             className="btn bp sm"
             disabled={!itens || itens.length === 0}
-            onClick={() => { if (itens) onImportar(itens, produtoOverride); }}
+            onClick={handleImportar}
           >
             Importar{itens ? ` (${itens.length} itens)` : ""}
           </button>

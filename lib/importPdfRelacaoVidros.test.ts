@@ -73,14 +73,14 @@ describe("agruparEmLinhas", () => {
 });
 
 describe("interpretarLinha", () => {
-  it("interpreta uma linha de peça válida", () => {
+  it("interpreta uma linha de peça válida, incluindo o tipo de vidro", () => {
     const linha = agruparEmLinhas(LINHA_1)[0];
-    expect(interpretarLinha(linha)).toEqual({ largura: 978, altura: 1451, quantidade: 4, codigo: "FD-MX01" });
+    expect(interpretarLinha(linha)).toEqual({ largura: 978, altura: 1451, quantidade: 4, codigo: "FD-MX01", tipo: "Laminado Refletivo, 8mm" });
   });
 
   it("interpreta código com sufixo (peça repetida com código derivado)", () => {
     const linha = agruparEmLinhas(LINHA_2)[0];
-    expect(interpretarLinha(linha)).toEqual({ largura: 978, altura: 1451, quantidade: 2, codigo: "FD-MX01_1" });
+    expect(interpretarLinha(linha)).toEqual({ largura: 978, altura: 1451, quantidade: 2, codigo: "FD-MX01_1", tipo: "Laminado Refletivo, 8mm" });
   });
 
   it("ignora a linha de cabeçalho da tabela", () => {
@@ -97,14 +97,34 @@ describe("interpretarLinha", () => {
     agruparEmLinhas(TITULO_OBRA).forEach(linha => expect(interpretarLinha(linha)).toBeNull());
   });
 
-  it("continua funcionando quando a coluna OBS vem preenchida (célula extra)", () => {
+  it("continua funcionando quando a coluna OBS vem preenchida (célula extra) — tipo continua no índice certo", () => {
     const comObs: TextItem[] = [
       ...LINHA_1.slice(0, 6),
       { str: "revisar prazo", x: 456, y: 719 },
       { str: "5,68", x: 547, y: 719 },
     ];
     const linha = agruparEmLinhas(comObs)[0];
-    expect(interpretarLinha(linha)).toEqual({ largura: 978, altura: 1451, quantidade: 4, codigo: "FD-MX01" });
+    expect(interpretarLinha(linha)).toEqual({ largura: 978, altura: 1451, quantidade: 4, codigo: "FD-MX01", tipo: "Laminado Refletivo, 8mm" });
+  });
+
+  it("linha sem coluna de tipo de vidro (só 6 células) deixa tipo undefined", () => {
+    const semTipo: TextItem[] = [...LINHA_1.slice(0, 5), { str: "5,68", x: 547, y: 719 }];
+    const linha = agruparEmLinhas(semTipo)[0];
+    const resultado = interpretarLinha(linha);
+    expect(resultado?.tipo).toBeUndefined();
+    expect(resultado).toEqual({ largura: 978, altura: 1451, quantidade: 4, codigo: "FD-MX01" });
+  });
+
+  it("dois tipos de vidro distintos no mesmo arquivo são preservados por linha", () => {
+    const linha2ComOutroTipo: TextItem[] = [
+      ...LINHA_2.slice(0, 5),
+      { str: "Temperado Incolor, 10mm", x: 270, y: 703 },
+      { str: "2,84", x: 547, y: 703 },
+    ];
+    const l1 = interpretarLinha(agruparEmLinhas(LINHA_1)[0]);
+    const l2 = interpretarLinha(agruparEmLinhas(linha2ComOutroTipo)[0]);
+    expect(l1?.tipo).toBe("Laminado Refletivo, 8mm");
+    expect(l2?.tipo).toBe("Temperado Incolor, 10mm");
   });
 
   it("rejeita linha curta demais pra ser uma peça", () => {

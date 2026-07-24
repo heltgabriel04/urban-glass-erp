@@ -55,10 +55,17 @@ export function interpretarLinha(linha: TextItem[]): MedidaImportada | null {
 
   const quantidade = parseInt(cells[4], 10);
 
+  // Formato da tabela: item, código, largura, altura, quantidade, [tipo de
+  // vidro], [obs opcional], m² (última célula). Com só 6 células não tem
+  // coluna de tipo (a 6ª célula é o próprio m²); com 7+ células, o tipo de
+  // vidro é sempre a que vem logo após a quantidade.
+  const tipo = cells.length >= 7 ? (cells[5]?.trim() || undefined) : undefined;
+
   return {
     largura, altura,
     quantidade: Number.isFinite(quantidade) && quantidade > 0 ? quantidade : 1,
     codigo,
+    tipo,
   };
 }
 

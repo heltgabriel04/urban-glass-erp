@@ -12,14 +12,17 @@ interface ProdutoOpt {
 
 interface Props {
   produtos: ProdutoOpt[];
-  onImportar: (itens: MedidaImportada[], produtoId: number | null) => void;
+  onImportar: (itens: MedidaImportada[], overridesPorTipo: Map<string, number | null>) => void;
   onClose: () => void;
 }
+
+const CHAVE_UNICA = "__unico__";
 
 export default function ImportarMedidasModal({ produtos, onImportar, onClose }: Props) {
   const arquivoFieldId = useId();
   const [itens, setItens]           = useState<MedidaImportada[] | null>(null);
-  const [produtoId, setProdutoId]   = useState<number | null>(null);
+  const [produtoUnico, setProdutoUnico] = useState<number | null>(null);
+  const [overridesPorTipo, setOverridesPorTipo] = useState<Map<string, number | null>>(new Map());
   const [erro, setErro]             = useState("");
   const [nomeArquivo, setNomeArquivo] = useState("");
   const [lendo, setLendo]           = useState(false);
@@ -38,6 +41,9 @@ export default function ImportarMedidasModal({ produtos, onImportar, onClose }: 
           : "Nenhuma medida válida encontrada. Confirme que a planilha tem colunas de largura e altura (em mm).");
       } else {
         setItens(lidos);
+        setProdutoUnico(null);
+        const tipos = [...new Set(lidos.map(i => i.tipo).filter((t): t is string => !!t))];
+        setOverridesPorTipo(new Map(tipos.map(t => [t, null])));
       }
     } catch {
       setErro("Não foi possível ler o arquivo. Confirme que é uma planilha .xlsx/.xls/.csv ou um PDF de Relação de Vidros válido.");
@@ -56,6 +62,15 @@ export default function ImportarMedidasModal({ produtos, onImportar, onClose }: 
 
   const totalQtd = itens?.reduce((a, i) => a + i.quantidade, 0) ?? 0;
   const totalComCodigo = itens?.filter(i => i.codigo).length ?? 0;
+  const tiposDistintos = itens ? [...new Set(itens.map(i => i.tipo).filter((t): t is string => !!t))] : [];
+
+  function handleImportar() {
+    if (!itens) return;
+    const overrides = tiposDistintos.length >= 2
+      ? overridesPorTipo
+      : new Map([[CHAVE_UNICA, produtoUnico]]);
+    onImportar(itens, overrides);
+  }
 
   return (
     <Modal open onClose={onClose} title="Importar Medidas" width="440px">
@@ -69,7 +84,7 @@ export default function ImportarMedidasModal({ produtos, onImportar, onClose }: 
             onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
           />
           <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "6px" }}>
-            Planilha — colunas esperadas: <strong>Largura</strong> e <strong>Altura</strong> (mm) e, opcionalmente, <strong>Quantidade</strong> (padrão 1 quando vazia) e <strong>Código</strong> (vai pra etiqueta de cada peça).
+            Planilha — colunas esperadas: <strong>Largura</strong> e <strong>Altura</strong> (mm) e, opcionalmente, <strong>Quantidade</strong> (padrão 1 quando vazia), <strong>Código</strong> (vai pra etiqueta de cada peça) e <strong>Tipo</strong> (pra separar produtos diferentes na importação).
             <br />PDF — aceita o formato "Relação de Vidros" (Item · Código · Largura · Altura · Quantidade · Tipo de vidro).
           </div>
         </div>
@@ -85,12 +100,36 @@ export default function ImportarMedidasModal({ produtos, onImportar, onClose }: 
               {totalComCodigo > 0 && ` · ${totalComCodigo} com código`}
             </div>
 
-            <Campo style={{ marginBottom: "16px" }} label="Vidro para todos os itens importados (opcional)">
-              <select name="produto_id" className="fc" value={produtoId ?? ""} onChange={e => setProdutoId(e.target.value ? Number(e.target.value) : null)}>
-                <option value="">— Deixar em branco, selecionar depois —</option>
-                {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-              </select>
-            </Campo>
+            {tiposDistintos.length >= 2 ? (
+              <div style={{ marginBottom: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                <div style={{ fontSize: "11px", color: "var(--t3)" }}>
+                  Encontrados {tiposDistintos.length} tipos de vidro diferentes — escolha o produto do sistema pra cada um:
+                </div>
+                {tiposDistintos.map(tipo => (
+                  <Campo key={tipo} label={tipo}>
+                    <select
+                      name={`produto_tipo_${tipo}`}
+                      className="fc"
+                      value={overridesPorTipo.get(tipo) ?? ""}
+                      onChange={e => {
+                        const valor = e.target.value ? Number(e.target.value) : null;
+                        setOverridesPorTipo(prev => new Map(prev).set(tipo, valor));
+                      }}
+                    >
+                      <option value="">— Deixar em branco, selecionar depois —</option>
+                      {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                    </select>
+                  </Campo>
+                ))}
+              </div>
+            ) : (
+              <Campo style={{ marginBottom: "16px" }} label="Vidro para todos os itens importados (opcional)">
+                <select name="produto_id" className="fc" value={produtoUnico ?? ""} onChange={e => setProdutoUnico(e.target.value ? Number(e.target.value) : null)}>
+                  <option value="">— Deixar em branco, selecionar depois —</option>
+                  {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                </select>
+              </Campo>
+            )}
           </>
         )}
 
@@ -99,7 +138,7 @@ export default function ImportarMedidasModal({ produtos, onImportar, onClose }: 
           <button
             className="btn bp sm"
             disabled={!itens || itens.length === 0}
-            onClick={() => { if (itens) onImportar(itens, produtoId); }}
+            onClick={handleImportar}
           >
             Importar{itens ? ` (${itens.length})` : ""}
           </button>
