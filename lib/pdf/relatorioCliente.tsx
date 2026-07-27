@@ -21,8 +21,8 @@ const styles = StyleSheet.create({
   bloco: { padding: 12, backgroundColor: "#f7f7f9", borderRadius: 6, marginBottom: 14 },
   blocoTitulo: { fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, color: AZUL },
   linha: { flexDirection: "row", justifyContent: "space-between", marginTop: 5 },
-  label: { fontSize: 9, color: "#333" },
-  valor: { fontSize: 9, fontWeight: 700, color: "#1a1a2e" },
+  label: { fontSize: 9, color: "#333", width: 90 },
+  valor: { fontSize: 9, fontWeight: 700, color: "#1a1a2e", flex: 1, textAlign: "right" },
 
   kpiRow: { flexDirection: "row", gap: 10, marginBottom: 18 },
   kpiBox: { flex: 1, padding: 10, backgroundColor: "#f0f4ff", borderRadius: 6 },
