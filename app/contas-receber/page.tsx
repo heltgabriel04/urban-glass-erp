@@ -113,7 +113,7 @@ function ContasReceberPageInner() {
   const [filtroEmissFim, setFiltroEmissFim] = useState("");
   const [filtroPgtoIni, setFiltroPgtoIni]   = useState("");
   const [filtroPgtoFim, setFiltroPgtoFim]   = useState("");
-  const [modal, setModal]           = useState<"add" | "edit" | "receber" | "baixas" | "lote-receber" | "excluir" | "adiantamento" | "reembolso" | null>(null);
+  const [modal, setModal]           = useState<"add" | "edit" | "receber" | "baixas" | "excluir" | "adiantamento" | "reembolso" | null>(null);
   const [form, setForm]             = useState({ ...EMPTY_FORM });
   const [editId, setEditId]         = useState<number | null>(null);
   const [receberId, setReceberId]   = useState<number | null>(null);
@@ -128,7 +128,12 @@ function ContasReceberPageInner() {
   const [salvando, setSalvando]     = useState(false);
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
-  const [dtLote, setDtLote]         = useState(hoje());
+  // Recebimento em lote não usa mais modal resumido — abre o formulário
+  // completo de baixa um item por vez. filaPagamento é o que falta
+  // processar depois do item atual; filaPagamentoTotal é o total original
+  // da leva, só pra mostrar "X de Y" no modal.
+  const [filaPagamento, setFilaPagamento] = useState<number[]>([]);
+  const [filaPagamentoTotal, setFilaPagamentoTotal] = useState(0);
   const [formasPagamento, setFormasPagamento] = useState<FormaPagamento[]>([]);
   const [duplicados, setDuplicados] = useState<LancamentoDuplicado[]>([]);
   const [motivoRenegociacao, setMotivoRenegociacao] = useState("");
@@ -196,7 +201,7 @@ function ContasReceberPageInner() {
   useGlobalShortcut("n", openAdd, modal === null);
   useGlobalShortcut("", salvarRecebivel, modal === "add" || modal === "edit", { ctrlEnter: true });
 
-  async function load() {
+  async function load(): Promise<{ recebiveis: Recebivel[]; baixasMap: Map<number, BaixaLancamento[]> }> {
     setLoading(true);
     const [{ data: rs }, { data: pls }, { data: cls }, cbs, formasPg] = await Promise.all([
       supabase
@@ -216,16 +221,22 @@ function ContasReceberPageInner() {
     setClientes((cls ?? []) as ClienteItem[]);
     setContasBancarias(cbs);
     setFormasPagamento(formasPg);
-    setBaixasMap(await getBaixasPorLancamentos(recebiveisCarregados.map(r => r.id)));
+    const baixasCarregadas = await getBaixasPorLancamentos(recebiveisCarregados.map(r => r.id));
+    setBaixasMap(baixasCarregadas);
     setLoading(false);
+    return { recebiveis: recebiveisCarregados, baixasMap: baixasCarregadas };
   }
 
   const filtrados = useMemo(() => {
     return recebiveis.filter(r => {
       const st = getStatusEfetivo(r);
       if (tab === "aberto"   && st !== "A Receber") return false;
-      if (tab === "recebido" && st !== "Recebido")  return false;
       if (tab === "vencido"  && st !== "Vencido")   return false;
+      // "Recebido" agora é inclusivo: mostra tudo que já tem algum valor
+      // recebido, mesmo parcial — inclusive o que também aparece em A
+      // Receber/Vencido. Assim dá pra ver o que falta sem perder de vista
+      // o título ainda em aberto ou já vencido.
+      if (tab === "recebido" && !(calcularSaldo(r, baixasMap.get(r.id)).valorPago > 0)) return false;
       const q = busca.toLowerCase();
       if (q && !r.descricao.toLowerCase().includes(q)
             && !(r.clientes?.nome ?? "").toLowerCase().includes(q)
@@ -239,7 +250,7 @@ function ContasReceberPageInner() {
       if (filtroPgtoFim  && (r.dt_pagamento ?? "") > filtroPgtoFim)  return false;
       return true;
     });
-  }, [recebiveis, tab, busca, filtroVencIni, filtroVencFim, filtroEmisIni, filtroEmissFim, filtroPgtoIni, filtroPgtoFim]);
+  }, [recebiveis, baixasMap, tab, busca, filtroVencIni, filtroVencFim, filtroEmisIni, filtroEmissFim, filtroPgtoIni, filtroPgtoFim]);
 
   const totalTitulos  = filtrados.reduce((s, r) => s + Number(r.valor), 0);
   const totalRecebido = filtrados.reduce((s, r) => s + calcularSaldo(r, baixasMap.get(r.id)).valorPago, 0);
@@ -291,8 +302,8 @@ function ContasReceberPageInner() {
     setMotivoRenegociacao("");
     setModal("add");
   }
-  async function openReceber(r: Recebivel) {
-    const { saldo } = calcularSaldo(r, baixasMap.get(r.id));
+  async function openReceber(r: Recebivel, baixasOverride?: BaixaLancamento[]) {
+    const { saldo } = calcularSaldo(r, baixasOverride ?? baixasMap.get(r.id));
     setReceberId(r.id);
     setDtRec(hoje());
     setValorBaixa(saldo > 0 ? saldo : Number(r.valor));
@@ -345,9 +356,43 @@ function ContasReceberPageInner() {
     setHistorico(await getHistorico(r.id));
     setModal("baixas");
   }
-  function openLoteReceber() {
-    setDtLote(hoje());
-    setModal("lote-receber");
+  // "Marcar como recebido(s)" não usa mais modal resumido — abre o
+  // formulário completo de Registrar Baixa pro primeiro item selecionado
+  // com saldo; os demais ficam na fila e são abertos um a um conforme
+  // cada baixa é confirmada (ver avancarFilaRecebimento, chamado de
+  // dentro de confirmarRecebimento).
+  async function iniciarRecebimentoEmLote() {
+    const alvos = Array.from(selecionados).filter(id => {
+      const r = recebiveis.find(x => x.id === id);
+      return !!r && calcularSaldo(r, baixasMap.get(id)).saldo > 0;
+    });
+    if (alvos.length === 0) { toast("Nenhum selecionado tem saldo em aberto", "err"); return; }
+    const [primeiroId, ...resto] = alvos;
+    setFilaPagamentoTotal(alvos.length);
+    setFilaPagamento(resto);
+    const primeiro = recebiveis.find(x => x.id === primeiroId)!;
+    await openReceber(primeiro);
+  }
+
+  // Chamado depois de cada baixa confirmada com sucesso, quando veio de um
+  // recebimento em lote. Pula itens que já não têm mais saldo (recebido por
+  // outra via nesse meio-tempo) até achar o próximo válido, ou encerra a fila.
+  async function avancarFilaRecebimento(recebiveisAtuais: Recebivel[], baixasAtuais: Map<number, BaixaLancamento[]>, fila: number[]) {
+    let resto = fila;
+    while (resto.length > 0) {
+      const [proximoId, ...rest] = resto;
+      resto = rest;
+      const proximo = recebiveisAtuais.find(x => x.id === proximoId);
+      if (proximo && calcularSaldo(proximo, baixasAtuais.get(proximoId)).saldo > 0) {
+        setFilaPagamento(resto);
+        await openReceber(proximo, baixasAtuais.get(proximoId));
+        return;
+      }
+    }
+    setFilaPagamento([]);
+    setFilaPagamentoTotal(0);
+    setSelecionados(new Set());
+    closeModal();
   }
   async function abrirExcluir(r: Recebivel) {
     const temBaixa = (baixasMap.get(r.id) ?? []).length > 0;
@@ -366,6 +411,29 @@ function ContasReceberPageInner() {
     setBaixasVerId(null); setEstornandoBaixaId(null); setMotivoEstorno("");
     setExcluirId(null); setMotivoExclusao(""); setDuplicados([]); setMotivoRenegociacao("");
     setReembolsarId(null); setAdiantamentoUsadoId("");
+    // Cancelar no meio de um recebimento em lote interrompe o resto da fila.
+    setFilaPagamento([]); setFilaPagamentoTotal(0);
+  }
+
+  // Desmarcar a checkbox na aba "Recebido" é o atalho rápido pra "marquei
+  // errado" — não pede motivo (diferente do estorno formal em Ver baixas,
+  // que continua exigindo). Estorna todas as baixas ativas do título com
+  // um motivo padrão, só pra manter o rastro de auditoria em
+  // baixas_lancamento sem obrigar a pessoa a digitar nada toda vez.
+  async function desmarcarRecebido(r: Recebivel) {
+    const baixasAtivas = (baixasMap.get(r.id) ?? []).filter(b => !b.estornado_em);
+    if (baixasAtivas.length === 0) return;
+    if (!(await confirm(`Desfazer recebimento de "${r.descricao}" e voltar para "A Receber"?`, { perigo: true }))) return;
+    setSalvando(true);
+    let ok = 0;
+    for (const b of baixasAtivas) {
+      const res = await estornarBaixa({ baixaId: b.id, motivo: "Desmarcado via checkbox — marcado como recebido por engano" });
+      if (res) ok++;
+    }
+    setSalvando(false);
+    if (ok === baixasAtivas.length) toast("Recebimento desfeito — voltou para \"A Receber\"");
+    else toast(`Desfeito parcialmente (${ok}/${baixasAtivas.length}) — confira em "Ver baixas"`, "err");
+    load();
   }
 
   async function checarDuplicado(clienteId: string | number, documento: string) {
@@ -416,8 +484,9 @@ function ContasReceberPageInner() {
   async function confirmarRecebimento() {
     if (!receberId || !dtRec || valorBaixa <= 0) return;
     setSalvando(true);
+    const idRecebido = receberId;
     const res = await registrarBaixa({
-      lancamentoId: receberId,
+      lancamentoId: idRecebido,
       valor: valorBaixa,
       data: dtRec,
       contaId: adiantamentoUsadoId ? null : (contaBaixaId ? Number(contaBaixaId) : null),
@@ -428,13 +497,21 @@ function ContasReceberPageInner() {
       valorDesconto: valorDescontoBaixa || undefined,
       origemAdiantamentoId: adiantamentoUsadoId ? Number(adiantamentoUsadoId) : null,
     });
-    setSalvando(false);
-    if (res) {
-      toast("Baixa registrada");
-      closeModal();
-      load();
-    } else {
+    if (!res) {
+      setSalvando(false);
       toast("Erro ao registrar recebimento", "err");
+      return;
+    }
+    toast("Baixa registrada");
+    const filaAtual = filaPagamento;
+    const { recebiveis: recebiveisAtualizados, baixasMap: baixasAtualizado } = await load();
+    setSalvando(false);
+    setSelecionados(prev => { const next = new Set(prev); next.delete(idRecebido); return next; });
+    if (filaAtual.length > 0) {
+      await avancarFilaRecebimento(recebiveisAtualizados, baixasAtualizado, filaAtual);
+    } else {
+      setFilaPagamentoTotal(0);
+      closeModal();
     }
   }
 
@@ -449,26 +526,6 @@ function ContasReceberPageInner() {
     exportarExcel("ContasReceber_UrbanGlass",
       ["Emissão", "Cliente", "Descrição", "Pedido/Documento", "Plano de Contas", "Vencimento", "Valor", "Recebido", "Recebimento", "Status"],
       linhas);
-  }
-
-  async function confirmarRecebimentoLote() {
-    if (!dtLote) return;
-    setSalvando(true);
-    const alvos = recebiveis.filter(r => selecionados.has(r.id) && calcularSaldo(r, baixasMap.get(r.id)).saldo > 0);
-    let ok = 0;
-    for (const r of alvos) {
-      const { saldo } = calcularSaldo(r, baixasMap.get(r.id));
-      const res = await registrarBaixa({ lancamentoId: r.id, valor: saldo, data: dtLote });
-      if (res) ok++;
-    }
-    setSalvando(false);
-    toast(
-      ok === alvos.length ? `${ok} baixa(s) registrada(s)` : `${ok} de ${alvos.length} baixas registradas`,
-      ok === alvos.length ? undefined : "err"
-    );
-    setSelecionados(new Set());
-    closeModal();
-    load();
   }
 
   async function excluirLote() {
@@ -532,7 +589,7 @@ function ContasReceberPageInner() {
             { label: "Total de Títulos", val: recebiveis.length,  sub: "lançamentos", cor: "var(--t1)" },
             { label: "A Receber",        val: formatBRL(recebiveis.filter(r => getStatusEfetivo(r) === "A Receber").reduce((s,r) => s+Number(r.valor),0)), sub: `${recebiveis.filter(r => getStatusEfetivo(r) === "A Receber").length} título(s)`, cor: "#60a5fa" },
             { label: "Vencido",          val: formatBRL(recebiveis.filter(r => getStatusEfetivo(r) === "Vencido").reduce((s,r) => s+Number(r.valor),0)),   sub: `${qtdVencidos} título(s)`, cor: qtdVencidos > 0 ? "var(--err)" : "var(--t1)" },
-            { label: "Recebido (total)", val: formatBRL(recebiveis.reduce((s,r) => s + calcularSaldo(r, baixasMap.get(r.id)).valorPago, 0)),   sub: `${recebiveis.filter(r => getStatusEfetivo(r) === "Recebido").length} título(s)`, cor: "var(--ok)" },
+            { label: "Recebido (total)", val: formatBRL(recebiveis.reduce((s,r) => s + calcularSaldo(r, baixasMap.get(r.id)).valorPago, 0)),   sub: `${recebiveis.filter(r => calcularSaldo(r, baixasMap.get(r.id)).valorPago > 0).length} título(s)`, cor: "var(--ok)" },
           ].map(s => (
             <div key={s.label} style={{ background: "var(--surf1)", border: "1px solid var(--b1)", borderRadius: "10px", padding: "14px 16px" }}>
               <div style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: "6px" }}>{s.label}</div>
@@ -606,7 +663,7 @@ function ContasReceberPageInner() {
         {selecionados.size > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", marginBottom: "10px", background: "var(--surf2)", border: "1px solid var(--b2)", borderRadius: "8px" }}>
             <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--t1)" }}>{selecionados.size} selecionado(s)</span>
-            <button className="btn bp xs" onClick={openLoteReceber}>Marcar como recebido(s)</button>
+            <button className="btn bp xs" onClick={iniciarRecebimentoEmLote}>Marcar como recebido(s)</button>
             <button className="btn bg xs" onClick={excluirLote} style={{ color: "var(--err)" }}>Excluir selecionados</button>
             <div style={{ flex: 1 }} />
             <button className="btn bg xs" onClick={() => setSelecionados(new Set())}>Limpar seleção</button>
@@ -621,16 +678,18 @@ function ContasReceberPageInner() {
                 <thead>
                   <tr>
                     <th style={{ width: "30px" }}>
-                      <input name="todos_selecionados" type="checkbox" checked={todosSelecionados} onChange={toggleSelecionarTodos} />
+                      {tab !== "recebido" && (
+                        <input name="todos_selecionados" type="checkbox" checked={todosSelecionados} onChange={toggleSelecionarTodos} />
+                      )}
                     </th>
-                    <th style={{ width: "90px" }}>Emissão</th>
+                    <th style={{ width: "90px" }}>{tab === "recebido" ? "Recebimento" : "Vencimento"}</th>
+                    <th style={{ width: "90px" }}>{tab === "recebido" ? "Vencimento" : "Emissão"}</th>
                     <th>Cliente / Descrição</th>
                     <th style={{ width: "120px" }}>Pedido / Documento</th>
                     <th style={{ width: "200px" }}>Plano de Contas</th>
-                    <th style={{ width: "90px" }}>Vencimento</th>
                     <th style={{ width: "110px", textAlign: "right" }}>Valor</th>
                     <th style={{ width: "110px", textAlign: "right" }}>Recebido</th>
-                    <th style={{ width: "90px" }}>Recebimento</th>
+                    <th style={{ width: "90px" }}>{tab === "recebido" ? "Emissão" : "Recebimento"}</th>
                     <th style={{ width: "90px" }}>Status</th>
                     <th style={{ width: "50px" }}>Ações</th>
                   </tr>
@@ -648,9 +707,20 @@ function ContasReceberPageInner() {
                     return (
                       <tr key={r.id}>
                         <td>
-                          <input name={`r_id_${r.id}`} type="checkbox" checked={selecionados.has(r.id)} onChange={() => toggleSelecionado(r.id)} />
+                          {tab === "recebido" ? (
+                            <input
+                              name={`r_id_${r.id}`} type="checkbox" checked={true}
+                              onChange={() => desmarcarRecebido(r)}
+                              title="Desmarcar para desfazer o recebimento e voltar para 'A Receber'"
+                            />
+                          ) : (
+                            <input name={`r_id_${r.id}`} type="checkbox" checked={selecionados.has(r.id)} onChange={() => toggleSelecionado(r.id)} />
+                          )}
                         </td>
-                        <td style={{ fontSize: "12px" }}>{fmtData(r.dt_emissao ?? r.created_at)}</td>
+                        <td style={{ fontSize: "12px", color: st === "Vencido" ? "var(--err)" : "var(--t1)", fontWeight: st === "Vencido" ? 700 : 400 }}>
+                          {fmtData(tab === "recebido" ? r.dt_pagamento : r.vencimento)}
+                        </td>
+                        <td style={{ fontSize: "12px" }}>{fmtData(tab === "recebido" ? r.vencimento : (r.dt_emissao ?? r.created_at))}</td>
                         <td>
                           <div style={{ fontWeight: 600, fontSize: "13px" }}>{r.clientes?.nome ?? <span style={{ color: "var(--t3)" }}>—</span>}</div>
                           <div style={{ fontSize: "11px", color: "var(--t3)", marginTop: "2px" }}>{r.descricao}</div>
@@ -667,16 +737,13 @@ function ContasReceberPageInner() {
                             ? <span><span style={{ color: "var(--acc)", fontFamily: "'DM Mono',monospace", fontSize: "10px" }}>{r.plano_contas.codigo_estruturado}</span> {r.plano_contas.descricao}</span>
                             : <span style={{ color: "var(--t3)" }}>—</span>}
                         </td>
-                        <td style={{ fontSize: "12px", color: st === "Vencido" ? "var(--err)" : "var(--t1)", fontWeight: st === "Vencido" ? 700 : 400 }}>
-                          {fmtData(r.vencimento)}
-                        </td>
                         <td style={{ textAlign: "right", fontFamily: "'DM Mono',monospace", fontWeight: 700 }}>
                           {formatBRL(Number(r.valor))}
                         </td>
                         <td style={{ textAlign: "right", fontFamily: "'DM Mono',monospace", color: valorRec > 0 ? "var(--ok)" : "var(--t3)" }}>
                           {formatBRL(valorRec)}
                         </td>
-                        <td style={{ fontSize: "12px" }}>{fmtData(r.dt_pagamento)}</td>
+                        <td style={{ fontSize: "12px" }}>{fmtData(tab === "recebido" ? (r.dt_emissao ?? r.created_at) : r.dt_pagamento)}</td>
                         <td>
                           <span className={`chip ${STATUS_CHIP[stExibida]}`} style={{ whiteSpace: "nowrap" }}>
                             {stExibida}
@@ -819,9 +886,45 @@ function ContasReceberPageInner() {
       {/* ── MODAL BAIXA (recebimento total ou parcial) ── */}
       <Modal open={modal === "receber"} onClose={closeModal} title="Registrar Baixa" width="420px">
             <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div style={{ fontSize: "12px", color: "var(--t3)" }}>
-                {recebiveis.find(r => r.id === receberId)?.descricao}
-              </div>
+              {filaPagamentoTotal > 0 && (
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--acc)" }}>
+                  Recebimento {filaPagamentoTotal - filaPagamento.length} de {filaPagamentoTotal}
+                </div>
+              )}
+              {(() => {
+                const recebivelRecebendo = recebiveis.find(r => r.id === receberId);
+                if (!recebivelRecebendo) return null;
+                const { valorPago: jaRecebido, saldo: saldoRestante } = calcularSaldo(recebivelRecebendo, baixasMap.get(recebivelRecebendo.id));
+                return (
+                  <div style={{ padding: "12px 14px", background: "var(--surf2)", border: "1px solid var(--b1)", borderRadius: "8px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: "14px" }}>
+                          {recebivelRecebendo.clientes?.nome ?? <span style={{ color: "var(--t3)", fontWeight: 400 }}>Cliente não informado</span>}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "var(--t3)", marginTop: "2px" }}>{recebivelRecebendo.descricao}</div>
+                      </div>
+                      {jaRecebido > 0 && <span className={`chip ${STATUS_CHIP["Parcial"]}`} style={{ whiteSpace: "nowrap" }}>Parcial</span>}
+                    </div>
+                    <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                        <span style={{ fontSize: "10px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Total</span>
+                        <strong style={{ fontSize: "13px", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>{formatBRL(Number(recebivelRecebendo.valor))}</strong>
+                      </div>
+                      {jaRecebido > 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                          <span style={{ fontSize: "10px", color: "var(--ok)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Já recebido</span>
+                          <strong style={{ fontSize: "13px", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap", color: "var(--ok)" }}>{formatBRL(jaRecebido)}</strong>
+                        </div>
+                      )}
+                      <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                        <span style={{ fontSize: "10px", color: "var(--err)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Saldo</span>
+                        <strong style={{ fontSize: "13px", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap", color: "var(--err)" }}>{formatBRL(saldoRestante)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="fr">
                 <Campo label="Valor da Baixa">
                   <CurrencyInput value={valorBaixa} onChange={setValorBaixa} />
@@ -876,24 +979,6 @@ function ContasReceberPageInner() {
               <button className="btn bg" onClick={closeModal}>Cancelar</button>
               <button className="btn bp" onClick={confirmarRecebimento} disabled={salvando || !dtRec || valorBaixa <= 0}>
                 {salvando ? "Salvando..." : "Confirmar"}
-              </button>
-            </div>
-      </Modal>
-
-      {/* ── MODAL BAIXA EM LOTE ── */}
-      <Modal open={modal === "lote-receber"} onClose={closeModal} title={`Marcar ${selecionados.size} título(s) como recebidos`} width="360px">
-            <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
-              <Campo label="Data do Recebimento">
-                <DateInput value={dtLote} onChange={setDtLote} />
-              </Campo>
-              <div style={{ fontSize: "11px", color: "var(--t3)" }}>
-                Cada título é baixado pelo saldo em aberto integral (sem parcial).
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 20px", borderTop: "1px solid var(--b1)" }}>
-              <button className="btn bg" onClick={closeModal}>Cancelar</button>
-              <button className="btn bp" onClick={confirmarRecebimentoLote} disabled={salvando || !dtLote}>
-                {salvando ? "Processando..." : "Confirmar"}
               </button>
             </div>
       </Modal>
