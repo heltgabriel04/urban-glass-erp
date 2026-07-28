@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { formatBRL } from "@/lib/formatters";
@@ -727,7 +728,11 @@ function ContasReceberPageInner() {
                         </td>
                         <td className="mono" style={{ fontSize: "11px", color: "var(--acc)" }}>
                           {r.pedido_id
-                            ? <span style={{ fontWeight: 700 }}>{r.pedido_id}</span>
+                            ? <Link href={`/pedidos/${r.pedido_id}`} title="Abrir pedido" style={{ fontWeight: 700, color: "var(--acc)", textDecoration: "none" }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline"; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.textDecoration = "none"; }}>
+                                {r.pedido_id} ↗
+                              </Link>
                             : r.documento
                               ? <span style={{ color: "var(--t2)" }}>{r.documento}</span>
                               : <span style={{ color: "var(--t3)" }}>—</span>}

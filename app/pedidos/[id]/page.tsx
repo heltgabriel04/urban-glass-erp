@@ -484,6 +484,7 @@ export default function PedidoDetalhe() {
       status: "Pago",
       valor: valorPagar,
       vencimento: dataPgto,
+      dt_pagamento: dataPgto,
       conta: pag.conta || undefined,
       forma_pgto: pag.formaPgto || undefined,
     });
@@ -539,7 +540,7 @@ export default function PedidoDetalhe() {
       for (const r of restos) await deletarLancamento(r.id);
 
       // Restaura o lançamento original com o valor total consolidado
-      const ok = await updateLancamento(lancId, { status: "A Receber", conta: null, valor: valorConsolidado });
+      const ok = await updateLancamento(lancId, { status: "A Receber", conta: null, dt_pagamento: null, valor: valorConsolidado });
       if (!ok) { toast("Erro ao desfazer recebimento", "err"); setSalvando(false); return; }
       await recalcularRecebido(pedido.id);
       toast("Recebimento desfeito");
@@ -590,6 +591,7 @@ export default function PedidoDetalhe() {
     const atualizado = await updateLancamento(lancId, {
       valor: ed.valor,
       vencimento: ed.data,
+      dt_pagamento: ed.data,
       conta: ed.conta || null,
       forma_pgto: ed.formaPgto || null,
     });
