@@ -21,7 +21,7 @@ porquê de importar.
 | APS / Programação | Em construção (ver `modulos/aps.md`) — auditoria concluída, capacidade compartilhada + motor de cotação de prazo já implementados e pushados (2026-07-20) | Responder prazo de entrega ao cliente na hora — resolvido no backend, falta UI e validação com dado real | Alta — em implementação ativa |
 | Fiscal (NF-e) | Não documentado ainda | — | A definir |
 | Estoque | Não documentado ainda | **Pendência aberta**: produtos 17 (Reflecta 4+4 Incolor, lote id=4) e 21 (Refletivo 4+4, lote id=5) seguem com `dimensao_confirmada=false` — `m2_por_chapa` gravado (7,869 e 7,704) diverge do padrão 3300×2250 (7,425) usado nos demais laminados, então a dimensão NÃO foi assumida por igualdade. Aguardando o dono da empresa confirmar se mediu esses dois especificamente. Enquanto isso, o Otimizador exclui os dois do plano de corte (ver `sql/lotes-estoque-confirma-dimensao-verde-e-incolor-legado.sql`). | A definir |
-| Financeiro / Precificação | Não documentado ainda | Custeio de vidro por lote: PEPS confirmado pelo contador como método definitivo (2026-07-22, `lib/custoLote.ts`), substituindo a média ponderada provisória. Ressalva permanente: 5 lotes legados têm `dt_entrada_estimada=true`, então a ordem PEPS entre eles não é 100% confiável (aviso visível em `/margem` e `/contabilidade/estoque` quando isso acontece). | A definir |
+| Financeiro / Precificação | Não documentado ainda | Custeio de vidro por lote: PEPS confirmado pelo contador como método definitivo (2026-07-22, `lib/custoLote.ts`), substituindo a média ponderada provisória. Ressalva permanente: 5 lotes legados têm `dt_entrada_estimada=true`, então a ordem PEPS entre eles não é 100% confiável (aviso visível em `/margem` e `/contabilidade/estoque` quando isso acontece). **Pendência aberta (2026-07-29)**: o DRE em Regime Caixa (`services/dre.service.ts`, toggle em `/dre`) lê despesas de `baixas_lancamento`, não de `lancamentos` — e `baixas_lancamento` está estruturalmente vazia hoje (0 linhas em produção) porque o fluxo real de "marcar pedido como pago" (`registrarRecebimento` em `services/pedidos.service.ts`) muta o lançamento direto e nunca grava uma baixa. Resultado: **todo o histórico de despesas do sistema (os 66 lançamentos reais + os 154 importados de `investimentos`) é invisível no DRE em Regime Caixa**, não só os importados. Regime Competência não tem esse problema (lê `lancamentos` direto). Decisão de como fechar esse buraco (gerar baixas retroativas? mudar o fluxo de pagamento pra sempre gravar baixa?) ainda não foi tomada — é maior que qualquer importação pontual. | A definir |
 | Cut Optimizer (nesting) | Não documentado ainda | — | A definir |
 | Kanban de Produção | Não documentado ainda | — | A definir |
 
@@ -71,6 +71,32 @@ porquê de importar.
   esses dois casos na emissão de NF-e (CFOP pode diferir).
 - **Pendência**: não verificado ainda — próxima análise deveria cruzar
   isso com o módulo Fiscal.
+
+### 4. Data de competência vs. data de vencimento — cuidado ao comparar receita e despesa mês a mês
+- **Onde apareceu**: investigação de 2026-07-29 sobre a importação de
+  `investimentos` → `lancamentos` (154 despesas históricas), ao comparar
+  o range temporal de receita e despesa.
+- **Por que atravessa módulo**: hoje, comparar despesa por `vencimento`
+  com receita por `dt_pedido` funciona **por acidente**, não por
+  desenho — as 154 despesas importadas têm `vencimento` = data real do
+  gasto histórico (não uma data de vencimento futura), porque vieram de
+  um dump de outra empresa que já tinha o gasto consumado. No fluxo
+  normal do sistema (novo lançamento via `compras`/`lancamentos_recorrentes`
+  ou lançado manualmente em Contas a Pagar), `vencimento` volta a
+  significar "quando vai vencer", não "quando o gasto ocorreu" — exatamente
+  o mesmo problema de mistura de datas que já existia do lado da receita
+  (vencimento de parcela ≠ `dt_pedido`, corrigido nessa mesma investigação).
+- **Pendência**: quando a empresa passar a lançar despesa corrente pelo
+  fluxo normal, quem for montar qualquer DRE/comparativo mês a mês
+  precisa decidir explicitamente se o regime é por competência (data em
+  que o gasto foi incorrido) ou por vencimento (fluxo de caixa esperado),
+  e aplicar o mesmo critério dos dois lados (receita e despesa) — não
+  misturar `dt_pedido` de um lado com `vencimento` do outro de novo.
+  `dre.service.ts` já tem essa distinção formalizada como `regime:
+  'competencia' | 'caixa'`, mas o lado "despesa" do regime competência
+  hoje usa `vencimento` de `lancamentos` (linha 93), não uma data de
+  "incorrido" separada — vale revisar se isso é suficiente quando
+  despesa operacional real começar a fluir pelo sistema.
 
 ---
 

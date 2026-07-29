@@ -137,4 +137,5 @@ que é a ordem real em que foram escritos e (presumivelmente) rodados.
 | 2026-07-22 | `sql/lotes-estoque-custo-lote-importado-produto10.sql` | lotes_estoque — custo_m2 do lote importado New Glass (produto 10, lote id=6) = R$94,50/m², ICMS/IPI creditáveis confirmado pelo contador | ✅ |
 | 2026-07-22 | `sql/lotes-estoque-confirma-dimensao-verde-e-incolor-legado.sql` | lotes_estoque — confirma dimensão 3300×2250 do Laminado 4+4 Verde (produto 13) e do lote legado do Laminado 4+4 Incolor (produto 10, id=1); NÃO inclui produtos 17/21 (divergência pendente) | ✅ |
 | 2026-07-22 | `sql/pedido-comprovante-pagamento.sql` | Bucket + coluna comprovante_pagamento_urls — 4o tipo de anexo no pedido (Romaneio/NF-e/Boleto/Comprovante) | ⏳ |
-| 2026-07-28 | `sql/backfill-dt-pagamento-marcar-pago.sql` | Backfill de dt_pagamento (27 lançamentos pagos pela tela do pedido antes da correção, nunca gravaram a data de recebimento) | ⏳ |
+| 2026-07-28 | `sql/backfill-dt-pagamento-marcar-pago.sql` | Backfill de dt_pagamento (27 lançamentos pagos pela tela do pedido antes da correção, nunca gravaram a data de recebimento) | ✅ |
+| 2026-07-29 | `sql/plano-contas-despesas-a-reclassificar.sql` | Nova categoria "Despesas a Reclassificar" (pc_categorias id=19, plano_contas id=69) — recebe as linhas sem equivalente claro na importação de `investimentos` → `lancamentos` | ✅ |

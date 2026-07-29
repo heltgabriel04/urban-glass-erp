@@ -42,3 +42,6 @@ next-env.d.ts
 
 # superpowers scratch (brainstorm mockups, sdd progress ledger)
 .superpowers/
+
+# backups de dados reais (dumps de tabelas do Supabase) — nunca versionar
+/backups/
