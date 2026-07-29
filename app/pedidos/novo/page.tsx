@@ -479,14 +479,16 @@ function NovoPedidoPageInner() {
     setValorGeralInput(0);
   }
 
-  const somaParcelas = parcelasForm.reduce((a, p) => a + p.valor, 0);
-  const difParcelas  = Math.abs(somaParcelas - valorComIpiCalc);
-  const parcelasOk   = difParcelas < 0.02;
+  const somaParcelas    = parcelasForm.reduce((a, p) => a + p.valor, 0);
+  const difParcelas     = Math.abs(somaParcelas - valorComIpiCalc);
+  const parcelasOk      = difParcelas < 0.02;
+  const parcelasSemData = parcelasForm.some(p => p.valor > 0 && !p.data);
 
   async function salvar() {
     if (!clienteId) { toast("Selecione um cliente", "err"); return; }
     if (itens.some(i => i.largura === 0 || i.altura === 0)) { toast("Preencha as dimensões de todos os itens", "err"); return; }
     if (!parcelasOk) { toast(`Soma das parcelas (${formatBRL(somaParcelas)}) difere do total (${formatBRL(valorComIpiCalc)})`, "err"); return; }
+    if (parcelasSemData) { toast("Preencha a data de pagamento de todas as parcelas antes de salvar", "err"); return; }
 
     const caixaEscolhidaPorItem = new Map<number, number>();
     for (let i = 0; i < itens.length; i++) {
@@ -550,7 +552,10 @@ function NovoPedidoPageInner() {
       }));
 
       const result = await createPedido(pedido, itensInsert, caixaEscolhidaPorItem);
-      await criarLancamentosParcelados({ pedidoId: proximoId, clienteId, parcelas: parcelasForm });
+      const lancamentosOk = await criarLancamentosParcelados({ pedidoId: proximoId, clienteId, parcelas: parcelasForm });
+      if (!lancamentosOk) {
+        throw new Error(`Pedido ${proximoId} foi salvo, mas os lançamentos de recebimento falharam — confira em Contas a Receber e lance manualmente se necessário.`);
+      }
       if (vendedorId) {
         const vendedor = vendedores.find(v => v.id === vendedorId);
         const valorComissao = vendedor ? parseFloat((valorTotal * vendedor.comissao_pct / 100).toFixed(2)) : 0;
@@ -723,6 +728,11 @@ function NovoPedidoPageInner() {
                 {valorComIpiCalc > 0 && !parcelasOk && (
                   <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--warn)", fontFamily: "'DM Mono',monospace", background: "rgba(245,158,11,.08)", border: "1px solid rgba(245,158,11,.25)", borderRadius: "6px", padding: "6px 10px" }}>
                     ⚠ Soma das parcelas ({formatBRL(somaParcelas)}) difere do total ({formatBRL(valorComIpiCalc)})
+                  </div>
+                )}
+                {parcelasSemData && (
+                  <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--warn)", fontFamily: "'DM Mono',monospace", background: "rgba(245,158,11,.08)", border: "1px solid rgba(245,158,11,.25)", borderRadius: "6px", padding: "6px 10px" }}>
+                    ⚠ Preencha a data de pagamento de todas as parcelas — sem data, o lançamento de recebimento não é criado
                   </div>
                 )}
               </div>

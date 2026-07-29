@@ -231,9 +231,10 @@ export default function EditarPedidoPage() {
     setParcelasForm(prev => redistribuirParcelas(prev, valorComIpiCalc));
   }, [valorComIpiCalc]);
 
-  const somaParcelas = parcelasForm.reduce((a, p) => a + p.valor, 0);
-  const difParcelas  = Math.abs(somaParcelas - valorComIpiCalc);
-  const parcelasOk   = difParcelas < 0.02;
+  const somaParcelas    = parcelasForm.reduce((a, p) => a + p.valor, 0);
+  const difParcelas     = Math.abs(somaParcelas - valorComIpiCalc);
+  const parcelasOk      = difParcelas < 0.02;
+  const parcelasSemData = parcelasForm.some(p => p.valor > 0 && !p.data);
 
   // ── tabela de preços ─────────────────────────────────────────────
 
@@ -380,6 +381,7 @@ export default function EditarPedidoPage() {
     if (!clienteId) { toast("Selecione um cliente", "err"); return; }
     if (itens.some(i => i.largura === 0 || i.altura === 0)) { toast("Preencha as dimensões de todos os itens", "err"); return; }
     if (!parcelasOk) { toast(`Soma das parcelas (${formatBRL(somaParcelas)}) difere do total (${formatBRL(valorComIpiCalc)})`, "err"); return; }
+    if (parcelasSemData) { toast("Preencha a data de pagamento de todas as parcelas antes de salvar", "err"); return; }
 
     setSalvando(true);
 
@@ -459,7 +461,10 @@ export default function EditarPedidoPage() {
           pedido_id: id, cliente_id: clienteId,
         }));
       if (novasParcelas.length > 0) {
-        await supabase.from("lancamentos").insert(novasParcelas as never);
+        const { error: errParcelas } = await supabase.from("lancamentos").insert(novasParcelas as never);
+        if (errParcelas) {
+          toast(`Pedido salvo, mas falha ao gravar parcela(s) de recebimento: ${errParcelas.message} — confira em Contas a Receber`, "err");
+        }
       }
     }
     await recalcularRecebido(id);
@@ -616,6 +621,11 @@ export default function EditarPedidoPage() {
               {valorComIpiCalc > 0 && !parcelasOk && (
                 <div style={{ marginTop:"8px", fontSize:"11px", color:"var(--warn, #f59e0b)", fontFamily:"'DM Mono',monospace" }}>
                   ⚠ Soma das parcelas ({formatBRL(somaParcelas)}) difere do total ({formatBRL(valorComIpiCalc)})
+                </div>
+              )}
+              {parcelasSemData && (
+                <div style={{ marginTop:"8px", fontSize:"11px", color:"var(--warn, #f59e0b)", fontFamily:"'DM Mono',monospace" }}>
+                  ⚠ Preencha a data de pagamento de todas as parcelas — sem data, o lançamento de recebimento não é criado
                 </div>
               )}
             </div>
