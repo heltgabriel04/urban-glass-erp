@@ -432,6 +432,15 @@ export async function atualizarCreditoCliente(clienteId: number, novoCredito: nu
   return true;
 }
 
+// ⚠️ CÓDIGO MORTO — sem nenhum caller na UI hoje (handleMarcarPago parou de
+// usar essa função no commit aa180a4, 2026-06-05). NÃO reconecte sem corrigir
+// o bug abaixo primeiro: a busca por lançamento reaproveitável filtra
+// `status = 'A Receber'` e ignora `status = 'Pendente'` — se o pendente do
+// pedido estiver com esse status (aconteceu com o lanç. #51 do P-018, órfão
+// até a auditoria de 2026-07-31 excluí-lo), esta função cria um lançamento
+// `Pago` novo em vez de reaproveitar o pendente existente, deixando o
+// original órfão no banco. Ver histórico de 2026-07-31 (lançamentos #51 e
+// #129) antes de voltar a chamar isso de algum lugar.
 export async function registrarRecebimento(
   pedidoId: string,
   valor: number,
