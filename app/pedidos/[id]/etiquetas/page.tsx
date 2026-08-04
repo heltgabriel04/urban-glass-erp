@@ -9,15 +9,22 @@ import { getLotesUtilizaveis } from "@/services/lotes.service";
 import { isChapaInteira } from "@/lib/chapas";
 import type { Pedido } from "@/types";
 import type { HistoricoOtimizador } from "@/services/otimizador.service";
-import corteCertoData from "@/data/etiquetas-corte-certo-p058-p059.json";
+import corteCertoDataSaoLourenco from "@/data/etiquetas-corte-certo-p058-p059.json";
+import corteCertoDataP075 from "@/data/etiquetas-corte-certo-p075.json";
 
-// Ajuste único para os pedidos P-058/P-059 (obra São Lourenço): a impressão das etiquetas
-// segue a sequência real de corte do plano da Corte Certo (33 montagens = 33 chapas físicas),
-// não o plano salvo no otimizador do sistema. Dados extraídos e casados por dimensão a partir
-// do PDF do plano de corte + da Relação de Vidros do pedido. Ver conversa de 01/07/2026.
-const TOTAL_MONTAGENS_CORTE_CERTO = 33;
-interface PecaCorteCerto { ordem: number; montagem: number; tipo?: string; localizacao?: string; largura: number; altura: number; }
-const CORTE_CERTO_MAP = corteCertoData as Record<string, PecaCorteCerto[]>;
+// Ajuste único por pedido: a impressão das etiquetas segue a sequência real de corte de um
+// plano externo (Corte Certo), não o plano salvo no otimizador do sistema. Dados extraídos e
+// casados por dimensão a partir do PDF do plano de corte do fornecedor:
+// - P-058/P-059 (obra São Lourenço, 01/07/2026): casado com a Relação de Vidros do pedido
+//   (campos tipo/localizacao), offset de +4mm em cada dimensão (largura E altura) do Corte Certo.
+// - P-075 (04/08/2026): casado direto com itens_pedido por dimensão (mesmo offset de +4mm em
+//   cada dimensão); pecaId é o número da peça mostrado no desenho do plano de corte, pra
+//   localização física do vidro na chapa impressa.
+interface PecaCorteCerto { ordem: number; montagem: number; tipo?: string; localizacao?: string; pecaId?: number; largura: number; altura: number; }
+const CORTE_CERTO_MAP: Record<string, PecaCorteCerto[]> = {
+  ...(corteCertoDataSaoLourenco as Record<string, PecaCorteCerto[]>),
+  ...(corteCertoDataP075 as Record<string, PecaCorteCerto[]>),
+};
 
 interface PecaPlacada {
   x: number; y: number; l: number; a: number;
@@ -45,6 +52,7 @@ interface Etiqueta {
   modoCaixa?: boolean;
   modoVidroCliente?: boolean;
   codigoAdicional?: string | null;
+  codigoLabel?: string;
 }
 
 function QRCode({ data, size = 72 }: { data: string; size?: number }) {
@@ -86,7 +94,7 @@ function EtiquetaCard({ et, num, selecionada, onToggle }: { et: Etiqueta; num: n
             <span className="et-val et-pedido">{et.pedidoId}</span>
           </div>
           <div className="et-linha et-dim">
-            <span className="et-lbl">{et.codigoAdicional ? "MEDIDAS / CÓDIGO" : "MEDIDAS"}</span>
+            <span className="et-lbl">{et.codigoAdicional ? `MEDIDAS / ${et.codigoLabel ?? "CÓDIGO"}` : "MEDIDAS"}</span>
             <span className="et-val et-medidas">
               L {et.largura} × H {et.altura} mm
               {et.codigoAdicional && <span className="et-codigo"> · {et.codigoAdicional}</span>}
@@ -186,6 +194,7 @@ export default function EtiquetasPage() {
         }
 
         const material = ped?.itens_pedido?.[0]?.produto_nome ?? "—";
+        const totalMontagens = new Set(corteCertoLista.map(e => e.montagem)).size;
         const contagemPorMontagem = new Map<number, number>();
         corteCertoLista.forEach(e => contagemPorMontagem.set(e.montagem, (contagemPorMontagem.get(e.montagem) ?? 0) + 1));
         const posDentroMontagem = new Map<number, number>();
@@ -200,18 +209,19 @@ export default function EtiquetasPage() {
             largura: e.largura,
             altura: e.altura,
             chapaNum: e.montagem,
-            totalChapas: TOTAL_MONTAGENS_CORTE_CERTO,
+            totalChapas: totalMontagens,
             pecaNum: pos,
             totalPecasNaChapa: contagemPorMontagem.get(e.montagem) ?? 0,
             totalPecasGeral: corteCertoLista.length,
             loteCorte: lote,
             qrData: `https://urbanglasserp.vercel.app/api/r/${ped?.qr_token}`,
-            codigoAdicional: buscarCodigo(e.largura, e.altura),
+            codigoAdicional: e.pecaId != null ? String(e.pecaId) : buscarCodigo(e.largura, e.altura),
+            codigoLabel: e.pecaId != null ? "Nº PLANO DE CORTE" : undefined,
           };
         });
 
         setEtiquetas(ets);
-        setTotalChapas(TOTAL_MONTAGENS_CORTE_CERTO);
+        setTotalChapas(totalMontagens);
         setChapasDisponiveis([...contagemPorMontagem.keys()].sort((a, b) => a - b));
         setLoading(false);
         return;
