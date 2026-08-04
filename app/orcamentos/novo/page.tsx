@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/client";
 import { getClientes } from "@/services/clientes.service";
 import { createOrcamento, getProximoIdOrcamento, getOrcamentoById } from "@/services/orcamentos.service";
 import { getSaldoPorProduto } from "@/services/lotes.service";
+import { ALIQ_IPI_PEDIDO, calcularValorIpi } from "@/lib/pedidoIpi";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import DateInput from "@/components/ui/DateInput";
@@ -109,6 +110,7 @@ function NovoOrcamentoPageInner() {
   const [frete, setFrete]             = useState("Retirada");
   const [obs, setObs]                 = useState("");
   const [desconto, setDesconto]       = useState(0);
+  const [temIpi, setTemIpi]           = useState(false);
   const [itens, setItens]             = useState<ItemForm[]>([{ ...ITEM_VAZIO }]);
   const [estoque, setEstoque]         = useState<Map<number, number>>(new Map());
   const [comprometido, setComprometido] = useState<Map<number, number>>(new Map());
@@ -209,6 +211,8 @@ function NovoOrcamentoPageInner() {
   const subtotalBruto = itens.reduce((a, i) => a + calcSubtotal(i), 0);
   const valorDesconto = subtotalBruto * (desconto / 100);
   const valorTotal    = subtotalBruto - valorDesconto;
+  const valorIpi        = temIpi ? calcularValorIpi(valorTotal) : 0;
+  const valorComIpiCalc = valorTotal + valorIpi;
 
   useEffect(() => {
     setParcelasForm(prev => {
@@ -221,13 +225,13 @@ function NovoOrcamentoPageInner() {
         conta:     prev[i]?.conta     ?? defaultConta,
         formaPgto: prev[i]?.formaPgto ?? defaultForma,
       }));
-      return redistribuirParcelas(novas, valorTotal);
+      return redistribuirParcelas(novas, valorComIpiCalc);
     });
   }, [parcelas]);
 
   useEffect(() => {
-    setParcelasForm(prev => redistribuirParcelas(prev, valorTotal));
-  }, [valorTotal]);
+    setParcelasForm(prev => redistribuirParcelas(prev, valorComIpiCalc));
+  }, [valorComIpiCalc]);
 
   function handlePrimeiraDtPgto(data: string) {
     setParcelasForm(prev => prev.map((p, i) => ({
@@ -242,7 +246,7 @@ function NovoOrcamentoPageInner() {
   function handleValorParcela(idx: number, valor: number) {
     setParcelasForm(prev => {
       const atualizado = prev.map((p, i) => i === idx ? { ...p, valor, editado: true } : p);
-      return redistribuirParcelas(atualizado, valorTotal, idx);
+      return redistribuirParcelas(atualizado, valorComIpiCalc, idx);
     });
   }
 
@@ -257,7 +261,7 @@ function NovoOrcamentoPageInner() {
   }
 
   const somaParcelas = parcelasForm.reduce((a, p) => a + p.valor, 0);
-  const parcelasOk   = Math.abs(somaParcelas - valorTotal) < 0.02;
+  const parcelasOk   = Math.abs(somaParcelas - valorComIpiCalc) < 0.02;
 
   function getTabela(): TabelaPreco | null {
     if (!clienteId) return tabelas[0] || null;
@@ -488,6 +492,8 @@ function NovoOrcamentoPageInner() {
       parcelas, frete, obs,
       m2_total: m2Total,
       valor_total: valorTotal,
+      tem_ipi: temIpi,
+      valor_ipi: valorIpi,
       desconto,
       status: "Rascunho",
     }, itensInsert);
@@ -549,11 +555,17 @@ function NovoOrcamentoPageInner() {
             <div style={{ marginTop: "14px", borderTop: "1px solid var(--b1)", paddingTop: "14px" }}>
               <div style={{ fontSize: "11px", color: "var(--t3)", fontWeight: 700, marginBottom: "12px", letterSpacing: ".06em" }}>FINANCEIRO</div>
 
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", fontSize: "12px", color: "var(--t2)", cursor: "pointer" }}>
+                <input name="tem_ipi" type="checkbox" tabIndex={-1} checked={temIpi} onChange={e => setTemIpi(e.target.checked)} />
+                Tem IPI ({ALIQ_IPI_PEDIDO}%)
+                {temIpi && <span style={{ fontFamily: "'DM Mono',monospace", color: "var(--warn)", marginLeft: "4px" }}>— {formatBRL(valorIpi)}</span>}
+              </label>
+
               {/* 3 boxes */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "12px" }}>
                 <div style={{ background: "var(--surf2)", borderRadius: "8px", padding: "10px 12px", border: "1px solid var(--b2)" }}>
                   <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: "4px" }}>Total</div>
-                  <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--acc)", fontFamily: "'DM Mono',monospace" }}>{formatBRL(valorTotal)}</div>
+                  <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--acc)", fontFamily: "'DM Mono',monospace" }}>{formatBRL(valorComIpiCalc)}</div>
                 </div>
                 <div style={{ background: "var(--surf2)", borderRadius: "8px", padding: "10px 12px", border: "1px solid var(--b2)" }}>
                   <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: "4px" }}>m² Total</div>
@@ -564,7 +576,7 @@ function NovoOrcamentoPageInner() {
                     {parcelas > 1 ? `${parcelas}× Parcelas` : "Pagamento"}
                   </div>
                   <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--t1)", fontFamily: "'DM Mono',monospace" }}>
-                    {parcelas > 1 ? formatBRL(valorTotal / parcelas) : (parcelasForm[0]?.formaPgto || formaPgto || "—")}
+                    {parcelas > 1 ? formatBRL(valorComIpiCalc / parcelas) : (parcelasForm[0]?.formaPgto || formaPgto || "—")}
                   </div>
                 </div>
               </div>
@@ -617,9 +629,9 @@ function NovoOrcamentoPageInner() {
                     </div>
                   ))}
                 </div>
-                {valorTotal > 0 && !parcelasOk && (
+                {valorComIpiCalc > 0 && !parcelasOk && (
                   <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--warn)", fontFamily: "'DM Mono',monospace", background: "rgba(245,158,11,.08)", border: "1px solid rgba(245,158,11,.25)", borderRadius: "6px", padding: "6px 10px" }}>
-                    ⚠ Soma das parcelas ({formatBRL(somaParcelas)}) difere do total ({formatBRL(valorTotal)})
+                    ⚠ Soma das parcelas ({formatBRL(somaParcelas)}) difere do total ({formatBRL(valorComIpiCalc)})
                   </div>
                 )}
               </div>
@@ -641,9 +653,9 @@ function NovoOrcamentoPageInner() {
                 <div className="sv" style={{ color: "var(--err)" }}>− {formatBRL(valorDesconto)}</div>
               </div>
             )}
-            <div className="sr"><div className="sl">Valor Total</div><div className="sv" style={{ color: "var(--acc)", fontSize: "18px" }}>{formatBRL(valorTotal)}</div></div>
+            <div className="sr"><div className="sl">Valor Total</div><div className="sv" style={{ color: "var(--acc)", fontSize: "18px" }}>{formatBRL(valorComIpiCalc)}</div></div>
             {parcelas > 1 && (
-              <div className="sr"><div className="sl">Por Parcela</div><div className="sv">{formatBRL(valorTotal / parcelas)}</div></div>
+              <div className="sr"><div className="sl">Por Parcela</div><div className="sv">{formatBRL(valorComIpiCalc / parcelas)}</div></div>
             )}
 
             {estoque.size > 0 && m2NecPorProduto.size > 0 && (() => {
@@ -841,7 +853,7 @@ function NovoOrcamentoPageInner() {
             <div className="ti"><div className="tl">m² Total</div><div className="tv" style={{ color: "var(--acc2)" }}>{formatM2(m2Total)}</div></div>
             <div className="ti"><div className="tl">Subtotal</div><div className="tv">{formatBRL(subtotalBruto)}</div></div>
             {desconto > 0 && <div className="ti"><div className="tl">Desconto</div><div className="tv" style={{ color: "var(--err)" }}>− {formatBRL(valorDesconto)}</div></div>}
-            <div className="ti"><div className="tl">Total</div><div className="tv" style={{ color: "var(--acc)" }}>{formatBRL(valorTotal)}</div></div>
+            <div className="ti"><div className="tl">Total</div><div className="tv" style={{ color: "var(--acc)" }}>{formatBRL(valorComIpiCalc)}</div></div>
           </div>
         </div>
       </div>

@@ -6,6 +6,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { getClientes } from "@/services/clientes.service";
 import { getOrcamentoById, updateOrcamento } from "@/services/orcamentos.service";
+import { ALIQ_IPI_PEDIDO, calcularValorIpi } from "@/lib/pedidoIpi";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
 import CurrencyInput from "@/components/ui/CurrencyInput";
@@ -59,6 +60,7 @@ export default function EditarOrcamentoPage() {
   const [frete, setFrete]             = useState("Retirada");
   const [obs, setObs]                 = useState("");
   const [desconto, setDesconto]       = useState(0);
+  const [temIpi, setTemIpi]           = useState(false);
   const [itens, setItens]             = useState<ItemForm[]>([]);
   const [itensDeletados, setItensDeletados] = useState<number[]>([]);
   const [totalOrcamentoInput, setTotalOrcamentoInput] = useState(0);
@@ -96,6 +98,7 @@ export default function EditarOrcamentoPage() {
     setFrete(orc.frete ?? "Retirada");
     setObs(orc.obs ?? "");
     setDesconto(orc.desconto ?? 0);
+    setTemIpi(orc.tem_ipi ?? false);
 
     const rawItens = (orc.itens_orcamento ?? []) as any[];
     setItens(rawItens.map(i => ({
@@ -131,6 +134,8 @@ export default function EditarOrcamentoPage() {
   const subtotalBruto = itens.reduce((a, i) => a + calcSubtotal(i), 0);
   const valorDesconto = subtotalBruto * (desconto / 100);
   const valorTotal    = subtotalBruto - valorDesconto;
+  const valorIpi        = temIpi ? calcularValorIpi(valorTotal) : 0;
+  const valorComIpiCalc = valorTotal + valorIpi;
 
   // ── tabela de preços ─────────────────────────────────────────────
 
@@ -236,6 +241,8 @@ export default function EditarOrcamentoPage() {
       frete,
       obs,
       desconto,
+      tem_ipi:      temIpi,
+      valor_ipi:    parseFloat(valorIpi.toFixed(2)),
       m2_total:     parseFloat(m2Total.toFixed(4)),
       valor_total:  parseFloat(valorTotal.toFixed(2)),
     });
@@ -336,6 +343,12 @@ export default function EditarOrcamentoPage() {
               </Campo>
             </div>
 
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", margin: "10px 0", fontSize: "12px", color: "var(--t2)", cursor: "pointer" }}>
+              <input name="tem_ipi" type="checkbox" checked={temIpi} onChange={e => setTemIpi(e.target.checked)} />
+              Tem IPI ({ALIQ_IPI_PEDIDO}%)
+              {temIpi && <span style={{ fontFamily: "'DM Mono',monospace", color: "var(--warn)", marginLeft: "4px" }}>— {formatBRL(valorIpi)}</span>}
+            </label>
+
             <Campo style={{ marginTop: "10px" }} label="Observações">
               <textarea name="obs" className="fc" value={obs} onChange={e => setObs(e.target.value)} placeholder="Observações do orçamento..." />
             </Campo>
@@ -353,12 +366,12 @@ export default function EditarOrcamentoPage() {
                 <div className="sv" style={{ color: "var(--err)" }}>− {formatBRL(valorDesconto)}</div>
               </div>
             )}
-            <div className="sr"><div className="sl">Valor Total</div><div className="sv" style={{ color: "var(--acc)", fontSize: "18px" }}>{formatBRL(valorTotal)}</div></div>
+            <div className="sr"><div className="sl">Valor Total</div><div className="sv" style={{ color: "var(--acc)", fontSize: "18px" }}>{formatBRL(valorComIpiCalc)}</div></div>
             {parcelas > 1 && (
-              <div className="sr"><div className="sl">Por Parcela</div><div className="sv">{formatBRL(valorTotal / parcelas)}</div></div>
+              <div className="sr"><div className="sl">Por Parcela</div><div className="sv">{formatBRL(valorComIpiCalc / parcelas)}</div></div>
             )}
             <button className="btn bp" style={{ width:"100%", marginTop:"16px", padding:"12px" }} onClick={salvar} disabled={salvando}>
-              {salvando ? "Salvando..." : `✓ Salvar Alterações · ${formatBRL(valorTotal)}`}
+              {salvando ? "Salvando..." : `✓ Salvar Alterações · ${formatBRL(valorComIpiCalc)}`}
             </button>
           </div>
         </div>
@@ -450,7 +463,7 @@ export default function EditarOrcamentoPage() {
             <div className="ti"><div className="tl">m² Total</div><div className="tv" style={{ color: "var(--acc2)" }}>{formatM2(m2Total)}</div></div>
             <div className="ti"><div className="tl">Subtotal</div><div className="tv">{formatBRL(subtotalBruto)}</div></div>
             {desconto > 0 && <div className="ti"><div className="tl">Desconto</div><div className="tv" style={{ color: "var(--err)" }}>− {formatBRL(valorDesconto)}</div></div>}
-            <div className="ti"><div className="tl">Total</div><div className="tv" style={{ color: "var(--acc)" }}>{formatBRL(valorTotal)}</div></div>
+            <div className="ti"><div className="tl">Total</div><div className="tv" style={{ color: "var(--acc)" }}>{formatBRL(valorComIpiCalc)}</div></div>
           </div>
         </div>
       </div>

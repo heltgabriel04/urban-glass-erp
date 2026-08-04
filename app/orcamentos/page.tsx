@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getOrcamentos, updateOrcamento, aprovarOrcamento, rejeitarOrcamento, deletarOrcamento } from "@/services/orcamentos.service";
+import { valorComIpi } from "@/lib/pedidoIpi";
 import { formatBRL, formatDate, formatPercent } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
@@ -83,7 +84,7 @@ export default function OrcamentosPage() {
     return matchBusca && matchStatus;
   });
 
-  const totalValor      = orcamentos.reduce((a, o) => a + Number(o.valor_total), 0);
+  const totalValor      = orcamentos.reduce((a, o) => a + valorComIpi(o), 0);
   const totalAprovados  = orcamentos.filter(o => o.status === "Aprovado").length;
   const totalPendentes  = orcamentos.filter(o => ["Rascunho", "Enviado"].includes(o.status)).length;
   const totalRejeitados = orcamentos.filter(o => o.status === "Rejeitado").length;
@@ -214,7 +215,7 @@ export default function OrcamentosPage() {
                     <td className="mono">{formatDate(o.dt_orcamento)}</td>
                     <td className="mono">{formatDate(o.dt_validade) || "—"}</td>
                     <td className="mono">{Number(o.m2_total).toFixed(2)} m²</td>
-                    <td className="mono" style={{ color:"var(--acc)", fontWeight:600 }}>{formatBRL(o.valor_total)}</td>
+                    <td className="mono" style={{ color:"var(--acc)", fontWeight:600 }}>{formatBRL(valorComIpi(o))}</td>
                     <td><span className={CHIP[o.status] ?? "chip cgr"}>{o.status}</span></td>
                     <td>
                       {o.pedido_id ? (

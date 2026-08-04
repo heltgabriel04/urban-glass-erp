@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getOrcamentoById, updateOrcamento, aprovarOrcamento, rejeitarOrcamento, uploadArquivoAssinado, deleteArquivoAssinado } from "@/services/orcamentos.service";
 import { getSaldoPorProduto } from "@/services/lotes.service";
+import { ALIQ_IPI_PEDIDO, valorComIpi } from "@/lib/pedidoIpi";
 import { formatBRL, formatDate, formatM2 } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
@@ -254,7 +255,7 @@ export default function OrcamentoDetalhe() {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "14px" }}>
                     <div style={{ background: "var(--surf2)", borderRadius: "8px", padding: "10px 12px", border: "1px solid var(--b2)" }}>
                       <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: "4px" }}>Total</div>
-                      <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--acc)", fontFamily: "'DM Mono',monospace" }}>{formatBRL(orc.valor_total)}</div>
+                      <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--acc)", fontFamily: "'DM Mono',monospace" }}>{formatBRL(valorComIpi(orc))}</div>
                     </div>
                     <div style={{ background: "var(--surf2)", borderRadius: "8px", padding: "10px 12px", border: "1px solid var(--b2)" }}>
                       <div style={{ fontSize: "9px", color: "var(--t3)", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: "4px" }}>{unidade} Total</div>
@@ -265,12 +266,19 @@ export default function OrcamentoDetalhe() {
                         {orc.parcelas > 1 ? `${orc.parcelas}× Parcelas` : "Pagamento"}
                       </div>
                       <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--t1)", fontFamily: "'DM Mono',monospace" }}>
-                        {orc.parcelas > 1 ? formatBRL(orc.valor_total / orc.parcelas) : (orc.forma_pgto || "—")}
+                        {orc.parcelas > 1 ? formatBRL(valorComIpi(orc) / orc.parcelas) : (orc.forma_pgto || "—")}
                       </div>
                     </div>
                   </div>
                 );
               })()}
+
+              {orc.tem_ipi && (
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "var(--t3)", marginBottom: "10px" }}>
+                  <span>IPI ({ALIQ_IPI_PEDIDO}% sobre {formatBRL(orc.valor_total)})</span>
+                  <span style={{ fontFamily: "'DM Mono',monospace", color: "var(--warn)" }}>{formatBRL(orc.valor_ipi)}</span>
+                </div>
+              )}
 
               {/* Desconto e detalhes adicionais */}
               <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
@@ -598,7 +606,7 @@ export default function OrcamentoDetalhe() {
                 {orc.parcelas > 1 && (
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ fontWeight: 600, color: "#444" }}>Parcelas</span>
-                    <strong>{orc.parcelas}× de {formatBRL(orc.valor_total / orc.parcelas)}</strong>
+                    <strong>{orc.parcelas}× de {formatBRL(valorComIpi(orc) / orc.parcelas)}</strong>
                   </div>
                 )}
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -662,9 +670,15 @@ export default function OrcamentoDetalhe() {
                   <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#c00" }}>− {formatBRL(orc.valor_total / (1 - orc.desconto/100) * orc.desconto/100)}</span>
                 </div>
               )}
+              {orc.tem_ipi && (
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "11px" }}>
+                  <span style={{ fontWeight: 700, color: "#444" }}>IPI ({ALIQ_IPI_PEDIDO}%)</span>
+                  <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#444" }}>+ {formatBRL(orc.valor_ipi)}</span>
+                </div>
+              )}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "10px", borderTop: "2px solid #2d5fa6" }}>
                 <span style={{ fontWeight: 800, fontSize: "13px", color: "#2d5fa6" }}>VALOR TOTAL</span>
-                <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: "18px", color: "#2d5fa6" }}>{formatBRL(orc.valor_total)}</span>
+                <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: "18px", color: "#2d5fa6" }}>{formatBRL(valorComIpi(orc))}</span>
               </div>
             </div>
           </div>

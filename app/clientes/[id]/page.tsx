@@ -340,7 +340,7 @@ export default function ClienteDetalhe() {
                       <td><span className="mono" style={{ color:"var(--acc)" }}>{o.id}</span></td>
                       <td className="mono">{formatDate(o.dt_criacao)}</td>
                       <td className="mono">{o.validade} dias</td>
-                      <td className="mono">{formatBRL(o.valor_total)}</td>
+                      <td className="mono">{formatBRL(valorComIpi(o))}</td>
                       <td><span className={ORCAMENTO_CHIP[o.status] ?? "chip cgr"}>{o.status}</span></td>
                       <td><a href={`/orcamentos/${o.id}`} className="btn bg xs">Ver</a></td>
                     </tr>

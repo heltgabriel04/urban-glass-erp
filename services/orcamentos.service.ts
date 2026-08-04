@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase/client';
 import { criarLancamentosParcelados } from './financeiro.service';
 import { registrarLog } from './log.service';
+import { valorComIpi } from '@/lib/pedidoIpi';
 
 function addMonthsStr(dateStr: string, months: number): string {
   const d = new Date(dateStr + "T12:00:00");
@@ -37,6 +38,8 @@ export interface OrcamentoInsert {
   obs?: string;
   m2_total: number;
   valor_total: number;
+  tem_ipi?: boolean;
+  valor_ipi?: number;
   desconto?: number;
   status?: StatusOrcamento;
 }
@@ -132,6 +135,8 @@ export async function aprovarOrcamento(orcamentoId: string) {
       dt_retirada: orc.dt_entrega || null,
       m2_total: orc.m2_total,
       valor_total: orc.valor_total,
+      tem_ipi: orc.tem_ipi ?? false,
+      valor_ipi: orc.valor_ipi ?? 0,
       valor_recebido: 0,
       status: 'Aguardando otimização',
       forma_pgto: orc.forma_pgto || '',
@@ -163,7 +168,7 @@ export async function aprovarOrcamento(orcamentoId: string) {
 
   // Gerar parcelas com datas (mensal a partir de dt_entrega ou hoje)
   const n = orc.parcelas || 1;
-  const valorParcela = parseFloat((orc.valor_total / n).toFixed(2));
+  const valorParcela = parseFloat((valorComIpi(orc) / n).toFixed(2));
   const primeiraData = orc.dt_entrega || new Date().toISOString().split("T")[0];
   const parcelasGeradas = Array.from({ length: n }, (_, i) => ({
     data: i === 0 ? primeiraData : addMonthsStr(primeiraData, i),

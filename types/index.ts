@@ -435,6 +435,8 @@ export interface Orcamento {
   dt_criacao: string;
   validade: number;
   valor_total: number;
+  tem_ipi?: boolean;
+  valor_ipi?: number;
   status: StatusOrcamento;
   obs: string;
   envio: string;
