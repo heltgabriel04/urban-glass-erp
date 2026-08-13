@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/client";
 import { getPedidoById, updatePedido, recalcularRecebido } from "@/services/pedidos.service";
 import { getLancamentosPorPedido } from "@/services/financeiro.service";
 import { getContasBancarias } from "@/services/contasBancarias.service";
+import { getFormasPagamento } from "@/services/formasPagamento.service";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import { ALIQ_IPI_PEDIDO, calcularValorIpi, valorComIpi } from "@/lib/pedidoIpi";
 import DateInput from "@/components/ui/DateInput";
@@ -104,6 +105,7 @@ export default function EditarPedidoPage() {
   const [tabelaItens, setTabelaItens] = useState<TabelaPrecoItem[]>([]);
   const [vendedores, setVendedores]   = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
   const [contasBancarias, setContasBancarias] = useState<string[]>(["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"]);
+  const [formasPagamento, setFormasPagamento] = useState<string[]>(["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"]);
 
   const [clienteId, setClienteId]   = useState<number | null>(null);
   const [vendedorId, setVendedorId] = useState<number | null>(null);
@@ -130,7 +132,7 @@ export default function EditarPedidoPage() {
 
   async function load() {
     setLoading(true);
-    const [pedido, lancs, clis, prods, tabs, tabItens, vends, cbs] = await Promise.all([
+    const [pedido, lancs, clis, prods, tabs, tabItens, vends, cbs, formasPg] = await Promise.all([
       getPedidoById(id),
       getLancamentosPorPedido(id),
       supabase.from("clientes").select("*").eq("ativo", true).order("nome").then(r => r.data as Cliente[] ?? []),
@@ -139,6 +141,7 @@ export default function EditarPedidoPage() {
       supabase.from("tabela_preco_itens").select("*").then(r => r.data as TabelaPrecoItem[] ?? []),
       supabase.from("vendedores").select("id, nome, comissao_pct").eq("ativo", true).order("nome").then(r => r.data ?? []),
       getContasBancarias(true),
+      getFormasPagamento(true),
     ]);
 
     if (!pedido) { toast("Pedido não encontrado", "err"); router.back(); return; }
@@ -150,6 +153,7 @@ export default function EditarPedidoPage() {
     setTabelaItens(tabItens);
     setVendedores(vends as Pick<Vendedor, "id" | "nome" | "comissao_pct">[]);
     if (cbs.length > 0) setContasBancarias(cbs.map(c => c.nome.trim()));
+    if (formasPg.length > 0) setFormasPagamento(formasPg.map(f => f.nome));
     setClienteId(pedido.cliente_id);
     setVendedorId(pedido.vendedor_id ?? null);
     setDtPedido(pedido.dt_pedido ?? "");
@@ -585,7 +589,7 @@ export default function EditarPedidoPage() {
               <Campo label="Forma de Pagamento">
                 <select name="forma_pgto" className="fc" value={formaPgto} onChange={e => setFormaPgto(e.target.value)}>
                   <option value="">Selecione...</option>
-                  {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
+                  {formasPagamento.map(f => <option key={f}>{f}</option>)}
                 </select>
               </Campo>
               <Campo label="Conta">

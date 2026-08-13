@@ -9,6 +9,8 @@ import { getOtimizacoesPorPedido } from "@/services/otimizador.service";
 import { createNaoConformidade, getNaoConformidadesPorPedido, uploadFotosNC, updateNaoConformidade } from "@/services/qualidade.service";
 import { getRetiradasPorPedido, calcularSaldoItens } from "@/services/retiradas.service";
 import { getObservacoesPorPedido, createObservacao, deletarObservacao, updateObservacao } from "@/services/observacoes.service";
+import { getFormasPagamento } from "@/services/formasPagamento.service";
+import { getContasBancarias } from "@/services/contasBancarias.service";
 import { formatBRL, formatDate, formatDuracao, formatM2, medidaReal, pctConcluido } from "@/lib/formatters";
 import { ALIQ_IPI_PEDIDO, calcularValorIpi, valorComIpi } from "@/lib/pedidoIpi";
 import { registrarRecente } from "@/lib/recentes";
@@ -95,7 +97,8 @@ const CHAPAS_DIMS = [
   { w: 2150, h: 3660 }, { w: 3660, h: 2150 },
 ];
 
-const CONTAS = ["ZRS","Banco Inter Urban Glass","Banco Inter Maxi Build","Caixa Econômica"];
+const CONTAS_FALLBACK = ["ZRS","Banco Inter Urban Glass","Banco Inter Maxi Build","Caixa Econômica"];
+const FORMAS_PGTO_FALLBACK = ["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"];
 
 function isChapaInteira(largura: number, altura: number): boolean {
   return CHAPAS_DIMS.some(c =>
@@ -188,6 +191,8 @@ export default function PedidoDetalhe() {
   const [textoEditadoObs, setTextoEditadoObs] = useState("");
   const [clientes, setClientes]         = useState<{ id: number; nome: string }[]>([]);
   const [vendedores, setVendedores]     = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
+  const [formasPagamento, setFormasPagamento] = useState<string[]>(FORMAS_PGTO_FALLBACK);
+  const [contasBancarias, setContasBancarias] = useState<string[]>(CONTAS_FALLBACK);
   const [creditoCliente, setCreditoCliente] = useState(0);
   const [loading, setLoading]           = useState(true);
   const [salvando, setSalvando]         = useState(false);
@@ -251,7 +256,7 @@ export default function PedidoDetalhe() {
 
   async function load() {
     setLoading(true);
-    const [data, lancs, otims, clis, vends, ncsData, rets, obsData] = await Promise.all([
+    const [data, lancs, otims, clis, vends, ncsData, rets, obsData, formasPg, cbs] = await Promise.all([
       getPedidoById(id),
       getLancamentosPorPedido(id),
       getOtimizacoesPorPedido(id),
@@ -260,6 +265,8 @@ export default function PedidoDetalhe() {
       getNaoConformidadesPorPedido(id),
       getRetiradasPorPedido(id),
       getObservacoesPorPedido(id),
+      getFormasPagamento(true),
+      getContasBancarias(true),
     ]);
     setPedido(data);
     if (data) {
@@ -268,6 +275,8 @@ export default function PedidoDetalhe() {
     setLancamentos(lancs);
     setOtimizacoes(otims);
     setClientes(clis as { id: number; nome: string }[]);
+    if (formasPg.length > 0) setFormasPagamento(formasPg.map(f => f.nome));
+    if (cbs.length > 0) setContasBancarias(cbs.map(c => c.nome.trim()));
     setVendedores(vends as Pick<Vendedor, "id" | "nome" | "comissao_pct">[]);
     setNcs(ncsData);
     setRetiradas(rets);
@@ -427,7 +436,7 @@ export default function PedidoDetalhe() {
         descricao: editForm.parcelas === 1 ? `Recebimento · ${pedido.id}` : `Parcela ${i + 1}/${editForm.parcelas} · ${pedido.id}`,
         valor: p.valor, status: "A Receber", vencimento: p.data,
         pedido_id: pedido.id, cliente_id: editForm.cliente_id,
-        conta: editForm.conta || CONTAS[0],
+        conta: editForm.conta || contasBancarias[0],
       });
     }
     await recalcularRecebido(pedido.id);
@@ -1254,7 +1263,7 @@ export default function PedidoDetalhe() {
                                     style={{ ...fc, fontSize:"12px", padding:"7px 8px" }}
                                   >
                                     <option value="">— Conta —</option>
-                                    {CONTAS.map(c => <option key={c} value={c}>{c}</option>)}
+                                    {contasBancarias.map(c => <option key={c} value={c}>{c}</option>)}
                                   </select>
                                 </div>
                                 <div>
@@ -1265,7 +1274,7 @@ export default function PedidoDetalhe() {
                                     style={{ ...fc, fontSize:"12px", padding:"7px 8px" }}
                                   >
                                     <option value="">— Forma —</option>
-                                    {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
+                                    {formasPagamento.map(f => <option key={f}>{f}</option>)}
                                   </select>
                                 </div>
                                 <div>
@@ -1396,7 +1405,7 @@ export default function PedidoDetalhe() {
                                       style={{ ...fc, fontSize:"12px", padding:"6px 8px" }}
                                     >
                                       <option value="">— Selecione —</option>
-                                      {CONTAS.map(o => <option key={o} value={o}>{o}</option>)}
+                                      {contasBancarias.map(o => <option key={o} value={o}>{o}</option>)}
                                     </select>
                                   </div>
                                   <div>
@@ -1407,7 +1416,7 @@ export default function PedidoDetalhe() {
                                       style={{ ...fc, fontSize:"12px", padding:"6px 8px" }}
                                     >
                                       <option value="">— Forma —</option>
-                                      {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
+                                      {formasPagamento.map(f => <option key={f}>{f}</option>)}
                                     </select>
                                   </div>
                                 </div>
@@ -1830,13 +1839,13 @@ export default function PedidoDetalhe() {
                   <Campo label="Forma de Pagamento">
                     <select name="forma_pgto" style={fc} value={editForm.forma_pgto} onChange={e => setEditForm(f => ({ ...f, forma_pgto: e.target.value }))}>
                       <option value="">Selecione...</option>
-                      {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(o => <option key={o}>{o}</option>)}
+                      {formasPagamento.map(o => <option key={o}>{o}</option>)}
                     </select>
                   </Campo>
                   <Campo label="Conta">
                     <select name="conta" style={fc} value={editForm.conta} onChange={e => setEditForm(f => ({ ...f, conta: e.target.value }))}>
                       <option value="">Selecione...</option>
-                      {CONTAS.map(o => <option key={o}>{o}</option>)}
+                      {contasBancarias.map(o => <option key={o}>{o}</option>)}
                     </select>
                   </Campo>
                 </div>

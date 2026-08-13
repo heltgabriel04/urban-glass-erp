@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/client";
 import { getClientes } from "@/services/clientes.service";
 import { getOrcamentoById, updateOrcamento } from "@/services/orcamentos.service";
 import { getContasBancarias } from "@/services/contasBancarias.service";
+import { getFormasPagamento } from "@/services/formasPagamento.service";
 import { ALIQ_IPI_PEDIDO, calcularValorIpi } from "@/lib/pedidoIpi";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
@@ -51,6 +52,7 @@ export default function EditarOrcamentoPage() {
   const [tabelas, setTabelas]         = useState<TabelaPreco[]>([]);
   const [tabelaItens, setTabelaItens] = useState<TabelaPrecoItem[]>([]);
   const [contasBancarias, setContasBancarias] = useState<string[]>(["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"]);
+  const [formasPagamento, setFormasPagamento] = useState<string[]>(["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"]);
 
   const [clienteId, setClienteId]     = useState<number | null>(null);
   const [dtOrcamento, setDtOrcamento] = useState("");
@@ -75,13 +77,14 @@ export default function EditarOrcamentoPage() {
 
   async function load() {
     setLoading(true);
-    const [orc, clis, prods, tabs, tabItens, cbs] = await Promise.all([
+    const [orc, clis, prods, tabs, tabItens, cbs, formasPg] = await Promise.all([
       getOrcamentoById(id),
       getClientes(true),
       supabase.from("produtos").select("*").eq("ativo", true).then(r => r.data as Produto[] ?? []),
       supabase.from("tabelas_preco").select("*").eq("ativo", true).then(r => r.data as TabelaPreco[] ?? []),
       supabase.from("tabela_preco_itens").select("*").then(r => r.data as TabelaPrecoItem[] ?? []),
       getContasBancarias(true),
+      getFormasPagamento(true),
     ]);
 
     if (!orc) { toast("Orçamento não encontrado", "err"); router.back(); return; }
@@ -91,6 +94,7 @@ export default function EditarOrcamentoPage() {
     setTabelas(tabs);
     setTabelaItens(tabItens);
     if (cbs.length > 0) setContasBancarias(cbs.map(c => c.nome.trim()));
+    if (formasPg.length > 0) setFormasPagamento(formasPg.map(f => f.nome));
 
     setClienteId(orc.cliente_id);
     setDtOrcamento(orc.dt_orcamento ?? "");
@@ -326,7 +330,7 @@ export default function EditarOrcamentoPage() {
               <Campo label="Forma de Pagamento">
                 <select name="forma_pgto" className="fc" value={formaPgto} onChange={e => setFormaPgto(e.target.value)}>
                   <option value="">Selecione...</option>
-                  {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
+                  {formasPagamento.map(f => <option key={f}>{f}</option>)}
                 </select>
               </Campo>
               <Campo label="Conta">

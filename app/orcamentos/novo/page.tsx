@@ -8,6 +8,7 @@ import { getClientes } from "@/services/clientes.service";
 import { createOrcamento, getProximoIdOrcamento, getOrcamentoById } from "@/services/orcamentos.service";
 import { getSaldoPorProduto } from "@/services/lotes.service";
 import { getContasBancarias } from "@/services/contasBancarias.service";
+import { getFormasPagamento } from "@/services/formasPagamento.service";
 import { ALIQ_IPI_PEDIDO, calcularValorIpi } from "@/lib/pedidoIpi";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
@@ -123,6 +124,7 @@ function NovoOrcamentoPageInner() {
   const [modalImportar, setModalImportar] = useState(false);
   const [modalImportarPdf, setModalImportarPdf] = useState(false);
   const [contasBancarias, setContasBancarias] = useState<string[]>(["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"]);
+  const [formasPagamento, setFormasPagamento] = useState<string[]>(["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"]);
 
   const largRefs   = useRef<(HTMLInputElement | null)[]>([]);
   const altRefs    = useRef<(HTMLInputElement | null)[]>([]);
@@ -140,7 +142,7 @@ function NovoOrcamentoPageInner() {
   }, [itens.length]);
 
   async function load() {
-    const [clis, prods, tabs, tpcItens, pid, saldoPorProduto, cbs] = await Promise.all([
+    const [clis, prods, tabs, tpcItens, pid, saldoPorProduto, cbs, formasPg] = await Promise.all([
       getClientes(true),
       supabase.from("produtos").select("*").eq("ativo", true).then(r => r.data as Produto[]),
       supabase.from("tabelas_preco").select("*").eq("ativo", true).then(r => r.data as TabelaPreco[]),
@@ -148,6 +150,7 @@ function NovoOrcamentoPageInner() {
       getProximoIdOrcamento(),
       getSaldoPorProduto(),
       getContasBancarias(true),
+      getFormasPagamento(true),
     ]);
     setClientes(clis || []);
     setProdutos(prods || []);
@@ -155,6 +158,7 @@ function NovoOrcamentoPageInner() {
     setTabelaItens(tpcItens || []);
     setProximoId(pid);
     if (cbs.length > 0) setContasBancarias(cbs.map(c => c.nome.trim()));
+    if (formasPg.length > 0) setFormasPagamento(formasPg.map(f => f.nome));
     const em = new Map<number, number>();
     saldoPorProduto.forEach(e => em.set(e.produtoId, e.m2Saldo));
     setEstoque(em);
@@ -617,7 +621,7 @@ function NovoOrcamentoPageInner() {
                         onChange={e => handleFormaParc(idx, e.target.value)}
                       >
                         <option value="">— Forma —</option>
-                        {["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"].map(f => <option key={f}>{f}</option>)}
+                        {formasPagamento.map(f => <option key={f}>{f}</option>)}
                       </select>
                       <select name={`p_conta_${idx}`}
                         tabIndex={-1}
