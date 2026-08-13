@@ -6,6 +6,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { getClientes } from "@/services/clientes.service";
 import { getOrcamentoById, updateOrcamento } from "@/services/orcamentos.service";
+import { getContasBancarias } from "@/services/contasBancarias.service";
 import { ALIQ_IPI_PEDIDO, calcularValorIpi } from "@/lib/pedidoIpi";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import DateInput from "@/components/ui/DateInput";
@@ -49,6 +50,7 @@ export default function EditarOrcamentoPage() {
   const [produtos, setProdutos]       = useState<Produto[]>([]);
   const [tabelas, setTabelas]         = useState<TabelaPreco[]>([]);
   const [tabelaItens, setTabelaItens] = useState<TabelaPrecoItem[]>([]);
+  const [contasBancarias, setContasBancarias] = useState<string[]>(["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"]);
 
   const [clienteId, setClienteId]     = useState<number | null>(null);
   const [dtOrcamento, setDtOrcamento] = useState("");
@@ -73,12 +75,13 @@ export default function EditarOrcamentoPage() {
 
   async function load() {
     setLoading(true);
-    const [orc, clis, prods, tabs, tabItens] = await Promise.all([
+    const [orc, clis, prods, tabs, tabItens, cbs] = await Promise.all([
       getOrcamentoById(id),
       getClientes(true),
       supabase.from("produtos").select("*").eq("ativo", true).then(r => r.data as Produto[] ?? []),
       supabase.from("tabelas_preco").select("*").eq("ativo", true).then(r => r.data as TabelaPreco[] ?? []),
       supabase.from("tabela_preco_itens").select("*").then(r => r.data as TabelaPrecoItem[] ?? []),
+      getContasBancarias(true),
     ]);
 
     if (!orc) { toast("Orçamento não encontrado", "err"); router.back(); return; }
@@ -87,6 +90,7 @@ export default function EditarOrcamentoPage() {
     setProdutos(prods);
     setTabelas(tabs);
     setTabelaItens(tabItens);
+    if (cbs.length > 0) setContasBancarias(cbs.map(c => c.nome.trim()));
 
     setClienteId(orc.cliente_id);
     setDtOrcamento(orc.dt_orcamento ?? "");
@@ -328,7 +332,7 @@ export default function EditarOrcamentoPage() {
               <Campo label="Conta">
                 <select name="conta" className="fc" value={conta} onChange={e => setConta(e.target.value)}>
                   <option value="">Selecione...</option>
-                  {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => <option key={c}>{c}</option>)}
+                  {contasBancarias.map(c => <option key={c}>{c}</option>)}
                 </select>
               </Campo>
             </div>

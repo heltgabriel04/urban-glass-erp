@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/client";
 import { getClientes } from "@/services/clientes.service";
 import { createOrcamento, getProximoIdOrcamento, getOrcamentoById } from "@/services/orcamentos.service";
 import { getSaldoPorProduto } from "@/services/lotes.service";
+import { getContasBancarias } from "@/services/contasBancarias.service";
 import { ALIQ_IPI_PEDIDO, calcularValorIpi } from "@/lib/pedidoIpi";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import { useToast } from "@/components/ui/toast";
@@ -121,6 +122,7 @@ function NovoOrcamentoPageInner() {
   const [parcelasForm, setParcelasForm] = useState<ParcelaForm[]>([{ data: "", valor: 0, editado: false, conta: "", formaPgto: "" }]);
   const [modalImportar, setModalImportar] = useState(false);
   const [modalImportarPdf, setModalImportarPdf] = useState(false);
+  const [contasBancarias, setContasBancarias] = useState<string[]>(["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"]);
 
   const largRefs   = useRef<(HTMLInputElement | null)[]>([]);
   const altRefs    = useRef<(HTMLInputElement | null)[]>([]);
@@ -138,19 +140,21 @@ function NovoOrcamentoPageInner() {
   }, [itens.length]);
 
   async function load() {
-    const [clis, prods, tabs, tpcItens, pid, saldoPorProduto] = await Promise.all([
+    const [clis, prods, tabs, tpcItens, pid, saldoPorProduto, cbs] = await Promise.all([
       getClientes(true),
       supabase.from("produtos").select("*").eq("ativo", true).then(r => r.data as Produto[]),
       supabase.from("tabelas_preco").select("*").eq("ativo", true).then(r => r.data as TabelaPreco[]),
       supabase.from("tabela_preco_itens").select("*").then(r => r.data as TabelaPrecoItem[] || []),
       getProximoIdOrcamento(),
       getSaldoPorProduto(),
+      getContasBancarias(true),
     ]);
     setClientes(clis || []);
     setProdutos(prods || []);
     setTabelas(tabs || []);
     setTabelaItens(tpcItens || []);
     setProximoId(pid);
+    if (cbs.length > 0) setContasBancarias(cbs.map(c => c.nome.trim()));
     const em = new Map<number, number>();
     saldoPorProduto.forEach(e => em.set(e.produtoId, e.m2Saldo));
     setEstoque(em);
@@ -623,7 +627,7 @@ function NovoOrcamentoPageInner() {
                         onChange={e => handleContaParc(idx, e.target.value)}
                       >
                         <option value="">— Conta —</option>
-                        {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => <option key={c}>{c}</option>)}
+                        {contasBancarias.map(c => <option key={c}>{c}</option>)}
                       </select>
                       <CurrencyInput value={p.valor} onChange={v => handleValorParcela(idx, v)} placeholder="R$ 0,00" style={{ margin: 0, fontSize: "12px", padding: "7px 8px" }} />
                     </div>

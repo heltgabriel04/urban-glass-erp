@@ -8,6 +8,7 @@ import { getClientes } from "@/services/clientes.service";
 import { createPedido, getProximoIdPedido, getPedidoById } from "@/services/pedidos.service";
 import { criarLancamentosParcelados } from "@/services/financeiro.service";
 import { getFormasPagamento } from "@/services/formasPagamento.service";
+import { getContasBancarias } from "@/services/contasBancarias.service";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import { ALIQ_IPI_PEDIDO, calcularValorIpi } from "@/lib/pedidoIpi";
 import { useToast } from "@/components/ui/toast";
@@ -129,6 +130,7 @@ function NovoPedidoPageInner() {
   const [tabelaItens, setTabelaItens] = useState<TabelaPrecoItem[]>([]);
   const [vendedores, setVendedores]   = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
   const [formasPagamento, setFormasPagamento] = useState<string[]>(["Dinheiro","PIX","Boleto","Cartão","Cheque","A Prazo"]);
+  const [contasBancarias, setContasBancarias] = useState<string[]>(["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"]);
   const [proximoId, setProximoId]     = useState("");
 
   const [clienteId, setClienteId]   = useState<number | null>(null);
@@ -156,7 +158,7 @@ function NovoPedidoPageInner() {
   useEffect(() => { load(); }, []);
 
   async function load() {
-    const [clis, prods, tabs, itens, pid, vends, formasPg, lotes] = await Promise.all([
+    const [clis, prods, tabs, itens, pid, vends, formasPg, cbs, lotes] = await Promise.all([
       getClientes(true),
       supabase.from("produtos").select("*").eq("ativo", true).then(r => r.data as Produto[]),
       supabase.from("tabelas_preco").select("*").eq("ativo", true).then(r => r.data as TabelaPreco[]),
@@ -164,6 +166,7 @@ function NovoPedidoPageInner() {
       getProximoIdPedido(),
       supabase.from("vendedores").select("id, nome, comissao_pct").eq("ativo", true).order("nome").then(r => r.data ?? []),
       getFormasPagamento(true),
+      getContasBancarias(true),
       getLotesUtilizaveis(),
     ]);
     setClientes(clis || []);
@@ -174,6 +177,7 @@ function NovoPedidoPageInner() {
     setProximoId(pid);
     setItens([{ ...ITEM_VAZIO }]);
     if (formasPg.length > 0) setFormasPagamento(formasPg.map(f => f.nome));
+    if (cbs.length > 0) setContasBancarias(cbs.map(c => c.nome.trim()));
     setLotesEstoque(lotes);
 
     const duplicarDe = searchParams.get("duplicarDe");
@@ -719,7 +723,7 @@ function NovoPedidoPageInner() {
                         onChange={e => handleContaParc(idx, e.target.value)}
                       >
                         <option value="">— Conta —</option>
-                        {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => <option key={c}>{c}</option>)}
+                        {contasBancarias.map(c => <option key={c}>{c}</option>)}
                       </select>
                       <CurrencyInput value={p.valor} onChange={v => handleValorParcela(idx, v)} placeholder="R$ 0,00" style={{ margin: 0, fontSize: "12px", padding: "7px 8px" }} />
                     </div>

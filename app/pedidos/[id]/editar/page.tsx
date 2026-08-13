@@ -6,6 +6,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/lib/supabase/client";
 import { getPedidoById, updatePedido, recalcularRecebido } from "@/services/pedidos.service";
 import { getLancamentosPorPedido } from "@/services/financeiro.service";
+import { getContasBancarias } from "@/services/contasBancarias.service";
 import { formatBRL, formatM2 } from "@/lib/formatters";
 import { ALIQ_IPI_PEDIDO, calcularValorIpi, valorComIpi } from "@/lib/pedidoIpi";
 import DateInput from "@/components/ui/DateInput";
@@ -102,6 +103,7 @@ export default function EditarPedidoPage() {
   const [tabelas, setTabelas]         = useState<TabelaPreco[]>([]);
   const [tabelaItens, setTabelaItens] = useState<TabelaPrecoItem[]>([]);
   const [vendedores, setVendedores]   = useState<Pick<Vendedor, "id" | "nome" | "comissao_pct">[]>([]);
+  const [contasBancarias, setContasBancarias] = useState<string[]>(["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"]);
 
   const [clienteId, setClienteId]   = useState<number | null>(null);
   const [vendedorId, setVendedorId] = useState<number | null>(null);
@@ -128,7 +130,7 @@ export default function EditarPedidoPage() {
 
   async function load() {
     setLoading(true);
-    const [pedido, lancs, clis, prods, tabs, tabItens, vends] = await Promise.all([
+    const [pedido, lancs, clis, prods, tabs, tabItens, vends, cbs] = await Promise.all([
       getPedidoById(id),
       getLancamentosPorPedido(id),
       supabase.from("clientes").select("*").eq("ativo", true).order("nome").then(r => r.data as Cliente[] ?? []),
@@ -136,6 +138,7 @@ export default function EditarPedidoPage() {
       supabase.from("tabelas_preco").select("*").eq("ativo", true).then(r => r.data as TabelaPreco[] ?? []),
       supabase.from("tabela_preco_itens").select("*").then(r => r.data as TabelaPrecoItem[] ?? []),
       supabase.from("vendedores").select("id, nome, comissao_pct").eq("ativo", true).order("nome").then(r => r.data ?? []),
+      getContasBancarias(true),
     ]);
 
     if (!pedido) { toast("Pedido não encontrado", "err"); router.back(); return; }
@@ -146,6 +149,7 @@ export default function EditarPedidoPage() {
     setTabelas(tabs);
     setTabelaItens(tabItens);
     setVendedores(vends as Pick<Vendedor, "id" | "nome" | "comissao_pct">[]);
+    if (cbs.length > 0) setContasBancarias(cbs.map(c => c.nome.trim()));
     setClienteId(pedido.cliente_id);
     setVendedorId(pedido.vendedor_id ?? null);
     setDtPedido(pedido.dt_pedido ?? "");
@@ -587,7 +591,7 @@ export default function EditarPedidoPage() {
               <Campo label="Conta">
                 <select name="conta" className="fc" value={conta} onChange={e => setConta(e.target.value)}>
                   <option value="">Selecione...</option>
-                  {["ZRS","Itaú","Bradesco","Nubank","Caixa Econômica","Santander"].map(c => <option key={c}>{c}</option>)}
+                  {contasBancarias.map(c => <option key={c}>{c}</option>)}
                 </select>
               </Campo>
             </div>
