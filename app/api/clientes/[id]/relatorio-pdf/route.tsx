@@ -45,7 +45,7 @@ export async function GET(
       .select("*")
       .eq("cliente_id", id)
       .eq("tipo", "Entrada")
-      .eq("status", "A Receber")
+      .in("status", ["A Receber", "Pago"])
       .order("vencimento", { ascending: true }),
   ]);
   console.log(`[relatorio-pdf] busca pedidos+lancamentos: ${Date.now() - t2}ms`);
@@ -54,11 +54,18 @@ export async function GET(
   const lancamentos = (lancData ?? []) as Lancamento[];
 
   const parcelasPorPedido = new Map<string, { vencimento: string | null; valor: number }[]>();
+  const pagamentosPorPedido = new Map<string, { data: string | null; formaPgto: string | null; conta: string | null; valor: number }[]>();
   for (const l of lancamentos) {
     if (!l.pedido_id) continue;
-    const lista = parcelasPorPedido.get(l.pedido_id) ?? [];
-    lista.push({ vencimento: l.vencimento, valor: l.valor });
-    parcelasPorPedido.set(l.pedido_id, lista);
+    if (l.status === "A Receber") {
+      const lista = parcelasPorPedido.get(l.pedido_id) ?? [];
+      lista.push({ vencimento: l.vencimento, valor: l.valor });
+      parcelasPorPedido.set(l.pedido_id, lista);
+    } else if (l.status === "Pago") {
+      const lista = pagamentosPorPedido.get(l.pedido_id) ?? [];
+      lista.push({ data: l.dt_pagamento ?? l.vencimento, formaPgto: l.forma_pgto ?? null, conta: l.conta ?? null, valor: l.valor });
+      pagamentosPorPedido.set(l.pedido_id, lista);
+    }
   }
 
   const pedidos: PedidoRelatorio[] = pedidosRows.map((pedido) => {
@@ -73,6 +80,7 @@ export async function GET(
       quitado: Number(pedido.valor_recebido) >= totalComIpi - 0.02,
       isML,
       parcelasPendentes: parcelasPorPedido.get(pedido.id) ?? [],
+      pagamentosRecebidos: pagamentosPorPedido.get(pedido.id) ?? [],
     };
   });
 

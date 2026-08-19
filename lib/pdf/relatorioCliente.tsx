@@ -55,6 +55,8 @@ const styles = StyleSheet.create({
   statusQuitado: { fontSize: 9, fontWeight: 700, color: VERDE },
   statusAberto: { fontSize: 9, fontWeight: 700, color: VERMELHO },
   parcelaLinha: { flexDirection: "row", justifyContent: "space-between", fontSize: 8, color: "#333", marginTop: 2, paddingLeft: 8 },
+  pagamentosTitulo: { fontSize: 7.5, fontWeight: 700, color: "#333", textTransform: "uppercase", letterSpacing: 1, marginTop: 6 },
+  pagamentoLinha: { flexDirection: "row", justifyContent: "space-between", fontSize: 8, color: "#333", marginTop: 2, paddingLeft: 8 },
 
   footer: { borderTopWidth: 2, borderTopColor: AZUL, paddingTop: 8, marginTop: 12 },
   footerTexto: { fontSize: 7, color: "#333" },
@@ -66,6 +68,7 @@ export interface PedidoRelatorio {
   quitado: boolean;
   isML: boolean;
   parcelasPendentes: { vencimento: string | null; valor: number }[];
+  pagamentosRecebidos: { data: string | null; formaPgto: string | null; conta: string | null; valor: number }[];
 }
 
 export interface RelatorioClienteDados {
@@ -161,7 +164,7 @@ export function RelatorioClienteDocument({ dados }: { dados: RelatorioClienteDad
           <Text style={styles.label}>Nenhum pedido em aberto no momento.</Text>
         ) : (
           dados.pedidos.map((pr) => {
-            const { pedido, totalComIpi, quitado, parcelasPendentes } = pr;
+            const { pedido, totalComIpi, quitado, parcelasPendentes, pagamentosRecebidos } = pr;
             const itens = pedido.itens_pedido ?? [];
             const aberto = totalComIpi - Number(pedido.valor_recebido);
             return (
@@ -218,6 +221,22 @@ export function RelatorioClienteDocument({ dados }: { dados: RelatorioClienteDad
                     </View>
                   )}
                 </View>
+
+                {pagamentosRecebidos.length > 0 && (
+                  <View style={{ marginBottom: 4 }}>
+                    <Text style={styles.pagamentosTitulo}>Pagamentos Recebidos</Text>
+                    {pagamentosRecebidos.map((p, i) => (
+                      <View key={i} style={styles.pagamentoLinha}>
+                        <Text>
+                          {p.data ? formatDate(p.data) : "data não definida"}
+                          {p.formaPgto ? ` · ${p.formaPgto}` : ""}
+                          {p.conta ? ` · ${p.conta}` : ""}
+                        </Text>
+                        <Text style={{ color: VERDE, fontWeight: 700 }}>{formatBRL(p.valor)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
 
                 {quitado ? (
                   <Text style={styles.statusQuitado}>✓ Quitado</Text>

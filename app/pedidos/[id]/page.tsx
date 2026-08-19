@@ -1262,7 +1262,9 @@ export default function PedidoDetalhe() {
                                     value={pag?.dataPagamento ?? hoje()}
                                     onChange={v => {
                                       setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], dataPagamento: v } }));
-                                      if (v.includes("-")) salvarRascunhoPagamento(l.id, { dt_pagamento: v });
+                                      // Data pgto também vale como vencimento da parcela — decisão do
+                                      // usuário 2026-08-19: um campo só, sem "vencimento" separado.
+                                      if (v.includes("-")) salvarRascunhoPagamento(l.id, { dt_pagamento: v, vencimento: v });
                                     }}
                                   />
                                 </div>
