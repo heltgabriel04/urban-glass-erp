@@ -691,6 +691,19 @@ export default function EditarPedidoPage() {
             <button className="btn bp xs" onClick={addItem}>+ Item</button>
           </div>
 
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px", marginBottom:"10px" }}>
+            <div style={{ padding:"7px 10px", background:"var(--surf2)", borderRadius:"6px", border:"1px solid var(--b2)", display:"flex", alignItems:"center", gap:"8px" }}>
+              <span style={{ fontSize:"10px", color:"var(--t2)", fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap" }} title={`Distribui proporcionalmente ao ${isMl ? "ml" : "m²"} de cada item`}>Distribuir total:</span>
+              <CurrencyInput value={totalPedidoInput} onChange={setTotalPedidoInput} placeholder="R$ 850,00" style={{ flex:1, minWidth:0, margin:0 }} />
+              <button className="btn bp xs" onClick={() => aplicarTotalPedido(totalPedidoInput)} disabled={totalPedidoInput <= 0 || m2Total === 0} title="Aplicar">↵</button>
+            </div>
+            <div style={{ padding:"7px 10px", background:"var(--surf2)", borderRadius:"6px", border:"1px solid var(--b2)", display:"flex", alignItems:"center", gap:"8px" }}>
+              <span style={{ fontSize:"10px", color:"var(--t2)", fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap" }} title={`Define o mesmo R$/${isMl ? "ml" : "m²"} em todas as linhas — útil quando você não sabe o total, só o preço unitário`}>Preço único:</span>
+              <CurrencyInput value={valorGeralInput} onChange={setValorGeralInput} placeholder={isMl ? "R$ 15,00/ml" : "R$ 80,00/m²"} style={{ flex:1, minWidth:0, margin:0 }} />
+              <button className="btn bp xs" onClick={() => aplicarValorGeral(valorGeralInput)} disabled={valorGeralInput <= 0} title="Aplicar">↵</button>
+            </div>
+          </div>
+
           {isMl && (
             <div style={{ marginBottom:"10px", padding:"8px 12px", background:"rgba(99,102,241,.1)", borderRadius:"6px", border:"1px solid rgba(99,102,241,.3)", fontSize:"12px", color:"#818cf8", fontFamily:"'DM Mono',monospace" }}>
               Metro Linear · fórmula: (Largura_m × ☑ + Altura_m × ☑) × Quantidade × R$/ml
@@ -822,21 +835,6 @@ export default function EditarPedidoPage() {
               </div>
             );
           })}
-
-          {/* Distribuir total */}
-          <div style={{ marginTop:"14px", padding:"12px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)", display:"flex", alignItems:"center", gap:"12px", flexWrap:"wrap" }}>
-            <span style={{ fontSize:"11px", color:"var(--t2)", fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap" }}>Distribuir total do pedido:</span>
-            <CurrencyInput value={totalPedidoInput} onChange={setTotalPedidoInput} placeholder="Ex: R$ 850,00" style={{ width:"140px", margin:0 }} />
-            <button className="btn bp sm" onClick={() => aplicarTotalPedido(totalPedidoInput)} disabled={totalPedidoInput <= 0 || m2Total === 0}>↵ Aplicar</button>
-            <span style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>distribui proporcionalmente ao {isMl ? "ml" : "m²"} de cada item</span>
-          </div>
-
-          <div style={{ marginTop:"8px", padding:"12px 14px", background:"var(--surf2)", borderRadius:"8px", border:"1px solid var(--b2)", display:"flex", alignItems:"center", gap:"12px", flexWrap:"wrap" }}>
-            <span style={{ fontSize:"11px", color:"var(--t2)", fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap" }}>Aplicar preço único a todos os itens:</span>
-            <CurrencyInput value={valorGeralInput} onChange={setValorGeralInput} placeholder={isMl ? "Ex: R$ 15,00/ml" : "Ex: R$ 80,00/m²"} style={{ width:"140px", margin:0 }} />
-            <button className="btn bp sm" onClick={() => aplicarValorGeral(valorGeralInput)} disabled={valorGeralInput <= 0}>↵ Aplicar</button>
-            <span style={{ fontSize:"10px", color:"var(--t3)", fontFamily:"'DM Mono',monospace" }}>define o mesmo R$/{isMl ? "ml" : "m²"} em todas as linhas — útil quando você não sabe o total, só o preço unitário</span>
-          </div>
 
           {/* Totbar */}
           <div className="totbar" style={{ marginTop:"8px" }}>

@@ -725,6 +725,19 @@ function NovoOrcamentoPageInner() {
             </div>
           </div>
 
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "10px" }}>
+            <div style={{ padding: "7px 10px", background: "var(--surf2)", borderRadius: "6px", border: "1px solid var(--b2)", display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "10px", color: "var(--t2)", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }} title="Distribui proporcionalmente ao m² de cada item">Distribuir total:</span>
+              <CurrencyInput tabIndex={-1} value={totalPedidoInput} onChange={setTotalPedidoInput} placeholder="R$ 850,00" style={{ flex: 1, minWidth: 0, margin: 0 }} />
+              <button tabIndex={-1} className="btn bp xs" onClick={() => aplicarTotalPedido(totalPedidoInput)} disabled={totalPedidoInput <= 0 || m2Total === 0} title="Aplicar">↵</button>
+            </div>
+            <div style={{ padding: "7px 10px", background: "var(--surf2)", borderRadius: "6px", border: "1px solid var(--b2)", display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "10px", color: "var(--t2)", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }} title="Define o mesmo R$/m² em todas as linhas — útil quando você não sabe o total, só o preço unitário">Preço único:</span>
+              <CurrencyInput tabIndex={-1} value={valorGeralInput} onChange={setValorGeralInput} placeholder="R$ 80,00/m²" style={{ flex: 1, minWidth: 0, margin: 0 }} />
+              <button tabIndex={-1} className="btn bp xs" onClick={() => aplicarValorGeral(valorGeralInput)} disabled={valorGeralInput <= 0} title="Aplicar">↵</button>
+            </div>
+          </div>
+
           <div style={{ display: "grid", gridTemplateColumns: "2fr 90px 90px 90px 90px 110px 90px 36px", gap: "6px", padding: "6px 0", borderBottom: "1px solid var(--b1)", marginBottom: "8px" }}>
             {["Produto","Largura","Altura","Quantidade","R$/m²","Unitário (R$)","Total (R$)",""].map((h, idx) => (
               <div key={idx} style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace" }}>{h}</div>
@@ -837,24 +850,6 @@ function NovoOrcamentoPageInner() {
               </div>
             );
           })}
-
-          <div style={{ marginTop: "14px", padding: "12px 14px", background: "var(--surf2)", borderRadius: "8px", border: "1px solid var(--b2)", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-            <span style={{ fontSize: "11px", color: "var(--t2)", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>
-              Distribuir total do pedido:
-            </span>
-            <CurrencyInput tabIndex={-1} value={totalPedidoInput} onChange={setTotalPedidoInput} placeholder="Ex: R$ 850,00" style={{ width: "140px", margin: 0 }} />
-            <button tabIndex={-1} className="btn bp sm" onClick={() => aplicarTotalPedido(totalPedidoInput)} disabled={totalPedidoInput <= 0 || m2Total === 0}>↵ Aplicar</button>
-            <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>distribui proporcionalmente ao m² de cada item</span>
-          </div>
-
-          <div style={{ marginTop: "8px", padding: "12px 14px", background: "var(--surf2)", borderRadius: "8px", border: "1px solid var(--b2)", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-            <span style={{ fontSize: "11px", color: "var(--t2)", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>
-              Aplicar preço único a todos os itens:
-            </span>
-            <CurrencyInput tabIndex={-1} value={valorGeralInput} onChange={setValorGeralInput} placeholder="Ex: R$ 80,00/m²" style={{ width: "140px", margin: 0 }} />
-            <button tabIndex={-1} className="btn bp sm" onClick={() => aplicarValorGeral(valorGeralInput)} disabled={valorGeralInput <= 0}>↵ Aplicar</button>
-            <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono',monospace" }}>define o mesmo R$/m² em todas as linhas — útil quando você não sabe o total, só o preço unitário</span>
-          </div>
 
           <div className="totbar" style={{ marginTop: "8px" }}>
             <div className="ti"><div className="tl">Itens</div><div className="tv">{itens.length}</div></div>
