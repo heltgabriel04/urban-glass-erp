@@ -2104,27 +2104,32 @@ export default function PedidoDetalhe() {
                     <strong style={{ fontFamily:"monospace" }}>{formatBRL(pedido.valor_ipi)}</strong>
                   </div>
                 )}
-                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Recebido</span><strong style={{ fontFamily:"monospace", color:"#155724" }}>{formatBRL(pedido.valor_recebido)}</strong></div>
-                <div style={{ display:"flex", justifyContent:"space-between", borderTop:"1px solid #d0daf0", paddingTop:"6px" }}>
+                {lancamentosPagos.length > 0 && (
+                  <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
+                    <div style={{ fontSize:"8px", fontWeight:700, color:"#333", textTransform:"uppercase", letterSpacing:"1px" }}>Pagamentos Recebidos</div>
+                    {lancamentosPagos.map(l => (
+                      <div key={l.id} style={{ display:"flex", justifyContent:"space-between", fontSize:"9.5px", color:"#333" }}>
+                        <span>{formatDate(l.vencimento)}{l.forma_pgto ? ` · ${l.forma_pgto}` : ""}{l.conta ? ` · ${l.conta}` : ""}</span>
+                        <span style={{ fontFamily:"monospace", color:"#155724", fontWeight:700 }}>{formatBRL(l.valor)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display:"flex", justifyContent:"space-between", borderTop:"1px solid #d0daf0", paddingTop:"6px" }}><span style={{ color:"#333" }}>Recebido</span><strong style={{ fontFamily:"monospace", color:"#155724" }}>{formatBRL(pedido.valor_recebido)}</strong></div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}>
                   <span style={{ color: aberto > 0 ? "#c00" : "#155724", fontWeight:700 }}>{aberto > 0 ? "Em aberto" : "✓ Quitado"}</span>
                   <strong style={{ fontFamily:"monospace", color: aberto > 0 ? "#c00" : "#155724" }}>{aberto > 0 ? formatBRL(aberto) : formatBRL(0)}</strong>
                 </div>
-                {(pedido.datas_pgto ?? []).length > 0 && (
-                  (pedido.datas_pgto ?? []).length === 1 ? (
-                    <div style={{ display:"flex", justifyContent:"space-between", borderTop:"1px solid #d0daf0", paddingTop:"6px" }}>
-                      <span style={{ color:"#333" }}>Data de pagamento</span>
-                      <strong style={{ fontFamily:"monospace" }}>{formatDate(pedido.datas_pgto![0])}</strong>
-                    </div>
-                  ) : (
-                    <div style={{ borderTop:"1px solid #d0daf0", paddingTop:"6px", display:"flex", flexDirection:"column", gap:"3px" }}>
-                      {pedido.datas_pgto!.map((data, i) => (
-                        <div key={i} style={{ display:"flex", justifyContent:"space-between", fontSize:"9.5px", color:"#333" }}>
-                          <span>Parcela {i + 1} — {formatDate(data)}</span>
-                          <span style={{ fontFamily:"monospace" }}>{formatBRL(pedido.valores_pgto?.[i] ?? 0)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )
+                {parcelasAReceber.length > 0 && (
+                  <div style={{ borderTop:"1px solid #d0daf0", paddingTop:"6px", display:"flex", flexDirection:"column", gap:"3px" }}>
+                    <div style={{ fontSize:"8px", fontWeight:700, color:"#c00", textTransform:"uppercase", letterSpacing:"1px" }}>Parcelas em Aberto</div>
+                    {parcelasAReceber.map(l => (
+                      <div key={l.id} style={{ display:"flex", justifyContent:"space-between", fontSize:"9.5px", color:"#333" }}>
+                        <span>Vence {formatDate(l.vencimento)}</span>
+                        <span style={{ fontFamily:"monospace", color:"#c00", fontWeight:700 }}>{formatBRL(l.valor)}</span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
