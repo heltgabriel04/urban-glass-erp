@@ -10,8 +10,10 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const t0 = Date.now();
   const denied = await requireAuth();
   if (denied) return denied;
+  console.log(`[relatorio-pdf] requireAuth: ${Date.now() - t0}ms`);
 
   const { id } = await params;
 
@@ -20,16 +22,19 @@ export async function GET(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
+  const t1 = Date.now();
   const { data: cliente, error: errCliente } = await sb
     .from("clientes")
     .select("*")
     .eq("id", id)
     .single();
+  console.log(`[relatorio-pdf] busca cliente: ${Date.now() - t1}ms`);
 
   if (errCliente || !cliente) {
     return NextResponse.json({ error: "Cliente não encontrado" }, { status: 404 });
   }
 
+  const t2 = Date.now();
   const [{ data: pedidosData }, { data: lancData }] = await Promise.all([
     sb.from("pedidos")
       .select("*, itens_pedido(*, produtos(id, unidade))")
@@ -43,6 +48,7 @@ export async function GET(
       .eq("status", "A Receber")
       .order("vencimento", { ascending: true }),
   ]);
+  console.log(`[relatorio-pdf] busca pedidos+lancamentos: ${Date.now() - t2}ms`);
 
   const pedidosRows = (pedidosData ?? []) as Pedido[];
   const lancamentos = (lancData ?? []) as Lancamento[];
@@ -86,7 +92,9 @@ export async function GET(
     pedidos: pedidosEmAberto,
   };
 
+  const t3 = Date.now();
   const buffer = await renderToBuffer(<RelatorioClienteDocument dados={dados} />);
+  console.log(`[relatorio-pdf] renderToBuffer: ${Date.now() - t3}ms | total: ${Date.now() - t0}ms`);
 
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
