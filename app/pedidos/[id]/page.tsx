@@ -292,7 +292,7 @@ export default function PedidoDetalhe() {
           lancId: l.id,
           valorOriginal: Number(l.valor),
           valorDigitado: 0,
-          dataPagamento: hoje(),
+          dataPagamento: l.dt_pagamento || hoje(),
           conta: l.conta || data?.conta || "",
           formaPgto: l.forma_pgto || data?.forma_pgto || "",
           marcando: false,
@@ -477,6 +477,14 @@ export default function PedidoDetalhe() {
     setSalvando(false);
     setEditando(false);
     await load();
+  }
+
+  // Salva rascunho de data/conta/forma direto no lançamento — ainda "A
+  // Receber", não mexe em valor/vencimento (que são o que está de fato
+  // pendente) — só pra esses campos sobreviverem a um refresh antes do
+  // usuário marcar como pago de verdade.
+  function salvarRascunhoPagamento(lancId: number, patch: Partial<Lancamento>) {
+    updateLancamento(lancId, patch as never).catch(err => console.warn("rascunho pagamento:", err));
   }
 
   async function handleMarcarPago(lancId: number) {
@@ -1252,14 +1260,21 @@ export default function PedidoDetalhe() {
                                   <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Data pgto</div>
                                   <DateInput
                                     value={pag?.dataPagamento ?? hoje()}
-                                    onChange={v => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], dataPagamento: v } }))}
+                                    onChange={v => {
+                                      setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], dataPagamento: v } }));
+                                      if (v.includes("-")) salvarRascunhoPagamento(l.id, { dt_pagamento: v });
+                                    }}
                                   />
                                 </div>
                                 <div>
                                   <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Conta</div>
                                   <select name="pag"
                                     value={pag?.conta ?? ""}
-                                    onChange={e => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], conta: e.target.value } }))}
+                                    onChange={e => {
+                                      const conta = e.target.value;
+                                      setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], conta } }));
+                                      salvarRascunhoPagamento(l.id, { conta: conta || null });
+                                    }}
                                     style={{ ...fc, fontSize:"12px", padding:"7px 8px" }}
                                   >
                                     <option value="">— Conta —</option>
@@ -1270,7 +1285,11 @@ export default function PedidoDetalhe() {
                                   <div style={{ fontSize:"9px", color:"var(--t3)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em", marginBottom:"4px" }}>Forma pgto</div>
                                   <select name="pag"
                                     value={pag?.formaPgto ?? ""}
-                                    onChange={e => setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], formaPgto: e.target.value } }))}
+                                    onChange={e => {
+                                      const formaPgto = e.target.value;
+                                      setPagamentos(prev => ({ ...prev, [l.id]: { ...prev[l.id], formaPgto } }));
+                                      salvarRascunhoPagamento(l.id, { forma_pgto: formaPgto || null });
+                                    }}
                                     style={{ ...fc, fontSize:"12px", padding:"7px 8px" }}
                                   >
                                     <option value="">— Forma —</option>
