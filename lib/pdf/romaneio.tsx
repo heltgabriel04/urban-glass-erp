@@ -1,9 +1,12 @@
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
-import { formatDate, formatM2, medidaReal } from "@/lib/formatters";
+import { formatDate, formatBRL, formatM2, medidaReal } from "@/lib/formatters";
+import { valorComIpi } from "@/lib/pedidoIpi";
 import type { Pedido } from "@/types";
 
 const AZUL = "#2d5fa6";
 const VERDE = "#3d8c5c";
+const LARANJA = "#c07a1e";
+const VERMELHO = "#b23b3b";
 
 const styles = StyleSheet.create({
   page: { padding: 32, fontSize: 10, color: "#1a1a2e", fontFamily: "Helvetica" },
@@ -25,6 +28,8 @@ const styles = StyleSheet.create({
   condLinha: { flexDirection: "row", justifyContent: "space-between", marginTop: 3 },
   condLabel: { fontSize: 9, color: "#333" },
   condValor: { fontSize: 9, fontWeight: 700, color: "#1a1a2e" },
+  statusPgto: { fontSize: 9, fontWeight: 700, marginTop: 5 },
+  parcelaLinha: { flexDirection: "row", justifyContent: "space-between", fontSize: 8, color: "#333", marginTop: 2 },
 
   table: { marginBottom: 16 },
   tableHeaderRow: { flexDirection: "row", backgroundColor: AZUL },
@@ -50,6 +55,13 @@ const styles = StyleSheet.create({
 export function RomaneioDocument({ pedido }: { pedido: Pedido }) {
   const itens = pedido.itens_pedido ?? [];
   const isML = itens.length > 0 && itens.every(i => i.produtos?.unidade === "ml");
+
+  const totalComIpi = valorComIpi(pedido);
+  const recebido = Number(pedido.valor_recebido);
+  const quitado = recebido >= totalComIpi - 0.02;
+  const parcial = !quitado && recebido > 0.02;
+  const datasPgto = pedido.datas_pgto ?? [];
+  const valoresPgto = pedido.valores_pgto ?? [];
 
   return (
     <Document>
@@ -100,6 +112,30 @@ export function RomaneioDocument({ pedido }: { pedido: Pedido }) {
                   : formatM2(itens.reduce((s, item) => s + medidaReal(item, item.produtos?.unidade === "ml"), 0))}
               </Text>
             </View>
+
+            <Text style={[styles.statusPgto, { color: quitado ? VERDE : parcial ? LARANJA : VERMELHO }]}>
+              {quitado
+                ? "✓ Quitado"
+                : parcial
+                ? `Parcial — recebido ${formatBRL(recebido)} de ${formatBRL(totalComIpi)}`
+                : `Em aberto — ${formatBRL(totalComIpi)}`}
+            </Text>
+
+            {datasPgto.length > 0 && (
+              datasPgto.length === 1 ? (
+                <View style={styles.condLinha}>
+                  <Text style={styles.condLabel}>Data de pagamento</Text>
+                  <Text style={styles.condValor}>{formatDate(datasPgto[0])}</Text>
+                </View>
+              ) : (
+                datasPgto.map((data, i) => (
+                  <View key={i} style={styles.parcelaLinha}>
+                    <Text>Parcela {i + 1} — {formatDate(data)}</Text>
+                    <Text>{formatBRL(valoresPgto[i] ?? 0)}</Text>
+                  </View>
+                ))
+              )
+            )}
           </View>
         </View>
 
