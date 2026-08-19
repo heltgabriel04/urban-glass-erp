@@ -544,7 +544,7 @@ export default function RetiradasPedidoPage() {
                   <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#333" }}>Pagamento</span><strong>{pedido.forma_pgto || "—"}</strong></div>
                   {pedido.parcelas > 1 && <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#333" }}>Parcelas</span><strong>{pedido.parcelas}×</strong></div>}
                   <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#333" }}>Retirada prevista</span><strong>{formatDate(pedido.dt_retirada)}</strong></div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#333" }}>{(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml total" : "m² total"}</span><strong>{Number(pedido.m2_total).toFixed(2)} {(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml" : "m²"}</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#333" }}>{(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml") ? "ml total" : "m² total"}</span><strong>{Number(pedido.m2_total).toFixed(2)} {(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml") ? "ml" : "m²"}</strong></div>
                 </div>
               </div>
             </div>
@@ -560,7 +560,7 @@ export default function RetiradasPedidoPage() {
               <tbody>
                 {(retiradaImprimir.retiradas_pedido_itens ?? []).map((item, i) => {
                   const itemPed = item.itens_pedido;
-                  const isML = itemPed?.produtos?.unidade === "ml" || itemPed?.vidro_cliente === true;
+                  const isML = itemPed?.produtos?.unidade === "ml";
                   const medida = itemPed ? (itemPed.largura / 1000) * (itemPed.altura / 1000) * item.quantidade : 0;
                   return (
                     <tr key={item.id} style={{ background: i % 2 === 0 ? "#fff" : "#f7f9ff" }}>

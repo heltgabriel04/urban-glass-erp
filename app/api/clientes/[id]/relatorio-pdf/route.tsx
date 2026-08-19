@@ -58,7 +58,7 @@ export async function GET(
   const pedidos: PedidoRelatorio[] = pedidosRows.map((pedido) => {
     const itens = pedido.itens_pedido ?? [];
     const isML = itens.length > 0 && itens.every(
-      (i) => i.produtos?.unidade === "ml" || i.vidro_cliente === true
+      (i) => i.produtos?.unidade === "ml"
     );
     const totalComIpi = valorComIpi(pedido);
     return {

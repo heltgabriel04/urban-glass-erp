@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
 
 export function RomaneioDocument({ pedido }: { pedido: Pedido }) {
   const itens = pedido.itens_pedido ?? [];
-  const isML = itens.length > 0 && itens.every(i => i.produtos?.unidade === "ml" || i.vidro_cliente === true);
+  const isML = itens.length > 0 && itens.every(i => i.produtos?.unidade === "ml");
 
   return (
     <Document>
@@ -97,7 +97,7 @@ export function RomaneioDocument({ pedido }: { pedido: Pedido }) {
               <Text style={styles.condValor}>
                 {isML
                   ? `${itens.reduce((s, item) => s + medidaReal(item, true), 0).toFixed(2)} ml`
-                  : formatM2(itens.reduce((s, item) => s + medidaReal(item, item.produtos?.unidade === "ml" || item.vidro_cliente === true), 0))}
+                  : formatM2(itens.reduce((s, item) => s + medidaReal(item, item.produtos?.unidade === "ml"), 0))}
               </Text>
             </View>
           </View>
@@ -113,7 +113,7 @@ export function RomaneioDocument({ pedido }: { pedido: Pedido }) {
             <Text style={[styles.th, styles.colCodigo]}>Código</Text>
           </View>
           {itens.map((item, i) => {
-            const itemML = item.produtos?.unidade === "ml" || item.vidro_cliente === true;
+            const itemML = item.produtos?.unidade === "ml";
             return (
               <View key={item.id} style={i % 2 === 1 ? [styles.tr, styles.trAlt] : styles.tr}>
                 <Text style={[styles.td, styles.colNum]}>{i + 1}</Text>

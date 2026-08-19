@@ -1132,7 +1132,7 @@ export default function PedidoDetalhe() {
                   <Row label="Data do pedido"     value={formatDate(pedido.dt_pedido)} />
                   <Row label="Retirada prevista"  value={formatDate(pedido.dt_retirada)} />
                   <Row label="Frete"               value={pedido.frete || "Retirada"} />
-                  <Row label={(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml total" : "m² total"} value={Number(pedido.m2_total).toFixed(2) + " " + ((pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml" : "m²")} />
+                  <Row label={(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml") ? "ml total" : "m² total"} value={Number(pedido.m2_total).toFixed(2) + " " + ((pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml") ? "ml" : "m²")} />
                   {pedido.parcelas > 1 && <Row label="Parcelas" value={pedido.parcelas + "×"} />}
                   {(() => {
                     const lancComissao = lancamentos.find(l => l.tipo === "Saída" && (l as any).vendedor_id != null);
@@ -1488,7 +1488,7 @@ export default function PedidoDetalhe() {
                   </thead>
                   <tbody>
                     {pedido.itens_pedido!.map((item, i) => {
-                      const isML = (item as any).produtos?.unidade === "ml" || (item as any).vidro_cliente === true;
+                      const isML = (item as any).produtos?.unidade === "ml";
                       const medida = medidaReal(item, isML).toFixed(3);
                       const unidade = isML ? "ml" : "m²";
                       return (
@@ -1589,7 +1589,7 @@ export default function PedidoDetalhe() {
                         <tbody>
                           {Object.values(
                             pedido.itens_pedido!.reduce((acc, item) => {
-                              const isML = (item as any).produtos?.unidade === "ml" || (item as any).vidro_cliente === true;
+                              const isML = (item as any).produtos?.unidade === "ml";
                               const key = item.produto_nome + (isML ? ":ml" : ":m2");
                               const g = acc[key] ?? (acc[key] = { nome: item.produto_nome, isML, metragem: 0, subtotal: 0 });
                               g.metragem += Number(item.m2);
@@ -2060,10 +2060,10 @@ export default function PedidoDetalhe() {
                 <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Retirada prevista</span><strong>{formatDate(pedido.dt_retirada)}</strong></div>
                 <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Frete</span><strong>{pedido.frete || "Retirada"}</strong></div>
                 <div style={{ display:"flex", justifyContent:"space-between" }}>
-                  <span style={{ color:"#333" }}>{(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml total" : "m² total"}</span>
+                  <span style={{ color:"#333" }}>{(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml") ? "ml total" : "m² total"}</span>
                   <strong>
-                    {(pedido.itens_pedido ?? []).reduce((s, item: any) => s + medidaReal(item, item.produtos?.unidade === "ml" || item.vidro_cliente === true), 0).toFixed(2)}
-                    {" "}{(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true) ? "ml" : "m²"}
+                    {(pedido.itens_pedido ?? []).reduce((s, item: any) => s + medidaReal(item, item.produtos?.unidade === "ml"), 0).toFixed(2)}
+                    {" "}{(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml") ? "ml" : "m²"}
                   </strong>
                 </div>
               </div>
@@ -2079,7 +2079,7 @@ export default function PedidoDetalhe() {
             </thead>
             <tbody>
               {(pedido.itens_pedido ?? []).map((item, i) => {
-                const isML = (item as any).produtos?.unidade === "ml" || (item as any).vidro_cliente === true;
+                const isML = (item as any).produtos?.unidade === "ml";
                 return (
                 <tr key={item.id} style={{ background: i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
                   <td style={{ padding:"7px 8px", borderBottom:"1px solid #e8ecf5", textAlign:"center", color:"#000", fontSize:"10px", fontWeight:700 }}>{i + 1}</td>

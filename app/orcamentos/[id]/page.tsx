@@ -162,7 +162,7 @@ export default function OrcamentoDetalhe() {
   if (!orc) return <AppLayout><div className="con" style={{ color: "var(--err)", padding: "32px" }}>Orçamento não encontrado.</div></AppLayout>;
 
   const itens = orc.itens_orcamento ?? [];
-  const isMLGeralItens = itens.length > 0 && itens.every((i: any) => i.produtos?.unidade === "ml" || i.vidro_cliente === true);
+  const isMLGeralItens = itens.length > 0 && itens.every((i: any) => i.produtos?.unidade === "ml");
   const m2TotalItens = itens.reduce((s: number, i: any) => s + Number(i.m2), 0);
 
   return (
@@ -638,7 +638,7 @@ export default function OrcamentoDetalhe() {
             </thead>
             <tbody>
               {itens.map((item: any, i: number) => {
-                const isML = item.produtos?.unidade === "ml" || item.vidro_cliente === true;
+                const isML = item.produtos?.unidade === "ml";
                 return (
                 <tr key={item.id} style={{ background: i % 2 === 0 ? "#fff" : "#f7f9ff" }}>
                   <td style={{ padding: "7px 8px", borderBottom: "1px solid #e0e6f5", textAlign: "center", fontWeight: 700, color: "#666", fontSize: "10px" }}>{i + 1}</td>

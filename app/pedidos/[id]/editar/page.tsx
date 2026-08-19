@@ -165,10 +165,12 @@ export default function EditarPedidoPage() {
     setObs(pedido.obs ?? "");
     setTemIpi(pedido.tem_ipi ?? false);
 
-    // Detectar modo ML: se todos os itens são vidro_cliente ou produto ml
+    // Detectar modo ML: só pelo produto cadastrado como ml (vidro_cliente não
+    // implica mais ml — desde o fim do metro linear, item de vidro do
+    // cliente também é cobrado em m²)
     const rawItens = (pedido.itens_pedido ?? []) as any[];
     const todosMl = rawItens.length > 0 && rawItens.every(i =>
-      i.vidro_cliente === true || i.produtos?.unidade === "ml"
+      i.produtos?.unidade === "ml"
     );
     setModoPedido(todosMl ? "ml" : "m2");
 
