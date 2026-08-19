@@ -2109,6 +2109,23 @@ export default function PedidoDetalhe() {
                   <span style={{ color: aberto > 0 ? "#c00" : "#155724", fontWeight:700 }}>{aberto > 0 ? "Em aberto" : "✓ Quitado"}</span>
                   <strong style={{ fontFamily:"monospace", color: aberto > 0 ? "#c00" : "#155724" }}>{aberto > 0 ? formatBRL(aberto) : formatBRL(0)}</strong>
                 </div>
+                {(pedido.datas_pgto ?? []).length > 0 && (
+                  (pedido.datas_pgto ?? []).length === 1 ? (
+                    <div style={{ display:"flex", justifyContent:"space-between", borderTop:"1px solid #d0daf0", paddingTop:"6px" }}>
+                      <span style={{ color:"#333" }}>Data de pagamento</span>
+                      <strong style={{ fontFamily:"monospace" }}>{formatDate(pedido.datas_pgto![0])}</strong>
+                    </div>
+                  ) : (
+                    <div style={{ borderTop:"1px solid #d0daf0", paddingTop:"6px", display:"flex", flexDirection:"column", gap:"3px" }}>
+                      {pedido.datas_pgto!.map((data, i) => (
+                        <div key={i} style={{ display:"flex", justifyContent:"space-between", fontSize:"9.5px", color:"#333" }}>
+                          <span>Parcela {i + 1} — {formatDate(data)}</span>
+                          <span style={{ fontFamily:"monospace" }}>{formatBRL(pedido.valores_pgto?.[i] ?? 0)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                )}
               </div>
             </div>
             <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"flex-end" }}>
