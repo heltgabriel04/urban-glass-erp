@@ -31,11 +31,16 @@ export default function DateInput({ value, onChange, className = "fc", style, ta
   };
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    let v = e.target.value.replace(/[^\d/]/g, "");
-    if (v.length === 2 && !v.includes("/")) v += "/";
-    if (v.length === 5 && v.split("/").length === 2) v += "/";
-    const parts = v.split("/");
-    if (parts.length === 3 && parts[2].length === 4) {
+    // Monta a máscara só a partir dos dígitos digitados, ignorando qualquer
+    // "/" que o usuário tenha digitado — evita duplicar barra quando ele
+    // seleciona o campo já preenchido e digita a data inteira por cima
+    // (ex.: "16/06/2026" virando "16//06/202" truncado nos 10 caracteres).
+    const digitos = e.target.value.replace(/\D/g, "").slice(0, 8);
+    let v = digitos;
+    if (digitos.length > 4) v = `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4)}`;
+    else if (digitos.length > 2) v = `${digitos.slice(0, 2)}/${digitos.slice(2)}`;
+
+    if (digitos.length === 8) {
       onChange(toISO(v));
     } else {
       onChange(v);
