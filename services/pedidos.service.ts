@@ -132,18 +132,36 @@ export async function createPedido(
   itens: ItemPedidoInsert[] = [],
   caixaEscolhidaPorItem: Map<number, number> = new Map(),
 ) {
-  const payload = {
-    ...pedido,
-    status_history: [{ status: pedido.status, desde: new Date().toISOString() }],
-  };
+  // O id (P-XXX) é calculado no cliente (maior id + 1) e pode estar
+  // desatualizado na hora do insert — duas pessoas abrindo "novo pedido"
+  // por perto, ou o usuário demorando pra preencher o formulário, geram o
+  // mesmo próximo id e o segundo insert bate em "duplicate key value
+  // violates unique constraint pedidos_pkey". Em vez de estourar erro pro
+  // usuário, tenta de novo com um id recalculado algumas vezes.
+  let idTentativa = pedido.id;
+  let data: Pedido | null = null;
+  for (let tentativa = 0; ; tentativa++) {
+    const payload = {
+      ...pedido,
+      id: idTentativa,
+      status_history: [{ status: pedido.status, desde: new Date().toISOString() }],
+    };
 
-  const { data, error } = await supabase
-    .from('pedidos')
-    .insert([payload as never])
-    .select()
-    .single();
+    const { data: inserted, error } = await supabase
+      .from('pedidos')
+      .insert([payload as never])
+      .select()
+      .single();
 
-  if (error) { console.error('createPedido:', error); throw new Error(error.message); }
+    if (!error) { data = inserted as Pedido; break; }
+
+    const colisaoDeId = error.code === '23505' && error.message.includes('pedidos_pkey');
+    if (!colisaoDeId || tentativa >= 4) {
+      console.error('createPedido:', error);
+      throw new Error(error.message);
+    }
+    idTentativa = await getProximoIdPedido();
+  }
 
   registrarLog({
     acao: "criou", tabela: "pedidos", registro_id: (data as Pedido).id,

@@ -69,13 +69,27 @@ export async function getOrcamentoById(id: string) {
 }
 
 export async function createOrcamento(orcamento: OrcamentoInsert, itens: Omit<ItemOrcamentoInsert, 'orcamento_id'>[] = []) {
-  const { data, error } = await supabase
-    .from('orcamentos')
-    .insert([orcamento as never])
-    .select()
-    .single();
+  // Mesmo problema de app/pedidos/novo — id (ORC-XXX) calculado no cliente
+  // pode colidir se duas pessoas estiverem criando orçamento ao mesmo tempo.
+  // Tenta de novo com id recalculado em vez de estourar erro pro usuário.
+  let idTentativa = orcamento.id;
+  let data: any = null;
+  for (let tentativa = 0; ; tentativa++) {
+    const { data: inserted, error } = await supabase
+      .from('orcamentos')
+      .insert([{ ...orcamento, id: idTentativa } as never])
+      .select()
+      .single();
 
-  if (error) { console.error('createOrcamento:', error); return null; }
+    if (!error) { data = inserted; break; }
+
+    const colisaoDeId = error.code === '23505' && error.message.includes('orcamentos_pkey');
+    if (!colisaoDeId || tentativa >= 4) {
+      console.error('createOrcamento:', error);
+      throw new Error(error.message);
+    }
+    idTentativa = await getProximoIdOrcamento();
+  }
 
   if (itens.length > 0) {
     const itensComId = itens.map(i => ({ ...i, orcamento_id: (data as any).id }));

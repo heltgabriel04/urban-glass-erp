@@ -513,6 +513,13 @@ function NovoPedidoPageInner() {
 
     setSalvando(true);
     try {
+      // Recalcula o id na hora de salvar — o que veio do carregamento da
+      // página pode estar desatualizado se o formulário ficou aberto um
+      // tempo (createPedido ainda tenta de novo em caso de colisão, isso
+      // aqui só reduz a chance de precisar).
+      const idAtual = await getProximoIdPedido();
+      setProximoId(idAtual);
+
       const todosChapa = itens.every(i => {
         if (!i.produto_id) return false;
         const dims = lotesEstoque
@@ -522,7 +529,7 @@ function NovoPedidoPageInner() {
       });
 
       const pedido: PedidoInsert = {
-        id: proximoId,
+        id: idAtual,
         cliente_id: clienteId,
         vendedor_id: vendedorId,
         dt_pedido: dtPedido,
@@ -541,7 +548,7 @@ function NovoPedidoPageInner() {
       };
 
       const itensInsert: ItemPedidoInsert[] = itens.map(i => ({
-        pedido_id: proximoId,
+        pedido_id: idAtual,
         produto_id: i.produto_id,
         produto_nome: i.produto_nome,
         largura: i.largura,
@@ -556,9 +563,9 @@ function NovoPedidoPageInner() {
       }));
 
       const result = await createPedido(pedido, itensInsert, caixaEscolhidaPorItem);
-      const lancamentosOk = await criarLancamentosParcelados({ pedidoId: proximoId, clienteId, parcelas: parcelasForm });
+      const lancamentosOk = await criarLancamentosParcelados({ pedidoId: result.id, clienteId, parcelas: parcelasForm });
       if (!lancamentosOk) {
-        throw new Error(`Pedido ${proximoId} foi salvo, mas os lançamentos de recebimento falharam — confira em Contas a Receber e lance manualmente se necessário.`);
+        throw new Error(`Pedido ${result.id} foi salvo, mas os lançamentos de recebimento falharam — confira em Contas a Receber e lance manualmente se necessário.`);
       }
       if (vendedorId) {
         const vendedor = vendedores.find(v => v.id === vendedorId);
@@ -566,7 +573,7 @@ function NovoPedidoPageInner() {
         if (vendedor && valorComissao > 0) {
           await supabase.from("lancamentos").insert([{
             tipo:        "Saída",
-            descricao:   `Comissão — ${vendedor.nome} — Pedido ${proximoId}`,
+            descricao:   `Comissão — ${vendedor.nome} — Pedido ${result.id}`,
             valor:        valorComissao,
             status:       "Pendente",
             vencimento:   parcelasForm[0]?.data || null,

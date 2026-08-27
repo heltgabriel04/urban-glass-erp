@@ -475,39 +475,49 @@ function NovoOrcamentoPageInner() {
     if (itens.some(i => i.largura === 0 || i.altura === 0)) { toast("Preencha as dimensões de todos os itens", "warn"); return; }
 
     setSalvando(true);
+    try {
+      // Recalcula o id na hora de salvar — createOrcamento ainda tenta de
+      // novo em caso de colisão, isso aqui só reduz a chance de precisar.
+      const idAtual = await getProximoIdOrcamento();
+      setProximoId(idAtual);
 
-    const itensInsert = itens.map(i => ({
-      produto_id: i.produto_id,
-      produto_nome: i.produto_nome,
-      largura: i.largura,
-      altura: i.altura,
-      quantidade: i.quantidade,
-      m2: calcM2Item(i),
-      valor_m2: i.valor_m2,
-      lapidacao: i.lapidacao,
-      desconto: 0,
-      subtotal: calcSubtotal(i),
-    }));
+      const itensInsert = itens.map(i => ({
+        produto_id: i.produto_id,
+        produto_nome: i.produto_nome,
+        largura: i.largura,
+        altura: i.altura,
+        quantidade: i.quantidade,
+        m2: calcM2Item(i),
+        valor_m2: i.valor_m2,
+        lapidacao: i.lapidacao,
+        desconto: 0,
+        subtotal: calcSubtotal(i),
+      }));
 
-    const result = await createOrcamento({
-      id: proximoId,
-      cliente_id: clienteId,
-      dt_orcamento: dtOrcamento,
-      dt_validade: dtValidade || null,
-      dt_entrega: dtEntrega || null,
-      forma_pgto: parcelasForm[0]?.formaPgto || formaPgto,
-      conta: parcelasForm[0]?.conta || conta,
-      parcelas, frete, obs,
-      m2_total: m2Total,
-      valor_total: valorTotal,
-      tem_ipi: temIpi,
-      valor_ipi: valorIpi,
-      desconto,
-      status: "Rascunho",
-    }, itensInsert);
+      await createOrcamento({
+        id: idAtual,
+        cliente_id: clienteId,
+        dt_orcamento: dtOrcamento,
+        dt_validade: dtValidade || null,
+        dt_entrega: dtEntrega || null,
+        forma_pgto: parcelasForm[0]?.formaPgto || formaPgto,
+        conta: parcelasForm[0]?.conta || conta,
+        parcelas, frete, obs,
+        m2_total: m2Total,
+        valor_total: valorTotal,
+        tem_ipi: temIpi,
+        valor_ipi: valorIpi,
+        desconto,
+        status: "Rascunho",
+      }, itensInsert);
 
-    setSalvando(false);
-    if (result) router.push("/orcamentos");
+      router.push("/orcamentos");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro desconhecido";
+      toast(`Erro ao salvar orçamento: ${msg}`, "err");
+    } finally {
+      setSalvando(false);
+    }
   }
 
   const tab = getTabela();
