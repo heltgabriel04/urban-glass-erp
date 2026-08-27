@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef } from "react";
+import { aplicarEdicao, paraSegmentos, paraTexto, posParaSegmento, segmentoParaPos, toDisplay, toISO } from "@/lib/dateMask";
 
 interface DateInputProps {
   value: string;
@@ -11,64 +12,11 @@ interface DateInputProps {
   id?: string;
 }
 
-// dd/mm/aaaa tratado como 3 blocos independentes (dia, mês, ano), não como
-// uma tira de dígitos remontada por posição — evita que apagar/corrigir um
-// bloco vaze dígito pro vizinho e evita o "preso na barra" do Backspace/Delete.
-type Segmentos = [string, string, string];
-
-function paraSegmentos(display: string): Segmentos {
-  const partes = display.split("/");
-  return [partes[0] ?? "", partes[1] ?? "", partes[2] ?? ""];
-}
-
-// remonta o texto incluindo a barra de um bloco só quando há algo depois dela
-function paraTexto([d, m, a]: Segmentos): string {
-  let texto = d;
-  if (m !== "" || a !== "") texto += `/${m}`;
-  if (a !== "") texto += `/${a}`;
-  return texto;
-}
-
-// posição do cursor (índice no texto exibido) -> {bloco, offset dentro do bloco}
-function posParaSegmento(display: string, pos: number): { seg: number; offset: number } {
-  const partes = display.split("/");
-  let acumulado = 0;
-  for (let i = 0; i < partes.length; i++) {
-    const fim = acumulado + partes[i].length;
-    if (pos <= fim) return { seg: i, offset: pos - acumulado };
-    acumulado = fim + 1; // +1 pula a barra
-  }
-  const ultimo = partes.length - 1;
-  return { seg: ultimo, offset: partes[ultimo]?.length ?? 0 };
-}
-
-// {bloco, offset} -> posição no texto reconstruído
-function segmentoParaPos(segs: Segmentos, seg: number, offset: number): number {
-  let pos = 0;
-  for (let i = 0; i < seg; i++) pos += segs[i].length + 1; // +1 da barra
-  return pos + offset;
-}
-
 export default function DateInput({ value, onChange, className = "fc", style, tabIndex, id }: DateInputProps) {
   const autoId = useId();
   const inputId = id ?? autoId;
   const inputRef = useRef<HTMLInputElement>(null);
   const caretRef = useRef<number | null>(null);
-
-  const toDisplay = (v: string) => {
-    if (!v || !v.includes("-")) return v;
-    const parts = v.split("-");
-    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
-    return v;
-  };
-
-  const toISO = (v: string) => {
-    const parts = v.split("/");
-    if (parts.length === 3 && parts[2].length === 4) {
-      return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
-    }
-    return v;
-  };
 
   const display = toDisplay(value);
 
@@ -88,15 +36,33 @@ export default function DateInput({ value, onChange, className = "fc", style, ta
   }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    // Monta a máscara só a partir dos dígitos digitados, ignorando qualquer
-    // "/" que o usuário tenha digitado — evita duplicar barra quando ele
-    // seleciona o campo já preenchido e digita a data inteira por cima
-    // (ex.: "16/06/2026" virando "16//06/202" truncado nos 10 caracteres).
-    const digitos = e.target.value.replace(/\D/g, "").slice(0, 8);
-    let v = digitos;
-    if (digitos.length > 4) v = `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4)}`;
-    else if (digitos.length > 2) v = `${digitos.slice(0, 2)}/${digitos.slice(2)}`;
-    aplicarTexto(v, e.target.selectionStart ?? v.length);
+    // Descobre exatamente o que mudou comparando com o texto exibido antes
+    // (prefixo/sufixo em comum), em vez de jogar tudo fora e remontar a
+    // máscara só pela contagem total de dígitos. Isso importa sempre que a
+    // edição não é um dígito simples no fim: selecionar um bloco (duplo-
+    // clique no mês, por ex.) e digitar/apagar por cima, ou colar uma data,
+    // mexe num trecho do meio — remontar do zero por contagem de dígitos
+    // deslocava dia/mês/ano uns pros outros e a data salva saía errada.
+    const antes = display;
+    const depois = e.target.value;
+
+    let p = 0;
+    const maxP = Math.min(antes.length, depois.length);
+    while (p < maxP && antes[p] === depois[p]) p++;
+    let s = 0;
+    const maxS = Math.min(antes.length - p, depois.length - p);
+    while (s < maxS && antes[antes.length - 1 - s] === depois[depois.length - 1 - s]) s++;
+
+    const fimRemovido = antes.length - s;
+    const inserido = depois.slice(p, depois.length - s).replace(/\D/g, "");
+
+    const segsOriginais = paraSegmentos(antes);
+    const { seg: pSeg, offset: pOff } = posParaSegmento(antes, p);
+    const { seg: endSeg, offset: endOff } = posParaSegmento(antes, fimRemovido);
+
+    const { segs, caretSeg, caretOffset } = aplicarEdicao(segsOriginais, pSeg, pOff, endSeg, endOff, inserido);
+    const texto = paraTexto(segs);
+    aplicarTexto(texto, segmentoParaPos(segs, caretSeg, caretOffset));
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
