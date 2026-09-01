@@ -252,7 +252,7 @@ export async function getStatusAreas(ano: number, mes: number): Promise<StatusAr
   const hojeStrFin = new Date().toISOString().split("T")[0];
   const [{ count: pagarVencidas }, { count: receberVencidas }] = await Promise.all([
     supabase.from("lancamentos").select("id", { count: "exact", head: true }).eq("tipo", "Saída").neq("status", "Pago").lt("vencimento", hojeStrFin).is("deletado_em", null),
-    supabase.from("lancamentos").select("id", { count: "exact", head: true }).eq("tipo", "Entrada").neq("status", "Pago").lt("vencimento", hojeStrFin).is("deletado_em", null),
+    supabase.from("lancamentos").select("id", { count: "exact", head: true }).eq("tipo", "Entrada").neq("status", "Pago").eq("permuta", false).lt("vencimento", hojeStrFin).is("deletado_em", null),
   ]);
   const totalVencidasFin = (pagarVencidas ?? 0) + (receberVencidas ?? 0);
   const itemChecklistFinanceiro = itens.find((i) => i.item_key === "financeiro");

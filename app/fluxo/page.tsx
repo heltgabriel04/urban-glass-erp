@@ -58,7 +58,7 @@ type LancRow = {
   id: number; tipo: "Entrada" | "Saída"; descricao: string; valor: number; status: string;
   vencimento: string | null; dt_pagamento: string | null; pedido_id: string | null;
   fornecedor: string | null; documento: string | null; plano_contas_id: number | null;
-  clientes: { id: number; nome: string } | null;
+  clientes: { id: number; nome: string } | null; permuta: boolean | null;
 };
 type BaixaRow = { id: number; lancamento_id: number; valor: number; data: string };
 
@@ -125,7 +125,7 @@ function FluxoPageInner() {
     setLoading(true);
     const [{ data: lancsRaw }, { data: baixasRaw }, { data: contasRaw }, { data: planosRaw }, ocorrencias, saldoAtualCalc] = await Promise.all([
       supabase.from("lancamentos")
-        .select("id, tipo, descricao, valor, status, vencimento, dt_pagamento, pedido_id, fornecedor, documento, plano_contas_id, clientes(id, nome)")
+        .select("id, tipo, descricao, valor, status, vencimento, dt_pagamento, pedido_id, fornecedor, documento, plano_contas_id, clientes(id, nome), permuta")
         .is("deletado_em", null),
       supabase.from("baixas_lancamento")
         .select("id, lancamento_id, valor, data")
@@ -175,6 +175,7 @@ function FluxoPageInner() {
         continue;
       }
       if (l.status === "Pago") continue;
+      if (l.permuta) continue; // permuta nunca vira caixa — não entra na projeção
       const valorPago = baixasDoLanc.reduce((a, bx) => a + Number(bx.valor), 0);
       const saldo = Number(l.valor) - valorPago;
       if (saldo <= 0 || !l.vencimento) continue;

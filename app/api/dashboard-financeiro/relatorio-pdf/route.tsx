@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
 
   // Em aberto (saldo-aware) — Entrada e Saída.
   async function getAberto(tipo: "Entrada" | "Saída"): Promise<number> {
-    let q = sb.from("lancamentos").select("id, valor").eq("tipo", tipo).neq("status", "Pago").is("deletado_em", null);
+    let q = sb.from("lancamentos").select("id, valor").eq("tipo", tipo).neq("status", "Pago").eq("permuta", false).is("deletado_em", null);
     if (contaId) q = q.eq("conta_id", contaId);
     const { data: lancs } = await q;
     const lista = (lancs ?? []) as { id: number; valor: number }[];
@@ -93,7 +93,7 @@ export async function GET(req: NextRequest) {
   const resultado = parseFloat((receita - despesasTotal).toFixed(2));
 
   // Projeção 30/60/90 — saldo atual + títulos abertos com vencimento dentro do horizonte.
-  let entradasAbertasQuery = sb.from("lancamentos").select("id, valor, vencimento").eq("tipo", "Entrada").neq("status", "Pago").not("vencimento", "is", null).is("deletado_em", null);
+  let entradasAbertasQuery = sb.from("lancamentos").select("id, valor, vencimento").eq("tipo", "Entrada").neq("status", "Pago").eq("permuta", false).not("vencimento", "is", null).is("deletado_em", null);
   let saidasAbertasQuery = sb.from("lancamentos").select("id, valor, vencimento").eq("tipo", "Saída").neq("status", "Pago").not("vencimento", "is", null).is("deletado_em", null);
   if (contaId) { entradasAbertasQuery = entradasAbertasQuery.eq("conta_id", contaId); saidasAbertasQuery = saidasAbertasQuery.eq("conta_id", contaId); }
   const [{ data: entradasAbertas }, { data: saidasAbertas }] = await Promise.all([entradasAbertasQuery, saidasAbertasQuery]);

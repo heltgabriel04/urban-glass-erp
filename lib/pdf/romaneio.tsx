@@ -52,14 +52,17 @@ const styles = StyleSheet.create({
   footerAviso: { fontSize: 7, color: "#c00", fontStyle: "italic", marginTop: 4 },
 });
 
-export function RomaneioDocument({ pedido }: { pedido: Pedido }) {
+export function RomaneioDocument({ pedido, permutaValor = 0 }: { pedido: Pedido; permutaValor?: number }) {
   const itens = pedido.itens_pedido ?? [];
   const isML = itens.length > 0 && itens.every(i => i.produtos?.unidade === "ml");
 
   const totalComIpi = valorComIpi(pedido);
   const recebido = Number(pedido.valor_recebido);
-  const quitado = recebido >= totalComIpi - 0.02;
-  const parcial = !quitado && recebido > 0.02;
+  // Permuta não é dinheiro (não soma em valor_recebido), mas quita o
+  // pedido do mesmo jeito — sem isso o romaneio mostraria "em aberto"
+  // pra um pedido já acertado em troca de produto/serviço.
+  const quitado = recebido + permutaValor >= totalComIpi - 0.02;
+  const parcial = !quitado && (recebido + permutaValor) > 0.02;
   const datasPgto = pedido.datas_pgto ?? [];
   const valoresPgto = pedido.valores_pgto ?? [];
 
@@ -115,9 +118,9 @@ export function RomaneioDocument({ pedido }: { pedido: Pedido }) {
 
             <Text style={[styles.statusPgto, { color: quitado ? VERDE : parcial ? LARANJA : VERMELHO }]}>
               {quitado
-                ? "✓ Quitado"
+                ? (permutaValor > 0 ? `✓ Quitado (inclui ${formatBRL(permutaValor)} em permuta)` : "✓ Quitado")
                 : parcial
-                ? `Parcial — recebido ${formatBRL(recebido)} de ${formatBRL(totalComIpi)}`
+                ? `Parcial — recebido ${formatBRL(recebido)}${permutaValor > 0 ? ` + ${formatBRL(permutaValor)} em permuta` : ""} de ${formatBRL(totalComIpi)}`
                 : `Em aberto — ${formatBRL(totalComIpi)}`}
             </Text>
 

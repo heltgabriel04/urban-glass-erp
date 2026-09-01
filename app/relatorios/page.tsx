@@ -192,24 +192,10 @@ export default function RelatoriosPage() {
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
   }, [pedidos]);
 
-  // Permuta some do "a receber" em qualquer lugar que leia `financeiro`
-  // (view agregada por cliente, não sabe de permuta por si só) — sem tocar
-  // em faturado/recebido, só abate do a_receber de cada cliente.
-  const permutaPorCliente = useMemo(() => {
-    const map = new Map<number, number>();
-    for (const l of (lancamentos as Lancamento[])) {
-      if (!l.permuta || !l.cliente_id) continue;
-      map.set(l.cliente_id, (map.get(l.cliente_id) ?? 0) + Number(l.valor));
-    }
-    return map;
-  }, [lancamentos]);
-
-  const clientesOrdenados = useMemo(() => [...financeiro]
-    .map(f => {
-      const permuta = permutaPorCliente.get(f.cliente_id) ?? 0;
-      return permuta > 0 ? { ...f, a_receber: Math.max(0, Number(f.a_receber) - permuta) } : f;
-    })
-    .sort((a, b) => Number(b.faturado) - Number(a.faturado)), [financeiro, permutaPorCliente]);
+  // a_receber de `financeiro` já vem líquido de permuta (view
+  // financeiro_clientes abate na fonte — sql/financeiro-clientes-permuta.sql),
+  // não precisa reajustar aqui.
+  const clientesOrdenados = useMemo(() => [...financeiro].sort((a, b) => Number(b.faturado) - Number(a.faturado)), [financeiro]);
   const maxCliFat         = clientesOrdenados[0] ? Number(clientesOrdenados[0].faturado) : 1;
 
   // ── Devedores e vencidos ─────────────────────────────────────────────────

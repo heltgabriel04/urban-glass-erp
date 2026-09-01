@@ -859,7 +859,11 @@ export default function PedidoDetalhe() {
   if (!pedido) return <AppLayout><div className="con"><div style={{ color:"var(--err)", padding:"32px" }}>Pedido não encontrado.</div></div></AppLayout>;
 
   const totalComIpi  = valorComIpi(pedido);
-  const aberto       = totalComIpi - Number(pedido.valor_recebido);
+  // Permuta some do saldo (não é mais dívida pendente) sem contar como
+  // dinheiro recebido — não entra em pedido.valor_recebido, só é abatido
+  // aqui na exibição.
+  const permutaValor = lancamentos.filter(l => l.permuta).reduce((a, l) => a + Number(l.valor), 0);
+  const aberto       = Math.max(0, totalComIpi - Number(pedido.valor_recebido) - permutaValor);
   const quitado      = aberto <= 0;
   const pctRec       = totalComIpi > 0 ? Math.min(100, (Number(pedido.valor_recebido) / totalComIpi) * 100) : 0;
   const statusIdx    = FLUXO.indexOf(pedido.status);
@@ -901,6 +905,11 @@ export default function PedidoDetalhe() {
   const bloqueadoSemOtim  = pedido.status === "Aguardando otimização" && !temOtimizacao && !todosVidroCliente && !todosChapa;
 
   const parcelasAReceber = lancamentos.filter(l => l.status === "A Receber").sort((a, b) => (a.vencimento ?? "").localeCompare(b.vencimento ?? ""));
+  // Só pro romaneio impresso (documento que sai com a entrega) — permuta
+  // já não é mais "em aberto", não faz sentido listar como pendência pro
+  // cliente ali. A lista interativa acima (parcelasAReceber) continua
+  // mostrando tudo, é onde o dono gerencia as parcelas de verdade.
+  const parcelasAbertasImpressao = parcelasAReceber.filter(l => !l.permuta);
   const lancamentosPagos = lancamentos.filter(l => l.status === "Pago");
 
   // Boleto só faz sentido anexar quando alguma forma de pagamento do pedido
@@ -974,7 +983,7 @@ export default function PedidoDetalhe() {
           <MetricCard label="Cliente" value={pedido.clientes?.nome ?? "—"} />
           <MetricCard label="Valor" value={formatBRL(totalComIpi)} valueColor="var(--acc)" />
           <MetricCard label="Recebido" value={formatBRL(pedido.valor_recebido)} valueColor={pedido.valor_recebido > 0 ? "var(--ok)" : undefined} />
-          <MetricCard label={quitado ? "Quitado" : "Saldo"} value={formatBRL(Math.max(0, aberto))} valueColor={quitado ? "var(--ok)" : "var(--warn)"} />
+          <MetricCard label={quitado ? "Quitado" : "Saldo"} value={formatBRL(Math.max(0, aberto))} valueColor={quitado ? "var(--ok)" : "var(--warn)"} sub={permutaValor > 0 ? `⇄ ${formatBRL(permutaValor)} em permuta` : undefined} />
           {temItens && (
             <MetricCard label="Peças" value={`${totalPecasRetirado}/${totalPecasPedido}`} valueColor="var(--acc4)" />
           )}
@@ -1235,8 +1244,9 @@ export default function PedidoDetalhe() {
                                   title="Marcar como pago"
                                 />
                                 <div style={{ flex:1, minWidth:0 }}>
-                                  <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                                  <div style={{ fontSize:"12px", color:"var(--t1)", fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", display:"flex", alignItems:"center", gap:"6px" }}>
                                     {l.descricao}
+                                    {l.permuta && <span className="chip cp" style={{ fontSize:"9px", padding:"1px 5px", flexShrink:0 }}>Permuta</span>}
                                   </div>
                                   <div style={{ fontSize:"10px", color: vencido ? "var(--err)" : "var(--t3)", fontFamily:"'DM Mono',monospace", marginTop:"2px" }}>
                                     {vencido ? "⚠ Vencido · " : "Vence: "}{formatDate(l.vencimento)}
@@ -2137,14 +2147,17 @@ export default function PedidoDetalhe() {
                   </div>
                 )}
                 <div style={{ display:"flex", justifyContent:"space-between", borderTop:"1px solid #d0daf0", paddingTop:"6px" }}><span style={{ color:"#333" }}>Recebido</span><strong style={{ fontFamily:"monospace", color:"#155724" }}>{formatBRL(pedido.valor_recebido)}</strong></div>
+                {permutaValor > 0 && (
+                  <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"#333" }}>Permuta</span><strong style={{ fontFamily:"monospace", color:"#6d28d9" }}>{formatBRL(permutaValor)}</strong></div>
+                )}
                 <div style={{ display:"flex", justifyContent:"space-between" }}>
                   <span style={{ color: aberto > 0 ? "#c00" : "#155724", fontWeight:700 }}>{aberto > 0 ? "Em aberto" : "✓ Quitado"}</span>
                   <strong style={{ fontFamily:"monospace", color: aberto > 0 ? "#c00" : "#155724" }}>{aberto > 0 ? formatBRL(aberto) : formatBRL(0)}</strong>
                 </div>
-                {parcelasAReceber.length > 0 && (
+                {parcelasAbertasImpressao.length > 0 && (
                   <div style={{ borderTop:"1px solid #d0daf0", paddingTop:"6px", display:"flex", flexDirection:"column", gap:"3px" }}>
                     <div style={{ fontSize:"8px", fontWeight:700, color:"#c00", textTransform:"uppercase", letterSpacing:"1px" }}>Parcelas em Aberto</div>
-                    {parcelasAReceber.map(l => (
+                    {parcelasAbertasImpressao.map(l => (
                       <div key={l.id} style={{ display:"flex", justifyContent:"space-between", fontSize:"9.5px", color:"#333" }}>
                         <span>Vence {formatDate(l.vencimento)}</span>
                         <span style={{ fontFamily:"monospace", color:"#c00", fontWeight:700 }}>{formatBRL(l.valor)}</span>

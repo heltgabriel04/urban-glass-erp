@@ -38,6 +38,7 @@ export default function DashboardPage() {
   const [comprasPend, setComprasPend] = useState(0);
   const [contasPagarAbertas, setContasPagarAbertas] = useState<ContaPagarMin[]>([]);
   const [compras, setCompras]       = useState<Compra[]>([]);
+  const [permutaRows, setPermutaRows] = useState<{ pedido_id: string | null; valor: number }[]>([]);
   const [semProgramacao, setSemProgramacao] = useState<Pedido[]>([]);
   const [loading, setLoading]       = useState(true);
   const [mesSel, setMesSel]         = useState<number | null>(null);
@@ -46,7 +47,7 @@ export default function DashboardPage() {
 
   async function load() {
     setLoading(true);
-    const [peds, fin, fat, est, qualidade, comprasRes, { data: cp }, semProg] = await Promise.all([
+    const [peds, fin, fat, est, qualidade, comprasRes, { data: cp }, semProg, { data: permuta }] = await Promise.all([
       getPedidos(),
       getFinanceiroClientes(),
       getFaturamentoMensal(new Date().getFullYear()),
@@ -55,6 +56,11 @@ export default function DashboardPage() {
       getCompras(),
       supabase.from("lancamentos").select("valor, vencimento").eq("tipo", "Saída").neq("status", "Pago").is("deletado_em", null),
       getPedidosSemProgramacao(),
+      // Permuta some do "a receber" — financeiro.a_receber já vem líquido
+      // (view), mas os KPIs abaixo (aReceber, topCli filtrado por mês) são
+      // recalculados direto de pedidos/fatTotal-recTotal, então precisam
+      // do próprio abatimento.
+      supabase.from("lancamentos").select("pedido_id, valor").eq("tipo", "Entrada").eq("permuta", true).is("deletado_em", null),
     ]);
     setPedidos(peds);
     setFinanceiro(fin);
@@ -66,6 +72,7 @@ export default function DashboardPage() {
     setContasPagarAbertas((cp ?? []) as ContaPagarMin[]);
     setCompras(comprasRes);
     setSemProgramacao(semProg);
+    setPermutaRows((permuta ?? []) as { pedido_id: string | null; valor: number }[]);
     setLoading(false);
   }
 
@@ -89,7 +96,19 @@ export default function DashboardPage() {
 
   const fatTotal  = financeiro.reduce((a, f) => a + Number(f.faturado), 0);
   const recTotal  = financeiro.reduce((a, f) => a + Number(f.recebido), 0);
-  const aReceber  = fatTotal - recTotal;
+  const totalPermuta = permutaRows.reduce((a, r) => a + Number(r.valor), 0);
+  const aReceber  = Math.max(0, fatTotal - recTotal - totalPermuta);
+
+  // Permuta por pedido — usado pelo topCli filtrado por mês abaixo, que
+  // recalcula a_receber direto de pedidosFiltrados (não passa pela view).
+  const permutaPorPedido = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of permutaRows) {
+      if (!r.pedido_id) continue;
+      map.set(r.pedido_id, (map.get(r.pedido_id) ?? 0) + Number(r.valor));
+    }
+    return map;
+  }, [permutaRows]);
 
   const fatMesSel = mesSel ? (barras.find(b => b.mesNum === mesSel)?.faturado ?? 0) : fatTotal;
   const pedMesSel = pedidosFiltrados.length;
@@ -141,21 +160,22 @@ export default function DashboardPage() {
     if (!mesSel) {
       return [...financeiro].sort((a, b) => Number(b.faturado) - Number(a.faturado)).slice(0, 6);
     }
-    const map = new Map<string, { nome: string; cidade: string; total: number; recebido: number }>();
+    const map = new Map<string, { nome: string; cidade: string; total: number; recebido: number; permuta: number }>();
     pedidosFiltrados.forEach(p => {
       const nome   = p.clientes?.nome ?? "—";
       const cidade = p.clientes?.cidade ?? "";
       const id     = String(p.cliente_id ?? nome);
-      if (!map.has(id)) map.set(id, { nome, cidade, total: 0, recebido: 0 });
+      if (!map.has(id)) map.set(id, { nome, cidade, total: 0, recebido: 0, permuta: 0 });
       const entry = map.get(id)!;
       entry.total    += valorComIpi(p);
       entry.recebido += Number(p.valor_recebido);
+      entry.permuta  += permutaPorPedido.get(p.id) ?? 0;
     });
     return [...map.entries()]
-      .map(([id, v]) => ({ cliente_id: id, cliente_nome: v.nome, cidade: v.cidade, faturado: v.total, recebido: v.recebido, a_receber: v.total - v.recebido }))
+      .map(([id, v]) => ({ cliente_id: id, cliente_nome: v.nome, cidade: v.cidade, faturado: v.total, recebido: v.recebido, a_receber: Math.max(0, v.total - v.recebido - v.permuta) }))
       .sort((a, b) => b.faturado - a.faturado)
       .slice(0, 6);
-  }, [financeiro, pedidosFiltrados, mesSel]);
+  }, [financeiro, pedidosFiltrados, mesSel, permutaPorPedido]);
 
   const maxTop   = Math.max(...topCli.map(c => Number(c.faturado)), 1);
   const mesLabel = mesSel ? MESES_ABREV[mesSel - 1] + "/" + anoAtual : anoAtual + " completo";

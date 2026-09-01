@@ -53,10 +53,19 @@ export async function GET(
   const pedidosRows = (pedidosData ?? []) as Pedido[];
   const lancamentos = (lancData ?? []) as Lancamento[];
 
+  // Permuta (paga em produto/serviço, não em dinheiro) não é mais dívida
+  // pendente — não entra na lista de parcelas mostrada ao cliente, mas
+  // também não conta como recebido: abate o saldo em aberto/quitado do
+  // pedido, sem tocar em valor_recebido.
   const parcelasPorPedido = new Map<string, { vencimento: string | null; valor: number }[]>();
   const pagamentosPorPedido = new Map<string, { data: string | null; formaPgto: string | null; conta: string | null; valor: number }[]>();
+  const permutaPorPedido = new Map<string, number>();
   for (const l of lancamentos) {
     if (!l.pedido_id) continue;
+    if (l.permuta) {
+      permutaPorPedido.set(l.pedido_id, (permutaPorPedido.get(l.pedido_id) ?? 0) + Number(l.valor));
+      continue;
+    }
     if (l.status === "A Receber") {
       const lista = parcelasPorPedido.get(l.pedido_id) ?? [];
       lista.push({ vencimento: l.vencimento, valor: l.valor });
@@ -74,10 +83,11 @@ export async function GET(
       (i) => i.produtos?.unidade === "ml"
     );
     const totalComIpi = valorComIpi(pedido);
+    const permutaPedido = permutaPorPedido.get(pedido.id) ?? 0;
     return {
       pedido,
       totalComIpi,
-      quitado: Number(pedido.valor_recebido) >= totalComIpi - 0.02,
+      quitado: Number(pedido.valor_recebido) + permutaPedido >= totalComIpi - 0.02,
       isML,
       parcelasPendentes: parcelasPorPedido.get(pedido.id) ?? [],
       pagamentosRecebidos: pagamentosPorPedido.get(pedido.id) ?? [],
@@ -86,7 +96,8 @@ export async function GET(
 
   const totalFaturado = pedidos.reduce((a, p) => a + p.totalComIpi, 0);
   const totalRecebido = pedidosRows.reduce((a, p) => a + Number(p.valor_recebido), 0);
-  const totalAberto = totalFaturado - totalRecebido;
+  const totalPermutaCliente = [...permutaPorPedido.values()].reduce((a, v) => a + v, 0);
+  const totalAberto = Math.max(0, totalFaturado - totalRecebido - totalPermutaCliente);
   const ticketMedio = pedidos.length > 0 ? totalFaturado / pedidos.length : 0;
 
   // KPIs refletem o histórico completo do cliente; a listagem detalhada

@@ -21,17 +21,20 @@ export async function POST(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const { data: pedido, error } = await sb
-    .from("pedidos")
-    .select(`*, clientes ( * ), itens_pedido ( *, produtos ( id, unidade ) )`)
-    .eq("id", id)
-    .single();
+  const [{ data: pedido, error }, { data: permutaRows }] = await Promise.all([
+    sb.from("pedidos")
+      .select(`*, clientes ( * ), itens_pedido ( *, produtos ( id, unidade ) )`)
+      .eq("id", id)
+      .single(),
+    sb.from("lancamentos").select("valor").eq("pedido_id", id).eq("permuta", true),
+  ]);
 
   if (error || !pedido) {
     return NextResponse.json({ error: "Pedido não encontrado" }, { status: 404 });
   }
 
-  const buffer = await renderToBuffer(<RomaneioDocument pedido={pedido as Pedido} />);
+  const permutaValor = (permutaRows ?? []).reduce((a, r) => a + Number((r as { valor: number }).valor), 0);
+  const buffer = await renderToBuffer(<RomaneioDocument pedido={pedido as Pedido} permutaValor={permutaValor} />);
 
   const path = `${id}/${Date.now()}_${Math.random().toString(36).slice(2)}.pdf`;
   const { error: uploadError } = await sb.storage

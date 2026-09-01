@@ -38,6 +38,7 @@ export async function getAbertoPorTipo(tipo: 'Entrada' | 'Saída', filtro?: Filt
     .select('id, valor, status')
     .eq('tipo', tipo)
     .neq('status', 'Pago')
+    .eq('permuta', false) // permuta não é dívida pendente nem dinheiro — some do "em aberto"
     .is('deletado_em', null);
   if (filtro?.contaId) query = query.eq('conta_id', filtro.contaId);
   const { data: lancs } = await query;
@@ -60,6 +61,7 @@ export async function getResumoAberto(tipo: 'Entrada' | 'Saída', filtro?: Filtr
     .select('id, valor, status, vencimento')
     .eq('tipo', tipo)
     .neq('status', 'Pago')
+    .eq('permuta', false) // permuta não é dívida pendente nem dinheiro — some do "em aberto"
     .is('deletado_em', null);
   if (filtro?.contaId) query = query.eq('conta_id', filtro.contaId);
   const { data: lancs } = await query;
