@@ -37,7 +37,7 @@ const STATUS_COR: Record<string, string> = {
   "Cancelado":               "var(--err)",
 };
 
-type TipoRelatorio = "gerencial" | "inadimplencia" | "faturamento" | "completo" | null;
+type TipoRelatorio = "gerencial" | "inadimplencia" | "faturamento" | "recebiveis" | "completo" | null;
 
 // ── helpers de estilo PDF ────────────────────────────────────────────────────
 const AZUL  = "#1a3d6b";
@@ -203,6 +203,62 @@ export default function RelatoriosPage() {
     [lancamentos, hoje]
   );
   const totalVencido = parcelasVencidas.reduce((a, l) => a + Number(l.valor), 0);
+
+  // ── Contas a Receber (posição em aberto: vencido + a vencer) ────────────
+  const recebiveisAbertos = useMemo(() =>
+    (lancamentos as Lancamento[]).filter(l => l.tipo === "Entrada" && l.status === "A Receber")
+      .sort((a, b) => (a.vencimento ?? "").localeCompare(b.vencimento ?? "")),
+    [lancamentos]
+  );
+  const recebiveisVencidos     = useMemo(() => recebiveisAbertos.filter(l => l.vencimento && l.vencimento < hoje), [recebiveisAbertos, hoje]);
+  const recebiveisAVencer      = useMemo(() => recebiveisAbertos.filter(l => !l.vencimento || l.vencimento >= hoje), [recebiveisAbertos, hoje]);
+  const totalRecebiveisAbertos = recebiveisAbertos.reduce((a, l) => a + Number(l.valor), 0);
+  const totalRecebiveisVencidos = recebiveisVencidos.reduce((a, l) => a + Number(l.valor), 0);
+  const totalRecebiveisAVencer  = recebiveisAVencer.reduce((a, l) => a + Number(l.valor), 0);
+
+  const recebiveisPorCliente = useMemo(() => {
+    const map = new Map<number, { cliente_id: number; nome: string; titulos: number; vencido: number; aVencer: number; total: number }>();
+    for (const l of recebiveisAbertos) {
+      const cid = l.cliente_id ?? -1;
+      const nome = (l as any).clientes?.nome ?? "Sem cliente";
+      const vencido = !!(l.vencimento && l.vencimento < hoje);
+      const cur = map.get(cid) ?? { cliente_id: cid, nome, titulos: 0, vencido: 0, aVencer: 0, total: 0 };
+      cur.titulos += 1;
+      if (vencido) cur.vencido += Number(l.valor); else cur.aVencer += Number(l.valor);
+      cur.total += Number(l.valor);
+      map.set(cid, cur);
+    }
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [recebiveisAbertos, hoje]);
+
+  async function exportarRecebiveisExcel() {
+    const { exportarExcelRelatorio } = await import("@/lib/exportExcel");
+    await exportarExcelRelatorio("ContasReceber_UrbanGlass", [
+      {
+        nome: "Resumo por Cliente",
+        titulo: "Relatório de Contas a Receber",
+        subtitulo: "Resumo por Cliente",
+        cabecalho: ["Cliente", "Nº Títulos", "Vencido", "A Vencer", "Total em Aberto"],
+        linhas: recebiveisPorCliente.map(c => [c.nome, c.titulos, c.vencido, c.aVencer, c.total]),
+        totalLinha: ["TOTAL", recebiveisAbertos.length, totalRecebiveisVencidos, totalRecebiveisAVencer, totalRecebiveisAbertos],
+      },
+      {
+        nome: "Detalhado",
+        titulo: "Relatório de Contas a Receber",
+        subtitulo: "Detalhado por Título",
+        cabecalho: ["Vencimento", "Cliente", "Pedido/Documento", "Descrição", "Valor", "Situação"],
+        linhas: recebiveisAbertos.map(l => [
+          l.vencimento ? new Date(l.vencimento + "T12:00:00").toLocaleDateString("pt-BR") : "—",
+          (l as any).clientes?.nome ?? "—",
+          l.pedido_id ?? l.documento ?? "—",
+          l.descricao,
+          Number(l.valor),
+          l.vencimento && l.vencimento < hoje ? "Vencido" : "A Vencer",
+        ]),
+        totalLinha: ["", "", "", "TOTAL", totalRecebiveisAbertos, ""],
+      },
+    ]);
+  }
 
   const mesLabel = mesSel ? MESES_ABREV[mesSel - 1] : "Ano todo";
 
@@ -428,16 +484,22 @@ export default function RelatoriosPage() {
           <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
             <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>PDF:</span>
             {([
-              { tipo: "gerencial" as TipoRelatorio,     label: "Gerencial",   cor: "#2d5fa6" },
-              { tipo: "inadimplencia" as TipoRelatorio, label: "Inadimpl.",   cor: "#c0392b" },
-              { tipo: "faturamento" as TipoRelatorio,   label: "Faturamento", cor: "#16a085" },
-              { tipo: "completo" as TipoRelatorio,      label: "Completo",    cor: "#6b21a8" },
+              { tipo: "gerencial" as TipoRelatorio,     label: "Gerencial",         cor: "#2d5fa6" },
+              { tipo: "inadimplencia" as TipoRelatorio, label: "Inadimpl.",         cor: "#c0392b" },
+              { tipo: "faturamento" as TipoRelatorio,   label: "Faturamento",       cor: "#16a085" },
+              { tipo: "recebiveis" as TipoRelatorio,    label: "Contas a Receber",  cor: "#0e7c66" },
+              { tipo: "completo" as TipoRelatorio,      label: "Completo",          cor: "#6b21a8" },
             ] as const).map(r => (
               <button key={r.tipo} onClick={() => imprimirRelatorio(r.tipo)}
                 style={{ fontSize: "10px", fontFamily: "'DM Mono', monospace", padding: "4px 10px", borderRadius: "5px", cursor: "pointer", fontWeight: 600, background: r.cor + "18", border: `1px solid ${r.cor}44`, color: r.cor }}>
                 ⎙ {r.label}
               </button>
             ))}
+            <span style={{ fontSize: "10px", color: "var(--t3)", fontFamily: "'DM Mono', monospace", marginLeft: "6px" }}>Excel:</span>
+            <button onClick={exportarRecebiveisExcel}
+              style={{ fontSize: "10px", fontFamily: "'DM Mono', monospace", padding: "4px 10px", borderRadius: "5px", cursor: "pointer", fontWeight: 600, background: "#0e7c6618", border: "1px solid #0e7c6644", color: "#0e7c66" }}>
+              ⇩ Contas a Receber
+            </button>
           </div>
         </div>
 
@@ -1785,7 +1847,7 @@ export default function RelatoriosPage() {
 
               {/* KPIs */}
               <div style={{ ...S.sec, borderBottomColor: "#c0392b", color: "#c0392b" }}>Resumo da Situação de Crédito</div>
-              <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+              <div style={{ display: "flex", gap: "14px", marginBottom: "24px" }}>
                 {[
                   { label: "Total em Aberto",       value: formatBRL(totalDevedores),                                                              sub: `${devedores.length} clientes`,    alert: totalDevedores > 0 },
                   { label: "Sem Nenhum Pagamento",   value: String(inadimplentes.length),                                                          sub: formatBRL(inadimplentes.reduce((a,f)=>a+Number(f.a_receber),0)),  alert: inadimplentes.length > 0 },
@@ -1793,9 +1855,9 @@ export default function RelatoriosPage() {
                   { label: "Parcelas Vencidas",      value: String(parcelasVencidas.length),                                                       sub: formatBRL(totalVencido) + " atrasado", alert: parcelasVencidas.length > 0 },
                   { label: "Taxa de Recebimento",    value: fatTotal > 0 ? (recTotal/fatTotal*100).toFixed(1) + "%" : "—",                         sub: `de ${formatBRL(fatTotal)} fat.`, alert: fatTotal > 0 && recTotal/fatTotal < 0.8 },
                 ].map(k => (
-                  <div key={k.label} style={{ ...S.kpi, ...(k.alert ? { background: "#fff5f5", border: "1px solid #f5c6cb" } : {}) }}>
+                  <div key={k.label} style={{ ...S.kpi, padding: "18px 20px", ...(k.alert ? { background: "#fff5f5", border: "1px solid #f5c6cb" } : {}) }}>
                     <div style={S.kpiL}>{k.label}</div>
-                    <div style={{ ...S.kpiV, color: k.alert ? "#c0392b" : "#155724" }}>{k.value}</div>
+                    <div style={{ ...S.kpiV, fontSize: "26px", color: k.alert ? "#c0392b" : "#155724" }}>{k.value}</div>
                     <div style={S.kpiS}>{k.sub}</div>
                   </div>
                 ))}
@@ -1889,7 +1951,7 @@ export default function RelatoriosPage() {
               {devedores.filter(f => Number(f.recebido) > 0).length > 0 && (
                 <>
                   <div style={{ ...S.sec, borderBottomColor: "#856404", color: "#856404" }}>Médio Risco — Clientes com Pagamento Parcial</div>
-                  <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "20px" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "24px" }}>
                     <thead>
                       <tr>{["#","Cliente","Cidade","Faturado","Recebido","Em Aberto","% Recebido"].map((h,i) => <th key={i} style={{ ...S.thWarn, textAlign: i >= 3 ? "right" : "left" }}>{h}</th>)}</tr>
                     </thead>
@@ -1904,44 +1966,17 @@ export default function RelatoriosPage() {
                             <td style={{ ...S.tdR, color: AZUL2 }}>{formatBRL(f.faturado)}</td>
                             <td style={{ ...S.tdR, color: "#155724" }}>{formatBRL(f.recebido)}</td>
                             <td style={{ ...S.tdR, color: "#856404", fontWeight: 700 }}>{formatBRL(f.a_receber)}</td>
-                            <td style={{ ...S.tdR, color: "#856404" }}>{pctRec.toFixed(1)}%</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </>
-              )}
-
-              {/* Parcelas Vencidas */}
-              {parcelasVencidas.length > 0 && (
-                <>
-                  <div style={{ ...S.sec, borderBottomColor: "#721c24", color: "#721c24" }}>Detalhamento de Parcelas Vencidas</div>
-                  <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "20px" }}>
-                    <thead>
-                      <tr>{["Vencimento","Dias Atraso","Cliente","Pedido","Descrição","Valor"].map((h,i) => <th key={i} style={{ ...S.th, background: "#721c24", textAlign: i >= 5 ? "right" : "left" }}>{h}</th>)}</tr>
-                    </thead>
-                    <tbody>
-                      {parcelasVencidas.map((l, i) => {
-                        const dias = l.vencimento ? Math.floor((new Date(hoje).getTime() - new Date(l.vencimento + "T12:00:00").getTime()) / 86400000) : 0;
-                        const cor  = dias > 90 ? "#4a0404" : dias > 60 ? "#721c24" : dias > 30 ? "#c0392b" : "#856404";
-                        return (
-                          <tr key={l.id} style={{ background: i % 2 === 0 ? "#fff5f5" : "#fff" }}>
-                            <td style={{ ...S.td, fontFamily: "monospace", color: "#c0392b", fontWeight: 700 }}>
-                              {l.vencimento ? new Date(l.vencimento + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
+                            <td style={{ ...S.tdR, color: "#856404" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px", justifyContent: "flex-end" }}>
+                                <div style={{ width: "44px", height: "6px", borderRadius: "3px", background: "#f0e6c8", overflow: "hidden" }}>
+                                  <div style={{ width: `${Math.min(pctRec, 100)}%`, height: "100%", background: "#856404" }} />
+                                </div>
+                                <span>{pctRec.toFixed(1)}%</span>
+                              </div>
                             </td>
-                            <td style={{ ...S.tdR, color: cor, fontWeight: 700 }}>{dias}d</td>
-                            <td style={{ ...S.tdB }}>{(l as any).clientes?.nome ?? "—"}</td>
-                            <td style={{ ...S.td, fontFamily: "monospace", color: AZUL2 }}>{l.pedido_id ?? "—"}</td>
-                            <td style={{ ...S.td, color: "#444" }}>{l.descricao}</td>
-                            <td style={{ ...S.tdR, color: "#c0392b", fontWeight: 800 }}>{formatBRL(l.valor)}</td>
                           </tr>
                         );
                       })}
-                      <tr>
-                        <td colSpan={5} style={{ ...S.tdTotal, color: "#721c24", fontWeight: 800 }}>TOTAL VENCIDO</td>
-                        <td style={{ ...S.tdTotal, textAlign: "right", color: "#c0392b", fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(totalVencido)}</td>
-                      </tr>
                     </tbody>
                   </table>
                 </>
@@ -1961,6 +1996,134 @@ export default function RelatoriosPage() {
                   </div>
                 ))}
               </div>
+
+            </div>
+            <PdfFooter emissao={dtEmissao} />
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════════
+            PDF: RELATÓRIO DE CONTAS A RECEBER
+        ════════════════════════════════════════════════════════════════════ */}
+        {reporteAtivo === "recebiveis" && (
+          <div className="print-area" style={S.page}>
+            <PdfHeader titulo="Relatório de Contas a Receber" subtitulo="Posição de Recebíveis em Aberto" emissao={dtEmissao} cor="#0e7c66" />
+            <div style={S.body}>
+
+              {/* Diagnóstico Executivo */}
+              {(() => {
+                const maiorCliente = recebiveisPorCliente.length > 0 ? recebiveisPorCliente[0] : null;
+                const insights = [
+                  recebiveisAbertos.length > 0
+                    ? `${formatBRL(totalRecebiveisAbertos)} em aberto, distribuídos entre ${recebiveisPorCliente.length} cliente${recebiveisPorCliente.length > 1 ? "s" : ""} e ${recebiveisAbertos.length} título${recebiveisAbertos.length > 1 ? "s" : ""}.`
+                    : "Nenhum título em aberto no momento.",
+                  recebiveisVencidos.length > 0
+                    ? `${formatBRL(totalRecebiveisVencidos)} já vencidos (${(totalRecebiveisAbertos > 0 ? totalRecebiveisVencidos / totalRecebiveisAbertos * 100 : 0).toFixed(0)}% do total em aberto) — prioridade de cobrança.`
+                    : "Nenhum título vencido — toda a carteira em aberto está dentro do prazo.",
+                  recebiveisAVencer.length > 0
+                    ? `${formatBRL(totalRecebiveisAVencer)} a vencer, ainda dentro do prazo combinado.`
+                    : null,
+                  maiorCliente ? `Maior exposição: ${maiorCliente.nome} — ${formatBRL(maiorCliente.total)} em aberto.` : null,
+                ].filter(Boolean);
+                return (
+                  <div style={{ marginBottom: "20px" }}>
+                    <div style={{ ...S.sec, marginTop: "0", borderBottomColor: "#0e7c66", color: "#0e7c66" }}>Diagnóstico da Carteira</div>
+                    {insights.map((t, i) => (
+                      <div key={i} style={{ ...S.insight, background: "#f0fbf8", borderLeftColor: "#0e7c66" }}>
+                        <strong style={{ color: "#0e7c66", marginRight: "5px" }}>◆</strong>{t}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* KPIs */}
+              <div style={{ ...S.sec, borderBottomColor: "#0e7c66", color: "#0e7c66" }}>Resumo da Posição</div>
+              <div style={{ display: "flex", gap: "14px", marginBottom: "24px" }}>
+                {[
+                  { label: "Total em Aberto", value: formatBRL(totalRecebiveisAbertos), sub: `${recebiveisAbertos.length} títulos`,           alert: false },
+                  { label: "Vencido",         value: formatBRL(totalRecebiveisVencidos), sub: `${recebiveisVencidos.length} título${recebiveisVencidos.length !== 1 ? "s" : ""}`, alert: totalRecebiveisVencidos > 0 },
+                  { label: "A Vencer",        value: formatBRL(totalRecebiveisAVencer),  sub: `${recebiveisAVencer.length} título${recebiveisAVencer.length !== 1 ? "s" : ""}`,  alert: false },
+                  { label: "Clientes",        value: String(recebiveisPorCliente.length), sub: "com títulos em aberto",                        alert: false },
+                ].map(k => (
+                  <div key={k.label} style={{ ...S.kpi, padding: "18px 20px", ...(k.alert ? { background: "#fff5f5", border: "1px solid #f5c6cb" } : {}) }}>
+                    <div style={S.kpiL}>{k.label}</div>
+                    <div style={{ ...S.kpiV, fontSize: "26px", color: k.alert ? "#c0392b" : "#0e7c66" }}>{k.value}</div>
+                    <div style={S.kpiS}>{k.sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Resumo por Cliente */}
+              {recebiveisPorCliente.length > 0 && (
+                <>
+                  <div style={{ ...S.sec, borderBottomColor: "#0e7c66", color: "#0e7c66" }}>Resumo por Cliente</div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "24px" }}>
+                    <thead>
+                      <tr>{["#","Cliente","Nº Títulos","Vencido","A Vencer","Total em Aberto","% do Total"].map((h,i) => <th key={i} style={{ ...S.th, background: "#0e7c66", textAlign: i >= 2 ? "right" : "left" }}>{h}</th>)}</tr>
+                    </thead>
+                    <tbody>
+                      {recebiveisPorCliente.map((c, i) => {
+                        const pct = totalRecebiveisAbertos > 0 ? c.total / totalRecebiveisAbertos * 100 : 0;
+                        return (
+                          <tr key={c.cliente_id} style={{ background: i % 2 === 0 ? "#f0fbf8" : "#fff" }}>
+                            <td style={{ ...S.td, color: "#888", textAlign: "center" }}>{i + 1}</td>
+                            <td style={{ ...S.tdB }}>{c.nome}</td>
+                            <td style={{ ...S.tdR }}>{c.titulos}</td>
+                            <td style={{ ...S.tdR, color: c.vencido > 0 ? "#c0392b" : "#aaa", fontWeight: c.vencido > 0 ? 700 : 400 }}>{c.vencido > 0 ? formatBRL(c.vencido) : "—"}</td>
+                            <td style={{ ...S.tdR, color: "#555" }}>{c.aVencer > 0 ? formatBRL(c.aVencer) : "—"}</td>
+                            <td style={{ ...S.tdR, color: "#0e7c66", fontWeight: 800 }}>{formatBRL(c.total)}</td>
+                            <td style={{ ...S.tdR }}>{pct.toFixed(1)}%</td>
+                          </tr>
+                        );
+                      })}
+                      <tr>
+                        <td colSpan={3} style={{ ...S.tdTotal, color: "#0e7c66", fontWeight: 800 }}>TOTAL GERAL</td>
+                        <td style={{ ...S.tdTotal, textAlign: "right", color: "#c0392b", fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(totalRecebiveisVencidos)}</td>
+                        <td style={{ ...S.tdTotal, textAlign: "right", fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(totalRecebiveisAVencer)}</td>
+                        <td style={{ ...S.tdTotal, textAlign: "right", color: "#0e7c66", fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(totalRecebiveisAbertos)}</td>
+                        <td style={{ ...S.tdTotal, textAlign: "right", fontWeight: 800 }}>100%</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </>
+              )}
+
+              {/* Detalhado por Título */}
+              {recebiveisAbertos.length > 0 && (
+                <>
+                  <div style={{ ...S.sec, borderBottomColor: "#0e7c66", color: "#0e7c66" }}>Detalhado por Título</div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "20px" }}>
+                    <thead>
+                      <tr>{["Vencimento","Cliente","Pedido/Doc.","Descrição","Valor","Situação"].map((h,i) => <th key={i} style={{ ...S.th, background: "#0e7c66", textAlign: i >= 4 ? "right" : "left" }}>{h}</th>)}</tr>
+                    </thead>
+                    <tbody>
+                      {recebiveisAbertos.map((l, i) => {
+                        const venceu = !!(l.vencimento && l.vencimento < hoje);
+                        return (
+                          <tr key={l.id} style={{ background: i % 2 === 0 ? "#f0fbf8" : "#fff" }}>
+                            <td style={{ ...S.td, fontFamily: "monospace", color: venceu ? "#c0392b" : "#333", fontWeight: venceu ? 700 : 500 }}>
+                              {l.vencimento ? new Date(l.vencimento + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
+                            </td>
+                            <td style={{ ...S.tdB }}>{(l as any).clientes?.nome ?? "—"}</td>
+                            <td style={{ ...S.td, fontFamily: "monospace", color: AZUL2 }}>{l.pedido_id ?? l.documento ?? "—"}</td>
+                            <td style={{ ...S.td, color: "#444" }}>{l.descricao}</td>
+                            <td style={{ ...S.tdR, fontWeight: 700 }}>{formatBRL(l.valor)}</td>
+                            <td style={{ ...S.td, textAlign: "center" }}>
+                              <span style={{ ...S.badge, background: venceu ? "#f5c6cb" : "#d4f4e8", color: venceu ? "#721c24" : "#0e7c66" }}>{venceu ? "Vencido" : "A Vencer"}</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      <tr>
+                        <td colSpan={4} style={{ ...S.tdTotal, color: "#0e7c66", fontWeight: 800 }}>TOTAL EM ABERTO</td>
+                        <td style={{ ...S.tdTotal, textAlign: "right", color: "#0e7c66", fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(totalRecebiveisAbertos)}</td>
+                        <td style={S.tdTotal} />
+                      </tr>
+                    </tbody>
+                  </table>
+                </>
+              )}
 
             </div>
             <PdfFooter emissao={dtEmissao} />
