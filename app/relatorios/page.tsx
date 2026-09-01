@@ -231,6 +231,24 @@ export default function RelatoriosPage() {
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
   }, [recebiveisAbertos, hoje]);
 
+  // Sem data — só agrupa por pedido/documento, mesmo raciocínio do
+  // resumo por cliente acima (evita linha a linha com vencimento, que
+  // fica desatualizado assim que o PDF é impresso).
+  const recebiveisPorPedido = useMemo(() => {
+    const map = new Map<string, { pedido: string; cliente: string; titulos: number; vencido: number; aVencer: number; total: number }>();
+    for (const l of recebiveisAbertos) {
+      const key = l.pedido_id ?? l.documento ?? "Sem pedido";
+      const cliente = (l as any).clientes?.nome ?? "Sem cliente";
+      const vencido = !!(l.vencimento && l.vencimento < hoje);
+      const cur = map.get(key) ?? { pedido: key, cliente, titulos: 0, vencido: 0, aVencer: 0, total: 0 };
+      cur.titulos += 1;
+      if (vencido) cur.vencido += Number(l.valor); else cur.aVencer += Number(l.valor);
+      cur.total += Number(l.valor);
+      map.set(key, cur);
+    }
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [recebiveisAbertos, hoje]);
+
   async function exportarRecebiveisExcel() {
     const { exportarExcelRelatorio } = await import("@/lib/exportExcel");
     await exportarExcelRelatorio("ContasReceber_UrbanGlass", [
@@ -243,19 +261,12 @@ export default function RelatoriosPage() {
         totalLinha: ["TOTAL", recebiveisAbertos.length, totalRecebiveisVencidos, totalRecebiveisAVencer, totalRecebiveisAbertos],
       },
       {
-        nome: "Detalhado",
+        nome: "Resumo por Pedido",
         titulo: "Relatório de Contas a Receber",
-        subtitulo: "Detalhado por Título",
-        cabecalho: ["Vencimento", "Cliente", "Pedido/Documento", "Descrição", "Valor", "Situação"],
-        linhas: recebiveisAbertos.map(l => [
-          l.vencimento ? new Date(l.vencimento + "T12:00:00").toLocaleDateString("pt-BR") : "—",
-          (l as any).clientes?.nome ?? "—",
-          l.pedido_id ?? l.documento ?? "—",
-          l.descricao,
-          Number(l.valor),
-          l.vencimento && l.vencimento < hoje ? "Vencido" : "A Vencer",
-        ]),
-        totalLinha: ["", "", "", "TOTAL", totalRecebiveisAbertos, ""],
+        subtitulo: "Resumo por Pedido",
+        cabecalho: ["Pedido/Documento", "Cliente", "Nº Títulos", "Vencido", "A Vencer", "Total em Aberto"],
+        linhas: recebiveisPorPedido.map(p => [p.pedido, p.cliente, p.titulos, p.vencido, p.aVencer, p.total]),
+        totalLinha: ["TOTAL", "", recebiveisAbertos.length, totalRecebiveisVencidos, totalRecebiveisAVencer, totalRecebiveisAbertos],
       },
     ]);
   }
@@ -2089,36 +2100,31 @@ export default function RelatoriosPage() {
                 </>
               )}
 
-              {/* Detalhado por Título */}
-              {recebiveisAbertos.length > 0 && (
+              {/* Resumo por Pedido */}
+              {recebiveisPorPedido.length > 0 && (
                 <>
-                  <div style={{ ...S.sec, borderBottomColor: "#0e7c66", color: "#0e7c66" }}>Detalhado por Título</div>
+                  <div style={{ ...S.sec, borderBottomColor: "#0e7c66", color: "#0e7c66" }}>Resumo por Pedido</div>
                   <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "20px" }}>
                     <thead>
-                      <tr>{["Vencimento","Cliente","Pedido/Doc.","Descrição","Valor","Situação"].map((h,i) => <th key={i} style={{ ...S.th, background: "#0e7c66", textAlign: i >= 4 ? "right" : "left" }}>{h}</th>)}</tr>
+                      <tr>{["#","Pedido/Doc.","Cliente","Nº Títulos","Vencido","A Vencer","Total em Aberto"].map((h,i) => <th key={i} style={{ ...S.th, background: "#0e7c66", textAlign: i >= 3 ? "right" : "left" }}>{h}</th>)}</tr>
                     </thead>
                     <tbody>
-                      {recebiveisAbertos.map((l, i) => {
-                        const venceu = !!(l.vencimento && l.vencimento < hoje);
-                        return (
-                          <tr key={l.id} style={{ background: i % 2 === 0 ? "#f0fbf8" : "#fff" }}>
-                            <td style={{ ...S.td, fontFamily: "monospace", color: venceu ? "#c0392b" : "#333", fontWeight: venceu ? 700 : 500 }}>
-                              {l.vencimento ? new Date(l.vencimento + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
-                            </td>
-                            <td style={{ ...S.tdB }}>{(l as any).clientes?.nome ?? "—"}</td>
-                            <td style={{ ...S.td, fontFamily: "monospace", color: AZUL2 }}>{l.pedido_id ?? l.documento ?? "—"}</td>
-                            <td style={{ ...S.td, color: "#444" }}>{l.descricao}</td>
-                            <td style={{ ...S.tdR, fontWeight: 700 }}>{formatBRL(l.valor)}</td>
-                            <td style={{ ...S.td, textAlign: "center" }}>
-                              <span style={{ ...S.badge, background: venceu ? "#f5c6cb" : "#d4f4e8", color: venceu ? "#721c24" : "#0e7c66" }}>{venceu ? "Vencido" : "A Vencer"}</span>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {recebiveisPorPedido.map((p, i) => (
+                        <tr key={p.pedido + i} style={{ background: i % 2 === 0 ? "#f0fbf8" : "#fff" }}>
+                          <td style={{ ...S.td, color: "#888", textAlign: "center" }}>{i + 1}</td>
+                          <td style={{ ...S.tdB, fontFamily: "monospace", color: AZUL2 }}>{p.pedido}</td>
+                          <td style={{ ...S.td }}>{p.cliente}</td>
+                          <td style={{ ...S.tdR }}>{p.titulos}</td>
+                          <td style={{ ...S.tdR, color: p.vencido > 0 ? "#c0392b" : "#aaa", fontWeight: p.vencido > 0 ? 700 : 400 }}>{p.vencido > 0 ? formatBRL(p.vencido) : "—"}</td>
+                          <td style={{ ...S.tdR, color: "#555" }}>{p.aVencer > 0 ? formatBRL(p.aVencer) : "—"}</td>
+                          <td style={{ ...S.tdR, color: "#0e7c66", fontWeight: 800 }}>{formatBRL(p.total)}</td>
+                        </tr>
+                      ))}
                       <tr>
-                        <td colSpan={4} style={{ ...S.tdTotal, color: "#0e7c66", fontWeight: 800 }}>TOTAL EM ABERTO</td>
+                        <td colSpan={4} style={{ ...S.tdTotal, color: "#0e7c66", fontWeight: 800 }}>TOTAL GERAL</td>
+                        <td style={{ ...S.tdTotal, textAlign: "right", color: "#c0392b", fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(totalRecebiveisVencidos)}</td>
+                        <td style={{ ...S.tdTotal, textAlign: "right", fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(totalRecebiveisAVencer)}</td>
                         <td style={{ ...S.tdTotal, textAlign: "right", color: "#0e7c66", fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(totalRecebiveisAbertos)}</td>
-                        <td style={S.tdTotal} />
                       </tr>
                     </tbody>
                   </table>
