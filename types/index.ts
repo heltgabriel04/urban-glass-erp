@@ -561,6 +561,8 @@ export interface Lancamento {
   lancamento_origem_id?: number | null;
   grupo_parcelamento_id?: string | null;
   compra_id?: string | null;
+  /** Tag informativa: parcela paga em permuta (produto/serviço, não dinheiro). Não afeta valor_recebido nem totais de "a receber" em nenhuma tela/relatório. */
+  permuta?: boolean;
   deletado_em?: string | null;
   deletado_por?: string | null;
   deletado_motivo?: string | null;

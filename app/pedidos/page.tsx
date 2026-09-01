@@ -10,6 +10,7 @@ import { valorComIpi } from "@/lib/pedidoIpi";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import { supabase } from "@/lib/supabase/client";
+import { PermutaModal } from "@/components/pedidos/PermutaModal";
 import type { Pedido, Cliente, StatusPedido } from "@/types";
 
 // Mesma ordem do fluxo real (services/pedidos.service.ts) — cada status vira
@@ -76,6 +77,8 @@ function PedidosPageInner() {
   const [comOtimizacao, setComOtimizacao] = useState<Set<string>>(new Set());
   const [pedidosChapa, setPedidosChapa]   = useState<Set<string>>(new Set());
   const [pedidosVidroCliente, setPedidosVidroCliente] = useState<Set<string>>(new Set());
+  const [pedidosComPermuta, setPedidosComPermuta] = useState<Set<string>>(new Set());
+  const [permutaPedidoId, setPermutaPedidoId] = useState<string | null>(null);
   const [deletando, setDeletando]         = useState<Set<string>>(new Set());
   const [clientes, setClientes]           = useState<Cliente[]>([]);
   const [sugestoesAbertas, setSugestoesAbertas] = useState(false);
@@ -128,16 +131,19 @@ function PedidosPageInner() {
       setComOtimizacao(new Set());
       setPedidosChapa(new Set());
       setPedidosVidroCliente(new Set());
+      setPedidosComPermuta(new Set());
       setLoading(false);
       return;
     }
 
-    const [otimRows, itensRows] = await Promise.all([
+    const [otimRows, itensRows, permutaRows] = await Promise.all([
       supabase.from("historico_otimizador").select("pedido_id").in("pedido_id", ids),
       supabase.from("itens_pedido").select("pedido_id, largura, altura, vidro_cliente").in("pedido_id", ids),
+      supabase.from("lancamentos").select("pedido_id").in("pedido_id", ids).eq("permuta", true),
     ]);
 
     setComOtimizacao(new Set<string>((otimRows.data ?? []).map((r: any) => r.pedido_id as string)));
+    setPedidosComPermuta(new Set<string>((permutaRows.data ?? []).map((r: any) => r.pedido_id as string)));
 
     // Agrupa itens por pedido
     const itensPorPedido: Record<string, any[]> = {};
@@ -213,6 +219,32 @@ function PedidosPageInner() {
         {icone}
       </a>
     );
+  }
+
+  function btnAction(onClick: () => void, titulo: string, icone: string, corHover: string, bgHover: string, ativo?: boolean) {
+    return (
+      <button
+        type="button"
+        title={titulo}
+        onClick={e => { e.stopPropagation(); onClick(); }}
+        style={{
+          display:"inline-flex", alignItems:"center", justifyContent:"center", width:"28px", height:"28px", borderRadius:"6px",
+          background: ativo ? bgHover : "transparent", border: `1px solid ${ativo ? corHover : "var(--b2)"}`, color: ativo ? corHover : "var(--t3)",
+          fontSize:"13px", cursor:"pointer", transition:"all 0.15s",
+        }}
+        onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = bgHover; b.style.borderColor = corHover; b.style.color = corHover; }}
+        onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = ativo ? bgHover : "transparent"; b.style.borderColor = ativo ? corHover : "var(--b2)"; b.style.color = ativo ? corHover : "var(--t3)"; }}
+      >
+        {icone}
+      </button>
+    );
+  }
+
+  async function refreshPermuta() {
+    const ids = pedidos.map(p => p.id);
+    if (ids.length === 0) return;
+    const { data } = await supabase.from("lancamentos").select("pedido_id").in("pedido_id", ids).eq("permuta", true);
+    setPedidosComPermuta(new Set<string>((data ?? []).map((r: any) => r.pedido_id as string)));
   }
 
   return (
@@ -414,14 +446,19 @@ function PedidosPageInner() {
                       <td className="mono">{Number(p.m2_total).toFixed(2)} m²</td>
                       <td className="mono">{formatBRL(valorComIpi(p))}</td>
                       <td>
-                        <span className="mono" style={{ color: quitado ? "var(--ok)" : "var(--warn)" }}>
-                          {formatBRL(p.valor_recebido)}
-                        </span>
-                        {!quitado && (
-                          <div className="tdim" style={{ color:"var(--err)" }}>
-                            − {formatBRL(aberto)}
+                        <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
+                          <div>
+                            <span className="mono" style={{ color: quitado ? "var(--ok)" : "var(--warn)" }}>
+                              {formatBRL(p.valor_recebido)}
+                            </span>
+                            {!quitado && (
+                              <div className="tdim" style={{ color:"var(--err)" }}>
+                                − {formatBRL(aberto)}
+                              </div>
+                            )}
                           </div>
-                        )}
+                          {btnAction(() => setPermutaPedidoId(p.id), "Marcar parcelas em permuta", "⇄", "#8b5cf6", "rgba(139,92,246,.12)", pedidosComPermuta.has(p.id))}
+                        </div>
                       </td>
                       <td><span className={CHIP[p.status] ?? "chip cgr"}>{p.status}</span></td>
                       <td>
@@ -510,6 +547,12 @@ function PedidosPageInner() {
           </div>
         )}
       </div>
+
+      <PermutaModal
+        pedidoId={permutaPedidoId}
+        onClose={() => setPermutaPedidoId(null)}
+        onChange={refreshPermuta}
+      />
     </AppLayout>
   );
 }

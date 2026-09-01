@@ -608,3 +608,15 @@ export async function getUltimoPlanoContas(params: { fornecedorId?: number | nul
   const row = data as { plano_contas_id: number | null };
   return { planoContasId: row.plano_contas_id };
 }
+
+// ── Permuta (tag informativa) ────────────────────────────────────────────
+// Só grava a flag — de propósito não passa por editarLancamento (que exige
+// motivo de renegociação quando valor/vencimento muda com baixa já
+// registrada) porque marcar permuta não é renegociação: não mexe em valor,
+// vencimento, status nem valor_recebido do pedido, é só um rótulo pra
+// filtro/controle.
+export async function togglePermutaLancamento(id: number, permuta: boolean): Promise<boolean> {
+  const { error } = await supabase.from('lancamentos').update({ permuta } as never).eq('id', id);
+  if (error) { console.error('togglePermutaLancamento:', error); return false; }
+  return true;
+}
