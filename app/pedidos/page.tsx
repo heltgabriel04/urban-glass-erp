@@ -51,6 +51,14 @@ function isChapaInteira(largura: number, altura: number): boolean {
   );
 }
 
+function somarPermutaPorPedido(rows: { pedido_id: string; valor: number }[] | null): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const r of rows ?? []) {
+    map.set(r.pedido_id, (map.get(r.pedido_id) ?? 0) + Number(r.valor));
+  }
+  return map;
+}
+
 const PAGE_SIZE = 50;
 
 export default function PedidosPage() {
@@ -77,7 +85,7 @@ function PedidosPageInner() {
   const [comOtimizacao, setComOtimizacao] = useState<Set<string>>(new Set());
   const [pedidosChapa, setPedidosChapa]   = useState<Set<string>>(new Set());
   const [pedidosVidroCliente, setPedidosVidroCliente] = useState<Set<string>>(new Set());
-  const [pedidosComPermuta, setPedidosComPermuta] = useState<Set<string>>(new Set());
+  const [pedidosPermutaValor, setPedidosPermutaValor] = useState<Map<string, number>>(new Map());
   const [permutaPedidoId, setPermutaPedidoId] = useState<string | null>(null);
   const [deletando, setDeletando]         = useState<Set<string>>(new Set());
   const [clientes, setClientes]           = useState<Cliente[]>([]);
@@ -131,7 +139,7 @@ function PedidosPageInner() {
       setComOtimizacao(new Set());
       setPedidosChapa(new Set());
       setPedidosVidroCliente(new Set());
-      setPedidosComPermuta(new Set());
+      setPedidosPermutaValor(new Map());
       setLoading(false);
       return;
     }
@@ -139,11 +147,11 @@ function PedidosPageInner() {
     const [otimRows, itensRows, permutaRows] = await Promise.all([
       supabase.from("historico_otimizador").select("pedido_id").in("pedido_id", ids),
       supabase.from("itens_pedido").select("pedido_id, largura, altura, vidro_cliente").in("pedido_id", ids),
-      supabase.from("lancamentos").select("pedido_id").in("pedido_id", ids).eq("permuta", true),
+      supabase.from("lancamentos").select("pedido_id, valor").in("pedido_id", ids).eq("permuta", true),
     ]);
 
     setComOtimizacao(new Set<string>((otimRows.data ?? []).map((r: any) => r.pedido_id as string)));
-    setPedidosComPermuta(new Set<string>((permutaRows.data ?? []).map((r: any) => r.pedido_id as string)));
+    setPedidosPermutaValor(somarPermutaPorPedido(permutaRows.data));
 
     // Agrupa itens por pedido
     const itensPorPedido: Record<string, any[]> = {};
@@ -243,8 +251,8 @@ function PedidosPageInner() {
   async function refreshPermuta() {
     const ids = pedidos.map(p => p.id);
     if (ids.length === 0) return;
-    const { data } = await supabase.from("lancamentos").select("pedido_id").in("pedido_id", ids).eq("permuta", true);
-    setPedidosComPermuta(new Set<string>((data ?? []).map((r: any) => r.pedido_id as string)));
+    const { data } = await supabase.from("lancamentos").select("pedido_id, valor").in("pedido_id", ids).eq("permuta", true);
+    setPedidosPermutaValor(somarPermutaPorPedido(data));
   }
 
   return (
@@ -394,7 +402,12 @@ function PedidosPageInner() {
                   </tr>
                 )}
                 {pedidos.map(p => {
-                  const aberto        = valorComIpi(p) - p.valor_recebido;
+                  const permutaValor  = pedidosPermutaValor.get(p.id) ?? 0;
+                  // Permuta some do saldo em aberto (não é mais dívida
+                  // pendente) sem contar como dinheiro recebido — por isso
+                  // não entra em p.valor_recebido, só é abatido aqui na
+                  // exibição do saldo.
+                  const aberto        = Math.max(0, valorComIpi(p) - p.valor_recebido - permutaValor);
                   const quitado       = aberto <= 0;
                   const finalizado    = ["Entregue","Cancelado"].includes(p.status);
                   const primeiro      = p.status === "Aguardando otimização";
@@ -456,8 +469,13 @@ function PedidosPageInner() {
                                 − {formatBRL(aberto)}
                               </div>
                             )}
+                            {permutaValor > 0 && (
+                              <div className="tdim" style={{ color:"#a78bfa" }}>
+                                ⇄ {formatBRL(permutaValor)} em permuta
+                              </div>
+                            )}
                           </div>
-                          {btnAction(() => setPermutaPedidoId(p.id), "Marcar parcelas em permuta", "⇄", "#8b5cf6", "rgba(139,92,246,.12)", pedidosComPermuta.has(p.id))}
+                          {btnAction(() => setPermutaPedidoId(p.id), "Marcar parcelas em permuta", "⇄", "#8b5cf6", "rgba(139,92,246,.12)", permutaValor > 0)}
                         </div>
                       </td>
                       <td><span className={CHIP[p.status] ?? "chip cgr"}>{p.status}</span></td>

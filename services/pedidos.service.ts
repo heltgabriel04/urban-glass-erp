@@ -54,11 +54,22 @@ export async function getPedidosPaginado(
   // Filtro de pagamento exige pré-busca de IDs pois PostgREST não compara colunas entre si
   let financialIds: string[] | null = null;
   if (statusPagamento === 'aberto' || statusPagamento === 'quitado') {
-    const { data: all } = await supabase.from('pedidos').select('id, valor_total, valor_ipi, valor_recebido');
+    const [{ data: all }, { data: permutaRows }] = await Promise.all([
+      supabase.from('pedidos').select('id, valor_total, valor_ipi, valor_recebido'),
+      // Permuta soma junto com valor_recebido só pra decidir aberto/quitado
+      // aqui — a coluna valor_recebido em si (dinheiro) nunca é tocada.
+      supabase.from('lancamentos').select('pedido_id, valor').eq('permuta', true),
+    ]);
+    const permutaPorPedido = new Map<string, number>();
+    for (const r of (permutaRows ?? []) as Array<{ pedido_id: string | null; valor: number }>) {
+      if (!r.pedido_id) continue;
+      permutaPorPedido.set(r.pedido_id, (permutaPorPedido.get(r.pedido_id) ?? 0) + Number(r.valor));
+    }
     financialIds = ((all ?? []) as Array<{ id: string; valor_total: number; valor_ipi: number; valor_recebido: number }>)
-      .filter(r => statusPagamento === 'aberto'
-        ? Number(r.valor_recebido) < valorComIpi(r)
-        : Number(r.valor_recebido) >= valorComIpi(r))
+      .filter(r => {
+        const recebidoAjustado = Number(r.valor_recebido) + (permutaPorPedido.get(r.id) ?? 0);
+        return statusPagamento === 'aberto' ? recebidoAjustado < valorComIpi(r) : recebidoAjustado >= valorComIpi(r);
+      })
       .map(r => r.id);
   }
 

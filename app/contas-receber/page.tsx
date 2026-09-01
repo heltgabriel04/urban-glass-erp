@@ -45,6 +45,8 @@ interface Recebivel {
   clientes: { id: number; nome: string } | null;
   conta_id: number | null;
   created_at: string;
+  /** Tag de permuta (produto/serviço, não dinheiro) — some do bucket "A Receber"/"Vencido", sem virar "Recebido". */
+  permuta: boolean | null;
 }
 
 type TabFiltro = "todos" | "aberto" | "recebido" | "vencido";
@@ -64,18 +66,22 @@ function fmtData(s: string | null) {
 
 // Bucket usado por filtro/aba — só olha o campo status guardado (fonte da
 // verdade após uma baixa), não mais dt_pagamento (que agora também é
-// preenchido em baixa parcial).
-function getStatusEfetivo(r: Recebivel): "Recebido" | "Vencido" | "A Receber" {
+// preenchido em baixa parcial). "Permuta" é checado antes de "Vencido"/"A
+// Receber": título pago em produto/serviço não é mais dívida pendente, mas
+// também não vira "Recebido" (não é dinheiro) — fica de fora dos totais e
+// abas de Aberto/Vencido/Recebido, só aparece em "Todos".
+function getStatusEfetivo(r: Recebivel): "Recebido" | "Permuta" | "Vencido" | "A Receber" {
   if (r.status === "Pago") return "Recebido";
+  if (r.permuta) return "Permuta";
   if (r.vencimento && r.vencimento < hoje()) return "Vencido";
   return "A Receber";
 }
 
 // Rótulo exibido no chip: Parcial tem prioridade visual sobre o bucket,
 // mesmo que o título já esteja vencido (ele continua parcialmente recebido).
-function getStatusExibicao(r: Recebivel, valorRecebido: number): "Recebido" | "Parcial" | "Vencido" | "A Receber" {
+function getStatusExibicao(r: Recebivel, valorRecebido: number): "Recebido" | "Parcial" | "Permuta" | "Vencido" | "A Receber" {
   const base = getStatusEfetivo(r);
-  if (base !== "Recebido" && valorRecebido > 0) return "Parcial";
+  if (base !== "Recebido" && base !== "Permuta" && valorRecebido > 0) return "Parcial";
   return base;
 }
 
@@ -83,7 +89,7 @@ function getStatusExibicao(r: Recebivel, valorRecebido: number): "Recebido" | "P
 // antes esta tela reimplementava as cores do zero com rgba solto, e
 // "Vencido" saía vermelho aqui e amarelo em /fluxo pro mesmo conceito.
 const STATUS_CHIP: Record<string, string> = {
-  "Recebido": "cg", "Parcial": "cy", "Vencido": "cr", "A Receber": "cb",
+  "Recebido": "cg", "Parcial": "cy", "Vencido": "cr", "A Receber": "cb", "Permuta": "cp",
 };
 
 export default function ContasReceberPage() {
@@ -207,7 +213,7 @@ function ContasReceberPageInner() {
     const [{ data: rs }, { data: pls }, { data: cls }, cbs, formasPg] = await Promise.all([
       supabase
         .from("lancamentos")
-        .select("id, descricao, valor, status, vencimento, documento, dt_emissao, dt_pagamento, obs, pedido_id, cliente_id, plano_contas_id, conta_id, created_at, plano_contas(id, codigo_estruturado, descricao), clientes(id, nome)")
+        .select("id, descricao, valor, status, vencimento, documento, dt_emissao, dt_pagamento, obs, pedido_id, cliente_id, plano_contas_id, conta_id, created_at, permuta, plano_contas(id, codigo_estruturado, descricao), clientes(id, nome)")
         .eq("tipo", "Entrada")
         .is("deletado_em", null)
         .order("vencimento", { ascending: true }),
@@ -255,7 +261,10 @@ function ContasReceberPageInner() {
 
   const totalTitulos  = filtrados.reduce((s, r) => s + Number(r.valor), 0);
   const totalRecebido = filtrados.reduce((s, r) => s + calcularSaldo(r, baixasMap.get(r.id)).valorPago, 0);
-  const totalAberto   = totalTitulos - totalRecebido;
+  // Permuta some do "em aberto" (não é dívida pendente) sem contar como
+  // recebido (não é dinheiro) — por isso não dá pra derivar de totalTitulos
+  // - totalRecebido quando a aba "Todos" mistura os três buckets.
+  const totalAberto   = filtrados.filter(r => !r.permuta).reduce((s, r) => s + Number(r.valor) - calcularSaldo(r, baixasMap.get(r.id)).valorPago, 0);
   const qtdVencidos   = recebiveis.filter(r => getStatusEfetivo(r) === "Vencido").length;
   const todosSelecionados = filtrados.length > 0 && filtrados.every(r => selecionados.has(r.id));
 

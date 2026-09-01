@@ -171,7 +171,10 @@ export default function RelatoriosPage() {
   // ── Totais
   const fatTotal = financeiro.reduce((a, f) => a + Number(f.faturado), 0);
   const recTotal = financeiro.reduce((a, f) => a + Number(f.recebido), 0);
-  const aReceber = fatTotal - recTotal;
+  // Permuta abate do "a receber" geral sem contar como recebido — mesmo
+  // raciocínio do ajuste por cliente feito mais abaixo em clientesOrdenados.
+  const totalPermutaGeral = (lancamentos as Lancamento[]).filter(l => l.tipo === "Entrada" && l.permuta).reduce((a, l) => a + Number(l.valor), 0);
+  const aReceber = Math.max(0, fatTotal - recTotal - totalPermutaGeral);
 
   const mesDados  = mesSel ? meses.find(m => m.mesNum === mesSel) : null;
   const fatMesVal = mesDados?.faturado ?? 0;
@@ -189,7 +192,24 @@ export default function RelatoriosPage() {
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
   }, [pedidos]);
 
-  const clientesOrdenados = useMemo(() => [...financeiro].sort((a, b) => Number(b.faturado) - Number(a.faturado)), [financeiro]);
+  // Permuta some do "a receber" em qualquer lugar que leia `financeiro`
+  // (view agregada por cliente, não sabe de permuta por si só) — sem tocar
+  // em faturado/recebido, só abate do a_receber de cada cliente.
+  const permutaPorCliente = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const l of (lancamentos as Lancamento[])) {
+      if (!l.permuta || !l.cliente_id) continue;
+      map.set(l.cliente_id, (map.get(l.cliente_id) ?? 0) + Number(l.valor));
+    }
+    return map;
+  }, [lancamentos]);
+
+  const clientesOrdenados = useMemo(() => [...financeiro]
+    .map(f => {
+      const permuta = permutaPorCliente.get(f.cliente_id) ?? 0;
+      return permuta > 0 ? { ...f, a_receber: Math.max(0, Number(f.a_receber) - permuta) } : f;
+    })
+    .sort((a, b) => Number(b.faturado) - Number(a.faturado)), [financeiro, permutaPorCliente]);
   const maxCliFat         = clientesOrdenados[0] ? Number(clientesOrdenados[0].faturado) : 1;
 
   // ── Devedores e vencidos ─────────────────────────────────────────────────
@@ -198,7 +218,7 @@ export default function RelatoriosPage() {
   const inadimplentes  = devedores.filter(f => Number(f.recebido) === 0);
 
   const parcelasVencidas = useMemo(() =>
-    (lancamentos as Lancamento[]).filter(l => l.status === "A Receber" && l.vencimento && l.vencimento < hoje)
+    (lancamentos as Lancamento[]).filter(l => l.status === "A Receber" && !l.permuta && l.vencimento && l.vencimento < hoje)
       .sort((a, b) => (a.vencimento ?? "").localeCompare(b.vencimento ?? "")),
     [lancamentos, hoje]
   );
@@ -206,7 +226,7 @@ export default function RelatoriosPage() {
 
   // ── Contas a Receber (posição em aberto: vencido + a vencer) ────────────
   const recebiveisAbertos = useMemo(() =>
-    (lancamentos as Lancamento[]).filter(l => l.tipo === "Entrada" && l.status === "A Receber")
+    (lancamentos as Lancamento[]).filter(l => l.tipo === "Entrada" && l.status === "A Receber" && !l.permuta)
       .sort((a, b) => (a.vencimento ?? "").localeCompare(b.vencimento ?? "")),
     [lancamentos]
   );
