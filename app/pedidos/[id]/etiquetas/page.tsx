@@ -53,6 +53,8 @@ interface Etiqueta {
   modoVidroCliente?: boolean;
   codigoAdicional?: string | null;
   codigoLabel?: string;
+  /** Chave de agrupamento pro filtro "Chapa/Caixa/Item N" — só usada fora do modo Corte Certo (que filtra por chapaNum direto). Necessária porque um pedido pode combinar mais de uma origem de etiqueta (ex.: peças cortadas de chapa + vidro do cliente), cada uma com sua própria numeração local 1..N; sem uma chave própria, duas origens diferentes colidiriam no mesmo número. */
+  grupoFiltro?: number;
 }
 
 function QRCode({ data, size = 72 }: { data: string; size?: number }) {
@@ -157,6 +159,9 @@ export default function EtiquetasPage() {
   const [modoVidroCliente, setModoVidroCliente] = useState(false);
   const [modoCorteCerto, setModoCorteCerto] = useState(false);
   const [chapasDisponiveis, setChapasDisponiveis] = useState<number[]>([]);
+  // Opções do filtro fora do modo Corte Certo — uma entrada por grupo
+  // (chapa/caixa/item de vidro do cliente), na ordem em que foram gerados.
+  const [gruposFiltro, setGruposFiltro] = useState<{ grupo: number; label: string }[]>([]);
   // Seleção de quais etiquetas imprimir — chave é o índice em `etiquetas`
   // (estável independente do filtro de chapa aplicado na visualização).
   // Todas começam selecionadas: 1 clique em "Imprimir" continua imprimindo
@@ -243,54 +248,62 @@ export default function EtiquetasPage() {
         chapasPorProduto.set(l.produto_id, arr);
       });
 
+      const hoje = new Date();
+      const dd  = String(hoje.getDate()).padStart(2, "0");
+      const mm  = String(hoje.getMonth() + 1).padStart(2, "0");
+      const aa  = String(hoje.getFullYear()).slice(-2);
+      const lote = `${dd}${mm}${aa}-${id}`;
+
+      // Fila de códigos adicionais por dimensão (largura/altura, em qualquer ordem
+      // por causa de peças rotacionadas), para casar com as peças já cortadas.
+      const codigoFila = new Map<string, { codigo: string; restante: number }[]>();
+      (ped?.itens_pedido ?? []).forEach((item) => {
+        if (!item.codigo_adicional) return;
+        const key = [item.largura, item.altura].sort((a, b) => a - b).join("x");
+        const fila = codigoFila.get(key) ?? [];
+        fila.push({ codigo: item.codigo_adicional, restante: item.quantidade });
+        codigoFila.set(key, fila);
+      });
+      function buscarCodigo(l: number, a: number): string | null {
+        const key = [l, a].sort((x, y) => x - y).join("x");
+        const fila = codigoFila.get(key);
+        if (!fila || fila.length === 0) return null;
+        const entry = fila[0];
+        entry.restante--;
+        if (entry.restante <= 0) fila.shift();
+        return entry.codigo;
+      }
+
+      // Um pedido pode combinar as duas coisas ao mesmo tempo: parte cortada
+      // de chapa própria (passa pelo otimizador) e parte vidro do cliente
+      // (nunca entra no otimizador — não é chapa nossa pra encaixar). As
+      // duas fontes de etiqueta são geradas de forma independente e depois
+      // combinadas; antes disso, a etapa de vidro do cliente só rodava
+      // quando NENHUM otimizador existia (bug real do P-089: 2 itens de
+      // chapa geraram otimização e escondiam os outros 2, de vidro do
+      // cliente, que ficavam sem etiqueta nenhuma).
+      const etsCombinadas: Etiqueta[] = [];
+      const grupos: { grupo: number; label: string }[] = [];
+      let proximoGrupo = 1;
+
+      const itensTodos         = ped?.itens_pedido ?? [];
+      const itensVidroCliente  = itensTodos.filter(i => i.vidro_cliente);
+      const itensProprios      = itensTodos.filter(i => !i.vidro_cliente);
+
+      // ── Fonte 1: peças cortadas de chapa própria (otimizador ou chapa inteira) ──
       if (otims.length > 0 && otims[0].chapas_json) {
         const o = otims[0];
         setOtim(o);
         const chapas = o.chapas_json as ChapaData[];
-        setTotalChapas(chapas.length);
-
-        const lote =
-          new Date(o.dt_otim)
-            .toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })
-            .replace(/\//g, "") +
-          "-" + id;
-
         const totalGeral = chapas.reduce((s, c) => s + c.placed.length, 0);
-        const ets: Etiqueta[] = [];
-
-        // QR por peça (rastreamento físico via scan) desativado na impressão:
-        // depende de pedido_pecas estar populada e legível (RLS pendente,
-        // gerarPecasDoPedido silenciosamente não persiste peça nenhuma hoje —
-        // ver docs/superpowers/plans ou memória do projeto), e por isso vinha
-        // gerando etiqueta com QR de peça que nunca resolve ("peça não
-        // encontrada" ao escanear). Volta a usar sempre o QR de pedido inteiro,
-        // que é o que funcionava antes do commit 0cc33fe.
-
-        // Fila de códigos adicionais por dimensão (largura/altura, em qualquer ordem
-        // por causa de peças rotacionadas), para casar com as peças já cortadas.
-        const codigoFila = new Map<string, { codigo: string; restante: number }[]>();
-        (ped?.itens_pedido ?? []).forEach((item) => {
-          if (!item.codigo_adicional) return;
-          const key = [item.largura, item.altura].sort((a, b) => a - b).join("x");
-          const fila = codigoFila.get(key) ?? [];
-          fila.push({ codigo: item.codigo_adicional, restante: item.quantidade });
-          codigoFila.set(key, fila);
-        });
-        function buscarCodigo(l: number, a: number): string | null {
-          const key = [l, a].sort((x, y) => x - y).join("x");
-          const fila = codigoFila.get(key);
-          if (!fila || fila.length === 0) return null;
-          const entry = fila[0];
-          entry.restante--;
-          if (entry.restante <= 0) fila.shift();
-          return entry.codigo;
-        }
 
         chapas.forEach((chapa, ci) => {
+          const grupo = proximoGrupo++;
+          grupos.push({ grupo, label: `Chapa ${ci + 1}` });
           chapa.placed.forEach((peca, pi) => {
             const pidDaPeca = (peca as any).pedidoId ?? id;
             const souEu = pidDaPeca === id;
-            ets.push({
+            etsCombinadas.push({
               pedidoId:          pidDaPeca,
               clienteNome:       ped?.clientes?.nome ?? "—",
               material:          peca.prod || chapa.prod,
@@ -304,98 +317,87 @@ export default function EtiquetasPage() {
               loteCorte:         lote,
               qrData:            `https://urbanglasserp.vercel.app/api/r/${ped?.qr_token}`,
               codigoAdicional:   souEu ? buscarCodigo(peca.l, peca.a) : null,
+              grupoFiltro:       grupo,
             });
           });
         });
+      } else if (itensProprios.length > 0 && itensProprios.every(i => isChapaInteira(i.largura, i.altura, (i.produto_id ? chapasPorProduto.get(i.produto_id) : undefined) ?? []))) {
+        setModoChapa(true);
+        const totalGeral = itensProprios.reduce((s, i) => s + i.quantidade, 0);
 
-        setEtiquetas(ets);
-      } else {
-        const itens = ped?.itens_pedido ?? [];
-        if (itens.length > 0 && itens.every(i => isChapaInteira(i.largura, i.altura, (i.produto_id ? chapasPorProduto.get(i.produto_id) : undefined) ?? []))) {
-          setModoChapa(true);
-          const hoje = new Date();
-          const dd  = String(hoje.getDate()).padStart(2, "0");
-          const mm  = String(hoje.getMonth() + 1).padStart(2, "0");
-          const aa  = String(hoje.getFullYear()).slice(-2);
-          const lote = `${dd}${mm}${aa}-${id}`;
-
-          const totalGeral = itens.reduce((s, i) => s + i.quantidade, 0);
-
-          // 3+3 vem 24 chapas por caixa; demais (4+4, etc.) vem 18
-          function chapasPorCaixa(nome: string) {
-            return nome.includes("3+3") ? 24 : 18;
-          }
-
-          const ets: Etiqueta[] = [];
-          let caixaIdx = 1;
-
-          itens.forEach((item) => {
-            const porCaixa   = chapasPorCaixa(item.produto_nome);
-            const numCaixas  = Math.ceil(item.quantidade / porCaixa);
-            for (let c = 0; c < numCaixas; c++) {
-              const nessaCaixa = (c === numCaixas - 1)
-                ? item.quantidade - c * porCaixa
-                : porCaixa;
-              ets.push({
-                pedidoId:          id,
-                clienteNome:       ped?.clientes?.nome ?? "—",
-                material:          item.produto_nome,
-                largura:           item.largura,
-                altura:            item.altura,
-                chapaNum:          caixaIdx,
-                totalChapas:       0, // preenchido abaixo
-                pecaNum:           nessaCaixa,
-                totalPecasNaChapa: porCaixa,
-                totalPecasGeral:   totalGeral,
-                loteCorte:         lote,
-                qrData: `https://urbanglasserp.vercel.app/api/r/${ped?.qr_token}`,
-                modoCaixa:         true,
-              });
-              caixaIdx++;
-            }
-          });
-
-          const totalCaixas = ets.length;
-          setTotalChapas(totalCaixas);
-          setEtiquetas(ets.map(e => ({ ...e, totalChapas: totalCaixas })));
-        } else if (itens.length > 0 && itens.every(i => i.vidro_cliente)) {
-          // Vidro do cliente: não passa pelo otimizador de chapas (não é estoque próprio),
-          // então a etiqueta é gerada direto a partir das peças do pedido, uma por unidade.
-          setModoVidroCliente(true);
-          const hoje = new Date();
-          const dd  = String(hoje.getDate()).padStart(2, "0");
-          const mm  = String(hoje.getMonth() + 1).padStart(2, "0");
-          const aa  = String(hoje.getFullYear()).slice(-2);
-          const lote = `${dd}${mm}${aa}-${id}`;
-
-          const totalGeral = itens.reduce((s, i) => s + i.quantidade, 0);
-          const ets: Etiqueta[] = [];
-
-          itens.forEach((item, ii) => {
-            for (let p = 0; p < item.quantidade; p++) {
-              ets.push({
-                pedidoId:          id,
-                clienteNome:       ped?.clientes?.nome ?? "—",
-                material:          item.produto_nome,
-                largura:           item.largura,
-                altura:            item.altura,
-                chapaNum:          ii + 1,
-                totalChapas:       itens.length,
-                pecaNum:           p + 1,
-                totalPecasNaChapa: item.quantidade,
-                totalPecasGeral:   totalGeral,
-                loteCorte:         lote,
-                qrData: `https://urbanglasserp.vercel.app/api/r/${ped?.qr_token}`,
-                modoVidroCliente:  true,
-                codigoAdicional:   item.codigo_adicional,
-              });
-            }
-          });
-
-          setTotalChapas(itens.length);
-          setEtiquetas(ets);
+        // 3+3 vem 24 chapas por caixa; demais (4+4, etc.) vem 18
+        function chapasPorCaixa(nome: string) {
+          return nome.includes("3+3") ? 24 : 18;
         }
+
+        const etsCaixa: Etiqueta[] = [];
+        itensProprios.forEach((item) => {
+          const porCaixa   = chapasPorCaixa(item.produto_nome);
+          const numCaixas  = Math.ceil(item.quantidade / porCaixa);
+          for (let c = 0; c < numCaixas; c++) {
+            const nessaCaixa = (c === numCaixas - 1)
+              ? item.quantidade - c * porCaixa
+              : porCaixa;
+            const caixaIdx = etsCaixa.length + 1;
+            const grupo = proximoGrupo++;
+            grupos.push({ grupo, label: `Caixa ${caixaIdx}` });
+            etsCaixa.push({
+              pedidoId:          id,
+              clienteNome:       ped?.clientes?.nome ?? "—",
+              material:          item.produto_nome,
+              largura:           item.largura,
+              altura:            item.altura,
+              chapaNum:          caixaIdx,
+              totalChapas:       0, // preenchido abaixo
+              pecaNum:           nessaCaixa,
+              totalPecasNaChapa: porCaixa,
+              totalPecasGeral:   totalGeral,
+              loteCorte:         lote,
+              qrData: `https://urbanglasserp.vercel.app/api/r/${ped?.qr_token}`,
+              modoCaixa:         true,
+              grupoFiltro:       grupo,
+            });
+          }
+        });
+
+        const totalCaixas = etsCaixa.length;
+        etsCombinadas.push(...etsCaixa.map(e => ({ ...e, totalChapas: totalCaixas })));
       }
+
+      // ── Fonte 2: vidro do cliente — sempre gerada quando existir, mesmo
+      //    junto com a Fonte 1 acima (não é mais "senão").
+      if (itensVidroCliente.length > 0) {
+        setModoVidroCliente(true);
+        const totalGeral = itensVidroCliente.reduce((s, i) => s + i.quantidade, 0);
+
+        itensVidroCliente.forEach((item, ii) => {
+          const grupo = proximoGrupo++;
+          grupos.push({ grupo, label: `Item ${ii + 1}` });
+          for (let p = 0; p < item.quantidade; p++) {
+            etsCombinadas.push({
+              pedidoId:          id,
+              clienteNome:       ped?.clientes?.nome ?? "—",
+              material:          item.produto_nome,
+              largura:           item.largura,
+              altura:            item.altura,
+              chapaNum:          ii + 1,
+              totalChapas:       itensVidroCliente.length,
+              pecaNum:           p + 1,
+              totalPecasNaChapa: item.quantidade,
+              totalPecasGeral:   totalGeral,
+              loteCorte:         lote,
+              qrData: `https://urbanglasserp.vercel.app/api/r/${ped?.qr_token}`,
+              modoVidroCliente:  true,
+              codigoAdicional:   item.codigo_adicional,
+              grupoFiltro:       grupo,
+            });
+          }
+        });
+      }
+
+      setEtiquetas(etsCombinadas);
+      setGruposFiltro(grupos);
+      setTotalChapas(grupos.length);
       setLoading(false);
     }
     load();
@@ -418,10 +420,14 @@ export default function EtiquetasPage() {
   // perder ao trocar o filtro (marcar na Chapa 1, ver Chapa 2, voltar pra
   // Chapa 1 — continua marcado).
   const etiquetasComIndice = etiquetas.map((et, i) => ({ et, i }));
+  // Fora do modo Corte Certo, filtra por grupoFiltro (não chapaNum) — um
+  // pedido pode combinar mais de uma origem de etiqueta (peças de chapa +
+  // vidro do cliente), cada uma com sua própria numeração 1..N; chapaNum
+  // colidiria entre origens diferentes.
   const etiquetasFiltradas =
     filtroChapa === "todas"
       ? etiquetasComIndice
-      : etiquetasComIndice.filter(({ et }) => et.chapaNum === filtroChapa);
+      : etiquetasComIndice.filter(({ et }) => (modoCorteCerto ? et.chapaNum : et.grupoFiltro) === filtroChapa);
 
   function selecionarTodasVisiveis() {
     setSelecionadas(prev => {
@@ -658,7 +664,9 @@ export default function EtiquetasPage() {
           Etiquetas — <span>{id}</span>
           <span style={{ fontSize: "11px", color: "#aaa", marginLeft: "12px" }}>
             {etiquetasFiltradas.length} etiqueta(s)
-            {filtroChapa !== "todas" ? ` · ${modoVidroCliente ? "Item" : "Chapa"} ${filtroChapa}` : ""}
+            {filtroChapa !== "todas"
+              ? ` · ${modoCorteCerto ? `${modoVidroCliente ? "Item" : "Chapa"} ${filtroChapa}` : gruposFiltro.find(g => g.grupo === filtroChapa)?.label ?? ""}`
+              : ""}
           </span>
         </div>
 
@@ -672,11 +680,13 @@ export default function EtiquetasPage() {
               }
             >
               <option value="todas">{modoVidroCliente ? "Todos os itens" : "Todas as chapas"}</option>
-              {(modoCorteCerto ? chapasDisponiveis : Array.from({ length: totalChapas }, (_, i) => i + 1)).map((n) => (
-                <option key={n} value={n}>
-                  {modoVidroCliente ? `Item ${n}` : `Chapa ${n}`}
-                </option>
-              ))}
+              {modoCorteCerto
+                ? chapasDisponiveis.map((n) => (
+                    <option key={n} value={n}>{modoVidroCliente ? `Item ${n}` : `Chapa ${n}`}</option>
+                  ))
+                : gruposFiltro.map((g) => (
+                    <option key={g.grupo} value={g.grupo}>{g.label}</option>
+                  ))}
             </select>
           </div>
         )}
@@ -694,15 +704,18 @@ export default function EtiquetasPage() {
         <div>Cliente: <span>{pedido.clientes?.nome ?? "—"}</span></div>
         {modoCorteCerto ? (
           <div>Tipo: <span>Plano de corte externo (Corte Certo) — ordem real de produção</span></div>
-        ) : otim ? (
-          <>
-            <div>Otimização: <span>{new Date(otim.dt_otim).toLocaleDateString("pt-BR")}</span></div>
-            <div>Aproveitamento: <span>{otim.aproveitamento}%</span></div>
-          </>
-        ) : modoVidroCliente ? (
-          <div>Tipo: <span>Vidro do Cliente</span></div>
         ) : (
-          <div>Tipo: <span>Chapas inteiras</span></div>
+          <>
+            {otim && (
+              <>
+                <div>Otimização: <span>{new Date(otim.dt_otim).toLocaleDateString("pt-BR")}</span></div>
+                <div>Aproveitamento: <span>{otim.aproveitamento}%</span></div>
+              </>
+            )}
+            {modoChapa && !otim && <div>Tipo: <span>Chapas inteiras</span></div>}
+            {/* Pedido pode combinar chapa própria + vidro do cliente — mostra os dois quando for o caso */}
+            {modoVidroCliente && <div>Tipo: <span>Vidro do Cliente{(otim || modoChapa) ? " (parte do pedido)" : ""}</span></div>}
+          </>
         )}
         <div>Total de etiquetas: <span>{etiquetas.length}</span></div>
       </div>
