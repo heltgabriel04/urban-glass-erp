@@ -1515,7 +1515,7 @@ export default function PedidoDetalhe() {
               <div className="tw" onClick={(e) => e.stopPropagation()} style={{ cursor:"default" }}>
                 <table>
                   <thead>
-                    <tr><th>#</th><th>Produto</th><th>Dimensão</th><th>Medida real</th><th>Quantidade</th><th>Preço Unitário</th><th>Vidro Cliente</th><th>Subtotal</th></tr>
+                    <tr><th>#</th><th>Produto</th><th>Dimensão</th><th>Medida real</th><th>Quantidade</th><th>Preço Unitário</th><th>Vidro Cliente</th><th>Subtotal</th><th>Observação</th></tr>
                   </thead>
                   <tbody>
                     {pedido.itens_pedido!.map((item, i) => {
@@ -1532,6 +1532,7 @@ export default function PedidoDetalhe() {
                         <td className="mono">{formatBRL(item.valor_m2)}</td>
                         <td style={{ textAlign:"center" }}>{(item as any).vidro_cliente ? <span style={{ color:"var(--warn)" }}>📦</span> : <span style={{ color:"var(--t3)" }}>—</span>}</td>
                         <td className="mono" style={{ color:"var(--acc)", fontWeight:600 }}>{formatBRL(item.subtotal)}</td>
+                        <td style={{ color:"var(--t2)", fontSize:"12px" }}>{item.obs || "—"}</td>
                       </tr>
                       );
                     })}

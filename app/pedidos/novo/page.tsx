@@ -41,6 +41,7 @@ interface ItemForm {
   preco_base: number;
   margem_prod: number;
   codigo_adicional: string;
+  obs: string;
 }
 
 interface ParcelaForm {
@@ -58,7 +59,7 @@ const ITEM_VAZIO: ItemForm = {
   ml_larg: true, ml_alt: true,
   vidro_cliente: false,
   preco_base: 0, margem_prod: 0,
-  codigo_adicional: "",
+  codigo_adicional: "", obs: "",
 };
 
 function arredondarParaMultiplo50(v: number): number {
@@ -560,6 +561,7 @@ function NovoPedidoPageInner() {
         subtotal: calcSubtotal(i),
         vidro_cliente: i.vidro_cliente,
         codigo_adicional: i.codigo_adicional || null,
+        obs: i.obs || null,
       }));
 
       const result = await createPedido(pedido, itensInsert, caixaEscolhidaPorItem);
@@ -944,6 +946,15 @@ function NovoPedidoPageInner() {
                         placeholder="—"
                         style={{ width: "120px", fontSize: "11px", padding: "2px 6px", height: "22px", fontFamily: "'DM Mono',monospace" }}
                       />
+                      <span style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>Obs</span>
+                      <input name={`item_obs_${i}`}
+                        className="fc"
+                        type="text"
+                        value={item.obs}
+                        onChange={e => updItem(i, "obs", e.target.value)}
+                        placeholder="observação da peça..."
+                        style={{ flex: 1, minWidth: "120px", fontSize: "11px", padding: "2px 6px", height: "22px", fontFamily: "'DM Mono',monospace" }}
+                      />
                     </div>
                   </div>
                 ) : (
@@ -984,6 +995,15 @@ function NovoPedidoPageInner() {
                         onChange={e => updItem(i, "codigo_adicional", e.target.value)}
                         placeholder="—"
                         style={{ width: "120px", fontSize: "11px", padding: "2px 6px", height: "22px", fontFamily: "'DM Mono',monospace" }}
+                      />
+                      <span style={{ fontSize: "9px", color: "var(--t3)", textTransform: "uppercase", letterSpacing: "1px", fontFamily: "'DM Mono',monospace", whiteSpace: "nowrap" }}>Obs</span>
+                      <input name={`item_obs_${i}`}
+                        className="fc"
+                        type="text"
+                        value={item.obs}
+                        onChange={e => updItem(i, "obs", e.target.value)}
+                        placeholder="observação da peça..."
+                        style={{ flex: 1, minWidth: "120px", fontSize: "11px", padding: "2px 6px", height: "22px", fontFamily: "'DM Mono',monospace" }}
                       />
                     </div>
                   </div>
