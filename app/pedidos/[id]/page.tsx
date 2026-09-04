@@ -1097,11 +1097,11 @@ export default function PedidoDetalhe() {
                     <tr>
                       <th>Vidro</th>
                       <th>Progresso</th>
-                      <th>m² Total</th>
+                      <th>m² Total (real)</th>
                       <th>Vidros Total</th>
-                      <th>m² Retirado</th>
+                      <th>m² Retirado (real)</th>
                       <th>Vidros Retirado</th>
-                      <th>m² Pendente</th>
+                      <th>m² Pendente (real)</th>
                       <th>Vidros Pendente</th>
                     </tr>
                   </thead>
@@ -1149,7 +1149,7 @@ export default function PedidoDetalhe() {
                   <Row label="Data do pedido"     value={formatDate(pedido.dt_pedido)} />
                   <Row label="Retirada prevista"  value={formatDate(pedido.dt_retirada)} />
                   <Row label="Frete"               value={pedido.frete || "Retirada"} />
-                  <Row label={(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml") ? "ml total" : "m² total"} value={Number(pedido.m2_total).toFixed(2) + " " + ((pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml") ? "ml" : "m²")} />
+                  <Row label={(pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml") ? "ml total" : "m² cobrado"} value={Number(pedido.m2_total).toFixed(2) + " " + ((pedido.itens_pedido ?? []).every((i: any) => i.produtos?.unidade === "ml") ? "ml" : "m²")} />
                   {pedido.parcelas > 1 && <Row label="Parcelas" value={pedido.parcelas + "×"} />}
                   {(() => {
                     const lancComissao = lancamentos.find(l => l.tipo === "Saída" && (l as any).vendedor_id != null);
@@ -1515,7 +1515,7 @@ export default function PedidoDetalhe() {
               <div className="tw" onClick={(e) => e.stopPropagation()} style={{ cursor:"default" }}>
                 <table>
                   <thead>
-                    <tr><th>#</th><th>Produto</th><th>Dimensão</th><th>Medida</th><th>Quantidade</th><th>Preço Unitário</th><th>Vidro Cliente</th><th>Subtotal</th></tr>
+                    <tr><th>#</th><th>Produto</th><th>Dimensão</th><th>Medida real</th><th>Quantidade</th><th>Preço Unitário</th><th>Vidro Cliente</th><th>Subtotal</th></tr>
                   </thead>
                   <tbody>
                     {pedido.itens_pedido!.map((item, i) => {

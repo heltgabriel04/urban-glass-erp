@@ -307,11 +307,11 @@ export default function RetiradasPedidoPage() {
                   <thead>
                     <tr>
                       <th>Vidro</th>
-                      <th>m² Total</th>
+                      <th>m² Total (real)</th>
                       <th>Vidros Total</th>
-                      <th>m² Retirado</th>
+                      <th>m² Retirado (real)</th>
                       <th>Vidros Retirado</th>
-                      <th>m² Pendente</th>
+                      <th>m² Pendente (real)</th>
                       <th>Vidros Pendente</th>
                     </tr>
                   </thead>

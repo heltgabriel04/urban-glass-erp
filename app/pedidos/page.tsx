@@ -385,7 +385,7 @@ function PedidosPageInner() {
                   <th>Cliente</th>
                   <th>Data</th>
                   <th>Retirada</th>
-                  <th>m²</th>
+                  <th>m² cobrado</th>
                   <th>Valor</th>
                   <th>Recebido</th>
                   <th>Status</th>

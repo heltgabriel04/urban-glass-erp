@@ -364,7 +364,7 @@ export default function ClienteDetalhe() {
             <div className="tw">
               <table>
                 <thead>
-                  <tr><th>Pedido</th><th>Data</th><th>Retirada</th><th>m²</th><th>Valor</th><th>Recebido</th><th>Status</th><th></th></tr>
+                  <tr><th>Pedido</th><th>Data</th><th>Retirada</th><th>m² cobrado</th><th>Valor</th><th>Recebido</th><th>Status</th><th></th></tr>
                 </thead>
                 <tbody>
                   {pedidos.map(p => {
