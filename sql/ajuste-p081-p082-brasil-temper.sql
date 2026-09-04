@@ -54,10 +54,23 @@ WHERE id IN ('P-081', 'P-082');
 
 COMMIT;
 
+-- ── Lançamento financeiro ("A Receber" / Contas a Receber) — ficou
+-- desatualizado na primeira rodada da correção (só pedidos.valor_total
+-- tinha sido ajustado). Achado ao conferir a tela "Informações do Pedido
+-- e Financeiro" ao vivo: o card "A Receber" ainda mostrava o valor
+-- antigo. Ambos os lançamentos seguiam com status "A Receber" (nada
+-- pago), então é seguro só trocar o valor. ──
+UPDATE lancamentos SET valor = 2921.10 WHERE id = 389 AND pedido_id = 'P-081' AND status = 'A Receber';
+UPDATE lancamentos SET valor =  617.55 WHERE id = 390 AND pedido_id = 'P-082' AND status = 'A Receber';
+
 -- ── Verificação ─────────────────────────────────────────────
--- P-081: valor_total = 2921.10, m2_total = 48.685 (inalterado)
--- P-082: valor_total =  617.55, m2_total = 10.2925 (inalterado)
+-- P-081: valor_total = 2921.10, m2_total = 48.685 (inalterado), lançamento 389 = 2921.10
+-- P-082: valor_total =  617.55, m2_total = 10.2925 (inalterado), lançamento 390 =  617.55
 SELECT id, valor_total, m2_total, valores_pgto, valor_recebido
 FROM   pedidos
 WHERE  id IN ('P-081', 'P-082')
 ORDER  BY id;
+
+SELECT id, pedido_id, valor, status
+FROM   lancamentos
+WHERE  pedido_id IN ('P-081', 'P-082');
