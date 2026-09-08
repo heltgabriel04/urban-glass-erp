@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 import { getClientes, createCliente, updateCliente, deletarCliente } from "@/services/clientes.service";
 import { getFinanceiroClientes } from "@/services/financeiro.service";
@@ -105,7 +105,16 @@ async function buscarCnpjApi(cnpj: string): Promise<{ data: any; notFound: boole
 }
 
 export default function ClientesPage() {
+  return (
+    <Suspense fallback={null}>
+      <ClientesPageInner />
+    </Suspense>
+  );
+}
+
+function ClientesPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const confirm = useConfirm();
   const [clientes, setClientes]       = useState<Cliente[]>([]);
@@ -122,6 +131,17 @@ export default function ClientesPage() {
   const [cnpjStatus, setCnpjStatus]     = useState<"" | "ok" | "err" | "offline">("");
 
   useEffect(() => { load(); }, []);
+
+  // Abre o modal de edição quando chega via /clientes?edit=<id> (ex.: botão
+  // "Editar Cliente" na tela de detalhe do cliente). Sem isso, o parâmetro
+  // era ignorado e a navegação só caía na listagem normal.
+  useEffect(() => {
+    const editParam = searchParams.get("edit");
+    if (!editParam || clientes.length === 0) return;
+    const alvo = clientes.find(c => c.id === Number(editParam));
+    if (alvo) abrirEdit(alvo);
+    router.replace("/clientes");
+  }, [searchParams, clientes]);
 
   async function load() {
     setLoading(true);
