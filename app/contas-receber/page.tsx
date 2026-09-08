@@ -21,6 +21,7 @@ import { Campo } from "@/components/ui/Campo";
 import { useGlobalShortcut } from "@/components/ui/useGlobalShortcut";
 import { exportarExcel } from "@/lib/exportExcel";
 import { getFiltrosSalvos, salvarFiltro, excluirFiltroSalvo, type FiltroSalvo } from "@/services/filtrosSalvos.service";
+import { contaFormaExibicao, formaPgtoExibicao } from "@/lib/relatorioEntradas";
 import { registrarRecente } from "@/lib/recentes";
 import ActionMenu from "@/components/ui/ActionMenu";
 import type { ContaBancaria, BaixaLancamento, FormaPagamento } from "@/types";
@@ -44,6 +45,7 @@ interface Recebivel {
   plano_contas: PlanoItem | null;
   clientes: { id: number; nome: string } | null;
   conta_id: number | null;
+  forma_pgto: string | null;
   created_at: string;
   /** Tag de permuta (produto/serviço, não dinheiro) — some do bucket "A Receber"/"Vencido", sem virar "Recebido". */
   permuta: boolean | null;
@@ -213,7 +215,7 @@ function ContasReceberPageInner() {
     const [{ data: rs }, { data: pls }, { data: cls }, cbs, formasPg] = await Promise.all([
       supabase
         .from("lancamentos")
-        .select("id, descricao, valor, status, vencimento, documento, dt_emissao, dt_pagamento, obs, pedido_id, cliente_id, plano_contas_id, conta_id, created_at, permuta, plano_contas(id, codigo_estruturado, descricao), clientes(id, nome)")
+        .select("id, descricao, valor, status, vencimento, documento, dt_emissao, dt_pagamento, obs, pedido_id, cliente_id, plano_contas_id, conta_id, forma_pgto, created_at, permuta, plano_contas(id, codigo_estruturado, descricao), clientes(id, nome)")
         .eq("tipo", "Entrada")
         .is("deletado_em", null)
         .order("vencimento", { ascending: true }),
@@ -233,6 +235,8 @@ function ContasReceberPageInner() {
     setLoading(false);
     return { recebiveis: recebiveisCarregados, baixasMap: baixasCarregadas };
   }
+
+  const contasPorId = useMemo(() => new Map(contasBancarias.map(c => [c.id, c])), [contasBancarias]);
 
   const filtrados = useMemo(() => {
     return recebiveis.filter(r => {
@@ -527,14 +531,17 @@ function ContasReceberPageInner() {
 
   function handleExportar() {
     const linhas = filtrados.map(r => {
-      const { valorPago } = calcularSaldo(r, baixasMap.get(r.id));
+      const baixasDoTitulo = baixasMap.get(r.id);
+      const { valorPago } = calcularSaldo(r, baixasDoTitulo);
+      const { texto: conta } = contaFormaExibicao(r, baixasDoTitulo, contasPorId);
+      const forma = formaPgtoExibicao(r, baixasDoTitulo);
       return [
         fmtData(r.dt_emissao ?? r.created_at), r.clientes?.nome ?? "", r.descricao, r.pedido_id ?? r.documento ?? "", r.plano_contas?.descricao ?? "",
-        fmtData(r.vencimento), Number(r.valor), valorPago, fmtData(r.dt_pagamento), getStatusExibicao(r, valorPago),
+        fmtData(r.vencimento), Number(r.valor), valorPago, fmtData(r.dt_pagamento), conta, forma, getStatusExibicao(r, valorPago),
       ];
     });
     exportarExcel("ContasReceber_UrbanGlass",
-      ["Emissão", "Cliente", "Descrição", "Pedido/Documento", "Plano de Contas", "Vencimento", "Valor", "Recebido", "Recebimento", "Status"],
+      ["Emissão", "Cliente", "Descrição", "Pedido/Documento", "Plano de Contas", "Vencimento", "Valor", "Recebido", "Recebimento", "Conta de Pagamento", "Forma de Pagamento", "Status"],
       linhas);
   }
 
@@ -700,13 +707,14 @@ function ContasReceberPageInner() {
                     <th style={{ width: "110px", textAlign: "right" }}>Valor</th>
                     <th style={{ width: "110px", textAlign: "right" }}>Recebido</th>
                     <th style={{ width: "90px" }}>{tab === "recebido" ? "Emissão" : "Recebimento"}</th>
+                    <th style={{ width: "120px" }}>Conta</th>
                     <th style={{ width: "90px" }}>Status</th>
                     <th style={{ width: "50px" }}>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtrados.length === 0 && (
-                    <tr><td colSpan={11} style={{ textAlign: "center", color: "var(--t3)", padding: "40px" }}>
+                    <tr><td colSpan={12} style={{ textAlign: "center", color: "var(--t3)", padding: "40px" }}>
                       Nenhum título encontrado.
                     </td></tr>
                   )}
@@ -758,6 +766,22 @@ function ContasReceberPageInner() {
                           {formatBRL(valorRec)}
                         </td>
                         <td style={{ fontSize: "12px" }}>{fmtData(tab === "recebido" ? (r.dt_emissao ?? r.created_at) : r.dt_pagamento)}</td>
+                        <td style={{ fontSize: "11px" }}>
+                          {(() => {
+                            const baixasDoTitulo = baixasMap.get(r.id);
+                            const { texto, faltando } = contaFormaExibicao(r, baixasDoTitulo, contasPorId);
+                            const forma = formaPgtoExibicao(r, baixasDoTitulo);
+                            const detalhe = (baixasDoTitulo ?? [])
+                              .filter(b => !b.estornado_em)
+                              .map(b => `${b.contas_bancarias?.nome ?? "sem conta"} — ${b.forma_pgto ?? "sem forma"} (${formatBRL(Number(b.valor))}, ${fmtData(b.data)})`)
+                              .join("\n");
+                            return (
+                              <span title={detalhe || undefined} style={{ color: faltando ? "var(--err)" : "var(--t2)", fontWeight: faltando ? 700 : 400 }}>
+                                {texto}{forma !== "—" && !faltando ? <span style={{ color: "var(--t3)" }}> · {forma}</span> : null}
+                              </span>
+                            );
+                          })()}
+                        </td>
                         <td>
                           <span className={`chip ${STATUS_CHIP[stExibida]}`} style={{ whiteSpace: "nowrap" }}>
                             {stExibida}

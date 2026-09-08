@@ -10,6 +10,8 @@ import { getAllHistoricoOtimizador } from "@/services/otimizador.service";
 import { getResumoQualidade, getIndicadoresMensais } from "@/services/qualidade.service";
 import { getTodasInteracoes } from "@/services/interacoes.service";
 import { getClientes } from "@/services/clientes.service";
+import { getContasBancarias } from "@/services/contasBancarias.service";
+import { getBaixasPorLancamentos } from "@/services/lancamentos.service";
 import { formatBRL, formatPercent, formatDuracao } from "@/lib/formatters";
 import { valorComIpi } from "@/lib/pedidoIpi";
 import { calcStatsEtapas, ETAPAS_FLUXO, calcLeadTime } from "@/lib/producao-stats";
@@ -18,8 +20,20 @@ import {
   calcularConversaoInteracaoOrcamento, calcularClientesSemContato,
   type InteracaoComCliente,
 } from "@/lib/crmAnalytics";
+import {
+  montarLinhasEntradas, parcelasRecebidasSemConta, pedidosSemLancamento, parcelasVencidasSemBaixa,
+} from "@/lib/relatorioEntradas";
 import { supabase } from "@/lib/supabase/client";
-import type { FinanceiroCliente, FaturamentoMensal, Pedido, Lancamento, IndicadorQualidadeMensal, Cliente } from "@/types";
+import type { FinanceiroCliente, FaturamentoMensal, Pedido, Lancamento, IndicadorQualidadeMensal, Cliente, ContaBancaria, BaixaLancamento } from "@/types";
+
+// Datas de lancamentos/baixas são YYYY-MM-DD (ou timestamp) puro — evita
+// `new Date(s)` direto (interpreta como UTC meia-noite e pode voltar um dia
+// no fuso local), mesmo cuidado já usado em app/contas-receber/page.tsx.
+function fmtDataBR(s: string | null): string {
+  if (!s) return "—";
+  const d = s.includes("T") ? new Date(s) : new Date(s + "T12:00:00");
+  return d.toLocaleDateString("pt-BR");
+}
 
 const MESES_ABREV    = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MESES_COMPLETOS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -37,7 +51,7 @@ const STATUS_COR: Record<string, string> = {
   "Cancelado":               "var(--err)",
 };
 
-type TipoRelatorio = "gerencial" | "inadimplencia" | "faturamento" | "recebiveis" | "completo" | null;
+type TipoRelatorio = "gerencial" | "inadimplencia" | "faturamento" | "recebiveis" | "entradas" | "completo" | null;
 
 // ── helpers de estilo PDF ────────────────────────────────────────────────────
 const AZUL  = "#1a3d6b";
@@ -117,6 +131,16 @@ export default function RelatoriosPage() {
   const [clientesAtivos, setClientesAtivos] = useState<Cliente[]>([]);
   const [janelaConversao, setJanelaConversao] = useState(90);
   const [limiarSemContato, setLimiarSemContato] = useState(60);
+  const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>([]);
+  const [baixasMap, setBaixasMap]         = useState<Map<number, BaixaLancamento[]>>(new Map());
+  // Período do relatório de Entradas — padrão: mês corrente. Diferente da
+  // aba "Contas a Receber" (foto do momento), Entradas é fluxo — precisa de
+  // um recorte de tempo, senão mistura anos de recebimento numa lista só.
+  const [entradasIni, setEntradasIni] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  });
+  const [entradasFim, setEntradasFim] = useState(() => new Date().toISOString().split("T")[0]);
 
   const hoje     = new Date().toISOString().split("T")[0];
   const dtEmissao = new Date().toLocaleDateString("pt-BR");
@@ -125,7 +149,7 @@ export default function RelatoriosPage() {
 
   async function load() {
     setLoading(true);
-    const [fin, fat, peds, lancs, otimHist, estq, orcs, invRes, qualRes, qualInd, interacs, clis] = await Promise.all([
+    const [fin, fat, peds, lancs, otimHist, estq, orcs, invRes, qualRes, qualInd, interacs, clis, cbs] = await Promise.all([
       getFinanceiroClientes(),
       getFaturamentoMensal(2026),
       getPedidos(),
@@ -138,6 +162,7 @@ export default function RelatoriosPage() {
       getIndicadoresMensais(),
       getTodasInteracoes(),
       getClientes(true),
+      getContasBancarias(true),
     ]);
     setFinanceiro(fin); setFatMensal(fat); setPedidos(peds);
     setLancamentos(lancs as Lancamento[]);
@@ -149,6 +174,11 @@ export default function RelatoriosPage() {
     setQualIndicadores(qualInd);
     setInteracoes(interacs);
     setClientesAtivos(clis);
+    setContasBancarias(cbs);
+    // Baixas só existem pra lançamentos de Entrada já com algum recebimento
+    // — busca em lote depois de saber os ids, mesmo padrão de /contas-receber.
+    const idsEntrada = (lancs as Lancamento[]).filter(l => l.tipo === "Entrada").map(l => l.id);
+    setBaixasMap(await getBaixasPorLancamentos(idsEntrada));
     setLoading(false);
     const mesAtual = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
     setMesSel(new Date().getMonth() + 1);
@@ -273,6 +303,57 @@ export default function RelatoriosPage() {
         cabecalho: ["Pedido/Documento", "Cliente", "Nº Títulos", "Vencido", "A Vencer", "Total em Aberto"],
         linhas: recebiveisPorPedido.map(p => [p.pedido, p.cliente, p.titulos, p.vencido, p.aVencer, p.total]),
         totalLinha: ["TOTAL", "", recebiveisAbertos.length, totalRecebiveisVencidos, totalRecebiveisAVencer, totalRecebiveisAbertos],
+      },
+    ]);
+  }
+
+  // ── Entradas (recebimentos efetivos no período) + auditoria de pedidos
+  // com informação incompleta ──────────────────────────────────────────────
+  const contasPorId = useMemo(() => new Map(contasBancarias.map(c => [c.id, c])), [contasBancarias]);
+  const linhasEntradas = useMemo(
+    () => montarLinhasEntradas(lancamentos, baixasMap, contasPorId, { inicio: entradasIni, fim: entradasFim }),
+    [lancamentos, baixasMap, contasPorId, entradasIni, entradasFim]
+  );
+  const totalEntradasPeriodo = linhasEntradas.reduce((a, l) => a + l.valor, 0);
+  const pedidosEntradasPeriodo = new Set(linhasEntradas.map(l => l.pedidoId)).size;
+
+  // Auditoria não é filtrada por período — é diagnóstico de dado, não de fluxo.
+  const semContaLista        = useMemo(() => parcelasRecebidasSemConta(lancamentos, baixasMap), [lancamentos, baixasMap]);
+  const semLancamentoLista   = useMemo(() => pedidosSemLancamento(pedidos, lancamentos), [pedidos, lancamentos]);
+  const vencidasSemBaixaLista = useMemo(() => parcelasVencidasSemBaixa(lancamentos, baixasMap, hoje), [lancamentos, baixasMap, hoje]);
+  const totalPendenciasEntradas = semContaLista.length + semLancamentoLista.length + vencidasSemBaixaLista.length;
+
+  async function exportarEntradasExcel() {
+    const { exportarExcelRelatorio } = await import("@/lib/exportExcel");
+    await exportarExcelRelatorio("Entradas_UrbanGlass", [
+      {
+        nome: "Entradas",
+        titulo: "Relatório de Entradas",
+        subtitulo: `${entradasIni} a ${entradasFim}`,
+        cabecalho: ["Pedido", "Cliente", "Parcela", "Valor", "Conta", "Forma de Pagamento", "Data"],
+        linhas: linhasEntradas.map(l => [l.pedidoId, l.cliente, l.parcela, l.valor, l.conta, l.formaPgto, fmtDataBR(l.data)]),
+        totalLinha: ["TOTAL", "", "", totalEntradasPeriodo, "", "", `${linhasEntradas.length} entrada(s) · ${pedidosEntradasPeriodo} pedido(s)`],
+      },
+      {
+        nome: "Sem Conta",
+        titulo: "Relatório de Entradas",
+        subtitulo: "Parcelas recebidas sem conta de pagamento registrada",
+        cabecalho: ["Pedido", "Cliente", "Parcela", "Valor"],
+        linhas: semContaLista.map(p => [p.pedidoId, p.cliente, p.parcela, p.valor]),
+      },
+      {
+        nome: "Sem Lançamento",
+        titulo: "Relatório de Entradas",
+        subtitulo: "Pedidos ativos sem nenhum lançamento financeiro vinculado",
+        cabecalho: ["Pedido", "Cliente", "Status", "Valor do Pedido"],
+        linhas: semLancamentoLista.map(p => [p.pedidoId, p.cliente, p.status, p.valorTotal]),
+      },
+      {
+        nome: "Vencida Sem Baixa",
+        titulo: "Relatório de Entradas",
+        subtitulo: "Parcelas vencidas sem nenhum recebimento registrado",
+        cabecalho: ["Pedido", "Cliente", "Parcela", "Valor", "Vencimento", "Dias em Atraso"],
+        linhas: vencidasSemBaixaLista.map(p => [p.pedidoId ?? "", p.cliente, p.parcela, p.valor, fmtDataBR(p.vencimento), p.diasAtraso]),
       },
     ]);
   }
@@ -505,6 +586,7 @@ export default function RelatoriosPage() {
               { tipo: "inadimplencia" as TipoRelatorio, label: "Inadimpl.",         cor: "#c0392b" },
               { tipo: "faturamento" as TipoRelatorio,   label: "Faturamento",       cor: "#16a085" },
               { tipo: "recebiveis" as TipoRelatorio,    label: "Contas a Receber",  cor: "#0e7c66" },
+              { tipo: "entradas" as TipoRelatorio,      label: "Entradas",          cor: "#1d7ea6" },
               { tipo: "completo" as TipoRelatorio,      label: "Completo",          cor: "#6b21a8" },
             ] as const).map(r => (
               <button key={r.tipo} onClick={() => imprimirRelatorio(r.tipo)}
@@ -517,6 +599,28 @@ export default function RelatoriosPage() {
               style={{ fontSize: "10px", fontFamily: "'DM Mono', monospace", padding: "4px 10px", borderRadius: "5px", cursor: "pointer", fontWeight: 600, background: "#0e7c6618", border: "1px solid #0e7c6644", color: "#0e7c66" }}>
               ⇩ Contas a Receber
             </button>
+            <button onClick={exportarEntradasExcel}
+              style={{ fontSize: "10px", fontFamily: "'DM Mono', monospace", padding: "4px 10px", borderRadius: "5px", cursor: "pointer", fontWeight: 600, background: "#1d7ea618", border: "1px solid #1d7ea644", color: "#1d7ea6" }}>
+              ⇩ Entradas
+            </button>
+          </div>
+        </div>
+
+        {/* ── Período do relatório de Entradas ────────────────────────────── */}
+        <div className="tb no-print" style={{ borderTop: "1px solid var(--b1)" }}>
+          <div style={{ fontSize: "11px", color: "var(--t3)", fontFamily: "'DM Mono', monospace" }}>
+            Período de <strong style={{ color: "#1d7ea6" }}>Entradas</strong>:
+          </div>
+          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+            <input type="date" value={entradasIni} onChange={e => setEntradasIni(e.target.value)}
+              style={{ fontSize: "11px", fontFamily: "'DM Mono', monospace", padding: "3px 6px", borderRadius: "5px", border: "1px solid var(--b2)", background: "var(--surf1)", color: "var(--t1)" }} />
+            <span style={{ fontSize: "10px", color: "var(--t3)" }}>até</span>
+            <input type="date" value={entradasFim} onChange={e => setEntradasFim(e.target.value)}
+              style={{ fontSize: "11px", fontFamily: "'DM Mono', monospace", padding: "3px 6px", borderRadius: "5px", border: "1px solid var(--b2)", background: "var(--surf1)", color: "var(--t1)" }} />
+            <span style={{ fontSize: "10px", color: "var(--t3)", marginLeft: "6px" }}>
+              {formatBRL(totalEntradasPeriodo)} em {linhasEntradas.length} entrada(s) · {pedidosEntradasPeriodo} pedido(s)
+              {totalPendenciasEntradas > 0 && <strong style={{ color: "var(--err)", marginLeft: "8px" }}>⚠ {totalPendenciasEntradas} pendência(s) de dado</strong>}
+            </span>
           </div>
         </div>
 
@@ -2135,6 +2239,157 @@ export default function RelatoriosPage() {
                     </tbody>
                   </table>
                 </>
+              )}
+
+            </div>
+            <PdfFooter emissao={dtEmissao} />
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════════
+            PDF: RELATÓRIO DE ENTRADAS
+        ════════════════════════════════════════════════════════════════════ */}
+        {reporteAtivo === "entradas" && (
+          <div className="print-area" style={S.page}>
+            <PdfHeader titulo="Relatório de Entradas" subtitulo={`Recebimentos de ${fmtDataBR(entradasIni)} a ${fmtDataBR(entradasFim)}`} emissao={dtEmissao} cor="#1d7ea6" />
+            <div style={S.body}>
+
+              {/* Diagnóstico */}
+              {(() => {
+                const insights = [
+                  linhasEntradas.length > 0
+                    ? `${formatBRL(totalEntradasPeriodo)} recebidos no período, em ${linhasEntradas.length} entrada${linhasEntradas.length > 1 ? "s" : ""} distribuídas entre ${pedidosEntradasPeriodo} pedido${pedidosEntradasPeriodo > 1 ? "s" : ""}.`
+                    : "Nenhuma entrada registrada no período selecionado.",
+                  totalPendenciasEntradas > 0
+                    ? `${totalPendenciasEntradas} pendência${totalPendenciasEntradas > 1 ? "s" : ""} de dado identificada${totalPendenciasEntradas > 1 ? "s" : ""} — ver seção de auditoria abaixo.`
+                    : "Nenhuma pendência de dado identificada — conta de pagamento registrada em todas as parcelas recebidas, e todo pedido ativo tem lançamento financeiro.",
+                ].filter(Boolean);
+                return (
+                  <div style={{ marginBottom: "20px" }}>
+                    <div style={{ ...S.sec, marginTop: "0", borderBottomColor: "#1d7ea6", color: "#1d7ea6" }}>Diagnóstico do Período</div>
+                    {insights.map((t, i) => (
+                      <div key={i} style={{ ...S.insight, background: "#f0f8fb", borderLeftColor: "#1d7ea6" }}>
+                        <strong style={{ color: "#1d7ea6", marginRight: "5px" }}>◆</strong>{t}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* KPIs */}
+              <div style={{ ...S.sec, borderBottomColor: "#1d7ea6", color: "#1d7ea6" }}>Resumo do Período</div>
+              <div style={{ display: "flex", gap: "14px", marginBottom: "24px" }}>
+                {[
+                  { label: "Total Recebido",  value: formatBRL(totalEntradasPeriodo), sub: `${fmtDataBR(entradasIni)} a ${fmtDataBR(entradasFim)}`, alert: false },
+                  { label: "Nº de Entradas",  value: String(linhasEntradas.length),   sub: "recebimentos registrados", alert: false },
+                  { label: "Nº de Pedidos",   value: String(pedidosEntradasPeriodo),  sub: "com recebimento no período", alert: false },
+                  { label: "Pendências de Dado", value: String(totalPendenciasEntradas), sub: "parcela/pedido a corrigir", alert: totalPendenciasEntradas > 0 },
+                ].map(k => (
+                  <div key={k.label} style={{ ...S.kpi, padding: "18px 20px", ...(k.alert ? { background: "#fff5f5", border: "1px solid #f5c6cb" } : {}) }}>
+                    <div style={S.kpiL}>{k.label}</div>
+                    <div style={{ ...S.kpiV, fontSize: "26px", color: k.alert ? "#c0392b" : "#1d7ea6" }}>{k.value}</div>
+                    <div style={S.kpiS}>{k.sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Entradas do período */}
+              <div style={{ ...S.sec, borderBottomColor: "#1d7ea6", color: "#1d7ea6" }}>Entradas do Período</div>
+              {linhasEntradas.length === 0 ? (
+                <div style={{ ...S.insight, marginBottom: "20px" }}>Nenhuma entrada no período selecionado.</div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "24px" }}>
+                  <thead>
+                    <tr>{["#","Pedido","Cliente","Parcela","Valor","Conta","Forma","Data"].map((h,i) => <th key={i} style={{ ...S.th, background: "#1d7ea6", textAlign: i === 4 ? "right" : "left" }}>{h}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {linhasEntradas.map((l, i) => (
+                      <tr key={`${l.lancamentoId}-${i}`} style={{ background: i % 2 === 0 ? "#f0f8fb" : "#fff" }}>
+                        <td style={{ ...S.td, color: "#888", textAlign: "center" }}>{i + 1}</td>
+                        <td style={{ ...S.tdB, fontFamily: "monospace", color: AZUL2 }}>{l.pedidoId}</td>
+                        <td style={{ ...S.td }}>{l.cliente}</td>
+                        <td style={{ ...S.td }}>{l.parcela}</td>
+                        <td style={{ ...S.tdR, color: "#1d7ea6", fontWeight: 800 }}>{formatBRL(l.valor)}</td>
+                        <td style={{ ...S.td }}>{l.conta}</td>
+                        <td style={{ ...S.td }}>{l.formaPgto}</td>
+                        <td style={{ ...S.td }}>{fmtDataBR(l.data)}</td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <td colSpan={4} style={{ ...S.tdTotal, color: "#1d7ea6", fontWeight: 800 }}>TOTAL DO PERÍODO</td>
+                      <td style={{ ...S.tdTotal, textAlign: "right", color: "#1d7ea6", fontWeight: 800, fontFamily: "monospace" }}>{formatBRL(totalEntradasPeriodo)}</td>
+                      <td colSpan={3} style={S.tdTotal}></td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+
+              {/* Auditoria — pedidos com informação incompleta */}
+              <div style={{ ...S.sec, borderBottomColor: "#c0392b", color: "#c0392b" }}>Pedidos com Informação Incompleta</div>
+
+              <div style={{ fontSize: "9px", fontWeight: 800, color: "#856404", textTransform: "uppercase", letterSpacing: "0.5px", margin: "10px 0 6px" }}>
+                Parcelas recebidas sem conta de pagamento registrada ({semContaLista.length})
+              </div>
+              {semContaLista.length === 0 ? (
+                <div style={{ fontSize: "10px", color: "#6b7280", marginBottom: "14px" }}>Nenhuma — todas as parcelas recebidas têm conta registrada.</div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px" }}>
+                  <thead><tr>{["Pedido","Cliente","Parcela","Valor"].map((h,i) => <th key={i} style={{ ...S.thWarn, textAlign: i === 3 ? "right" : "left" }}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {semContaLista.map((p, i) => (
+                      <tr key={p.lancamentoId} style={{ background: i % 2 === 0 ? "#fffbf0" : "#fff" }}>
+                        <td style={{ ...S.tdB, fontFamily: "monospace", color: AZUL2 }}>{p.pedidoId}</td>
+                        <td style={S.td}>{p.cliente}</td>
+                        <td style={S.td}>{p.parcela}</td>
+                        <td style={{ ...S.tdR, fontWeight: 700 }}>{formatBRL(p.valor)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              <div style={{ fontSize: "9px", fontWeight: 800, color: "#c0392b", textTransform: "uppercase", letterSpacing: "0.5px", margin: "10px 0 6px" }}>
+                Pedidos ativos sem nenhum lançamento financeiro ({semLancamentoLista.length})
+              </div>
+              {semLancamentoLista.length === 0 ? (
+                <div style={{ fontSize: "10px", color: "#6b7280", marginBottom: "14px" }}>Nenhum — todo pedido ativo tem lançamento vinculado.</div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px" }}>
+                  <thead><tr>{["Pedido","Cliente","Status","Valor do Pedido"].map((h,i) => <th key={i} style={{ ...S.thAlt, textAlign: i === 3 ? "right" : "left" }}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {semLancamentoLista.map((p, i) => (
+                      <tr key={p.pedidoId} style={{ background: i % 2 === 0 ? "#fff5f5" : "#fff" }}>
+                        <td style={{ ...S.tdB, fontFamily: "monospace", color: AZUL2 }}>{p.pedidoId}</td>
+                        <td style={S.td}>{p.cliente}</td>
+                        <td style={S.td}>{p.status}</td>
+                        <td style={{ ...S.tdR, fontWeight: 700 }}>{formatBRL(p.valorTotal)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              <div style={{ fontSize: "9px", fontWeight: 800, color: "#c0392b", textTransform: "uppercase", letterSpacing: "0.5px", margin: "10px 0 6px" }}>
+                Parcelas vencidas sem nenhuma baixa ({vencidasSemBaixaLista.length})
+              </div>
+              {vencidasSemBaixaLista.length === 0 ? (
+                <div style={{ fontSize: "10px", color: "#6b7280" }}>Nenhuma — toda parcela vencida já teve algum recebimento registrado.</div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead><tr>{["Pedido","Cliente","Parcela","Valor","Vencimento","Dias em Atraso"].map((h,i) => <th key={i} style={{ ...S.thAlt, textAlign: i >= 3 ? "right" : "left" }}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {vencidasSemBaixaLista.map((p, i) => (
+                      <tr key={p.lancamentoId} style={{ background: i % 2 === 0 ? "#fff5f5" : "#fff" }}>
+                        <td style={{ ...S.tdB, fontFamily: "monospace", color: AZUL2 }}>{p.pedidoId ?? "—"}</td>
+                        <td style={S.td}>{p.cliente}</td>
+                        <td style={S.td}>{p.parcela}</td>
+                        <td style={{ ...S.tdR, fontWeight: 700 }}>{formatBRL(p.valor)}</td>
+                        <td style={S.td}>{fmtDataBR(p.vencimento)}</td>
+                        <td style={{ ...S.tdR, color: "#c0392b", fontWeight: 800 }}>{p.diasAtraso}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
 
             </div>
