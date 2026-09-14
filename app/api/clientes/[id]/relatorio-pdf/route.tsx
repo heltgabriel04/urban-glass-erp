@@ -101,14 +101,12 @@ export async function GET(
   const ticketMedio = pedidos.length > 0 ? totalFaturado / pedidos.length : 0;
 
   // KPIs refletem o histórico completo do cliente; a listagem detalhada
-  // abaixo, por pedido, so pedidos ainda em aberto — pedidos quitados
-  // não precisam constar no relatório enviado ao cliente.
-  const pedidosEmAberto = pedidos.filter((p) => !p.quitado);
-
+  // abaixo mostra todos os pedidos (pagos e em aberto) — o cliente pediu
+  // para manter o histórico completo mesmo depois de quitado.
   const dados: RelatorioClienteDados = {
     cliente: cliente as Cliente,
     totalFaturado, totalRecebido, totalAberto, ticketMedio,
-    pedidos: pedidosEmAberto,
+    pedidos,
   };
 
   const t3 = Date.now();
